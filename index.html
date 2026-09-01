@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b5e3b" />
+    <title>產品出貨紀錄表</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <p class="eyebrow" id="co-name">鴻安公司</p>
+        <h1>產品出貨紀錄表</h1>
+        <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。上方填洋蔥數量，底部按確認輸入訂單（佔量）。出貨才扣現有庫存（已加工整理）。</p>
+      </header>
+      <nav class="tabs" aria-label="公司">
+        <button type="button" class="tab on" data-co="ha">鴻安公司</button>
+        <button type="button" class="tab" data-co="nq">穠全公司</button>
+      </nav>
+      <nav class="tabs" aria-label="頁面">
+        <button type="button" class="tab on" data-page="orders">訂單輸入</button>
+        <button type="button" class="tab" data-page="plan">排程</button>
+        <button type="button" class="tab" data-page="stock">庫存</button>
+      </nav>
+      <p id="alerts" class="alerts" hidden></p>
+      <section id="page-orders">
+        <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單">
+          <button type="button" class="tab on" data-form="leaf">地瓜葉</button>
+          <button type="button" class="tab" data-form="basil">九層塔</button>
+          <button type="button" class="tab" data-form="herb">散賣品項</button>
+        </nav>
+        <section class="card daily-sheet-card" id="daily-sheet-card" hidden>
+          <div class="head">
+            <h2 id="daily-sheet-title">穠全 地瓜葉出貨</h2>
+            <label class="date-inline">日期 <input id="daily-sheet-date" type="date" /></label>
+          </div>
+          <p class="hint" id="daily-sheet-hint">地瓜葉分誌／芳填當天叫貨。裝箱預設籃裝。出貨對象預設小琳、欣儒，可自行新增。</p>
+          <div class="nq-who-bar" id="nq-who-bar">
+            <label>新增出貨對象 <input id="nq-add-who" type="text" placeholder="名稱" autocomplete="off" /></label>
+            <button type="button" id="nq-add-who-btn">新增</button>
+          </div>
+          <div id="live-totals" class="live-totals" aria-live="polite"></div>
+          <div class="sheet-scroll" id="daily-sheet"></div>
+          <div id="leaf-inbound" class="leaf-inbound" hidden></div>
+          <div id="nq-check" class="check"></div>
+          <div class="btn-row">
+            <button type="button" id="nq-confirm" class="primary">確認輸入訂單</button>
+            <button type="button" id="nq-cancel-edit" class="ghost" hidden>取消編輯</button>
+          </div>
+        </section>
+        <form id="order-form" class="card">
+          <h2 id="form-title">訂單輸入</h2>
+          <p class="hint" id="form-hint">先手打或點常用出貨對象，再填紐西蘭／韓洋各規格數量。填完按確認，即佔量並列入排程。出貨才扣現有庫存（已加工整理）。</p>
+          <input id="edit-id" type="hidden" />
+          <div id="cust-chips" class="chips" role="group" aria-label="出貨對象"></div>
+          <label class="field">出貨對象 <input id="customer" type="text" required placeholder="請輸入出貨對象" autocomplete="off" /></label>
+          <label class="field">出貨日 <input id="ship-date" type="date" required /></label>
+          <div id="sheet"></div>
+          <div id="check" class="check"></div>
+          <div class="btn-row">
+            <button type="submit" class="primary">確認輸入訂單</button>
+            <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
+          </div>
+        </form>
+        <section class="card">
+          <h2>已填紀錄</h2>
+          <p class="hint" id="orders-hint">可刪除訂單紀錄（刪除前會確認）。確認後已佔量，未出貨不扣庫。先填先佔。</p>
+          <div id="orders"></div>
+        </section>
+      </section>
+      <section id="page-plan" hidden>
+        <section class="card">
+          <h2>出貨排程</h2>
+          <p class="hint">確認輸入訂單後會依出貨日排列。先填先佔。</p>
+          <div id="plan"></div>
+        </section>
+      </section>
+      <section id="page-stock" hidden>
+        <section class="card">
+          <div class="head"><h2>當天出貨對象</h2><span id="today-label" class="muted"></span></div>
+          <div id="customers"></div>
+        </section>
+        <section class="card">
+          <div class="head"><h2 id="stock-title">庫存</h2><span id="book-date" class="muted"></span></div>
+          <p class="hint" id="stock-hint"></p>
+          <div id="stock"></div>
+          <button type="button" id="fill-count" hidden>空白盤點帶入當日庫存</button>
+        </section>
+        <form id="receive" class="card" hidden>
+          <h2 id="recv-title">進貨</h2>
+          <label class="field">品項 <select id="in-sku"></select></label>
+          <label class="field">數量 <input id="in-qty" type="number" min="0" step="0.1" /></label>
+          <button type="submit" id="recv-btn">入庫</button>
+        </form>
+        <form id="process" class="card" hidden>
+          <h2>洋蔥加工</h2>
+          <p class="hint">從現有庫存轉成已加工好（可出）。</p>
+          <label class="field">規格 <select id="pr-sku"></select></label>
+          <label class="field">加工數量 <input id="pr-qty" type="number" min="0" step="0.1" /></label>
+          <button type="submit" class="primary">記入已加工</button>
+        </form>
+      </section>
+      <p id="status" class="status" hidden></p>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

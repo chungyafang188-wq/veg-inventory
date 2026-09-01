@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: veg-inventory
+    runtime: static
+    plan: free
+    region: singapore
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache

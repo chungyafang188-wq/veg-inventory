@@ -380,10 +380,13 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   line-height: 1.35;
 }
 .plan-stats {
-  margin: 0 0 0.4rem;
+  margin: auto 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed currentColor;
   display: grid;
-  gap: 0.15rem;
-  font-size: 0.82rem;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 .plan-stats p { margin: 0; }
 .plan-stats strong { font-variant-numeric: tabular-nums; }

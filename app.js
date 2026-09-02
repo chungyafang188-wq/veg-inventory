@@ -1175,13 +1175,13 @@ function renderPlan() {
       const allQty = round(waitQty + outQty);
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
+        ${personList(pending, g.unit, "pending")}
+        ${personList(shipped, g.unit, "shipped")}
         <div class="plan-stats">
           <p>已接單總數 <strong>${fmt(allQty)} ${esc(g.unit)}</strong></p>
           <p>已出件數 <strong>${fmt(outQty)} ${esc(g.unit)}</strong></p>
           <p>待出貨件數 <strong>${fmt(waitQty)} ${esc(g.unit)}</strong></p>
         </div>
-        ${personList(pending, g.unit, "pending")}
-        ${personList(shipped, g.unit, "shipped")}
       </section>`;
     })
     .join("");

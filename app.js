@@ -22,7 +22,7 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "紅骨、綠骨填件數；廠商選芳／琳／其他。上方顯示今天各廠商叫貨總數（含已確認訂單與本表未確認）。出貨對象與地瓜葉分開，刪除只影響九層塔。備註自由填寫。",
+    hint: "",
     formHint: "紅骨／綠骨／廠商／備註。",
     skuIds: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
@@ -777,6 +777,13 @@ function openOrders() {
 }
 
 function renderAlerts() {
+  const el = document.getElementById("alerts");
+  if (!el) return;
+  if (page === "plan") {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
   const msgs = [];
   for (const o of openOrders()) {
     const map = {};
@@ -787,7 +794,6 @@ function renderAlerts() {
       if (r.level === "warn") msgs.push(`${o.customer}：${r.sku.name} 將低於安全庫存`);
     }
   }
-  const el = document.getElementById("alerts");
   el.hidden = msgs.length === 0;
   el.className = "alerts bad";
   el.innerHTML = msgs.map((m) => esc(m)).join("<br>");
@@ -820,34 +826,119 @@ function renderOrders() {
     .join("")}</ul>`;
 }
 
+function skuShortName(sku) {
+  return (sku?.name || "").replace("本產蔬菜－", "");
+}
+function lineQtyForSku(o, skuId) {
+  let n = 0;
+  for (const l of o.lines || []) if (l.skuId === skuId) n += l.qty;
+  return round(n);
+}
 function renderPlan() {
-  const list = openOrders().slice().sort((a, b) => a.shipDate.localeCompare(b.shipDate) || a.no - b.no);
+  const shortBox = document.getElementById("plan-short");
   const box = document.getElementById("plan");
-  if (!list.length) {
-    box.innerHTML = '<p class="empty">沒有已佔量的未出貨紀錄。</p>';
+  if (!box) return;
+  const day = today();
+  const orders = state.orders.filter((o) => o.co === co && o.status !== "cancelled");
+  const shorts = [];
+  for (const sku of companySkus()) {
+    let need = 0;
+    for (const o of orders) {
+      if (o.status !== "open") continue;
+      need += lineQtyForSku(o, sku.id);
+    }
+    if (!need) continue;
+    const gap = round(need - ready(sku));
+    if (gap > 0) shorts.push({ sku, gap });
+  }
+  if (shortBox) {
+    shortBox.innerHTML = shorts.length
+      ? shorts
+          .map((s) => `<p class="bad">${esc(skuShortName(s.sku))} 共缺 ${fmt(s.gap)} ${esc(s.sku.unit)}</p>`)
+          .join("")
+      : '<p class="empty">目前沒有缺貨品項。</p>';
+  }
+  const isTodayShipped = (o) => o.status === "shipped" && (o.shippedOn || o.shipDate) === day;
+  const used = companySkus().filter((sku) =>
+    orders.some((o) => lineQtyForSku(o, sku.id) > 0 && (o.status === "open" || isTodayShipped(o))),
+  );
+  if (!used.length) {
+    box.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
     return;
   }
-  const days = [...new Set(list.map((o) => o.shipDate))];
-  box.innerHTML = days
-    .map((day) => {
-      const rows = list.filter((o) => o.shipDate === day);
-      return `<p class="day-title">${esc(day)}</p><ul class="list">${rows
-        .map((o) => {
-          const tag = o.edited ? '<span class="tag">改</span>' : "";
-          const lines = o.lines.map((l) => {
-            const s = skuById(l.skuId);
-            const name = (s ? s.name : l.skuId).replace("本產蔬菜－", "");
-            const pack = l.pack ? `（${l.pack}）` : "";
-            const note = l.note ? `（${l.note}）` : "";
-            return `${name} ${fmt(l.qty)}${pack}${note}`;
-          }).join("、");
-          return `<li>${tag}<strong>${esc(o.customer)}</strong>　${esc(day)}<p class="lines">${esc(lines)}</p></li>`;
-        })
-        .join("")}</ul>`;
+  const personList = (rows, sku) => {
+    if (!rows.length) return '<p class="empty">無</p>';
+    return `<ul class="list">${rows
+      .map(
+        (r) =>
+          `<li><strong>${esc(r.customer)}</strong><p class="lines">${fmt(r.qty)} ${esc(sku.unit)}　${esc(r.date)}${r.extra ? `　${esc(r.extra)}` : ""}</p></li>`,
+      )
+      .join("")}</ul>`;
+  };
+  box.innerHTML = used
+    .map((sku) => {
+      const pending = [];
+      const shipped = [];
+      for (const o of orders) {
+        const qty = lineQtyForSku(o, sku.id);
+        if (!qty) continue;
+        const extra = o.lines
+          .filter((l) => l.skuId === sku.id)
+          .map((l) => [l.pack, l.note].filter(Boolean).join(" "))
+          .filter(Boolean)
+          .join("、");
+        const rec = {
+          customer: o.customer,
+          qty,
+          date: o.status === "shipped" ? o.shippedOn || o.shipDate : o.shipDate,
+          extra,
+        };
+        if (o.status === "open") pending.push(rec);
+        else if (isTodayShipped(o)) shipped.push(rec);
+      }
+      pending.sort((a, b) => a.date.localeCompare(b.date) || a.customer.localeCompare(b.customer, "zh-Hant"));
+      shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
+      return `<section class="plan-sku">
+        <h3>${esc(skuShortName(sku))}</h3>
+        <h4>待出貨</h4>
+        ${personList(pending, sku)}
+        <h4>當天已出貨</h4>
+        ${personList(shipped, sku)}
+      </section>`;
     })
     .join("");
 }
 
+function nqMorningDone() {
+  return NQ_INBOUND.every((row) => !!bookRow(row.id).morningConfirmed);
+}
+function lotLabel(b) {
+  const lots = Array.isArray(b.lots) ? b.lots : [];
+  if (!lots.length) return "";
+  return lots.map((x, i) => `第${i + 1}批 ${fmt(x.qty)}`).join("、");
+}
+function ensureLots(b) {
+  if (Array.isArray(b.lots)) return b.lots;
+  b.lots = b.inbound ? [{ qty: round(b.inbound), at: 0 }] : [];
+  return b.lots;
+}
+function addInboundLot(skuId, raw, date = today()) {
+  const sku = skuById(skuId);
+  if (!sku) return;
+  const n = Number(raw);
+  if (!(n > 0)) return setStatus("本批進貨必須大於 0，記入後可再打下一批。", true);
+  const b = bookRow(skuId, date);
+  ensureLots(b);
+  b.lots.push({ qty: round(n), at: Date.now() });
+  b.inbound = round(b.lots.reduce((s, x) => s + Number(x.qty || 0), 0));
+  if (date === today()) syncNqQty(sku);
+  save();
+  setStatus(`已留存本批 ${fmt(n)} ${sku.unit}。今日合計 ${fmt(b.inbound)} ${sku.unit}，可再輸入下一筆。`, false);
+  renderStock();
+  renderLeafInbound();
+  renderCheck();
+  renderAlerts();
+}
 function renderStock() {
   const onion = co === "ha";
   const date = today();
@@ -855,13 +946,28 @@ function renderStock() {
   document.getElementById("book-date").textContent = date;
   const stockTab = document.querySelector('[data-page="stock"]');
   if (stockTab) stockTab.textContent = onion ? "庫存" : "庫存/進貨";
-  document.getElementById("stock-title").textContent = onion ? "現場庫存（已加工整理）" : "庫存/進貨";
+  const inDay = document.getElementById("in-day-card");
+  if (inDay) inDay.hidden = onion;
+  if (!onion) {
+    const tot = document.getElementById("in-day-totals");
+    if (tot) {
+      tot.innerHTML = NQ_INBOUND.map((row) => {
+        const sku = skuById(row.id);
+        const b = bookRow(row.id);
+        return `<div class="live-totals-item"><span>${esc(row.label)}</span><strong>${fmt(b.inbound || 0)} ${esc(sku.unit)}</strong></div>`;
+      }).join("");
+    }
+  }
   document.getElementById("stock-hint").textContent = onion
     ? "現有庫存＝已加工整理，可出。各規格在「加工填入」寫本次加工數量，記入後加入現有庫存。沒有原料欄、沒有進貨。訂單出貨只扣現有庫存。"
-    : "先填當日進貨。早上庫存盤點填完請按確認，確認後當日庫存＝早上盤點＋當日進貨－當日已出貨。";
+    : "進貨可分批：填本批數量按記入，合計會累加，欄位清空後再打下一批。早上庫存盤點每天填一次，全部填完按「確認今日早上盤點」，確認後當日不能再改。當日庫存＝早上盤點＋當日進貨合計－當日已出貨。";
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
-  document.getElementById("fill-count").hidden = true;
+  const morningDone = !onion && nqMorningDone();
+  const fillBtn = document.getElementById("fill-count");
+  fillBtn.hidden = onion || morningDone;
+  fillBtn.textContent = "確認今日早上盤點";
+  fillBtn.disabled = false;
   const opts = companySkus()
     .map((s) => `<option value="${s.id}">${esc(s.name)}</option>`)
     .join("");
@@ -895,30 +1001,36 @@ function renderStock() {
     const sku = skuById(row.id);
     const b = bookRow(row.id);
     const step = skuStep(sku);
-    const morningVal = b.morningConfirmed ? b.morning : "";
-    const done = b.morningConfirmed ? " 已確認" : "";
+    const morningVal = b.morning != null && b.morning !== "" ? b.morning : "";
+    const locked = !!b.morningConfirmed;
+    const done = locked ? "已確認" : "";
     return `<tr>
       <td class="name-cell">${esc(row.label)}</td>
       <td>
-        <div class="stepper inbound-qty">
-          <button type="button" class="step-btn" data-in-delta="-${step}" data-sku="${row.id}" aria-label="減少進貨">−</button>
-          <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="${b.inbound || 0}" inputmode="decimal" aria-label="${esc(row.label)} 當日進貨" />
-          <button type="button" class="step-btn" data-in-delta="${step}" data-sku="${row.id}" aria-label="增加進貨">+</button>
+        <div class="in-sum">
+          <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
           <span class="unit">${esc(sku.unit)}</span>
+          <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>
+        </div>
+      </td>
+      <td>
+        <div class="ha-process inbound-qty">
+          <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="" placeholder="本批" inputmode="decimal" aria-label="${esc(row.label)} 本批進貨" />
+          <span class="unit">${esc(sku.unit)}</span>
+          <button type="button" class="tiny-btn" data-add-inbound="${row.id}">記入</button>
         </div>
       </td>
       <td>
         <div class="ha-process morning-count">
-          <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${morningVal}" placeholder="0" inputmode="decimal" aria-label="${esc(row.label)} 早上庫存盤點" />
+          <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="0" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
           <span class="unit">${esc(sku.unit)}</span>
-          <button type="button" class="tiny-btn" data-confirm-morning="${row.id}">確認</button>
-          <span class="morning-ok" data-morning-ok="${row.id}">${esc(done.trim())}</span>
+          <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span>
         </div>
       </td>
     </tr>`;
   }).join("");
   document.getElementById("stock").innerHTML =
-    `<table class="inbound-main"><thead><tr><th>品項</th><th>當日進貨數量</th><th>早上庫存盤點</th></tr></thead><tbody>${body}</tbody></table>`;
+    `<table class="inbound-main"><thead><tr><th>品項</th><th>今日已進貨</th><th>本批進貨</th><th>早上庫存盤點</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function renderCustomers() {
@@ -1076,7 +1188,18 @@ function renderLeafInbound() {
       return `<tr>
         <td class="who">${esc(r.label)}</td>
         <td>${fmt(b.opening || 0)}</td>
-        <td><input class="cell-in inbound-in" data-in-sku="${r.id}" type="text" inputmode="decimal" autocomplete="off" value="${b.inbound ? esc(b.inbound) : ""}" aria-label="${esc(r.label)} 當天進貨" /></td>
+        <td>
+          <div class="in-sum">
+            <strong>${fmt(b.inbound || 0)}</strong> ${esc(sku.unit)}
+            <p class="in-lots">${esc(lotLabel(b))}</p>
+          </div>
+        </td>
+        <td>
+          <div class="ha-process inbound-qty">
+            <input class="cell-in inbound-in" data-in-sku="${r.id}" type="text" inputmode="decimal" autocomplete="off" value="" placeholder="本批" aria-label="${esc(r.label)} 本批進貨" />
+            <button type="button" class="tiny-btn" data-add-in-sku="${r.id}">記入</button>
+          </div>
+        </td>
         <td><strong>${fmt(stock)}</strong> ${esc(sku.unit)}</td>
         <td>${fmt(order)}</td>
         <td class="${enough ? "ok" : "bad"}">${order ? (enough ? `夠（多 ${fmt(gap)}）` : `不夠（差 ${fmt(-gap)}）`) : "—"}</td>
@@ -1084,10 +1207,10 @@ function renderLeafInbound() {
     })
     .join("");
   box.innerHTML = `<h3>當天進貨（對庫存）</h3>
-    <p class="hint">每天 10:00 前採收完成後，在此填當天進貨，即可對庫存。10:00 是作業時間，系統不會鎖死不能填。</p>
+    <p class="hint">進貨可分批記入，合計會累加。10:00 是作業時間，系統不會鎖死不能填。</p>
     <div class="sheet-scroll">
       <table class="daily-grid inbound-table">
-        <thead><tr><th>品項</th><th>前一日盤點</th><th>當天進貨</th><th>可確認庫存</th><th>本表叫貨</th><th>庫存 vs 訂單</th></tr></thead>
+        <thead><tr><th>品項</th><th>前一日盤點</th><th>今日已進貨</th><th>本批進貨</th><th>可確認庫存</th><th>本表叫貨</th><th>庫存 vs 訂單</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>`;
@@ -1113,11 +1236,14 @@ function refreshInboundCompare() {
     const tds = input.closest("tr")?.children;
     if (!tds) return;
     if (tds[1]) tds[1].textContent = fmt(b.opening || 0);
-    if (tds[3] && sku) tds[3].innerHTML = `<strong>${fmt(stock)}</strong> ${esc(sku.unit)}`;
-    if (tds[4]) tds[4].textContent = fmt(order);
-    if (tds[5]) {
-      tds[5].className = enough ? "ok" : "bad";
-      tds[5].textContent = order ? (enough ? `夠（多 ${fmt(gap)}）` : `不夠（差 ${fmt(-gap)}）`) : "—";
+    if (tds[2]) {
+      tds[2].innerHTML = `<div class="in-sum"><strong>${fmt(b.inbound || 0)}</strong> ${sku ? esc(sku.unit) : ""}<p class="in-lots">${esc(lotLabel(b))}</p></div>`;
+    }
+    if (tds[4] && sku) tds[4].innerHTML = `<strong>${fmt(stock)}</strong> ${esc(sku.unit)}`;
+    if (tds[5]) tds[5].textContent = fmt(order);
+    if (tds[6]) {
+      tds[6].className = enough ? "ok" : "bad";
+      tds[6].textContent = order ? (enough ? `夠（多 ${fmt(gap)}）` : `不夠（差 ${fmt(-gap)}）`) : "—";
     }
   });
 }
@@ -1139,7 +1265,9 @@ function renderDailyGrid() {
   document.getElementById("daily-sheet-title").textContent = editing
     ? "修改數量（確認後更新排程）"
     : def.title;
-  document.getElementById("daily-sheet-hint").textContent = def.hint;
+  const hintEl = document.getElementById("daily-sheet-hint");
+  hintEl.textContent = def.hint || "";
+  hintEl.hidden = !def.hint;
   const dateEl = document.getElementById("daily-sheet-date");
   if (!dateEl.value) dateEl.value = today();
   const date = dateEl.value;
@@ -1409,15 +1537,22 @@ if (inboundBox) {
     if (!input) return;
     const cleaned = input.value.replace(/[^\d.]/g, "");
     if (cleaned !== input.value) input.value = cleaned;
-    const skuId = input.dataset.inSku;
-    const date = sheetDate();
-    const b = bookRow(skuId, date);
-    b.inbound = cleaned === "" ? 0 : Math.max(0, Number(cleaned) || 0);
-    const sku = skuById(skuId);
-    if (sku && date === today()) syncNqQty(sku);
-    save();
-    refreshInboundCompare();
-    renderCheck();
+  });
+  inboundBox.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-add-in-sku]");
+    if (!btn) return;
+    const id = btn.dataset.addInSku;
+    const input = document.querySelector(`[data-in-sku="${id}"]`);
+    addInboundLot(id, input?.value, sheetDate());
+    if (input) input.value = "";
+  });
+  inboundBox.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const input = e.target.closest("[data-in-sku]");
+    if (!input) return;
+    e.preventDefault();
+    addInboundLot(input.dataset.inSku, input.value, sheetDate());
+    input.value = "";
   });
 }
 document.getElementById("nq-confirm").onclick = confirmNqSchedule;
@@ -1640,13 +1775,14 @@ function bumpInbound(skuId, delta) {
   save();
   patchStockRow(skuId);
 }
-function confirmMorningCount(skuId, raw) {
+function confirmMorningCount(skuId, raw, quiet) {
   const sku = skuById(skuId);
   if (!sku) return;
   if (raw === "" || raw == null) return setStatus("請填早上庫存盤點數量後再確認。", true);
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return setStatus("早上盤點請填 0 或正數。", true);
   const b = bookRow(skuId);
+  if (b.morningConfirmed) return;
   b.morning = round(n);
   b.morningConfirmed = true;
   b.opening = round(n);
@@ -1654,6 +1790,9 @@ function confirmMorningCount(skuId, raw) {
   save();
   const mark = document.querySelector(`[data-morning-ok="${skuId}"]`);
   if (mark) mark.textContent = "已確認";
+  const input = document.querySelector(`[data-morning="${skuId}"]`);
+  if (input) input.readOnly = true;
+  if (quiet) return;
   const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
   setStatus(`已確認「${label}」早上盤點 ${fmt(n)} ${sku.unit}。`, false);
   renderCheck();
@@ -1683,11 +1822,24 @@ stockEl.addEventListener("change", (e) => {
 });
 stockEl.addEventListener("input", (e) => {
   const t = e.target;
-  if (t.dataset.inbound != null) applyBookField(t.dataset.inbound, "inbound", t.value);
-  else if (t.dataset.opening != null) applyBookField(t.dataset.opening, "opening", t.value);
+  if (t.dataset.morning != null) {
+    const b = bookRow(t.dataset.morning);
+    if (b.morningConfirmed) return;
+    b.morning = t.value === "" ? "" : Math.max(0, Number(t.value) || 0);
+    save();
+    return;
+  }
+  if (t.dataset.opening != null) applyBookField(t.dataset.opening, "opening", t.value);
   else if (t.dataset.count != null) applyBookField(t.dataset.count, "count", t.value);
 });
 stockEl.addEventListener("click", (e) => {
+  const addIn = e.target.closest("[data-add-inbound]");
+  if (addIn) {
+    const id = addIn.dataset.addInbound;
+    const input = document.querySelector(`[data-inbound="${id}"]`);
+    addInboundLot(id, input?.value);
+    return;
+  }
   const morningBtn = e.target.closest("[data-confirm-morning]");
   if (morningBtn) {
     const id = morningBtn.dataset.confirmMorning;
@@ -1701,16 +1853,18 @@ stockEl.addEventListener("click", (e) => {
     addProcessed(add.dataset.addProcess, input?.value);
     return;
   }
-  const btn = e.target.closest("[data-in-delta]");
-  if (!btn) return;
-  bumpInbound(btn.dataset.sku, Number(btn.dataset.inDelta));
 });
 stockEl.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  const inbound = e.target.closest("[data-inbound]");
+  if (inbound) {
+    e.preventDefault();
+    addInboundLot(inbound.dataset.inbound, inbound.value);
+    return;
+  }
   const morning = e.target.closest("[data-morning]");
   if (morning) {
     e.preventDefault();
-    confirmMorningCount(morning.dataset.morning, morning.value);
     return;
   }
   const input = e.target.closest("[data-process]");
@@ -1719,17 +1873,21 @@ stockEl.addEventListener("keydown", (e) => {
   addProcessed(input.dataset.process, input.value);
 });
 document.getElementById("fill-count").onclick = () => {
-  let n = 0;
-  for (const sku of nqSkus()) {
-    const b = bookRow(sku.id);
-    if (b.count != null) continue;
-    b.count = onHand(sku);
-    n++;
+  const missing = [];
+  for (const row of NQ_INBOUND) {
+    const input = document.querySelector(`[data-morning="${row.id}"]`);
+    const raw = input ? input.value : bookRow(row.id).morning;
+    if (raw === "" || raw == null) missing.push(row.label);
   }
-  if (!n) return setStatus("各品項都已有盤點數字。", false);
-  save();
-  setStatus("已將空白盤點帶入當日庫存，明早會自動成為前一日盤點。", false);
+  if (missing.length) return setStatus(`請先填完早上盤點：${missing.join("、")}`, true);
+  for (const row of NQ_INBOUND) {
+    const input = document.querySelector(`[data-morning="${row.id}"]`);
+    confirmMorningCount(row.id, input?.value, true);
+  }
+  setStatus("已確認今日早上盤點。隔天再填新的一趟。", false);
   renderStock();
+  renderCheck();
+  renderAlerts();
 };
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;

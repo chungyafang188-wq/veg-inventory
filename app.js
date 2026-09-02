@@ -779,24 +779,8 @@ function openOrders() {
 function renderAlerts() {
   const el = document.getElementById("alerts");
   if (!el) return;
-  if (page === "plan") {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
-  }
-  const msgs = [];
-  for (const o of openOrders()) {
-    const map = {};
-    for (const line of o.lines) map[line.skuId] = (map[line.skuId] || 0) + line.qty;
-    const { rows } = lineChecks(map, o);
-    for (const r of rows) {
-      if (r.level === "bad") msgs.push(`${o.customer}：${r.sku.name} 缺 ${fmt(r.need - r.av)} ${r.sku.unit}`);
-      if (r.level === "warn") msgs.push(`${o.customer}：${r.sku.name} 將低於安全庫存`);
-    }
-  }
-  el.hidden = msgs.length === 0;
-  el.className = "alerts bad";
-  el.innerHTML = msgs.map((m) => esc(m)).join("<br>");
+  el.hidden = true;
+  el.innerHTML = "";
 }
 
 function renderOrders() {

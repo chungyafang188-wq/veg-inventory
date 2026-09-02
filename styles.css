@@ -379,6 +379,14 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-size: 0.82rem;
   line-height: 1.35;
 }
+.plan-stats {
+  margin: 0 0 0.4rem;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+}
+.plan-stats p { margin: 0; }
+.plan-stats strong { font-variant-numeric: tabular-nums; }
 .plan-est strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .plan-est span { display: block; opacity: 0.85; font-size: 0.75rem; }
 .plan-est.over { color: var(--bad); }
@@ -463,10 +471,17 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   opacity: 0.9;
 }
 .short-est strong {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 0.28em;
   font-size: 2.15rem;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.short-est .est-unit {
+  font-size: 1.05rem;
+  font-style: normal;
   font-weight: 800;
 }
 .short-est small {
@@ -486,7 +501,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .short-vends { display: grid; gap: 0.3rem; }
 .short-v {
   display: grid;
-  grid-template-columns: 2.4rem 1fr auto;
+  grid-template-columns: auto 1fr;
   gap: 0.3rem;
   align-items: baseline;
   padding: 0.28rem 0.4rem;

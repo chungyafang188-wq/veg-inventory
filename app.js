@@ -1075,33 +1075,6 @@ function groupLeftover(g) {
   }
   return n;
 }
-function leftoverHtml(g) {
-  const n = groupLeftover(g);
-  const over = n < 0;
-  const label = over ? "已超接" : "尚可接單";
-  return `<p class="plan-est${over ? " over" : ""}">預估庫存 <strong>${fmt(n)}</strong> ${esc(g.unit)}<span>${esc(label)}（暫扣訂單後）</span></p>`;
-}
-function isLeafGroup(g) {
-  return (g.skuIds || []).some((id) => id === "sl-zhi" || id === "sl-fang");
-}
-function pendingPackSplit(orders, skuIds) {
-  let basket = 0;
-  let box = 0;
-  for (const o of orders) {
-    if (o.status !== "open") continue;
-    for (const l of o.lines || []) {
-      if (!skuIds.includes(l.skuId) || !(l.qty > 0)) continue;
-      if (l.pack === "箱裝") box = round(box + l.qty);
-      else basket = round(basket + l.qty);
-    }
-  }
-  return { basket, box };
-}
-function leafPackHtml(g, orders) {
-  if (!isLeafGroup(g)) return "";
-  const { basket, box } = pendingPackSplit(orders, g.skuIds);
-  return `<p class="plan-pack">待出貨需 <b>籃裝 ${fmt(basket)}</b> 件　<b>箱裝 ${fmt(box)}</b> 件</p>`;
-}
 function renderPlan() {
   const shortBox = document.getElementById("plan-short");
   const box = document.getElementById("plan");
@@ -1147,18 +1120,15 @@ function renderPlan() {
             ? `<div class="short-vends">${s.parts
                 .map((p) => {
                   const over = p.left < 0;
-                  return `<div class="short-v ${over ? "no" : "ok"}"><span>${esc(p.vendor)}</span><b>需 ${fmt(p.need)}</b><em>預估 ${fmt(p.left)}</em></div>`;
+                  return `<div class="short-v ${over ? "no" : "ok"}"><span>${esc(p.vendor)}</span><em>預估 ${fmt(p.left)} ${esc(s.unit)}</em></div>`;
                 })
                 .join("")}</div>`
             : "";
           const left = groupLeftover(g);
           const over = left < 0;
-          const gapLine = s.gap > 0 ? `<p class="short-gap">共缺 ${fmt(s.gap)} ${esc(s.unit)}</p>` : "";
           return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
             <h3>${esc(s.label)}</h3>
-            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)}</strong><small>${esc(s.unit)}　${over ? "已超接" : "尚可接單"}</small></p>
-            ${gapLine}
-            ${leafPackHtml(g, orders)}
+            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)}<em class="est-unit">${esc(s.unit)}</em></strong><small>${over ? "已超接" : "尚可接單"}</small></p>
             ${vend}
           </article>`;
         })
@@ -1200,10 +1170,16 @@ function renderPlan() {
       }
       pending.sort((a, b) => rankOf(a.id) - rankOf(b.id) || a.customer.localeCompare(b.customer, "zh-Hant"));
       shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
+      const waitQty = round(pending.reduce((n, r) => n + r.qty, 0));
+      const outQty = round(shipped.reduce((n, r) => n + r.qty, 0));
+      const allQty = round(waitQty + outQty);
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
-        ${leftoverHtml(g)}
-        ${leafPackHtml(g, orders)}
+        <div class="plan-stats">
+          <p>已接單總數 <strong>${fmt(allQty)} ${esc(g.unit)}</strong></p>
+          <p>已出件數 <strong>${fmt(outQty)} ${esc(g.unit)}</strong></p>
+          <p>待出貨件數 <strong>${fmt(waitQty)} ${esc(g.unit)}</strong></p>
+        </div>
         ${personList(pending, g.unit, "pending")}
         ${personList(shipped, g.unit, "shipped")}
       </section>`;

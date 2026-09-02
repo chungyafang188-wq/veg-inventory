@@ -434,13 +434,45 @@ function currentRecord() {
   return editing ? state.orders.find((x) => x.id === editing) : undefined;
 }
 /** 先填先佔：只算比 current 更早（單號較小）的未出貨紀錄。新紀錄則算全部已佔。 */
+function orderRank(o) {
+  return Number.isFinite(o.prio) ? o.prio : o.no;
+}
+function openQueue() {
+  return state.orders
+    .filter((o) => o.co === co && o.status === "open")
+    .slice()
+    .sort((a, b) => orderRank(a) - orderRank(b) || a.no - b.no);
+}
+function nextPrio() {
+  const list = state.orders.filter((o) => o.co === co);
+  let m = 0;
+  for (const o of list) m = Math.max(m, orderRank(o));
+  return m + 1;
+}
+function bumpOrder(id, dir) {
+  const list = openQueue();
+  list.forEach((o, i) => {
+    o.prio = i + 1;
+  });
+  const i = list.findIndex((o) => o.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  const tmp = list[i].prio;
+  list[i].prio = list[j].prio;
+  list[j].prio = tmp;
+  save();
+  renderPlan();
+  renderCheck();
+  renderAlerts();
+}
 function reservedAhead(skuId, current) {
   let n = 0;
+  const curRank = current ? orderRank(current) : Infinity;
   for (const o of state.orders) {
     if (o.co !== co || o.status !== "open") continue;
     if (current) {
       if (o.id === current.id) continue;
-      if (o.no >= current.no) continue;
+      if (orderRank(o) >= curRank) continue;
     }
     for (const line of o.lines) if (line.skuId === skuId) n += line.qty;
   }
@@ -676,6 +708,7 @@ function addOpenOrder(customer, shipDate, lines) {
     shipDate,
     lines,
     status: "open",
+    prio: nextPrio(),
     edited: false,
   });
 }
@@ -917,6 +950,13 @@ function renderPlan() {
     box.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
     return;
   }
+  const queue = openQueue();
+  const queueHtml = `<div class="prio-box"><h3>出貨優先順序</h3><ol class="prio-list">${queue
+    .map(
+      (o, i) =>
+        `<li><span class="prio-n">${i + 1}</span><button type="button" class="tiny-btn" data-prio-up="${o.id}" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" class="tiny-btn" data-prio-down="${o.id}" ${i === queue.length - 1 ? "disabled" : ""}>↓</button><strong>${esc(o.customer)}</strong><span class="muted">${esc(o.shipDate)}</span></li>`,
+    )
+    .join("")}</ol></div>`;
   const personList = (rows, unit, kind) => {
     if (!rows.length) return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><p class="empty">無</p></div>`;
     return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><ul class="list plan-people">${rows
@@ -926,7 +966,11 @@ function renderPlan() {
       })
       .join("")}</ul></div>`;
   };
-  box.innerHTML = used
+  const rankOf = (id) => {
+    const o = state.orders.find((x) => x.id === id);
+    return o ? orderRank(o) : 0;
+  };
+  const board = used
     .map((g) => {
       const pending = [];
       const shipped = [];
@@ -934,6 +978,7 @@ function renderPlan() {
         const qty = lineQtyForSkus(o, g.skuIds);
         if (!qty) continue;
         const rec = {
+          id: o.id,
           customer: o.customer,
           qty,
           note: planLineNote(o, g.skuIds),
@@ -941,7 +986,7 @@ function renderPlan() {
         if (o.status === "open") pending.push(rec);
         else if (isTodayShipped(o)) shipped.push(rec);
       }
-      pending.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
+      pending.sort((a, b) => rankOf(a.id) - rankOf(b.id) || a.customer.localeCompare(b.customer, "zh-Hant"));
       shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
@@ -950,7 +995,7 @@ function renderPlan() {
       </section>`;
     })
     .join("");
-  box.innerHTML = `<div class="plan-board">${box.innerHTML}</div>`;
+  box.innerHTML = `${queueHtml}<div class="plan-board">${board}</div>`;
 }
 
 function nqMorningDone() {
@@ -1021,6 +1066,7 @@ function renderStock() {
   document.getElementById("book-date").textContent = date;
   const stockTab = document.querySelector('[data-page="stock"]');
   if (stockTab) stockTab.textContent = onion ? "庫存" : "庫存/進貨";
+  document.getElementById("stock-title").textContent = onion ? "現場庫存（已加工整理）" : "庫存/進貨";
   const inDay = document.getElementById("in-day-card");
   if (inDay) inDay.hidden = onion;
   if (!onion) {
@@ -1256,85 +1302,13 @@ function confirmStock(skuId, date) {
 }
 function renderLeafInbound() {
   const box = document.getElementById("leaf-inbound");
-  if (!box) return;
-  const show = co === "nq" && formKind === "leaf";
-  box.hidden = !show;
-  if (!show) return;
-  const date = sheetDate();
-  const { sums } = gridQtySums();
-  const rows = [
-    { id: "sl-zhi", key: "slZhi", label: "地瓜葉／誌" },
-    { id: "sl-fang", key: "slFang", label: "地瓜葉／芳" },
-  ];
-  const body = rows
-    .map((r) => {
-      const sku = skuById(r.id);
-      const b = bookRow(r.id, date);
-      const stock = confirmStock(r.id, date);
-      const order = sums[r.key] || 0;
-      const enough = stock >= order;
-      const gap = round(stock - order);
-      return `<tr>
-        <td class="who">${esc(r.label)}</td>
-        <td>${fmt(b.opening || 0)}</td>
-        <td>
-          <div class="in-sum">
-            <strong>${fmt(b.inbound || 0)}</strong> ${esc(sku.unit)}
-            <p class="in-lots">${esc(lotLabel(b))}</p>
-          </div>
-        </td>
-        <td>
-          <div class="ha-process inbound-qty">
-            <input class="cell-in inbound-in" data-in-sku="${r.id}" type="text" inputmode="decimal" autocomplete="off" value="" placeholder="本批" aria-label="${esc(r.label)} 本批進貨" />
-            <button type="button" class="tiny-btn" data-add-in-sku="${r.id}">記入</button>
-          </div>
-        </td>
-        <td><strong>${fmt(stock)}</strong> ${esc(sku.unit)}</td>
-        <td>${fmt(order)}</td>
-        <td class="${enough ? "ok" : "bad"}">${order ? (enough ? `夠（多 ${fmt(gap)}）` : `不夠（差 ${fmt(-gap)}）`) : "—"}</td>
-      </tr>`;
-    })
-    .join("");
-  box.innerHTML = `<h3>當天進貨（對庫存）</h3>
-    <p class="hint">進貨可分批記入，合計會累加。10:00 是作業時間，系統不會鎖死不能填。</p>
-    <div class="sheet-scroll">
-      <table class="daily-grid inbound-table">
-        <thead><tr><th>品項</th><th>前一日盤點</th><th>今日已進貨</th><th>本批進貨</th><th>可確認庫存</th><th>本表叫貨</th><th>庫存 vs 訂單</th></tr></thead>
-        <tbody>${body}</tbody>
-      </table>
-    </div>`;
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = "";
+  }
 }
 function refreshInboundCompare() {
-  const box = document.getElementById("leaf-inbound");
-  if (!box || box.hidden) return;
-  if (!box.querySelector("[data-in-sku]")) {
-    renderLeafInbound();
-    return;
-  }
-  const date = sheetDate();
-  const { sums } = gridQtySums();
-  const keys = { "sl-zhi": "slZhi", "sl-fang": "slFang" };
-  box.querySelectorAll("[data-in-sku]").forEach((input) => {
-    const id = input.dataset.inSku;
-    const sku = skuById(id);
-    const b = bookRow(id, date);
-    const stock = confirmStock(id, date);
-    const order = sums[keys[id]] || 0;
-    const enough = stock >= order;
-    const gap = round(stock - order);
-    const tds = input.closest("tr")?.children;
-    if (!tds) return;
-    if (tds[1]) tds[1].textContent = fmt(b.opening || 0);
-    if (tds[2]) {
-      tds[2].innerHTML = `<div class="in-sum"><strong>${fmt(b.inbound || 0)}</strong> ${sku ? esc(sku.unit) : ""}<p class="in-lots">${esc(lotLabel(b))}</p></div>`;
-    }
-    if (tds[4] && sku) tds[4].innerHTML = `<strong>${fmt(stock)}</strong> ${esc(sku.unit)}`;
-    if (tds[5]) tds[5].textContent = fmt(order);
-    if (tds[6]) {
-      tds[6].className = enough ? "ok" : "bad";
-      tds[6].textContent = order ? (enough ? `夠（多 ${fmt(gap)}）` : `不夠（差 ${fmt(-gap)}）`) : "—";
-    }
-  });
+  return;
 }
 function moveDailyCell(el, dr, dc) {
   const r = Number(el.dataset.r);
@@ -1444,7 +1418,7 @@ function applyCopy() {
       "鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。上方填洋蔥數量，底部按確認輸入訂單（佔量）。出貨才扣現有庫存（已加工整理）。";
     formTitle.textContent = editing ? "修改數量" : "訂單輸入";
     formHint.textContent = "先手打或點常用出貨對象，再填紐西蘭／韓洋各規格數量。填完按確認，即佔量並列入排程。出貨才扣現有庫存（已加工整理）。";
-    ordersHint.textContent = "可刪除訂單紀錄（刪除前會確認）。確認後已佔量，未出貨不扣庫。先填先佔。";
+    ordersHint.textContent = "可刪除訂單紀錄。排程頁可用 ↑↓ 調整出貨優先。";
     cust.placeholder = "請輸入出貨對象";
     cust.readOnly = false;
     return;
@@ -1454,7 +1428,7 @@ function applyCopy() {
     "穠全：在上方表格填當天叫貨數量，頂端總數即時加總。出貨對象預設小琳、欣儒，可自行新增；地瓜葉、九層塔、散賣名單分開，互不刪除。底部按「確認輸入訂單」即佔量並列排程。出貨才扣庫。";
   formTitle.textContent = editing ? "修改數量" : def.formTitle;
   formHint.textContent = def.formHint;
-  ordersHint.textContent = "取消會紅線劃掉但留下；改過的前面有「改」。確認後已佔量，未出貨不扣庫。先填先佔。";
+  ordersHint.textContent = "取消會紅線劃掉但留下。排程頁可用 ↑↓ 調整出貨優先。";
   cust.readOnly = false;
   cust.placeholder = "請輸入出貨對象";
 }
@@ -1699,6 +1673,7 @@ document.getElementById("order-form").onsubmit = (e) => {
       shipDate: document.getElementById("ship-date").value,
       lines,
       status: "open",
+      prio: nextPrio(),
       edited: false,
     });
   }

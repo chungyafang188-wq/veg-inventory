@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
   </head>
   <body>
     <div class="app">
@@ -43,7 +43,6 @@
           </div>
           <div id="live-totals" class="live-totals" aria-live="polite"></div>
           <div class="sheet-scroll" id="daily-sheet"></div>
-          <div id="leaf-inbound" class="leaf-inbound" hidden></div>
           <div id="nq-check" class="check"></div>
           <div class="btn-row">
             <button type="button" id="nq-confirm" class="primary">確認輸入訂單</button>
@@ -66,7 +65,7 @@
         </form>
         <section class="card">
           <h2>已填紀錄</h2>
-          <p class="hint" id="orders-hint">可刪除訂單紀錄（刪除前會確認）。確認後已佔量，未出貨不扣庫。先填先佔。</p>
+          <p class="hint" id="orders-hint">可刪除訂單紀錄。確認後已佔量。排程頁可用 ↑↓ 調整出貨優先。</p>
           <div id="orders"></div>
         </section>
       </section>
@@ -89,12 +88,11 @@
           <div id="customers"></div>
         </section>
         <section class="card">
-          <div class="head"><h2 id="stock-title">庫存</h2><span id="book-date" class="muted"></span></div>
-          <p class="hint" id="stock-hint" hidden></p>
+          <div class="head"><h2 id="stock-title">庫存/進貨</h2><span id="book-date" class="muted"></span></div>
           <div id="stock-guides" class="stock-guides">
-            <p id="guide-stock"></p>
-            <p id="guide-in"></p>
-            <p id="guide-count"></p>
+            <p id="guide-stock"><strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。</p>
+            <p id="guide-in"><strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。</p>
+            <p id="guide-count"><strong>盤點</strong>每天早上填一次，全部填完按「確認今日早上盤點」。打錯按該列「修正」，改完再確認。</p>
           </div>
           <div id="stock"></div>
           <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
@@ -116,6 +114,6 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./app.js?v=17"></script>
+    <script src="./app.js?v=19"></script>
   </body>
 </html>

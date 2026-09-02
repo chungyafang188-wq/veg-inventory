@@ -367,11 +367,20 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   min-height: 11rem;
 }
 .plan-sku h3 {
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.35rem;
   font-size: 0.95rem;
   padding-bottom: 0.3rem;
   border-bottom: 2px solid currentColor;
 }
+.plan-est, .plan-pack {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.plan-est strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.plan-est span { display: block; opacity: 0.85; font-size: 0.75rem; }
+.plan-est.over { color: var(--bad); }
+.plan-pack b { font-variant-numeric: tabular-nums; }
 .plan-block { flex: 1; }
 .plan-sku.tone-leaf-zhi { background: #eef7f0; color: #1b5e3b; }
 .plan-sku.tone-leaf-fang { background: #eaf4fb; color: #1a4f73; }

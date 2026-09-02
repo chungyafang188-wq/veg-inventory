@@ -1056,6 +1056,42 @@ function planLineNote(o, skuIds) {
   }
   return [...new Set(bits.filter(Boolean))].join("　");
 }
+function groupLeftover(g) {
+  let n = 0;
+  for (const id of g.skuIds) {
+    const sku = skuById(id);
+    if (!sku) continue;
+    n = round(n + available(sku));
+  }
+  return n;
+}
+function leftoverHtml(g) {
+  const n = groupLeftover(g);
+  const over = n < 0;
+  const label = over ? "已超接" : "尚可接單";
+  return `<p class="plan-est${over ? " over" : ""}">預估庫存 <strong>${fmt(n)}</strong> ${esc(g.unit)}<span>${esc(label)}（暫扣訂單後）</span></p>`;
+}
+function isLeafGroup(g) {
+  return (g.skuIds || []).some((id) => id === "sl-zhi" || id === "sl-fang");
+}
+function pendingPackSplit(orders, skuIds) {
+  let basket = 0;
+  let box = 0;
+  for (const o of orders) {
+    if (o.status !== "open") continue;
+    for (const l of o.lines || []) {
+      if (!skuIds.includes(l.skuId) || !(l.qty > 0)) continue;
+      if (l.pack === "箱裝") box = round(box + l.qty);
+      else basket = round(basket + l.qty);
+    }
+  }
+  return { basket, box };
+}
+function leafPackHtml(g, orders) {
+  if (!isLeafGroup(g)) return "";
+  const { basket, box } = pendingPackSplit(orders, g.skuIds);
+  return `<p class="plan-pack">待出貨需 <b>籃裝 ${fmt(basket)}</b> 件　<b>箱裝 ${fmt(box)}</b> 件</p>`;
+}
 function renderPlan() {
   const shortBox = document.getElementById("plan-short");
   const box = document.getElementById("plan");
@@ -1109,6 +1145,8 @@ function renderPlan() {
           return `<article class="short-card tone-${esc(g.tone)} ${enough ? "ok" : "no"}">
             <h3>${esc(s.label)}</h3>
             <p class="short-total">${enough ? "<strong>夠</strong>" : `共缺 <strong>${fmt(s.gap)}</strong> ${esc(s.unit)}`}</p>
+            ${leftoverHtml(g)}
+            ${leafPackHtml(g, orders)}
             ${vend}
           </article>`;
         })
@@ -1152,6 +1190,8 @@ function renderPlan() {
       shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
+        ${leftoverHtml(g)}
+        ${leafPackHtml(g, orders)}
         ${personList(pending, g.unit, "pending")}
         ${personList(shipped, g.unit, "shipped")}
       </section>`;
@@ -1205,22 +1245,43 @@ function unlockAllMorning() {
   renderCheck();
   renderAlerts();
 }
-function addInboundLot(skuId, raw, date = today()) {
+function addInboundLot(skuId, raw, date = today(), quiet) {
   const sku = skuById(skuId);
   if (!sku) return;
   const n = Number(raw);
-  if (!(n > 0)) return setStatus("本批進貨必須大於 0，記入後可再打下一批。", true);
+  if (!(n > 0)) {
+    if (!quiet) setStatus("本批進貨必須大於 0，記入後可再打下一批。", true);
+    return;
+  }
   const b = bookRow(skuId, date);
   ensureLots(b);
   b.lots.push({ qty: round(n), at: Date.now() });
   b.inbound = round(b.lots.reduce((s, x) => s + Number(x.qty || 0), 0));
-  if (date === today()) syncNqQty(sku);
+  if (sku.onion) state.stock[sku.id].qty = round((state.stock[sku.id].qty || 0) + n);
+  else if (date === today()) syncNqQty(sku);
   save();
+  if (quiet) return;
   setStatus(`已留存本批 ${fmt(n)} ${sku.unit}。今日合計 ${fmt(b.inbound)} ${sku.unit}，可再輸入下一筆。`, false);
   renderStock();
   renderLeafInbound();
   renderCheck();
   renderAlerts();
+}
+function reverseInboundLot(skuId, qty, date) {
+  const sku = skuById(skuId);
+  if (!sku || !(qty > 0)) return;
+  const b = bookRow(skuId, date);
+  ensureLots(b);
+  b.lots.push({ qty: round(-qty), at: Date.now() });
+  b.inbound = round(Math.max(0, b.lots.reduce((s, x) => s + Number(x.qty || 0), 0)));
+  if (sku.onion) state.stock[sku.id].qty = round(Math.max(0, (state.stock[sku.id].qty || 0) - qty));
+  else syncNqQty(sku);
+}
+function shipInboundSku(sku) {
+  if (!sku) return "";
+  if (sku.onion) return "auto";
+  if (sku.id === "mint-kg" || sku.id === "shiso-kg" || sku.id === "shiso-jin") return "ask";
+  return "";
 }
 function renderStock() {
   const onion = co === "ha";
@@ -1857,6 +1918,7 @@ document.getElementById("orders").onclick = (e) => {
         const sku = skuById(line.skuId);
         if (sku?.onion) state.stock[sku.id].processed = round(state.stock[sku.id].processed + line.qty);
       }
+      for (const lot of o.shipInbounds || []) reverseInboundLot(lot.skuId, lot.qty, o.shippedOn || today());
     }
     state.orders = state.orders.filter((x) => x.id !== o.id);
     if (editing === o.id) {
@@ -1904,18 +1966,43 @@ document.getElementById("orders").onclick = (e) => {
         return;
       }
     }
+    const autoIn = [];
+    const askIn = [];
+    for (const [skuId, qty] of Object.entries(need)) {
+      const sku = skuById(skuId);
+      const how = shipInboundSku(sku);
+      if (how === "auto") autoIn.push({ skuId, qty, sku });
+      if (how === "ask") askIn.push({ skuId, qty, sku });
+    }
+    let doAskIn = false;
+    if (askIn.length) {
+      const names = [...new Set(askIn.map((x) => x.sku.name.replace("散賣kg", "").replace("散賣斤", "")))].join("、");
+      doAskIn = confirm(
+        `${names}出貨：要同時記入相同數量進貨嗎？\n確定＝進貨＋出貨（當日可出庫存不變）\n取消＝只出貨扣庫`,
+      );
+    }
+    const shipInbounds = [];
     for (const [skuId, qty] of Object.entries(need)) {
       const sku = skuById(skuId);
       if (sku.onion) state.stock[sku.id].processed = round(state.stock[sku.id].processed - qty);
     }
     o.status = "shipped";
     o.shippedOn = today();
+    const inLots = [...autoIn, ...(doAskIn ? askIn : [])];
+    for (const lot of inLots) {
+      addInboundLot(lot.skuId, lot.qty, o.shippedOn, true);
+      shipInbounds.push({ skuId: lot.skuId, qty: lot.qty });
+    }
+    o.shipInbounds = shipInbounds;
     for (const skuId of Object.keys(need)) {
       const sku = skuById(skuId);
       if (!sku.onion) syncNqQty(sku);
     }
     save();
-    setStatus("已出貨並扣可出庫存。", false);
+    const inNote = shipInbounds.length
+      ? `並已記入進貨 ${shipInbounds.map((x) => `${fmt(x.qty)}`).join("、")}。`
+      : "";
+    setStatus(`已出貨並扣可出庫存。${inNote}`, false);
     render();
   }
 };

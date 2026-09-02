@@ -316,19 +316,42 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-size: 0.88rem;
 }
 .plan-qty { font-variant-numeric: tabular-nums; }
-.short-board {
-  display: flex;
-  gap: 0.55rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
+.stock-guides { margin: 0.45rem 0 0; display: grid; gap: 0.4rem; }
+.stock-guides p {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.65rem;
+  background: #f4f1ea;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.stock-guides strong {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.35rem;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.78rem;
+}
+#plan-card { overflow-x: auto; }
+#plan-card .plan-board,
+#plan-card .short-board {
+  display: grid;
+  grid-template-columns: repeat(var(--plan-n, 1), 14.8rem);
+  overflow: visible;
+  gap: 0.6rem;
 }
 .short-card {
-  flex: 0 0 15rem;
+  flex: none;
+  width: auto;
+  min-width: 0;
   padding: 0.7rem 0.75rem;
   border-radius: 0.85rem;
   background: #f8e4e4;
   color: var(--bad);
 }
+.short-card.ok { background: #e4f0e4; color: var(--green); }
 .short-card h3 { margin: 0; font-size: 0.95rem; }
 .short-total { margin: 0.25rem 0 0.45rem; font-size: 0.9rem; }
 .short-total strong { font-size: 1.55rem; font-variant-numeric: tabular-nums; }
@@ -358,10 +381,4 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
     overflow: visible;
   }
   .plan-sku { flex: none; width: auto; min-width: 0; }
-  .short-board {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    overflow: visible;
-  }
-  .short-card { flex: none; width: auto; }
 }

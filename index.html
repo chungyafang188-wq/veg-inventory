@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
   </head>
   <body>
     <div class="app">
@@ -71,12 +71,10 @@
         </section>
       </section>
       <section id="page-plan" hidden>
-        <section class="card">
+        <section class="card" id="plan-card">
           <h2>尚缺品項</h2>
           <div id="plan-short"></div>
-        </section>
-        <section class="card">
-          <h2>出貨排程</h2>
+          <h2 class="plan-sub">出貨排程</h2>
           <div id="plan"></div>
         </section>
       </section>
@@ -92,9 +90,15 @@
         </section>
         <section class="card">
           <div class="head"><h2 id="stock-title">庫存</h2><span id="book-date" class="muted"></span></div>
-          <p class="hint" id="stock-hint"></p>
+          <p class="hint" id="stock-hint" hidden></p>
+          <div id="stock-guides" class="stock-guides">
+            <p id="guide-stock"></p>
+            <p id="guide-in"></p>
+            <p id="guide-count"></p>
+          </div>
           <div id="stock"></div>
           <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
+          <button type="button" id="fix-morning" class="ghost" hidden>修正早上盤點</button>
         </section>
         <form id="receive" class="card" hidden>
           <h2 id="recv-title">進貨</h2>
@@ -112,6 +116,6 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./app.js?v=14"></script>
+    <script src="./app.js?v=17"></script>
   </body>
 </html>

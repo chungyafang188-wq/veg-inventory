@@ -861,8 +861,11 @@ function renderPlan() {
   const day = today();
   const orders = state.orders.filter((o) => o.co === co && o.status !== "cancelled");
   const groups = planGroups();
-  const shorts = [];
-  for (const g of groups) {
+  const isTodayShipped = (o) => o.status === "shipped" && (o.shippedOn || o.shipDate) === day;
+  const used = groups.filter((g) =>
+    orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && (o.status === "open" || isTodayShipped(o))),
+  );
+  const groupShort = (g) => {
     const parts = [];
     let needAll = 0;
     let gapAll = 0;
@@ -881,38 +884,35 @@ function renderPlan() {
       const vendor = BASIL_REV[id]?.val;
       if (vendor && need) parts.push({ vendor, need, gap, unit: sku.unit });
     }
-    if (!needAll) continue;
-    if (gapAll <= 0 && !parts.length) continue;
-    if (gapAll <= 0 && parts.every((p) => p.gap <= 0)) continue;
-    shorts.push({ label: g.label, gap: gapAll, unit: g.unit, parts });
-  }
+    return { label: g.label, tone: g.tone, unit: g.unit, gap: gapAll, need: needAll, parts };
+  };
+  const wrap = document.getElementById("plan-card") || shortBox?.parentElement;
+  if (wrap) wrap.style.setProperty("--plan-n", String(Math.max(used.length, 1)));
   if (shortBox) {
-    shortBox.innerHTML = shorts.length
-      ? `<div class="short-board">${shorts
-          .map((s) => {
-            const vend = s.parts.length
-              ? `<div class="short-vends">${s.parts
-                  .map((p) => {
-                    const gap = p.gap
-                      ? `<em class="no">缺 ${fmt(p.gap)}</em>`
-                      : `<em class="ok">夠</em>`;
-                    return `<div class="short-v ${p.gap ? "no" : "ok"}"><span>${esc(p.vendor)}</span><b>需 ${fmt(p.need)}</b>${gap}</div>`;
-                  })
-                  .join("")}</div>`
-              : "";
-            return `<article class="short-card">
-              <h3>${esc(s.label)}</h3>
-              <p class="short-total">${s.gap > 0 ? `共缺 <strong>${fmt(s.gap)}</strong> ${esc(s.unit)}` : "合計夠出"}</p>
-              ${vend}
-            </article>`;
-          })
-          .join("")}</div>`
-      : '<p class="empty">目前沒有缺貨品項。</p>';
+    if (!used.length) {
+      shortBox.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
+    } else {
+      shortBox.innerHTML = `<div class="plan-board short-board">${used
+        .map((g) => {
+          const s = groupShort(g);
+          const enough = s.gap <= 0;
+          const vend = s.parts.length
+            ? `<div class="short-vends">${s.parts
+                .map((p) => {
+                  const gap = p.gap ? `<em>缺 ${fmt(p.gap)}</em>` : `<em>夠</em>`;
+                  return `<div class="short-v ${p.gap ? "no" : "ok"}"><span>${esc(p.vendor)}</span><b>需 ${fmt(p.need)}</b>${gap}</div>`;
+                })
+                .join("")}</div>`
+            : "";
+          return `<article class="short-card tone-${esc(g.tone)} ${enough ? "ok" : "no"}">
+            <h3>${esc(s.label)}</h3>
+            <p class="short-total">${enough ? "<strong>夠</strong>" : `共缺 <strong>${fmt(s.gap)}</strong> ${esc(s.unit)}`}</p>
+            ${vend}
+          </article>`;
+        })
+        .join("")}</div>`;
+    }
   }
-  const isTodayShipped = (o) => o.status === "shipped" && (o.shippedOn || o.shipDate) === day;
-  const used = groups.filter((g) =>
-    orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && (o.status === "open" || isTodayShipped(o))),
-  );
   if (!used.length) {
     box.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
     return;
@@ -966,6 +966,37 @@ function ensureLots(b) {
   b.lots = b.inbound ? [{ qty: round(b.inbound), at: 0 }] : [];
   return b.lots;
 }
+function correctInbound(skuId, raw, date = today()) {
+  const sku = skuById(skuId);
+  if (!sku) return;
+  if (raw === "" || raw == null) return setStatus("請在本批欄填正確的今日進貨總數，再按修正。", true);
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return setStatus("修正請填 0 或正數。", true);
+  const b = bookRow(skuId, date);
+  const qty = round(n);
+  b.lots = qty ? [{ qty, at: Date.now() }] : [];
+  b.inbound = qty;
+  if (date === today()) syncNqQty(sku);
+  save();
+  const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
+  setStatus(`已修正「${label}」今日進貨為 ${fmt(qty)} ${sku.unit}。`, false);
+  renderStock();
+  renderLeafInbound();
+  renderCheck();
+  renderAlerts();
+}
+function unlockMorning(skuId) {
+  const b = bookRow(skuId);
+  b.morningConfirmed = false;
+  save();
+}
+function unlockAllMorning() {
+  for (const row of NQ_INBOUND) unlockMorning(row.id);
+  setStatus("已解開早上盤點，改完請再按確認。", false);
+  renderStock();
+  renderCheck();
+  renderAlerts();
+}
 function addInboundLot(skuId, raw, date = today()) {
   const sku = skuById(skuId);
   if (!sku) return;
@@ -1002,16 +1033,28 @@ function renderStock() {
       }).join("");
     }
   }
-  document.getElementById("stock-hint").textContent = onion
-    ? "現有庫存＝已加工整理，可出。各規格在「加工填入」寫本次加工數量，記入後加入現有庫存。沒有原料欄、沒有進貨。訂單出貨只扣現有庫存。"
-    : "進貨可分批：填本批數量按記入，合計會累加，欄位清空後再打下一批。早上庫存盤點每天填一次，全部填完按「確認今日早上盤點」，確認後當日不能再改。當日庫存＝早上盤點＋當日進貨合計－當日已出貨。";
+  const gs = document.getElementById("guide-stock");
+  const gi = document.getElementById("guide-in");
+  const gc = document.getElementById("guide-count");
+  if (onion) {
+    if (gs) gs.innerHTML = "<strong>庫存</strong>現有庫存＝已加工整理，可出。出貨只扣現有庫存。";
+    if (gi) gi.innerHTML = "<strong>進貨</strong>鴻安沒有進貨欄。各規格用「加工填入」記入本次加工，加入現有庫存。";
+    if (gc) gc.innerHTML = "<strong>盤點</strong>鴻安不另做早上盤點，以現有庫存為準。";
+  } else {
+    if (gs) gs.innerHTML = "<strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。";
+    if (gi) gi.innerHTML = "<strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。";
+    if (gc) gc.innerHTML = "<strong>盤點</strong>每天早上填一次，全部填完按「確認今日早上盤點」。打錯按該列「修正」，改完再確認。";
+  }
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
   const morningDone = !onion && nqMorningDone();
+  const anyMorning = !onion && NQ_INBOUND.some((row) => bookRow(row.id).morningConfirmed);
   const fillBtn = document.getElementById("fill-count");
   fillBtn.hidden = onion || morningDone;
   fillBtn.textContent = "確認今日早上盤點";
   fillBtn.disabled = false;
+  const fixM = document.getElementById("fix-morning");
+  if (fixM) fixM.hidden = onion || !anyMorning;
   const opts = companySkus()
     .map((s) => `<option value="${s.id}">${esc(s.name)}</option>`)
     .join("");
@@ -1062,6 +1105,7 @@ function renderStock() {
           <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="" placeholder="本批" inputmode="decimal" aria-label="${esc(row.label)} 本批進貨" />
           <span class="unit">${esc(sku.unit)}</span>
           <button type="button" class="tiny-btn" data-add-inbound="${row.id}">記入</button>
+          <button type="button" class="tiny-btn ghost" data-fix-inbound="${row.id}">修正</button>
         </div>
       </td>
       <td>
@@ -1069,6 +1113,7 @@ function renderStock() {
           <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="0" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
           <span class="unit">${esc(sku.unit)}</span>
           <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span>
+          ${locked ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正</button>` : ""}
         </div>
       </td>
     </tr>`;
@@ -1884,6 +1929,22 @@ stockEl.addEventListener("click", (e) => {
     addInboundLot(id, input?.value);
     return;
   }
+  const fixIn = e.target.closest("[data-fix-inbound]");
+  if (fixIn) {
+    const id = fixIn.dataset.fixInbound;
+    const input = document.querySelector(`[data-inbound="${id}"]`);
+    const label = NQ_INBOUND.find((r) => r.id === id)?.label || id;
+    if (!confirm(`將「${label}」今日進貨改為輸入框的數字？`)) return;
+    correctInbound(id, input?.value);
+    return;
+  }
+  const fixOne = e.target.closest("[data-fix-morning]");
+  if (fixOne) {
+    unlockMorning(fixOne.dataset.fixMorning);
+    setStatus("已解開此品項早上盤點，改完請再按確認。", false);
+    renderStock();
+    return;
+  }
   const morningBtn = e.target.closest("[data-confirm-morning]");
   if (morningBtn) {
     const id = morningBtn.dataset.confirmMorning;
@@ -1933,6 +1994,7 @@ document.getElementById("fill-count").onclick = () => {
   renderCheck();
   renderAlerts();
 };
+document.getElementById("fix-morning").onclick = unlockAllMorning;
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   pollCloud();

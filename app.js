@@ -1088,32 +1088,6 @@ function renderPlan() {
   const used = groups.filter((g) =>
     orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && (o.status === "open" || isTodayShipped(o))),
   );
-  const groupShort = (g) => {
-    const parts = [];
-    let needAll = 0;
-    let gapAll = 0;
-    let haveAll = 0;
-    let inAll = 0;
-    for (const id of g.skuIds) {
-      const sku = skuById(id);
-      if (!sku) continue;
-      let need = 0;
-      for (const o of orders) {
-        if (o.status === "open") need += lineQtyForSku(o, id);
-      }
-      need = round(need);
-      const have = ready(sku);
-      const inbound = Number(bookRow(id).inbound) || 0;
-      const gap = round(Math.max(0, need - have));
-      needAll = round(needAll + need);
-      haveAll = round(haveAll + have);
-      inAll = round(inAll + inbound);
-      gapAll = round(gapAll + gap);
-      const vendor = BASIL_REV[id]?.val;
-      if (vendor) parts.push({ vendor, need, have, inbound, gap, left: round(have - need), unit: sku.unit });
-    }
-    return { label: g.label, tone: g.tone, unit: g.unit, gap: gapAll, need: needAll, have: haveAll, inbound: inAll, parts };
-  };
   const wrap = document.getElementById("plan-card") || shortBox?.parentElement;
   if (wrap) wrap.style.setProperty("--plan-n", String(Math.max(used.length, 1)));
   if (shortBox) {
@@ -1122,24 +1096,11 @@ function renderPlan() {
     } else {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
-          const s = groupShort(g);
-          const nowRows = s.parts.length
-            ? s.parts
-                .map(
-                  (p) =>
-                    `<li><span>${esc(p.vendor)}</span><b>現有 ${fmt(p.have)}</b><b>進貨 ${fmt(p.inbound)}</b></li>`,
-                )
-                .join("")
-            : `<li><b>現有 ${fmt(s.have)}</b><b>進貨 ${fmt(s.inbound)}</b></li>`;
           const left = groupLeftover(g);
           const over = left < 0;
           return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
-            <h3>${esc(s.label)}</h3>
-            <div class="short-line">
-              <span>現有／進貨${s.parts.length ? "（廠商別）" : ""}</span>
-              <ul class="short-now">${nowRows}</ul>
-            </div>
-            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)}<em class="est-unit">${esc(s.unit)}</em></strong></p>
+            <h3>${esc(g.label)}</h3>
+            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)} ${esc(g.unit)}</strong></p>
             <p class="short-can">${over ? "已超接，不宜再接單" : "尚可接單"}</p>
           </article>`;
         })

@@ -114,7 +114,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .inbound-main th { background: #dcefe3; color: var(--green); }
 .inbound-main .inbound-qty { justify-content: flex-end; }
-.inbound-main .unit { color: var(--muted); font-size: 0.85rem; min-width: 1.6rem; }
+.in-sum .tag { margin-right: 0.25rem; }
 .in-sum { text-align: right; }
 .in-lots { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--muted); font-weight: normal; text-align: right; }
 .morning-ok { font-size: 0.78rem; color: var(--green); min-width: 3rem; }

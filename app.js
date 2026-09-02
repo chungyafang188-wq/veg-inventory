@@ -1021,6 +1021,7 @@ function correctInbound(skuId, raw, date = today()) {
   const qty = round(n);
   b.lots = qty ? [{ qty, at: Date.now() }] : [];
   b.inbound = qty;
+  b.inboundEdited = true;
   if (date === today()) syncNqQty(sku);
   save();
   const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
@@ -1075,7 +1076,8 @@ function renderStock() {
       tot.innerHTML = NQ_INBOUND.map((row) => {
         const sku = skuById(row.id);
         const b = bookRow(row.id);
-        return `<div class="live-totals-item"><span>${esc(row.label)}</span><strong>${fmt(b.inbound || 0)} ${esc(sku.unit)}</strong></div>`;
+        const edited = b.inboundEdited ? '<span class="tag">修正</span>' : "";
+        return `<div class="live-totals-item"><span>${edited}${esc(row.label)}</span><strong>${fmt(b.inbound || 0)} ${esc(sku.unit)}</strong></div>`;
       }).join("");
     }
   }
@@ -1141,6 +1143,7 @@ function renderStock() {
       <td class="name-cell">${esc(row.label)}</td>
       <td>
         <div class="in-sum">
+          ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
           <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
           <span class="unit">${esc(sku.unit)}</span>
           <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>

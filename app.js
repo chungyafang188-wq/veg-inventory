@@ -863,23 +863,50 @@ function renderPlan() {
   const groups = planGroups();
   const shorts = [];
   for (const g of groups) {
-    let need = 0;
-    let have = 0;
+    const parts = [];
+    let needAll = 0;
+    let gapAll = 0;
     for (const id of g.skuIds) {
       const sku = skuById(id);
       if (!sku) continue;
+      let need = 0;
       for (const o of orders) {
         if (o.status === "open") need += lineQtyForSku(o, id);
       }
-      have += ready(sku);
+      need = round(need);
+      const have = ready(sku);
+      const gap = round(Math.max(0, need - have));
+      needAll = round(needAll + need);
+      gapAll = round(gapAll + gap);
+      const vendor = BASIL_REV[id]?.val;
+      if (vendor && need) parts.push({ vendor, need, gap, unit: sku.unit });
     }
-    need = round(need);
-    have = round(have);
-    if (need && round(need - have) > 0) shorts.push({ label: g.label, gap: round(need - have), unit: g.unit });
+    if (!needAll) continue;
+    if (gapAll <= 0 && !parts.length) continue;
+    if (gapAll <= 0 && parts.every((p) => p.gap <= 0)) continue;
+    shorts.push({ label: g.label, gap: gapAll, unit: g.unit, parts });
   }
   if (shortBox) {
     shortBox.innerHTML = shorts.length
-      ? shorts.map((s) => `<p class="bad">${esc(s.label)} 共缺 ${fmt(s.gap)} ${esc(s.unit)}</p>`).join("")
+      ? `<div class="short-board">${shorts
+          .map((s) => {
+            const vend = s.parts.length
+              ? `<div class="short-vends">${s.parts
+                  .map((p) => {
+                    const gap = p.gap
+                      ? `<em class="no">缺 ${fmt(p.gap)}</em>`
+                      : `<em class="ok">夠</em>`;
+                    return `<div class="short-v ${p.gap ? "no" : "ok"}"><span>${esc(p.vendor)}</span><b>需 ${fmt(p.need)}</b>${gap}</div>`;
+                  })
+                  .join("")}</div>`
+              : "";
+            return `<article class="short-card">
+              <h3>${esc(s.label)}</h3>
+              <p class="short-total">${s.gap > 0 ? `共缺 <strong>${fmt(s.gap)}</strong> ${esc(s.unit)}` : "合計夠出"}</p>
+              ${vend}
+            </article>`;
+          })
+          .join("")}</div>`
       : '<p class="empty">目前沒有缺貨品項。</p>';
   }
   const isTodayShipped = (o) => o.status === "shipped" && (o.shippedOn || o.shipDate) === day;

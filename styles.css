@@ -316,7 +316,38 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-size: 0.88rem;
 }
 .plan-qty { font-variant-numeric: tabular-nums; }
-.plan-note { color: var(--muted); font-size: 0.85rem; }
+.short-board {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.short-card {
+  flex: 0 0 15rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: 0.85rem;
+  background: #f8e4e4;
+  color: var(--bad);
+}
+.short-card h3 { margin: 0; font-size: 0.95rem; }
+.short-total { margin: 0.25rem 0 0.45rem; font-size: 0.9rem; }
+.short-total strong { font-size: 1.55rem; font-variant-numeric: tabular-nums; }
+.short-vends { display: grid; gap: 0.3rem; }
+.short-v {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr auto;
+  gap: 0.3rem;
+  align-items: baseline;
+  padding: 0.28rem 0.4rem;
+  border-radius: 0.45rem;
+  background: #fff;
+  font-size: 0.88rem;
+}
+.short-v span { font-weight: 700; }
+.short-v b { font-weight: 600; color: var(--ink); }
+.short-v em { font-style: normal; font-weight: 700; }
+.short-v.ok em { color: var(--green); }
+.short-v.no em { color: var(--bad); }
 .inbound-table .ok, .inbound-table .bad { padding: 0.2rem 0.3rem; border-radius: 0.35rem; }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }
@@ -327,4 +358,10 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
     overflow: visible;
   }
   .plan-sku { flex: none; width: auto; min-width: 0; }
+  .short-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    overflow: visible;
+  }
+  .short-card { flex: none; width: auto; }
 }

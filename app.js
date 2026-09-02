@@ -1092,6 +1092,8 @@ function renderPlan() {
     const parts = [];
     let needAll = 0;
     let gapAll = 0;
+    let haveAll = 0;
+    let inAll = 0;
     for (const id of g.skuIds) {
       const sku = skuById(id);
       if (!sku) continue;
@@ -1101,13 +1103,16 @@ function renderPlan() {
       }
       need = round(need);
       const have = ready(sku);
+      const inbound = Number(bookRow(id).inbound) || 0;
       const gap = round(Math.max(0, need - have));
       needAll = round(needAll + need);
+      haveAll = round(haveAll + have);
+      inAll = round(inAll + inbound);
       gapAll = round(gapAll + gap);
       const vendor = BASIL_REV[id]?.val;
-      if (vendor && need) parts.push({ vendor, need, gap, left: round(have - need), unit: sku.unit });
+      if (vendor) parts.push({ vendor, need, have, inbound, gap, left: round(have - need), unit: sku.unit });
     }
-    return { label: g.label, tone: g.tone, unit: g.unit, gap: gapAll, need: needAll, parts };
+    return { label: g.label, tone: g.tone, unit: g.unit, gap: gapAll, need: needAll, have: haveAll, inbound: inAll, parts };
   };
   const wrap = document.getElementById("plan-card") || shortBox?.parentElement;
   if (wrap) wrap.style.setProperty("--plan-n", String(Math.max(used.length, 1)));
@@ -1118,20 +1123,24 @@ function renderPlan() {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
           const s = groupShort(g);
-          const vend = s.parts.length
-            ? `<div class="short-vends">${s.parts
-                .map((p) => {
-                  const over = p.left < 0;
-                  return `<div class="short-v ${over ? "no" : "ok"}"><span>${esc(p.vendor)}</span><em>預估 ${fmt(p.left)} ${esc(s.unit)}</em></div>`;
-                })
-                .join("")}</div>`
-            : "";
+          const nowRows = s.parts.length
+            ? s.parts
+                .map(
+                  (p) =>
+                    `<li><span>${esc(p.vendor)}</span><b>現有 ${fmt(p.have)}</b><b>進貨 ${fmt(p.inbound)}</b></li>`,
+                )
+                .join("")
+            : `<li><b>現有 ${fmt(s.have)}</b><b>進貨 ${fmt(s.inbound)}</b></li>`;
           const left = groupLeftover(g);
           const over = left < 0;
           return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
             <h3>${esc(s.label)}</h3>
-            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)}<em class="est-unit">${esc(s.unit)}</em></strong><small>${over ? "已超接" : "尚可接單"}</small></p>
-            ${vend}
+            <div class="short-line">
+              <span>現有／進貨${s.parts.length ? "（廠商別）" : ""}</span>
+              <ul class="short-now">${nowRows}</ul>
+            </div>
+            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)}<em class="est-unit">${esc(s.unit)}</em></strong></p>
+            <p class="short-can">${over ? "已超接，不宜再接單" : "尚可接單"}</p>
           </article>`;
         })
         .join("")}</div>`;
@@ -1150,39 +1159,71 @@ function renderPlan() {
       })
       .join("")}</ul></div>`;
   };
-  const rankOf = (id) => {
-    const o = state.orders.find((x) => x.id === id);
-    return o ? orderRank(o) : 0;
+  const addPlanRecs = (list, o, g, kind) => {
+    const basil = g.skuIds.some((id) => BASIL_REV[id]);
+    if (basil) {
+      for (const id of g.skuIds) {
+        const qty = lineQtyForSku(o, id);
+        if (!qty) continue;
+        const extra = [];
+        for (const l of o.lines || []) {
+          if (l.skuId !== id) continue;
+          if (l.note) extra.push(l.note);
+        }
+        const note = [BASIL_REV[id]?.val, ...extra].filter(Boolean).join("　");
+        list.push({ id: `${o.id}:${id}`, customer: o.customer, qty, note, prio: orderRank(o) });
+      }
+      return;
+    }
+    const qty = lineQtyForSkus(o, g.skuIds);
+    if (!qty) return;
+    list.push({
+      id: o.id,
+      customer: o.customer,
+      qty,
+      note: planLineNote(o, g.skuIds),
+      prio: orderRank(o),
+    });
   };
   const board = used
     .map((g) => {
       const pending = [];
       const shipped = [];
       for (const o of orders) {
-        const qty = lineQtyForSkus(o, g.skuIds);
-        if (!qty) continue;
-        const rec = {
-          id: o.id,
-          customer: o.customer,
-          qty,
-          note: planLineNote(o, g.skuIds),
-        };
-        if (o.status === "open") pending.push(rec);
-        else if (isTodayShipped(o)) shipped.push(rec);
+        if (o.status === "open") addPlanRecs(pending, o, g);
+        else if (isTodayShipped(o)) addPlanRecs(shipped, o, g);
       }
-      pending.sort((a, b) => rankOf(a.id) - rankOf(b.id) || a.customer.localeCompare(b.customer, "zh-Hant"));
-      shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
+      pending.sort((a, b) => (a.prio || 0) - (b.prio || 0) || a.customer.localeCompare(b.customer, "zh-Hant") || (a.note || "").localeCompare(b.note || "", "zh-Hant"));
+      shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant") || (a.note || "").localeCompare(b.note || "", "zh-Hant"));
       const waitQty = round(pending.reduce((n, r) => n + r.qty, 0));
       const outQty = round(shipped.reduce((n, r) => n + r.qty, 0));
       const allQty = round(waitQty + outQty);
+      const vendIds = g.skuIds.filter((id) => BASIL_REV[id]);
+      const vendRows = vendIds.map((id) => {
+        let wait = 0;
+        let out = 0;
+        for (const o of orders) {
+          const n = lineQtyForSku(o, id);
+          if (!n) continue;
+          if (o.status === "open") wait += n;
+          else if (isTodayShipped(o)) out += n;
+        }
+        wait = round(wait);
+        out = round(out);
+        return { vendor: BASIL_REV[id].val, wait, out, all: round(wait + out) };
+      });
+      const vendText = (key) => {
+        const bits = vendRows.filter((r) => r[key]).map((r) => `${r.vendor}${fmt(r[key])}`);
+        return bits.length ? `<span class="plan-vend-inline">${esc(bits.join("\u00a0\u00a0"))}</span>` : "";
+      };
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
         ${personList(pending, g.unit, "pending")}
         ${personList(shipped, g.unit, "shipped")}
         <div class="plan-stats">
-          <p>已接單總數 <strong>${fmt(allQty)} ${esc(g.unit)}</strong></p>
-          <p>已出件數 <strong>${fmt(outQty)} ${esc(g.unit)}</strong></p>
-          <p>待出貨件數 <strong>${fmt(waitQty)} ${esc(g.unit)}</strong></p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i>接</i><i>單</i></span><strong>${fmt(allQty)} ${esc(g.unit)}</strong>${vendText("all")}</p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i></i><i>出</i></span><strong>${fmt(outQty)} ${esc(g.unit)}</strong>${vendText("out")}</p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>待</i><i></i><i>出</i></span><strong>${fmt(waitQty)} ${esc(g.unit)}</strong>${vendText("wait")}</p>
         </div>
       </section>`;
     })

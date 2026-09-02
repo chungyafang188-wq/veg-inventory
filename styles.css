@@ -260,6 +260,17 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   border: none; background: transparent;
 }
 .daily-grid tfoot td { background: #c5ddb8; font-weight: 700; color: var(--green); }
+.daily-grid tr.rest-row td { background: #eef4ee; }
+.daily-grid tr.rest-row td.who { background: #e4efe4; color: var(--green); }
+.daily-grid tr.rest-row .cell-in { text-align: center; color: var(--green); font-weight: 700; }
+.rest-box { margin: 0.55rem 0 0.85rem; padding: 0.7rem 0.75rem; border: 1px solid var(--line); border-radius: 0.85rem; background: #f3f8f3; }
+.rest-box h3 { margin: 0; font-size: 0.95rem; }
+.rest-list { list-style: none; margin: 0.45rem 0 0; padding: 0; }
+.rest-list li {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  padding: 0.4rem 0; border-bottom: 1px solid #d5e4d6;
+}
+.rest-list .tiny-btn { width: auto; min-width: 0; min-height: 0; padding: 0.25rem 0.55rem; margin: 0 0 0 auto; }
 .live-totals {
   position: sticky;
   top: 0;

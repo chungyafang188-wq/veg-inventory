@@ -9,7 +9,7 @@ const FORM_KINDS = {
     label: "地瓜葉",
     title: "穠全 地瓜葉出貨",
     formTitle: "填寫地瓜葉出貨數量",
-    hint: "地瓜葉分誌／芳填當天叫貨。裝箱預設籃裝，可改箱裝。出貨對象預設小琳、欣儒，其他可自行新增；與九層塔／散賣名單分開，刪除不會互刪。件數直接打數字，↑↓←→ 換格。",
+    hint: "地瓜葉分誌／芳填當天叫貨。無叫貨請填「休」，會列入當日清單，表示已確認該客戶叫貨狀態。裝箱預設籃裝。出貨對象預設小琳、欣儒，其他可自行新增。件數直接打數字，↑↓←→ 換格。",
     formHint: "填地瓜葉／誌與地瓜葉／芳數量。裝箱預設籃裝。",
     skuIds: ["sl-zhi", "sl-fang"],
     cols: [
@@ -22,8 +22,8 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "",
-    formHint: "紅骨／綠骨／廠商／備註。",
+    hint: "無叫貨請填「休」，會列入當日清單，表示已確認該客戶叫貨狀態。",
+    formHint: "紅骨／綠骨／廠商／備註。無叫貨填「休」。",
     skuIds: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
       { key: "rb", label: "紅骨", kind: "qty" },
@@ -185,10 +185,11 @@ function load() {
     const data = JSON.parse(localStorage.getItem(KEY) || "null");
     if (data && data.stock && data.orders) {
       if (!data.daily) data.daily = {};
+      if (!Array.isArray(data.rests)) data.rests = [];
       return data;
     }
   } catch (_) {}
-  return { stock: emptyStock(), orders: [], daily: {} };
+  return { stock: emptyStock(), orders: [], daily: {}, rests: [] };
 }
 function save() {
   try {
@@ -286,6 +287,7 @@ for (const sku of SKUS) {
   if (!state.stock[sku.id]) state.stock[sku.id] = { qty: 0, processed: 0, safety: 0 };
 }
 if (!state.daily) state.daily = {};
+if (!Array.isArray(state.rests)) state.rests = [];
 const seeded = ensureTodayBooks();
 syncAllNqQty();
 if (migrated || seeded) save();
@@ -388,6 +390,7 @@ function formRowKeys(kind = formCustKey()) {
       "_basil3",
     );
   }
+  keys.push("rest");
   return keys;
 }
 function clearFormFields(row, kind = formCustKey()) {
@@ -583,6 +586,73 @@ function qtyN(v) {
   const n = Number(v);
   return n > 0 ? n : 0;
 }
+function formAllowsRest() {
+  return co === "nq" && (formKind === "leaf" || formKind === "basil");
+}
+function isRestText(v) {
+  return String(v || "").trim() === "休";
+}
+function qtyColKeys(kind = formKind) {
+  return (FORM_KINDS[kind] || FORM_KINDS.leaf).cols.filter((c) => c.kind === "qty").map((c) => c.key);
+}
+function rowRestState(row, kind = formKind) {
+  if (!row) return "";
+  if (row.rest) return "rest";
+  const texts = qtyColKeys(kind).map((k) => String(row[k] ?? "").trim());
+  const hasRest = texts.some(isRestText);
+  const hasQty = texts.some((t) => qtyN(t) > 0);
+  if (hasRest && hasQty) return "mix";
+  if (hasRest) return "rest";
+  return "";
+}
+function markRowRest(row, kind = formKind) {
+  row.rest = true;
+  for (const k of qtyColKeys(kind)) row[k] = "休";
+}
+function clearRowRest(row, kind = formKind) {
+  if (!row) return;
+  delete row.rest;
+  for (const k of qtyColKeys(kind)) {
+    if (isRestText(row[k])) delete row[k];
+  }
+}
+function restKeyMatch(r, name, date, kind = formKind) {
+  return r.co === "nq" && r.formKind === kind && r.customer === name && r.date === date;
+}
+function upsertRest(name, date, kind = formKind) {
+  if (!Array.isArray(state.rests)) state.rests = [];
+  if (state.rests.some((r) => restKeyMatch(r, name, date, kind))) return;
+  state.rests.push({
+    id: uid(),
+    co: "nq",
+    formKind: kind,
+    customer: name,
+    date,
+  });
+  save();
+}
+function removeRest(name, date, kind = formKind) {
+  if (!Array.isArray(state.rests)) return;
+  state.rests = state.rests.filter((r) => !restKeyMatch(r, name, date, kind));
+  save();
+}
+function sheetDate() {
+  return document.getElementById("daily-sheet-date")?.value || today();
+}
+function applyQtyCellValue(row, who, col, raw, date) {
+  const val = String(raw || "").trim();
+  if (formAllowsRest() && isRestText(val)) {
+    markRowRest(row);
+    upsertRest(who, date);
+    return "rest";
+  }
+  if (formAllowsRest()) {
+    clearRowRest(row);
+    removeRest(who, date);
+  }
+  row[col] = val;
+  return "";
+}
 function rowVendor(row) {
   const v = String(row?.vendor || "").trim();
   if (VENDOR_OPTS.includes(v)) return v;
@@ -678,13 +748,24 @@ function collectNqEntries() {
     if (o) names = [o.customer];
   }
   const entries = [];
+  const rests = [];
   const errors = [];
   for (const name of names) {
-    const { lines, err } = linesFromDailyRow(book[name] || {}, basilMeta(book));
+    const row = book[name] || {};
+    const rs = formAllowsRest() ? rowRestState(row) : "";
+    if (rs === "mix") {
+      errors.push(`${name}：休與數量不能同時填`);
+      continue;
+    }
+    if (rs === "rest") {
+      rests.push(name);
+      continue;
+    }
+    const { lines, err } = linesFromDailyRow(row, basilMeta(book));
     if (err.includes("pack")) errors.push(`${name}：地瓜葉有數量時請選裝箱樣式`);
     if (lines.length) entries.push({ customer: name, lines });
   }
-  return { date, entries, errors };
+  return { date, entries, errors, rests };
 }
 function qtyMapFromLines(entries) {
   const map = {};
@@ -723,12 +804,10 @@ function commitStatus(worst) {
   else setStatus("已確認並列入排程（已佔量，尚未扣庫）。", false);
 }
 function confirmNqSchedule() {
-  const { date, entries, errors } = collectNqEntries();
+  const { date, entries, errors, rests } = collectNqEntries();
   if (errors.length) return setStatus(errors[0], true);
-  if (!entries.length) return setStatus("請在上方表格填至少一項件數", true);
-  const map = qtyMapFromLines(entries);
-  const { worst } = lineChecks(map, currentRecord());
   if (editing) {
+    if (!entries.length) return setStatus("請填數量後再確認。", true);
     const o = state.orders.find((x) => x.id === editing);
     o.customer = entries[0].customer;
     o.shipDate = date;
@@ -737,9 +816,22 @@ function confirmNqSchedule() {
     o.status = "open";
     editing = "";
     document.getElementById("edit-id").value = "";
-  } else {
-    for (const e of entries) addOpenOrder(e.customer, date, e.lines);
+    removeRest(entries[0].customer, date);
+    clearDailyRows(entries.map((e) => e.customer), date);
+    save();
+    commitStatus("ok");
+    render();
+    return;
   }
+  if (!entries.length) {
+    if (rests.length) return setStatus(`已記錄無叫貨（休）${rests.length} 位，無需入單。`, false);
+    return setStatus("請填數量，無叫貨請填「休」。", true);
+  }
+  for (const e of entries) removeRest(e.customer, date);
+  for (const name of rests) upsertRest(name, date);
+  const map = qtyMapFromLines(entries);
+  const { worst } = lineChecks(map, currentRecord());
+  for (const e of entries) addOpenOrder(e.customer, date, e.lines);
   clearDailyRows(entries.map((e) => e.customer), date);
   save();
   commitStatus(worst);
@@ -750,7 +842,7 @@ function renderCheck() {
   if (co === "nq") {
     const box = document.getElementById("nq-check");
     if (!box) return;
-    const { entries, errors } = collectNqEntries();
+    const { entries, errors, rests } = collectNqEntries();
     const map = qtyMapFromLines(entries);
     const { rows, worst } = lineChecks(map, currentRecord());
     const stockHtml = rows
@@ -766,7 +858,11 @@ function renderCheck() {
       })
       .join("");
     const errHtml = errors.map((m) => `<p class="bad">${esc(m)}</p>`).join("");
-    box.innerHTML = errHtml + stockHtml;
+    const restHtml =
+      formAllowsRest() && rests.length
+        ? `<p class="ok">無叫貨（休）已確認：${rests.map(esc).join("、")}</p>`
+        : "";
+    box.innerHTML = errHtml + restHtml + stockHtml;
     box.dataset.worst = errors.length ? "bad" : worst;
     return;
   }
@@ -885,6 +981,35 @@ function renderOrders() {
       </article>`;
     })
     .join("")}</div>`;
+}
+
+function renderRestList() {
+  const box = document.getElementById("rest-list");
+  if (!box) return;
+  if (!formAllowsRest()) {
+    box.innerHTML = "";
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const date = sheetDate();
+  const kindLabel = FORM_KINDS[formKind]?.label || "";
+  const rows = (state.rests || [])
+    .filter((r) => restKeyMatch(r, r.customer, date, formKind))
+    .slice()
+    .sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
+  if (!rows.length) {
+    box.innerHTML = `<div class="rest-box"><h3>無叫貨（休）· ${esc(kindLabel)}</h3><p class="empty">數量欄填「休」即列入，表示已確認當日不叫貨。</p></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="rest-box"><h3>無叫貨（休）· ${esc(kindLabel)} ${esc(date)}</h3>
+    <p class="hint">已確認當日叫貨狀態（無叫貨）。</p>
+    <ul class="rest-list">${rows
+      .map(
+        (r) =>
+          `<li><span class="tag">休</span><strong>${esc(r.customer)}</strong><button type="button" class="tiny-btn" data-unrest="${esc(r.customer)}" aria-label="取消 ${esc(r.customer)} 的休">取消</button></li>`,
+      )
+      .join("")}</ul></div>`;
 }
 
 function skuShortName(sku) {
@@ -1249,9 +1374,6 @@ function dailyRow(book, name) {
   if (!book[name]) book[name] = {};
   return book[name];
 }
-function sheetDate() {
-  return document.getElementById("daily-sheet-date")?.value || today();
-}
 function confirmStock(skuId, date) {
   const b = bookRow(skuId, date);
   return round((b.opening || 0) + (b.inbound || 0) - shippedQty(skuId, date));
@@ -1290,13 +1412,25 @@ function renderDailyGrid() {
   const dateEl = document.getElementById("daily-sheet-date");
   if (!dateEl.value) dateEl.value = today();
   const date = dateEl.value;
-  const { book } = dailyBook(date);
+  const { data, book } = dailyBook(date);
+  let restDirty = false;
   const names = gridCustomers();
   const cols = currentCols();
   const head = `<th>出貨對象</th>${cols.map((c) => `<th>${esc(c.label)}</th>`).join("")}`;
   const body = names.map((name, ri) => {
     const row = book[name] || {};
     if (formKind === "basil") migrateBasilDailyRow(row);
+    if (
+      formAllowsRest() &&
+      (state.rests || []).some((r) => restKeyMatch(r, name, date)) &&
+      rowRestState(row) !== "rest" &&
+      rowRestState(row) !== "mix" &&
+      qtyColKeys().every((k) => !qtyN(row[k]))
+    ) {
+      markRowRest(row);
+      restDirty = true;
+    }
+    const restCls = rowRestState(row) === "rest" ? " rest-row" : "";
     const cells = cols.map((col, ci) => {
       const val = row[col.key] || "";
       const pos = `data-who="${esc(name)}" data-col="${col.key}" data-r="${ri}" data-c="${ci}"`;
@@ -1322,17 +1456,22 @@ function renderDailyGrid() {
     const drop = NQ_DEFAULT_CUSTOMERS.includes(name)
       ? ""
       : `<button type="button" class="who-x" data-drop-who="${esc(name)}" aria-label="移除 ${esc(name)}">×</button>`;
-    return `<tr><td class="who">${esc(name)}${drop}</td>${cells}</tr>`;
+    return `<tr class="${restCls.trim()}"><td class="who">${esc(name)}${drop}</td>${cells}</tr>`;
   }).join("");
   const totals = cols.map((col) => {
     if (col.kind !== "qty") return "<td></td>";
     let n = 0;
-    for (const name of names) n += Number((book[name] || {})[col.key]) || 0;
+    for (const name of names) {
+      const raw = (book[name] || {})[col.key];
+      if (isRestText(raw)) continue;
+      n += Number(raw) || 0;
+    }
     return `<td>${n ? fmt(n) : ""}</td>`;
   }).join("");
   const gridClass = formKind === "basil" ? "daily-grid basil-grid" : "daily-grid";
   document.getElementById("daily-sheet").innerHTML =
     `<table class="${gridClass}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td class="who">合計</td>${totals}</tr></tfoot></table>`;
+  if (restDirty) saveDailyStore(data);
   renderLeafInbound();
 }
 function renderCustChips() {
@@ -1380,10 +1519,12 @@ function applyCopy() {
   }
   const def = FORM_KINDS[formKind] || FORM_KINDS.leaf;
   intro.textContent =
-    "穠全：在上方表格填當天叫貨數量。出貨對象預設小琳、欣儒，可自行新增；地瓜葉、九層塔、散賣名單分開，互不刪除。底部按「確認輸入訂單」即佔量。出貨順序在下方已填紀錄用 ↑↓ 調整。出貨才扣庫。";
+    "穠全：在上方表格填當天叫貨數量。地瓜葉／九層塔無叫貨請填「休」，會列清單表示已確認當日狀態。出貨對象預設小琳、欣儒，可自行新增。底部按「確認輸入訂單」即佔量。出貨順序在已填紀錄用 ↑↓ 調整。";
   formTitle.textContent = editing ? "修改數量" : def.formTitle;
   formHint.textContent = def.formHint;
-  ordersHint.textContent = "待出貨可用 ↑↓ 調整出貨順序。取消會紅線劃掉但留下。";
+  ordersHint.textContent = formAllowsRest()
+    ? "無叫貨填「休」會列在上方清單。待出貨可用 ↑↓ 調整出貨順序。取消會紅線劃掉但留下。"
+    : "待出貨可用 ↑↓ 調整出貨順序。取消會紅線劃掉但留下。";
   cust.readOnly = false;
   cust.placeholder = "請輸入出貨對象";
 }
@@ -1419,6 +1560,7 @@ function render() {
   run(renderSheet);
   run(renderCheck);
   run(renderOrders);
+  run(renderRestList);
   run(renderPlan);
   run(renderStock);
   run(renderCustomers);
@@ -1469,24 +1611,44 @@ document.getElementById("daily-sheet-date").addEventListener("change", () => {
   renderDailyGrid();
   renderLeafInbound();
   renderCheck();
+  renderRestList();
 });
 document.getElementById("daily-sheet").addEventListener("input", (e) => {
   const el = e.target.closest("[data-who][data-col]");
   if (!el) return;
-  if (el.classList.contains("cell-in")) {
-    const cleaned = el.value.replace(/[^\d.]/g, "");
+  if (el.classList.contains("cell-in") && !e.isComposing) {
+    const t = el.value.trim();
+    const cleaned = formAllowsRest() && t === "休" ? "休" : t.replace(/[^\d.]/g, "");
     if (cleaned !== el.value) el.value = cleaned;
   }
   const date = document.getElementById("daily-sheet-date").value || today();
   const { data, book } = dailyBook(date);
   const row = dailyRow(book, el.dataset.who);
   if (formKind === "basil") migrateBasilDailyRow(row);
-  row[el.dataset.col] = el.value;
+  if (el.classList.contains("cell-in")) {
+    const mode = applyQtyCellValue(row, el.dataset.who, el.dataset.col, el.value, date);
+    if (mode === "rest") {
+      document.querySelectorAll("#daily-sheet .cell-in").forEach((input) => {
+        if (input.dataset.who === el.dataset.who && qtyColKeys().includes(input.dataset.col)) {
+          input.value = "休";
+        }
+      });
+      el.closest("tr")?.classList.add("rest-row");
+    } else {
+      el.closest("tr")?.classList.remove("rest-row");
+      document.querySelectorAll("#daily-sheet .cell-in").forEach((input) => {
+        if (input.dataset.who === el.dataset.who && input !== el && isRestText(input.value)) input.value = "";
+      });
+    }
+  } else {
+    row[el.dataset.col] = el.value;
+  }
   saveDailyStore(data);
   if (el.classList.contains("cell-in")) {
     const col = el.dataset.col;
     let n = 0;
     document.querySelectorAll(`#daily-sheet [data-col="${col}"]`).forEach((input) => {
+      if (isRestText(input.value)) return;
       n += Number(input.value) || 0;
     });
     const cols = currentCols();
@@ -1496,10 +1658,12 @@ document.getElementById("daily-sheet").addEventListener("input", (e) => {
   }
   refreshInboundCompare();
   renderCheck();
+  renderRestList();
 });
 document.getElementById("daily-sheet").addEventListener("change", (e) => {
   const el = e.target.closest("[data-who][data-col]");
   if (!el) return;
+  if (el.classList.contains("cell-in")) return;
   const date = document.getElementById("daily-sheet-date").value || today();
   const { data, book } = dailyBook(date);
   const row = dailyRow(book, el.dataset.who);
@@ -1655,6 +1819,17 @@ document.getElementById("cancel-edit").onclick = () => {
   render();
 };
 
+document.getElementById("rest-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-unrest]");
+  if (!btn) return;
+  const name = btn.dataset.unrest;
+  const date = sheetDate();
+  removeRest(name, date);
+  const { data, book } = dailyBook(date);
+  clearRowRest(book[name]);
+  saveDailyStore(data);
+  render();
+});
 document.getElementById("orders").onclick = (e) => {
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
@@ -1956,6 +2131,7 @@ document.addEventListener("visibilitychange", () => {
 function bundleHasData(b) {
   if (!b || typeof b !== "object") return false;
   if (Array.isArray(b.orders?.orders) && b.orders.orders.length) return true;
+  if (Array.isArray(b.orders?.rests) && b.orders.rests.length) return true;
   if (b.orders?.daily && Object.keys(b.orders.daily).length) return true;
   if (b.dailySheet && Object.keys(b.dailySheet).length) return true;
   const nq = b.nqCustomers;
@@ -1971,6 +2147,7 @@ function bundleHasData(b) {
 }
 function localHasData() {
   if (state.orders.length) return true;
+  if ((state.rests || []).length) return true;
   if (state.daily && Object.keys(state.daily).length) return true;
   try {
     if (Object.keys(JSON.parse(localStorage.getItem(DAILY_KEY) || "{}")).length) return true;
@@ -1986,7 +2163,7 @@ function localHasData() {
 function collectBundle() {
   return {
     updatedAt: Date.now(),
-    orders: { stock: state.stock, orders: state.orders, daily: state.daily || {} },
+    orders: { stock: state.stock, orders: state.orders, daily: state.daily || {}, rests: state.rests || [] },
     nqCustomers: loadNqLists(),
     haCustomers: loadHaCustomers(),
     dailySheet: dailyStore(),
@@ -1999,6 +2176,7 @@ function applyBundle(b) {
       state.stock = b.orders.stock;
       state.orders = b.orders.orders;
       state.daily = b.orders.daily || {};
+      state.rests = Array.isArray(b.orders.rests) ? b.orders.rests : state.rests || [];
       for (const sku of SKUS) {
         if (!state.stock[sku.id]) state.stock[sku.id] = { qty: 0, processed: 0, safety: 0 };
       }

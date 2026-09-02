@@ -923,6 +923,7 @@ function renderPlan() {
       </section>`;
     })
     .join("");
+  box.innerHTML = `<div class="plan-board">${box.innerHTML}</div>`;
 }
 
 function nqMorningDone() {

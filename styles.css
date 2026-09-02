@@ -239,7 +239,48 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   cursor: pointer;
   line-height: 1;
 }
-.date-inline input { width: 9.5rem; padding: 0.35rem 0.45rem; }
+#sheet .qty-cell { white-space: nowrap; }
+#sheet .qty-cell .qty { width: 5.2rem; }
+#sheet .qty-cell .unit { margin-left: 0.35rem; font-weight: 700; }
+#ha-lines { display: grid; gap: 0.45rem; margin: 0.15rem 0 0.5rem; }
+.ha-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+}
+.ha-line select { width: auto; min-width: 6.2rem; padding: 0.35rem 0.4rem; }
+.ha-line [data-ha-extras] { display: contents; }
+.ha-line .qty { width: 5.4rem; }
+.ha-pallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.ha-pallet input { width: auto; accent-color: var(--green); }
+#ha-add-line { width: auto; margin: 0; }
+#line-paste { min-height: 5.5rem; font: inherit; }
+.line-draft {
+  margin-top: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: #fffdf8;
+}
+.line-draft pre {
+  margin: 0.35rem 0;
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.line-draft ul { margin: 0.25rem 0 0.45rem; padding-left: 1.1rem; }
+.line-draft .btn-row { margin-top: 0.35rem; }
+.plan-date-row { margin-top: 0.85rem; }
+.plan-date-row h2 { margin: 0; }
 .daily-sheet-card .hint { margin-bottom: 0.45rem; }
 .sheet-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.35rem; }
 .daily-grid { min-width: 28rem; border-collapse: collapse; font-size: 0.78rem; }

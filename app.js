@@ -79,12 +79,20 @@ const SKUS = [
   { id: "shiso-kg", co: "nq", name: "紫蘇散賣kg", unit: "kg" },
   { id: "basil-kg", co: "nq", name: "九層塔散賣kg", unit: "kg" },
   { id: "shiso-jin", co: "nq", name: "紫蘇散賣斤", unit: "斤" },
-  { id: "on-nz-l", co: "ha", name: "洋蔥／紐西蘭大球", unit: "袋", onion: true, site: true },
-  { id: "on-nz-xl", co: "ha", name: "洋蔥／紐西蘭特大", unit: "袋", onion: true, site: true },
-  { id: "on-kr-l", co: "ha", name: "洋蔥／韓洋大球", unit: "袋", onion: true, site: true },
-  { id: "on-kr-xl", co: "ha", name: "洋蔥／韓洋特大", unit: "袋", onion: true, site: true },
-  { id: "on-kr-m", co: "ha", name: "洋蔥／韓洋中", unit: "袋", onion: true, site: true },
-  { id: "pk", co: "ha", name: "南瓜", unit: "袋", site: true },
+  { id: "on-nz-20", co: "ha", name: "洋蔥／紐西蘭／20K", unit: "袋", onion: true, site: true },
+  { id: "on-nz-12", co: "ha", name: "洋蔥／紐西蘭／12K", unit: "袋", onion: true, site: true },
+  { id: "on-au-20", co: "ha", name: "洋蔥／澳洲／20K", unit: "袋", onion: true, site: true },
+  { id: "on-au-12", co: "ha", name: "洋蔥／澳洲／12K", unit: "袋", onion: true, site: true },
+  { id: "on-kr-20", co: "ha", name: "洋蔥／韓國／20K", unit: "袋", onion: true, site: true },
+  { id: "on-kr-12", co: "ha", name: "洋蔥／韓國／12K", unit: "袋", onion: true, site: true },
+  { id: "on-vn-20", co: "ha", name: "洋蔥／越南／20K", unit: "袋", onion: true, site: true },
+  { id: "on-vn-12", co: "ha", name: "洋蔥／越南／12K", unit: "袋", onion: true, site: true },
+  { id: "on-b-kg", co: "ha", name: "洋蔥／B級", unit: "kg", onion: true, site: true },
+  { id: "pk-mi-18", co: "ha", name: "南瓜／密本／18K", unit: "箱", site: true },
+  { id: "pk-mi-20", co: "ha", name: "南瓜／密本／20K", unit: "箱", site: true },
+  { id: "pk-ch-18", co: "ha", name: "南瓜／阿成／18K", unit: "箱", site: true },
+  { id: "pk-ch-20", co: "ha", name: "南瓜／阿成／20K", unit: "箱", site: true },
+  { id: "pk-b-kg", co: "ha", name: "南瓜／B級", unit: "kg", site: true },
 ];
 const NQ_INBOUND = [
   { id: "sl-zhi", label: "地瓜葉-誌" },
@@ -135,6 +143,34 @@ function addStockRow(a, b) {
     safety: Math.max(a?.safety || 0, b?.safety || 0),
   };
 }
+const SKU_REMAP = {
+  pk: "pk-mi-18",
+  "pk-mi": "pk-mi-18",
+  "pk-cheng": "pk-ch-18",
+  "pk-mid": "pk-mi-18",
+  "pk-mid-kg": "pk-b-kg",
+  "on-nz-l": "on-nz-20",
+  "on-nz-xl": "on-nz-12",
+  "on-kr-l": "on-kr-20",
+  "on-kr-xl": "on-kr-12",
+  "on-kr-m": "on-b-kg",
+  "on-kr-b": "on-b-kg",
+  "on-kr-b-kg": "on-b-kg",
+};
+function remapSkuId(id) {
+  return SKU_REMAP[id] || id;
+}
+function mergeDailySku(to, from) {
+  if (!from) return to || { opening: 0, inbound: 0, count: null };
+  return {
+    opening: round((to?.opening || 0) + (from.opening || 0)),
+    inbound: round((to?.inbound || 0) + (from.inbound || 0)),
+    count: from.count != null ? round((Number(to?.count) || 0) + Number(from.count)) : to?.count ?? null,
+    morning: from.morning != null && from.morning !== "" ? from.morning : to?.morning,
+    morningConfirmed: !!(from.morningConfirmed || to?.morningConfirmed),
+    lots: [...(to?.lots || []), ...(from.lots || [])],
+  };
+}
 function migrate(data) {
   let changed = false;
   const pairs = [
@@ -175,6 +211,40 @@ function migrate(data) {
           delete book[id];
         }
         book[to] = { opening, inbound, count };
+        changed = true;
+      }
+    }
+  }
+  for (const o of data.orders || []) {
+    for (const line of o.lines || []) {
+      const next = remapSkuId(line.skuId);
+      if (next !== line.skuId) {
+        line.skuId = next;
+        changed = true;
+      }
+    }
+    for (const lot of o.shipInbounds || []) {
+      const next = remapSkuId(lot.skuId);
+      if (next !== lot.skuId) {
+        lot.skuId = next;
+        changed = true;
+      }
+    }
+  }
+  for (const [from, to] of Object.entries(SKU_REMAP)) {
+    if (data.stock?.[from]) {
+      data.stock[to] = addStockRow(data.stock[to] || { qty: 0, processed: 0, safety: 0 }, data.stock[from]);
+      delete data.stock[from];
+      changed = true;
+    }
+  }
+  if (data.daily) {
+    for (const date of Object.keys(data.daily)) {
+      const book = data.daily[date];
+      for (const [from, to] of Object.entries(SKU_REMAP)) {
+        if (!book?.[from]) continue;
+        book[to] = mergeDailySku(book[to], book[from]);
+        delete book[from];
         changed = true;
       }
     }
@@ -471,6 +541,10 @@ function orderFormKind(o) {
 function visibleOpenQueue() {
   let list = openQueue();
   if (co === "nq") list = list.filter((o) => orderFormKind(o) === formKind);
+  if (co === "ha") {
+    const day = document.getElementById("ship-date")?.value || today();
+    list = list.filter((o) => o.shipDate === day);
+  }
   return list;
 }
 function bumpOrder(id, dir) {
@@ -510,7 +584,8 @@ function lineLabel(l, withUnit) {
   const unit = s && withUnit ? ` ${s.unit}` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const note = l.note ? `（${l.note}）` : "";
-  return `${name} ${fmt(l.qty)}${unit}${pack}${note}`;
+  const pallet = l.pallet ? "（疊棧板）" : "";
+  return `${name} ${fmt(l.qty)}${unit}${pack}${note}${pallet}`;
 }
 
 function setStatus(text, err) {
@@ -539,14 +614,113 @@ function lineChecks(qtyMap, current) {
   return { rows, worst };
 }
 
+const HA_ONION_ORIGINS = ["紐西蘭", "澳洲", "韓國", "越南"];
+const HA_ONION_SPECS = ["20K", "12K"];
+const HA_PK_VARS = ["密本", "阿成"];
+const HA_PK_SPECS = ["18K", "20K"];
+const HA_ORIGIN_CODE = { 紐西蘭: "nz", 澳洲: "au", 韓國: "kr", 越南: "vn" };
+const HA_PK_CODE = { 密本: "mi", 阿成: "ch" };
+function optsHtml(list, selected) {
+  return list.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`).join("");
+}
+function haOnionSku(origin, spec) {
+  const o = HA_ORIGIN_CODE[origin] || "nz";
+  const s = spec === "12K" ? "12" : "20";
+  return `on-${o}-${s}`;
+}
+function haPkSku(kind, spec) {
+  const k = HA_PK_CODE[kind] || "mi";
+  const s = spec === "20K" ? "20" : "18";
+  return `pk-${k}-${s}`;
+}
+function haParseSku(id) {
+  if (id === "on-b-kg") return { kind: "on-b" };
+  if (id === "pk-b-kg") return { kind: "pk-b" };
+  const on = String(id || "").match(/^on-(nz|au|kr|vn)-(20|12)$/);
+  if (on) {
+    const origin = { nz: "紐西蘭", au: "澳洲", kr: "韓國", vn: "越南" }[on[1]];
+    return { kind: "on", origin, spec: on[2] === "12" ? "12K" : "20K" };
+  }
+  const pk = String(id || "").match(/^pk-(mi|ch)-(18|20)$/);
+  if (pk) {
+    return { kind: "pk", variety: pk[1] === "mi" ? "密本" : "阿成", spec: pk[2] === "20" ? "20K" : "18K" };
+  }
+  return { kind: "on", origin: "紐西蘭", spec: "20K" };
+}
+function haUnitOf(kind) {
+  if (kind === "pk") return "箱";
+  if (kind === "on") return "袋";
+  return "kg";
+}
+function haExtrasHtml(kind, rec = {}) {
+  if (kind === "on") {
+    return `<select data-ha-origin aria-label="產地">${optsHtml(HA_ONION_ORIGINS, rec.origin || "紐西蘭")}</select>
+      <select data-ha-spec aria-label="規格">${optsHtml(HA_ONION_SPECS, rec.spec || "20K")}</select>`;
+  }
+  if (kind === "pk") {
+    return `<select data-ha-var aria-label="品種">${optsHtml(HA_PK_VARS, rec.variety || "密本")}</select>
+      <select data-ha-spec aria-label="規格">${optsHtml(HA_PK_SPECS, rec.spec || "18K")}</select>`;
+  }
+  return "";
+}
+function haLineHtml(rec = {}) {
+  const parsed = rec.skuId ? haParseSku(rec.skuId) : { kind: rec.kind || "on", origin: "紐西蘭", spec: "20K", variety: "密本" };
+  const kind = parsed.kind || "on";
+  const qty = rec.qty > 0 ? rec.qty : "";
+  const kinds = [
+    ["on", "洋蔥"],
+    ["pk", "南瓜"],
+    ["on-b", "洋蔥B級"],
+    ["pk-b", "南瓜B級"],
+  ];
+  const kindOpts = kinds.map(([v, lab]) => `<option value="${v}"${v === kind ? " selected" : ""}>${lab}</option>`).join("");
+  return `<div class="ha-line">
+    <select data-ha-kind aria-label="品項">${kindOpts}</select>
+    <span data-ha-extras>${haExtrasHtml(kind, parsed)}</span>
+    <input class="qty" data-ha-qty type="number" min="0" step="${kind.endsWith("-b") ? "0.1" : "1"}" inputmode="decimal" value="${esc(qty)}" placeholder="數量" aria-label="數量" />
+    <span class="unit" data-ha-unit>${haUnitOf(kind)}</span>
+    <label class="ha-pallet"><input type="checkbox" data-ha-pallet ${rec.pallet ? "checked" : ""} />疊棧板</label>
+    <button type="button" class="tiny-btn ghost" data-ha-del>刪</button>
+  </div>`;
+}
+function renderHaSheet(lines) {
+  const rows = Array.isArray(lines) && lines.length ? lines : [{}];
+  document.getElementById("sheet").innerHTML = `<div id="ha-lines">${rows.map((l) => haLineHtml(l)).join("")}</div>
+    <button type="button" class="ghost" id="ha-add-line" data-ha-add>+ 加一筆</button>`;
+}
+function haLinesFromForm() {
+  const out = [];
+  document.querySelectorAll("#ha-lines .ha-line").forEach((row) => {
+    const kind = row.querySelector("[data-ha-kind]")?.value || "on";
+    const qty = Number(row.querySelector("[data-ha-qty]")?.value);
+    if (!(qty > 0)) return;
+    let skuId = "on-nz-20";
+    if (kind === "on-b") skuId = "on-b-kg";
+    else if (kind === "pk-b") skuId = "pk-b-kg";
+    else if (kind === "on") {
+      skuId = haOnionSku(row.querySelector("[data-ha-origin]")?.value, row.querySelector("[data-ha-spec]")?.value);
+    } else {
+      skuId = haPkSku(row.querySelector("[data-ha-var]")?.value, row.querySelector("[data-ha-spec]")?.value);
+    }
+    const line = { skuId, qty: round(qty) };
+    if (row.querySelector("[data-ha-pallet]")?.checked) line.pallet = true;
+    out.push(line);
+  });
+  return out;
+}
+
 function renderSheet() {
   const current = currentRecord();
   const leaf = co === "nq" && formKind === "leaf";
+  if (co === "ha") {
+    renderHaSheet(current?.lines);
+    return;
+  }
   const html = formSkus()
     .map((sku) => {
       const av = available(sku, current);
       return `<tr><td class="name-cell">${esc(sku.name)}</td><td>${fmt(av)} ${sku.unit}</td>
-        <td><input class="qty" data-sku="${sku.id}" type="number" min="0" step="0.1" /></td></tr>`;
+        <td><input class="qty" data-sku="${sku.id}" type="number" min="0" step="${skuStep(sku)}" /></td></tr>`;
     })
     .join("");
   const pack = leaf
@@ -562,6 +736,10 @@ function renderSheet() {
 
 function qtyMapFromForm() {
   const map = {};
+  if (co === "ha") {
+    for (const l of haLinesFromForm()) map[l.skuId] = round((map[l.skuId] || 0) + l.qty);
+    return map;
+  }
   document.querySelectorAll("#sheet [data-sku]").forEach((input) => {
     const n = Number(input.value);
     if (n > 0) map[input.dataset.sku] = n;
@@ -582,6 +760,7 @@ function packMapFromForm() {
   return map;
 }
 function linesFromForm() {
+  if (co === "ha") return haLinesFromForm();
   const qty = qtyMapFromForm();
   const packs = packMapFromForm();
   return Object.entries(qty).map(([skuId, n]) => {
@@ -797,16 +976,22 @@ function clearDailyRows(names, date) {
   saveDailyStore(data);
 }
 function addOpenOrder(customer, shipDate, lines) {
-  const nos = state.orders.filter((o) => o.co === co).map((o) => o.no);
+  addOpenOrderFor(co, customer, shipDate, lines);
+}
+function addOpenOrderFor(company, customer, shipDate, lines) {
+  const nos = state.orders.filter((o) => o.co === company).map((o) => o.no);
+  const list = state.orders.filter((o) => o.co === company);
+  let m = 0;
+  for (const o of list) m = Math.max(m, orderRank(o));
   state.orders.unshift({
     id: uid(),
-    co,
+    co: company,
     no: (nos.length ? Math.max(...nos) : 0) + 1,
     customer,
     shipDate,
     lines,
     status: "open",
-    prio: nextPrio(),
+    prio: m + 1,
     edited: false,
   });
 }
@@ -878,6 +1063,14 @@ function renderCheck() {
     box.dataset.worst = errors.length ? "bad" : worst;
     return;
   }
+  if (co === "ha") {
+    const box = document.getElementById("check");
+    if (box) {
+      box.innerHTML = "";
+      box.dataset.worst = "ok";
+    }
+    return;
+  }
   const map = qtyMapFromForm();
   const { rows, worst } = lineChecks(map, currentRecord());
   const box = document.getElementById("check");
@@ -933,9 +1126,13 @@ function renderOrders() {
   const box = document.getElementById("orders");
   let list = state.orders.filter((o) => o.co === co);
   if (co === "nq") list = list.filter((o) => orderFormKind(o) === formKind);
+  const day = document.getElementById("ship-date")?.value || today();
+  if (co === "ha") list = list.filter((o) => o.shipDate === day);
   if (!list.length) {
     const kind = co === "nq" ? FORM_KINDS[formKind]?.label || "本表" : "";
-    box.innerHTML = `<p class="empty">${kind ? `「${kind}」尚無已填紀錄。` : "尚無紀錄。"}</p>`;
+    box.innerHTML = `<p class="empty">${
+      co === "ha" ? `${day} 尚無已填紀錄。` : kind ? `「${kind}」尚無已填紀錄。` : "尚無紀錄。"
+    }</p>`;
     return;
   }
   const rank = {};
@@ -1610,6 +1807,90 @@ function renderCustChips() {
   box.innerHTML = "";
 }
 
+let lineDraftsCache = [];
+let linePastePreview = null;
+function lineSkuLabel(id) {
+  const s = skuById(id);
+  return s ? `${s.name} ${s.unit}` : id;
+}
+function confirmParsedOrder(parsed, date) {
+  const who = (parsed.customer || document.getElementById("customer")?.value || "").trim();
+  if (!who) return setStatus("請先寫客人名字（第一行或出貨對象欄）。", true);
+  const lines = parsed.lines || [];
+  if (!lines.length) return setStatus("沒有對到品項，請改文字再解析。", true);
+  const ha = lines.filter((l) => (skuById(l.skuId) || {}).co === "ha");
+  const nq = lines.filter((l) => (skuById(l.skuId) || {}).co === "nq");
+  const day = date || document.getElementById("ship-date")?.value || today();
+  if (ha.length) {
+    addOpenOrderFor("ha", who, day, ha);
+    rememberHaCustomer(who);
+  }
+  if (nq.length) {
+    addOpenOrderFor("nq", who, day, nq);
+    addNqCustomer(who, formKindOfSku(nq[0].skuId));
+  }
+  save();
+  setStatus(`已把「${who}」拆成訂單（需再確認內容）。鴻安 ${ha.length} 項、穠全 ${nq.length} 項。`, false);
+  render();
+  return true;
+}
+async function dropLineDraft(id) {
+  await fetch("/api/line/drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "drop", id }),
+  });
+}
+function renderLineDrafts() {
+  const box = document.getElementById("line-drafts");
+  if (!box) return;
+  const list = [];
+  if (linePastePreview) list.push({ ...linePastePreview, id: "paste", local: true });
+  for (const d of lineDraftsCache) list.push(d);
+  if (!list.length) {
+    box.innerHTML = '<p class="empty">目前沒有待確認的 LINE 單。</p>';
+    return;
+  }
+  box.innerHTML = list
+    .map((d) => {
+      const bits = (d.lines || [])
+        .map((l) => {
+          const extra = [l.pack, l.pallet ? "疊棧板" : ""].filter(Boolean).join(" ");
+          return `<li>${esc(lineSkuLabel(l.skuId))} ${esc(fmt(l.qty))}${extra ? ` ${esc(extra)}` : ""}</li>`;
+        })
+        .join("");
+      const unk = (d.unknown || []).length ? `<p class="hint">沒對到：${esc(d.unknown.join("、"))}</p>` : "";
+      const who = d.customer ? esc(d.customer) : "（未寫客人）";
+      return `<article class="line-draft">
+        <strong>${who}</strong>　<span class="muted">${esc(d.date || "")}</span>
+        <pre>${esc(d.text || d.raw || "")}</pre>
+        <ul>${bits || "<li>沒有對到品項</li>"}</ul>
+        ${unk}
+        <div class="btn-row">
+          <button type="button" class="primary" data-line-ok="${esc(d.id)}">確認入單</button>
+          <button type="button" class="ghost" data-line-no="${esc(d.id)}">丟掉</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+async function refreshLineDrafts() {
+  const st = document.getElementById("line-api-status");
+  try {
+    const s = await fetch("/api/line/status", { cache: "no-store" }).then((r) => r.json());
+    if (st) st.textContent = s.configured ? "LINE 頻道已接上（金鑰在伺服器）。" : "伺服器還沒填 LINE 金鑰。可先用下方貼上解析。";
+  } catch (_) {
+    if (st) st.textContent = "本機或尚未部署 webhook。可先貼上文字解析。";
+  }
+  try {
+    const data = await fetch("/api/line/drafts", { cache: "no-store" }).then((r) => r.json());
+    lineDraftsCache = Array.isArray(data.drafts) ? data.drafts : [];
+  } catch (_) {
+    lineDraftsCache = [];
+  }
+  renderLineDrafts();
+}
+
 function applyCopy() {
   const intro = document.getElementById("intro-note");
   const formTitle = document.getElementById("form-title");
@@ -1621,10 +1902,10 @@ function applyCopy() {
   document.querySelectorAll("[data-form]").forEach((b) => b.classList.toggle("on", b.dataset.form === formKind));
   if (co === "ha") {
     intro.textContent =
-      "鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。填數量後按確認即佔量。庫存頁把早上盤點「加入」才有可出貨件數。出貨扣庫會扣可出，並把出貨數量累計入今日進貨。";
+      "鴻安：手打或點出貨對象，加品項填數量後確認。接單不看可出；出貨才扣庫。";
     formTitle.textContent = editing ? "修改數量" : "訂單輸入";
-    formHint.textContent = "先手打或點常用出貨對象，再填洋蔥／南瓜數量。填完按確認，即佔量並列入排程。出貨才扣可出貨件數，並累計入今日進貨。";
-    ordersHint.textContent = "未出貨的紀錄可用 ↑↓ 調整出貨順序。可刪除訂單紀錄。";
+    formHint.textContent = "洋蔥：紐西蘭／澳洲／韓國／越南，規格 20K／12K。南瓜：密本／阿成，規格 18K（預設）／20K。B級按 kg。疊棧板可勾、可不勾。用＋加一筆、刪拿掉。已填紀錄跟出貨日同一天。";
+    ordersHint.textContent = "只顯示所選出貨日的紀錄。未出貨可用 ↑↓ 調整出貨順序。";
     cust.placeholder = "請輸入出貨對象";
     cust.readOnly = false;
     return;
@@ -1667,6 +1948,7 @@ function render() {
       console.error(err);
     }
   };
+  run(renderLineDrafts);
   run(renderCustChips);
   run(renderDailyGrid);
   run(renderSheet);
@@ -1714,9 +1996,78 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
     render();
   };
 });
+document.getElementById("line-parse-btn")?.addEventListener("click", () => {
+  const parse = globalThis.LineOrderParse?.parseLineOrderText;
+  if (!parse) return setStatus("解析程式還沒載入。", true);
+  const raw = document.getElementById("line-paste")?.value || "";
+  const parsed = parse(raw);
+  linePastePreview = { ...parsed, text: raw, date: today() };
+  renderLineDrafts();
+  if (!parsed.lines.length) setStatus("沒對到品項。第一行寫客人，下面寫紐20兩袋、密本一箱。", true);
+  else setStatus("已解析，請看預覽再按確認入單。", false);
+});
+document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
+  const ok = e.target.closest("[data-line-ok]");
+  const no = e.target.closest("[data-line-no]");
+  if (ok) {
+    const id = ok.dataset.lineOk;
+    if (id === "paste") {
+      if (confirmParsedOrder(linePastePreview)) {
+        linePastePreview = null;
+        const ta = document.getElementById("line-paste");
+        if (ta) ta.value = "";
+      }
+      return;
+    }
+    const d = lineDraftsCache.find((x) => x.id === id);
+    if (!d) return;
+    if (confirmParsedOrder(d, d.date)) {
+      await dropLineDraft(id);
+      await refreshLineDrafts();
+    }
+    return;
+  }
+  if (no) {
+    const id = no.dataset.lineNo;
+    if (id === "paste") {
+      linePastePreview = null;
+      renderLineDrafts();
+      return;
+    }
+    await dropLineDraft(id);
+    await refreshLineDrafts();
+  }
+});
 document.getElementById("sheet").addEventListener("input", renderCheck);
-document.getElementById("sheet").addEventListener("change", renderCheck);
+document.getElementById("sheet").addEventListener("change", (e) => {
+  const kind = e.target.closest("[data-ha-kind]");
+  if (kind) {
+    const row = kind.closest(".ha-line");
+    const extras = row?.querySelector("[data-ha-extras]");
+    const unit = row?.querySelector("[data-ha-unit]");
+    const qty = row?.querySelector("[data-ha-qty]");
+    if (extras) extras.innerHTML = haExtrasHtml(kind.value);
+    if (unit) unit.textContent = haUnitOf(kind.value);
+    if (qty) qty.step = kind.value.endsWith("-b") ? "0.1" : "1";
+  }
+  renderCheck();
+});
+document.getElementById("sheet").addEventListener("click", (e) => {
+  if (e.target.closest("[data-ha-add]")) {
+    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", haLineHtml({}));
+    return;
+  }
+  const del = e.target.closest("[data-ha-del]");
+  if (!del) return;
+  del.closest(".ha-line")?.remove();
+  if (!document.querySelector("#ha-lines .ha-line")) {
+    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", haLineHtml({}));
+  }
+});
 document.getElementById("ship-date").value = today();
+document.getElementById("ship-date").addEventListener("change", () => {
+  if (co === "ha") renderOrders();
+});
 document.getElementById("daily-sheet-date").value = today();
 document.getElementById("daily-sheet-date").addEventListener("change", () => {
   renderDailyGrid();
@@ -1999,10 +2350,6 @@ document.getElementById("orders").onclick = (e) => {
     document.getElementById("ship-date").value = o.shipDate;
     document.getElementById("cancel-edit").hidden = false;
     render();
-    o.lines.forEach((l) => {
-      const input = document.querySelector(`#sheet [data-sku="${l.skuId}"]`);
-      if (input) input.value = Number(input.value || 0) + l.qty;
-    });
     renderCheck();
     return;
   }
@@ -2492,4 +2839,6 @@ async function pollCloud() {
 ensureHaHistory();
 render();
 bootCloudSync();
+refreshLineDrafts();
 setInterval(healCloudSync, 8000);
+setInterval(refreshLineDrafts, 8000);

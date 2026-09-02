@@ -1,7 +1,10 @@
 const http = require("http");
+const https = require("https");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { parseLineOrderText, worthKeeping } = require("./line-parse.js");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5174;
@@ -18,6 +21,7 @@ function pickDataDir() {
 }
 const DATA_DIR = pickDataDir();
 const DATA_FILE = path.join(DATA_DIR, "sync.json");
+const LINE_FILE = path.join(DATA_DIR, "line-drafts.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -44,7 +48,7 @@ function send(res, code, body, type) {
   res.end(body);
 }
 
-function readBody(req, max = 2e6) {
+function readBodyBuf(req, max = 2e6) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let n = 0;
@@ -57,13 +61,151 @@ function readBody(req, max = 2e6) {
       }
       chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+function readBody(req, max = 2e6) {
+  return readBodyBuf(req, max).then((buf) => buf.toString("utf8"));
+}
+function todayYmd() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+}
+function lineSigOk(rawBuf, header) {
+  const secret = process.env.LINE_CHANNEL_SECRET || "";
+  if (!secret || !header) return false;
+  const digest = crypto.createHmac("sha256", secret).update(rawBuf).digest("base64");
+  const a = Buffer.from(digest);
+  const b = Buffer.from(String(header));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+function loadLineDrafts() {
+  try {
+    const data = JSON.parse(fs.readFileSync(LINE_FILE, "utf8"));
+    if (data && Array.isArray(data.drafts)) return data;
+  } catch (_) {}
+  return { drafts: [] };
+}
+function saveLineDrafts(data) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${LINE_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, LINE_FILE);
+}
+function lineReply(replyToken, text) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
+  if (!token || !replyToken || !text) return;
+  const body = JSON.stringify({ replyToken, messages: [{ type: "text", text }] });
+  const req = https.request(
+    {
+      hostname: "api.line.me",
+      path: "/v2/bot/message/reply",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "Content-Length": Buffer.byteLength(body),
+      },
+    },
+    () => {},
+  );
+  req.on("error", () => {});
+  req.end(body);
+}
+function handleLineWebhook(req, res) {
+  if (req.method === "GET") {
+    send(res, 200, '{"ok":true}', TYPES[".json"]);
+    return true;
+  }
+  if (req.method !== "POST") {
+    send(res, 405, "Method not allowed");
+    return true;
+  }
+  readBodyBuf(req)
+    .then((raw) => {
+      const sig = req.headers["x-line-signature"];
+      if (!lineSigOk(raw, sig)) return send(res, 401, '{"ok":false}', TYPES[".json"]);
+      let payload;
+      try {
+        payload = JSON.parse(raw.toString("utf8"));
+      } catch (_) {
+        return send(res, 400, '{"ok":false}', TYPES[".json"]);
+      }
+      const events = Array.isArray(payload.events) ? payload.events : [];
+      const store = loadLineDrafts();
+      let added = 0;
+      for (const ev of events) {
+        if (ev.type !== "message" || ev.message?.type !== "text") continue;
+        const text = String(ev.message.text || "").trim();
+        if (!text) continue;
+        const parsed = parseLineOrderText(text);
+        if (!worthKeeping(parsed)) continue;
+        store.drafts.unshift({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          at: Date.now(),
+          date: todayYmd(),
+          source: ev.source?.type || "",
+          groupId: ev.source?.groupId || "",
+          userId: ev.source?.userId || "",
+          text,
+          customer: parsed.customer || "",
+          lines: parsed.lines || [],
+          unknown: parsed.unknown || [],
+        });
+        added += 1;
+        if (parsed.lines.length) lineReply(ev.replyToken, "已收到，待會計確認。");
+      }
+      if (store.drafts.length > 80) store.drafts = store.drafts.slice(0, 80);
+      if (added) saveLineDrafts(store);
+      send(res, 200, '{"ok":true}', TYPES[".json"]);
+    })
+    .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
+  return true;
+}
+function handleLineDrafts(req, res) {
+  if (req.method === "GET") {
+    send(res, 200, JSON.stringify(loadLineDrafts()), TYPES[".json"]);
+    return true;
+  }
+  if (req.method === "POST") {
+    readBody(req)
+      .then((raw) => {
+        const body = JSON.parse(raw || "{}");
+        const store = loadLineDrafts();
+        if (body.action === "drop" && body.id) {
+          store.drafts = store.drafts.filter((d) => d.id !== body.id);
+          saveLineDrafts(store);
+        }
+        send(res, 200, '{"ok":true}', TYPES[".json"]);
+      })
+      .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
+    return true;
+  }
+  send(res, 405, "Method not allowed");
+  return true;
 }
 
 function handleApi(req, res) {
   const urlPath = (req.url || "").split("?")[0];
+  if (urlPath.startsWith("/api/") && req.method === "OPTIONS") {
+    res.writeHead(204, { "Cache-Control": "no-store" });
+    res.end();
+    return true;
+  }
+  if (urlPath === "/api/line/webhook") return handleLineWebhook(req, res);
+  if (urlPath === "/api/line/drafts") return handleLineDrafts(req, res);
+  if (urlPath === "/api/line/status") {
+    send(
+      res,
+      200,
+      JSON.stringify({
+        configured: !!(process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN),
+      }),
+      TYPES[".json"],
+    );
+    return true;
+  }
   if (urlPath !== "/api/data") return false;
   if (req.method === "OPTIONS") {
     res.writeHead(204, { "Cache-Control": "no-store" });

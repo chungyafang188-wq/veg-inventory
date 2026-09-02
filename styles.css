@@ -128,8 +128,8 @@ button {
   background: #eef4ee;
   font-size: 0.85rem;
 }
-.order-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
-.order-actions button { width: auto; margin: 0; padding: 0.35rem 0.7rem; font-size: 0.85rem; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; position: relative; z-index: 3; }
+.order-actions button { width: auto; margin: 0; padding: 0.45rem 0.8rem; font-size: 0.85rem; min-height: 2.6rem; pointer-events: auto; }
 table { width: 100%; margin-top: 0.45rem; border-collapse: collapse; font-size: 0.85rem; }
 th, td { text-align: left; padding: 0.4rem 0.15rem; border-bottom: 1px solid var(--line); }
 th:not(:first-child), td:not(:first-child) { text-align: right; }
@@ -186,7 +186,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .stock-item { padding: 0.8rem 0; border-bottom: 1px solid var(--line); }
 .stock-item:last-child { border-bottom: none; }
 .stock-item h3 { margin: 0 0 0.5rem; font-size: 0.92rem; }
-.inbound-main { width: 100%; min-width: 22rem; border-collapse: collapse; }
+.inbound-main { width: 100%; min-width: 36rem; border-collapse: collapse; }
 .inbound-main th, .inbound-main td {
   border: 1px solid var(--line); padding: 0.45rem 0.5rem; text-align: left;
 }
@@ -196,6 +196,8 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .in-sum { text-align: right; }
 .in-lots { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--muted); font-weight: normal; text-align: right; }
 .morning-ok { font-size: 0.78rem; color: var(--green); min-width: 3rem; }
+.settle-count { flex-wrap: wrap; justify-content: flex-end; }
+.settle-calc { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .stock-span { grid-column: 1 / -1; }
 .stat-label, .stock-stat label {
   display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.2rem; font-weight: normal;
@@ -414,6 +416,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-size: 0.88rem;
 }
 .plan-qty { font-variant-numeric: tabular-nums; }
+#stock { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.45rem; }
 .stock-guides { margin: 0.45rem 0 0; display: grid; gap: 0.4rem; }
 .stock-guides p {
   margin: 0;
@@ -450,7 +453,34 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   color: var(--bad);
 }
 .short-card.ok { background: #e4f0e4; color: var(--green); }
-.short-card h3 { margin: 0; font-size: 0.95rem; }
+.short-card h3 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+.short-est { margin: 0.35rem 0 0.2rem; }
+.short-est span {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+.short-est strong {
+  display: block;
+  font-size: 2.15rem;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.short-est small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.short-gap {
+  margin: 0.2rem 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--bad);
+}
 .short-total { margin: 0.25rem 0 0.45rem; font-size: 0.9rem; }
 .short-total strong { font-size: 1.55rem; font-variant-numeric: tabular-nums; }
 .short-vends { display: grid; gap: 0.3rem; }
@@ -466,7 +496,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .short-v span { font-weight: 700; }
 .short-v b { font-weight: 600; color: var(--ink); }
-.short-v em { font-style: normal; font-weight: 700; }
+.short-v em { font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
 .short-v.ok em { color: var(--green); }
 .short-v.no em { color: var(--bad); }
 .inbound-table .ok, .inbound-table .bad { padding: 0.2rem 0.3rem; border-radius: 0.35rem; }

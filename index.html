@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=25" />
+    <link rel="stylesheet" href="./styles.css?v=31" />
   </head>
   <body>
     <div class="app">
       <header>
         <p class="eyebrow" id="co-name">鴻安公司</p>
         <h1>產品出貨紀錄表</h1>
-        <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。上方填洋蔥數量，底部按確認輸入訂單（佔量）。出貨才扣現有庫存（已加工整理）。</p>
+        <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。填數量後按確認即佔量。庫存頁把早上盤點「加入」才有可出貨件數。出貨扣庫會扣可出，並把出貨數量累計入今日進貨。</p>
         <p class="muted" id="sync-note"></p>
       </header>
       <nav class="tabs" aria-label="公司">
@@ -50,7 +50,7 @@
         </section>
         <form id="order-form" class="card">
           <h2 id="form-title">訂單輸入</h2>
-          <p class="hint" id="form-hint">先手打或點常用出貨對象，再填紐西蘭／韓洋各規格數量。填完按確認，即佔量並列入排程。出貨才扣現有庫存（已加工整理）。</p>
+          <p class="hint" id="form-hint">先手打或點常用出貨對象，再填洋蔥／南瓜數量。填完按確認，即佔量並列入排程。出貨才扣可出貨件數，並累計入今日進貨。</p>
           <input id="edit-id" type="hidden" />
           <div id="cust-chips" class="chips" role="group" aria-label="出貨對象"></div>
           <label class="field">出貨對象 <input id="customer" type="text" required placeholder="請輸入出貨對象" autocomplete="off" /></label>
@@ -84,10 +84,6 @@
           <div id="in-day-totals" class="live-totals-row"></div>
         </section>
         <section class="card">
-          <div class="head"><h2>當天出貨對象</h2><span id="today-label" class="muted"></span></div>
-          <div id="customers"></div>
-        </section>
-        <section class="card">
           <div class="head"><h2 id="stock-title">庫存/進貨</h2><span id="book-date" class="muted"></span></div>
           <div id="stock-guides" class="stock-guides">
             <p id="guide-stock"><strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。</p>
@@ -114,6 +110,6 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./app.js?v=25"></script>
+    <script src="./app.js?v=31"></script>
   </body>
 </html>

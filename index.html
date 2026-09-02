@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <div class="app">
@@ -13,6 +13,7 @@
         <p class="eyebrow" id="co-name">鴻安公司</p>
         <h1>產品出貨紀錄表</h1>
         <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。上方填洋蔥數量，底部按確認輸入訂單（佔量）。出貨才扣現有庫存（已加工整理）。</p>
+        <p class="muted" id="sync-note"></p>
       </header>
       <nav class="tabs" aria-label="公司">
         <button type="button" class="tab on" data-co="ha">鴻安公司</button>
@@ -103,6 +104,6 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=5"></script>
   </body>
 </html>

@@ -191,7 +191,35 @@ function load() {
   return { stock: emptyStock(), orders: [], daily: {} };
 }
 function save() {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (_) {}
+  scheduleCloudPush();
+}
+
+const CLOUD_URL = "/api/data";
+const SYNC_META_KEY = "nongquan-sync-meta-v1";
+let cloudReady = false;
+let skipCloud = true;
+let cloudTimer = 0;
+function readSyncAt() {
+  return Number(localStorage.getItem(SYNC_META_KEY) || 0) || 0;
+}
+function writeSyncAt(n) {
+  try {
+    localStorage.setItem(SYNC_META_KEY, String(n || 0));
+  } catch (_) {}
+}
+function setSyncNote(text) {
+  const el = document.getElementById("sync-note");
+  if (el) el.textContent = text || "";
+}
+function scheduleCloudPush() {
+  if (!cloudReady || skipCloud) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => {
+    pushCloud();
+  }, 450);
 }
 
 function bookOf(date) {
@@ -318,6 +346,7 @@ function loadNqLists() {
 }
 function saveNqLists(lists) {
   localStorage.setItem(NQ_CUST_KEY, JSON.stringify(lists));
+  scheduleCloudPush();
 }
 function loadNqCustomers(kind = formCustKey()) {
   const extras = asNameList(loadNqLists()[kind]).filter((n) => !NQ_DEFAULT_CUSTOMERS.includes(n));
@@ -376,6 +405,7 @@ function loadHaCustomers() {
 }
 function saveHaCustomers(list) {
   localStorage.setItem(HA_CUST_KEY, JSON.stringify(list));
+  scheduleCloudPush();
 }
 function rememberHaCustomer(name) {
   const n = name.trim();
@@ -913,6 +943,7 @@ function dailyStore() {
 }
 function saveDailyStore(data) {
   localStorage.setItem(DAILY_KEY, JSON.stringify(data));
+  scheduleCloudPush();
 }
 function dailyBook(date) {
   const data = dailyStore();
@@ -1702,6 +1733,7 @@ document.getElementById("fill-count").onclick = () => {
 };
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  pollCloud();
   if (ensureTodayBooks()) {
     syncAllNqQty();
     save();
@@ -1709,5 +1741,133 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+function bundleHasData(b) {
+  if (!b || typeof b !== "object") return false;
+  if (Array.isArray(b.orders?.orders) && b.orders.orders.length) return true;
+  if (b.orders?.daily && Object.keys(b.orders.daily).length) return true;
+  if (b.dailySheet && Object.keys(b.dailySheet).length) return true;
+  const nq = b.nqCustomers;
+  if (nq && (nq.leaf?.length || nq.basil?.length || nq.herb?.length)) return true;
+  if (Array.isArray(b.haCustomers) && b.haCustomers.length) return true;
+  const stock = b.orders?.stock;
+  if (stock) {
+    for (const row of Object.values(stock)) {
+      if ((row?.qty || 0) || (row?.processed || 0) || (row?.safety || 0)) return true;
+    }
+  }
+  return false;
+}
+function localHasData() {
+  if (state.orders.length) return true;
+  if (state.daily && Object.keys(state.daily).length) return true;
+  try {
+    if (Object.keys(JSON.parse(localStorage.getItem(DAILY_KEY) || "{}")).length) return true;
+  } catch (_) {}
+  const nq = loadNqLists();
+  if (nq.leaf.length || nq.basil.length || nq.herb.length) return true;
+  if (loadHaCustomers().length) return true;
+  for (const row of Object.values(state.stock || {})) {
+    if ((row?.qty || 0) || (row?.processed || 0) || (row?.safety || 0)) return true;
+  }
+  return false;
+}
+function collectBundle() {
+  return {
+    updatedAt: Date.now(),
+    orders: { stock: state.stock, orders: state.orders, daily: state.daily || {} },
+    nqCustomers: loadNqLists(),
+    haCustomers: loadHaCustomers(),
+    dailySheet: dailyStore(),
+  };
+}
+function applyBundle(b) {
+  skipCloud = true;
+  try {
+    if (b.orders && b.orders.stock && Array.isArray(b.orders.orders)) {
+      state.stock = b.orders.stock;
+      state.orders = b.orders.orders;
+      state.daily = b.orders.daily || {};
+      for (const sku of SKUS) {
+        if (!state.stock[sku.id]) state.stock[sku.id] = { qty: 0, processed: 0, safety: 0 };
+      }
+      if (!state.daily) state.daily = {};
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (_) {}
+    }
+    if (b.nqCustomers && typeof b.nqCustomers === "object") {
+      localStorage.setItem(
+        NQ_CUST_KEY,
+        JSON.stringify({
+          leaf: asNameList(b.nqCustomers.leaf),
+          basil: asNameList(b.nqCustomers.basil),
+          herb: asNameList(b.nqCustomers.herb),
+        }),
+      );
+    }
+    if (Array.isArray(b.haCustomers)) {
+      localStorage.setItem(HA_CUST_KEY, JSON.stringify(asNameList(b.haCustomers)));
+    }
+    if (b.dailySheet && typeof b.dailySheet === "object") {
+      localStorage.setItem(DAILY_KEY, JSON.stringify(b.dailySheet));
+    }
+    writeSyncAt(Number(b.updatedAt) || Date.now());
+    syncAllNqQty();
+  } finally {
+    skipCloud = false;
+  }
+}
+async function pullCloud() {
+  const r = await fetch(CLOUD_URL, { cache: "no-store", headers: { Accept: "application/json" } });
+  const type = r.headers.get("content-type") || "";
+  if (!r.ok || !type.includes("json")) throw new Error("no-cloud");
+  const data = await r.json();
+  if (!data || typeof data !== "object") throw new Error("bad");
+  return data;
+}
+async function pushCloud() {
+  if (skipCloud) return false;
+  const bundle = collectBundle();
+  writeSyncAt(bundle.updatedAt);
+  const r = await fetch(CLOUD_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(bundle),
+  });
+  const type = r.headers.get("content-type") || "";
+  if (!r.ok || !type.includes("json")) throw new Error("no-cloud");
+  return true;
+}
+async function bootCloudSync() {
+  try {
+    const remote = await pullCloud();
+    const remoteAt = Number(remote.updatedAt) || 0;
+    const localAt = readSyncAt();
+    if (bundleHasData(remote) && remoteAt >= localAt) applyBundle(remote);
+    else if (localHasData() && (!bundleHasData(remote) || localAt > remoteAt)) await pushCloud();
+    cloudReady = true;
+    skipCloud = false;
+    setSyncNote("手機與電腦共用同一份資料。改完後另一台重新打開或等幾秒就會對上。");
+    render();
+  } catch (_) {
+    cloudReady = false;
+    skipCloud = true;
+    setSyncNote("現在還不能跨裝置同步：網站仍是靜態頁。請把 Render 改成 Web Service（啟動指令 node server.js）後再打開這個網址。");
+  }
+}
+async function pollCloud() {
+  if (!cloudReady) return;
+  try {
+    const remote = await pullCloud();
+    const remoteAt = Number(remote.updatedAt) || 0;
+    if (remoteAt > readSyncAt() && bundleHasData(remote)) {
+      applyBundle(remote);
+      render();
+    }
+  } catch (_) {}
+}
+
 ensureHaHistory();
 render();
+bootCloudSync();
+setInterval(pollCloud, 8000);

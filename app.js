@@ -9,7 +9,7 @@ const FORM_KINDS = {
     label: "地瓜葉",
     title: "穠全 地瓜葉出貨",
     formTitle: "填寫地瓜葉出貨數量",
-    hint: "地瓜葉分誌／芳填當天叫貨。裝箱預設籃裝，可改箱裝。出貨對象預設小琳、欣儒，其他可自行新增；與九層塔／散賣名單分開，刪除不會互刪。件數直接打數字，↑↓←→ 換格。總數邊打邊加。",
+    hint: "地瓜葉分誌／芳填當天叫貨。裝箱預設籃裝，可改箱裝。出貨對象預設小琳、欣儒，其他可自行新增；與九層塔／散賣名單分開，刪除不會互刪。件數直接打數字，↑↓←→ 換格。",
     formHint: "填地瓜葉／誌與地瓜葉／芳數量。裝箱預設籃裝。",
     skuIds: ["sl-zhi", "sl-fang"],
     cols: [
@@ -449,21 +449,26 @@ function nextPrio() {
   for (const o of list) m = Math.max(m, orderRank(o));
   return m + 1;
 }
+function orderFormKind(o) {
+  const id = o.lines?.[0]?.skuId;
+  return id ? formKindOfSku(id) : "leaf";
+}
+function visibleOpenQueue() {
+  let list = openQueue();
+  if (co === "nq") list = list.filter((o) => orderFormKind(o) === formKind);
+  return list;
+}
 function bumpOrder(id, dir) {
-  const list = openQueue();
-  list.forEach((o, i) => {
-    o.prio = i + 1;
-  });
+  const list = visibleOpenQueue();
   const i = list.findIndex((o) => o.id === id);
   const j = i + dir;
   if (i < 0 || j < 0 || j >= list.length) return;
-  const tmp = list[i].prio;
-  list[i].prio = list[j].prio;
-  list[j].prio = tmp;
+  const a = orderRank(list[i]);
+  const b = orderRank(list[j]);
+  list[i].prio = b;
+  list[j].prio = a;
   save();
-  renderPlan();
-  renderCheck();
-  renderAlerts();
+  render();
 }
 function reservedAhead(skuId, current) {
   let n = 0;
@@ -817,18 +822,38 @@ function renderAlerts() {
 }
 
 function renderOrders() {
-  const list = state.orders.filter((o) => o.co === co);
   const box = document.getElementById("orders");
+  let list = state.orders.filter((o) => o.co === co);
+  if (co === "nq") list = list.filter((o) => orderFormKind(o) === formKind);
   if (!list.length) {
-    box.innerHTML = '<p class="empty">尚無紀錄。</p>';
+    const kind = co === "nq" ? FORM_KINDS[formKind]?.label || "本表" : "";
+    box.innerHTML = `<p class="empty">${kind ? `「${kind}」尚無已填紀錄。` : "尚無紀錄。"}</p>`;
     return;
   }
-  box.innerHTML = `<ul class="list">${list
+  const rank = {};
+  visibleOpenQueue().forEach((o, i) => {
+    rank[o.id] = i + 1;
+  });
+  const openN = Object.keys(rank).length;
+  const stRank = { open: 0, shipped: 1, cancelled: 2 };
+  list = list.slice().sort((a, b) => {
+    const sa = stRank[a.status] ?? 9;
+    const sb = stRank[b.status] ?? 9;
+    if (sa !== sb) return sa - sb;
+    if (a.status === "open") return (rank[a.id] || 0) - (rank[b.id] || 0) || a.no - b.no;
+    return b.no - a.no;
+  });
+  box.innerHTML = `<div class="order-cards">${list
     .map((o) => {
-      const cls = o.status === "cancelled" ? "cancelled" : "";
+      const cls = ["order-card", o.status === "cancelled" ? "cancelled" : "", o.status === "shipped" ? "shipped" : "", o.status === "open" ? "pending" : ""]
+        .filter(Boolean)
+        .join(" ");
       const tag = o.edited ? '<span class="tag">改</span>' : "";
-      const st = o.status === "shipped" ? "已出貨" : o.status === "cancelled" ? "已取消" : "未出貨";
-      const lines = o.lines.map((l) => lineLabel(l, true)).join("、");
+      const st = o.status === "shipped" ? "已出貨" : o.status === "cancelled" ? "已取消" : "待出貨";
+      const lines = o.lines
+        .filter((l) => l.qty)
+        .map((l) => `<span class="order-chip">${esc(lineLabel(l, true))}</span>`)
+        .join("");
       const bits = [];
       if (o.status === "open") {
         bits.push(`<button type="button" data-act="ship" data-id="${o.id}">出貨扣庫</button>`);
@@ -837,10 +862,29 @@ function renderOrders() {
       }
       if (co === "ha") bits.push(`<button type="button" data-act="delete" data-id="${o.id}">刪除紀錄</button>`);
       const acts = bits.length ? `<div class="order-actions">${bits.join("")}</div>` : "";
-      return `<li class="${cls}"><div class="row"><span class="order-title">${tag}#${esc(o.no)} ${esc(o.customer)}</span><span class="muted">${esc(o.shipDate)} ${st}</span></div>
-        <p class="lines">${esc(lines)}</p>${acts}</li>`;
+      const n = rank[o.id];
+      const prio =
+        o.status === "open"
+          ? `<div class="order-prio">
+              <span class="prio-n">${n}</span>
+              <button type="button" class="tiny-btn" data-act="up" data-id="${o.id}" ${n <= 1 ? "disabled" : ""} aria-label="往前">↑</button>
+              <button type="button" class="tiny-btn" data-act="down" data-id="${o.id}" ${n >= openN ? "disabled" : ""} aria-label="往後">↓</button>
+            </div>`
+          : `<div class="order-prio muted">${st}</div>`;
+      return `<article class="${cls}">
+        ${prio}
+        <div class="order-body">
+          <div class="order-card-head">
+            <strong class="order-who">${tag}${esc(o.customer)}</strong>
+            <span class="order-st st-${esc(o.status)}">${esc(st)}</span>
+          </div>
+          <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}</p>
+          <div class="order-chips">${lines}</div>
+          ${acts}
+        </div>
+      </article>`;
     })
-    .join("")}</ul>`;
+    .join("")}</div>`;
 }
 
 function skuShortName(sku) {
@@ -950,13 +994,6 @@ function renderPlan() {
     box.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
     return;
   }
-  const queue = openQueue();
-  const queueHtml = `<div class="prio-box"><h3>出貨優先順序</h3><ol class="prio-list">${queue
-    .map(
-      (o, i) =>
-        `<li><span class="prio-n">${i + 1}</span><button type="button" class="tiny-btn" data-prio-up="${o.id}" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" class="tiny-btn" data-prio-down="${o.id}" ${i === queue.length - 1 ? "disabled" : ""}>↓</button><strong>${esc(o.customer)}</strong><span class="muted">${esc(o.shipDate)}</span></li>`,
-    )
-    .join("")}</ol></div>`;
   const personList = (rows, unit, kind) => {
     if (!rows.length) return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><p class="empty">無</p></div>`;
     return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><ul class="list plan-people">${rows
@@ -995,7 +1032,7 @@ function renderPlan() {
       </section>`;
     })
     .join("");
-  box.innerHTML = `${queueHtml}<div class="plan-board">${board}</div>`;
+  box.innerHTML = `<div class="plan-board">${board}</div>`;
 }
 
 function nqMorningDone() {
@@ -1215,90 +1252,6 @@ function dailyRow(book, name) {
 function sheetDate() {
   return document.getElementById("daily-sheet-date")?.value || today();
 }
-function gridQtySums() {
-  const { book } = dailyBook(sheetDate());
-  const names = gridCustomers();
-  const sums = {};
-  let grand = 0;
-  for (const col of currentCols()) {
-    if (col.kind !== "qty") continue;
-    let n = 0;
-    for (const name of names) {
-      migrateBasilDailyRow(book[name] || {});
-      n += Number((book[name] || {})[col.key]) || 0;
-    }
-    sums[col.key] = n;
-    grand += n;
-  }
-  return { sums, grand };
-}
-function basilCalledTotals(date) {
-  const tot = {};
-  for (const v of VENDOR_OPTS) tot[v] = { rb: 0, gb: 0 };
-  const add = (vendor, bone, n) => {
-    if (!n || !tot[vendor]) return;
-    tot[vendor][bone] = round(tot[vendor][bone] + n);
-  };
-  for (const o of state.orders) {
-    if (o.co !== "nq" || o.shipDate !== date) continue;
-    if (o.status === "cancelled") continue;
-    if (editing && o.id === editing) continue;
-    for (const l of o.lines || []) {
-      const b = BASIL_REV[l.skuId];
-      if (b) add(b.val, b.qty, l.qty);
-    }
-  }
-  const { book } = dailyBook(date);
-  for (const name of gridCustomers()) {
-    const row = book[name] || {};
-    migrateBasilDailyRow(row);
-    const v = rowVendor(row);
-    add(v, "rb", qtyN(row.rb));
-    add(v, "gb", qtyN(row.gb));
-  }
-  return tot;
-}
-function renderLiveTotals() {
-  const el = document.getElementById("live-totals");
-  if (!el) return;
-  if (co !== "nq") {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-  const { sums, grand } = gridQtySums();
-  const item = (label, n, extra) =>
-    `<div class="live-totals-item${extra ? ` ${extra}` : ""}"><span>${esc(label)}</span><strong>${fmt(n || 0)}</strong></div>`;
-  let row = "";
-  let sub = "";
-  if (formKind === "leaf") {
-    row =
-      item("誌總數", sums.slZhi) +
-      item("芳總數", sums.slFang) +
-      item("合計", grand, "grand");
-  } else if (formKind === "basil") {
-    const date = sheetDate();
-    const called = basilCalledTotals(date);
-    const rbAll = VENDOR_OPTS.reduce((s, v) => round(s + (called[v].rb || 0)), 0);
-    const gbAll = VENDOR_OPTS.reduce((s, v) => round(s + (called[v].gb || 0)), 0);
-    row = item("紅骨", rbAll) + item("綠骨", gbAll) + item("合計", round(rbAll + gbAll), "grand");
-    sub = `<div class="vendor-totals"><p class="vendor-totals-kicker">今天九層塔廠商叫貨總數</p><div class="vendor-totals-grid">
-      ${VENDOR_OPTS.map((v) => {
-        const rb = called[v].rb || 0;
-        const gb = called[v].gb || 0;
-        const n = round(rb + gb);
-        return `<div class="vendor-tot"><span>${esc(v)}</span><strong>${fmt(n)}</strong><small>紅骨 ${fmt(rb)}　綠骨 ${fmt(gb)}</small></div>`;
-      }).join("")}
-    </div></div>`;
-  } else {
-    row =
-      item("薄荷", sums.mint) +
-      item("紫蘇", sums.shisoKg) +
-      item("九層塔", sums.basilKg) +
-      item("合計", grand, "grand");
-  }
-  el.innerHTML = `<p class="live-totals-kicker">今日叫貨總數（打了就加總，不必先確認）</p><div class="live-totals-row">${row}</div>${sub}`;
-}
 function confirmStock(skuId, date) {
   const b = bookRow(skuId, date);
   return round((b.opening || 0) + (b.inbound || 0) - shippedQty(skuId, date));
@@ -1380,7 +1333,6 @@ function renderDailyGrid() {
   const gridClass = formKind === "basil" ? "daily-grid basil-grid" : "daily-grid";
   document.getElementById("daily-sheet").innerHTML =
     `<table class="${gridClass}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td class="who">合計</td>${totals}</tr></tfoot></table>`;
-  renderLiveTotals();
   renderLeafInbound();
 }
 function renderCustChips() {
@@ -1421,17 +1373,17 @@ function applyCopy() {
       "鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。上方填洋蔥數量，底部按確認輸入訂單（佔量）。出貨才扣現有庫存（已加工整理）。";
     formTitle.textContent = editing ? "修改數量" : "訂單輸入";
     formHint.textContent = "先手打或點常用出貨對象，再填紐西蘭／韓洋各規格數量。填完按確認，即佔量並列入排程。出貨才扣現有庫存（已加工整理）。";
-    ordersHint.textContent = "可刪除訂單紀錄。排程頁可用 ↑↓ 調整出貨優先。";
+    ordersHint.textContent = "未出貨的紀錄可用 ↑↓ 調整出貨順序。可刪除訂單紀錄。";
     cust.placeholder = "請輸入出貨對象";
     cust.readOnly = false;
     return;
   }
   const def = FORM_KINDS[formKind] || FORM_KINDS.leaf;
   intro.textContent =
-    "穠全：在上方表格填當天叫貨數量，頂端總數即時加總。出貨對象預設小琳、欣儒，可自行新增；地瓜葉、九層塔、散賣名單分開，互不刪除。底部按「確認輸入訂單」即佔量並列排程。出貨才扣庫。";
+    "穠全：在上方表格填當天叫貨數量。出貨對象預設小琳、欣儒，可自行新增；地瓜葉、九層塔、散賣名單分開，互不刪除。底部按「確認輸入訂單」即佔量。出貨順序在下方已填紀錄用 ↑↓ 調整。出貨才扣庫。";
   formTitle.textContent = editing ? "修改數量" : def.formTitle;
   formHint.textContent = def.formHint;
-  ordersHint.textContent = "取消會紅線劃掉但留下。排程頁可用 ↑↓ 調整出貨優先。";
+  ordersHint.textContent = "待出貨可用 ↑↓ 調整出貨順序。取消會紅線劃掉但留下。";
   cust.readOnly = false;
   cust.placeholder = "請輸入出貨對象";
 }
@@ -1490,6 +1442,19 @@ document.querySelectorAll("[data-page]").forEach((btn) => {
     render();
   };
 });
+document.getElementById("plan").addEventListener("click", (e) => {
+  const up = e.target.closest("[data-prio-up]");
+  if (up && !up.disabled) {
+    e.preventDefault();
+    bumpOrder(up.dataset.prioUp, -1);
+    return;
+  }
+  const down = e.target.closest("[data-prio-down]");
+  if (down && !down.disabled) {
+    e.preventDefault();
+    bumpOrder(down.dataset.prioDown, 1);
+  }
+});
 document.querySelectorAll("[data-form]").forEach((btn) => {
   btn.onclick = () => {
     formKind = btn.dataset.form;
@@ -1502,7 +1467,6 @@ document.getElementById("ship-date").value = today();
 document.getElementById("daily-sheet-date").value = today();
 document.getElementById("daily-sheet-date").addEventListener("change", () => {
   renderDailyGrid();
-  renderLiveTotals();
   renderLeafInbound();
   renderCheck();
 });
@@ -1530,7 +1494,6 @@ document.getElementById("daily-sheet").addEventListener("input", (e) => {
     const cell = document.querySelector(`#daily-sheet tfoot td:nth-child(${idx + 2})`);
     if (cell) cell.textContent = n ? fmt(n) : "";
   }
-  renderLiveTotals();
   refreshInboundCompare();
   renderCheck();
 });
@@ -1543,7 +1506,6 @@ document.getElementById("daily-sheet").addEventListener("change", (e) => {
   if (formKind === "basil") migrateBasilDailyRow(row);
   row[el.dataset.col] = el.value;
   saveDailyStore(data);
-  renderLiveTotals();
   refreshInboundCompare();
   renderCheck();
 });
@@ -1698,6 +1660,14 @@ document.getElementById("orders").onclick = (e) => {
   if (!btn) return;
   const o = state.orders.find((x) => x.id === btn.dataset.id);
   if (!o) return;
+  if (btn.dataset.act === "up") {
+    bumpOrder(o.id, -1);
+    return;
+  }
+  if (btn.dataset.act === "down") {
+    bumpOrder(o.id, 1);
+    return;
+  }
   if (btn.dataset.act === "cancel") {
     o.status = "cancelled";
     save();

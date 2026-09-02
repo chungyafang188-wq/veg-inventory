@@ -1,10 +1,22 @@
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5174;
-const DATA_DIR = path.join(ROOT, "data");
+function pickDataDir() {
+  const candidates = [process.env.DATA_DIR, path.join(ROOT, "data"), path.join(os.tmpdir(), "veg-inventory-data")].filter(Boolean);
+  for (const dir of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.accessSync(dir, fs.constants.W_OK);
+      return dir;
+    } catch (_) {}
+  }
+  return path.join(ROOT, "data");
+}
+const DATA_DIR = pickDataDir();
 const DATA_FILE = path.join(DATA_DIR, "sync.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
@@ -70,9 +82,19 @@ function handleApi(req, res) {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("bad");
         fs.mkdirSync(DATA_DIR, { recursive: true });
-        fs.writeFile(DATA_FILE, JSON.stringify(parsed), (err) => {
+        const tmp = `${DATA_FILE}.tmp`;
+        fs.writeFile(tmp, JSON.stringify(parsed), (err) => {
           if (err) return send(res, 500, '{"ok":false}', TYPES[".json"]);
-          send(res, 200, '{"ok":true}', TYPES[".json"]);
+          fs.rename(tmp, DATA_FILE, (err2) => {
+            if (err2) {
+              fs.copyFile(tmp, DATA_FILE, (err3) => {
+                if (err3) return send(res, 500, '{"ok":false}', TYPES[".json"]);
+                send(res, 200, '{"ok":true}', TYPES[".json"]);
+              });
+              return;
+            }
+            send(res, 200, '{"ok":true}', TYPES[".json"]);
+          });
         });
       })
       .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));

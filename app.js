@@ -217,10 +217,12 @@ function setSyncNote(text) {
   if (el) el.textContent = text || "";
 }
 function scheduleCloudPush() {
-  if (!cloudReady || skipCloud) return;
+  if (skipCloud) return;
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => {
-    pushCloud();
+    pushCloud(true).catch(() => {
+      cloudReady = false;
+    });
   }, 450);
 }
 
@@ -2313,37 +2315,71 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-function bundleHasData(b) {
-  if (!b || typeof b !== "object") return false;
-  if (Array.isArray(b.orders?.orders) && b.orders.orders.length) return true;
-  if (Array.isArray(b.orders?.rests) && b.orders.rests.length) return true;
-  if (b.orders?.daily && Object.keys(b.orders.daily).length) return true;
-  if (b.dailySheet && Object.keys(b.dailySheet).length) return true;
-  const nq = b.nqCustomers;
-  if (nq && (nq.leaf?.length || nq.basil?.length || nq.herb?.length)) return true;
-  if (Array.isArray(b.haCustomers) && b.haCustomers.length) return true;
-  const stock = b.orders?.stock;
-  if (stock) {
-    for (const row of Object.values(stock)) {
-      if ((row?.qty || 0) || (row?.processed || 0) || (row?.safety || 0)) return true;
+function bookRowHasData(row) {
+  if (!row || typeof row !== "object") return false;
+  if (Number(row.inbound) > 0 || Number(row.morning) > 0) return true;
+  if (row.count != null && row.count !== "") return true;
+  if (row.morningConfirmed || row.countConfirmed) return true;
+  if (Array.isArray(row.lots) && row.lots.length) return true;
+  if (Number(row.opening) > 0) return true;
+  return false;
+}
+function dailyHasRealData(daily) {
+  if (!daily || typeof daily !== "object") return false;
+  for (const book of Object.values(daily)) {
+    if (!book || typeof book !== "object") continue;
+    for (const row of Object.values(book)) {
+      if (bookRowHasData(row)) return true;
     }
   }
   return false;
 }
+function sheetHasData(sheet) {
+  if (!sheet || typeof sheet !== "object") return false;
+  for (const book of Object.values(sheet)) {
+    if (!book || typeof book !== "object") continue;
+    for (const [name, row] of Object.entries(book)) {
+      if (name.startsWith("_") || !row || typeof row !== "object") continue;
+      for (const [k, v] of Object.entries(row)) {
+        if (k.startsWith("_")) continue;
+        if (v === "" || v == null || v === false) continue;
+        if (typeof v === "number" && v !== 0) return true;
+        if (typeof v === "string" && v.trim()) return true;
+        if (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length) return true;
+      }
+    }
+  }
+  return false;
+}
+function stockHasData(stock) {
+  if (!stock || typeof stock !== "object") return false;
+  for (const row of Object.values(stock)) {
+    if ((row?.qty || 0) || (row?.processed || 0) || (row?.safety || 0)) return true;
+  }
+  return false;
+}
+function bundleHasData(b) {
+  if (!b || typeof b !== "object") return false;
+  if (Array.isArray(b.orders?.orders) && b.orders.orders.length) return true;
+  if (Array.isArray(b.orders?.rests) && b.orders.rests.length) return true;
+  if (dailyHasRealData(b.orders?.daily)) return true;
+  if (sheetHasData(b.dailySheet)) return true;
+  const nq = b.nqCustomers;
+  if (nq && (nq.leaf?.length || nq.basil?.length || nq.herb?.length)) return true;
+  if (Array.isArray(b.haCustomers) && b.haCustomers.length) return true;
+  return stockHasData(b.orders?.stock);
+}
 function localHasData() {
   if (state.orders.length) return true;
   if ((state.rests || []).length) return true;
-  if (state.daily && Object.keys(state.daily).length) return true;
+  if (dailyHasRealData(state.daily)) return true;
   try {
-    if (Object.keys(JSON.parse(localStorage.getItem(DAILY_KEY) || "{}")).length) return true;
+    if (sheetHasData(JSON.parse(localStorage.getItem(DAILY_KEY) || "{}"))) return true;
   } catch (_) {}
   const nq = loadNqLists();
   if (nq.leaf.length || nq.basil.length || nq.herb.length) return true;
   if (loadHaCustomers().length) return true;
-  for (const row of Object.values(state.stock || {})) {
-    if ((row?.qty || 0) || (row?.processed || 0) || (row?.safety || 0)) return true;
-  }
-  return false;
+  return stockHasData(state.stock);
 }
 function collectBundle() {
   return {
@@ -2400,49 +2436,58 @@ async function pullCloud() {
   if (!data || typeof data !== "object") throw new Error("bad");
   return data;
 }
-async function pushCloud() {
-  if (skipCloud) return false;
+async function pushCloud(force) {
+  if (skipCloud && !force) return false;
+  if (!localHasData()) return false;
   const bundle = collectBundle();
-  writeSyncAt(bundle.updatedAt);
-  const r = await fetch(CLOUD_URL, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(bundle),
-  });
+  const body = JSON.stringify(bundle);
+  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  let r = await fetch(CLOUD_URL, { method: "POST", cache: "no-store", headers, body });
+  if (!r.ok) r = await fetch(CLOUD_URL, { method: "PUT", cache: "no-store", headers, body });
   const type = r.headers.get("content-type") || "";
   if (!r.ok || !type.includes("json")) throw new Error("no-cloud");
+  writeSyncAt(bundle.updatedAt);
   return true;
 }
-async function bootCloudSync() {
+async function healCloudSync() {
   try {
     const remote = await pullCloud();
+    skipCloud = false;
     const remoteAt = Number(remote.updatedAt) || 0;
     const localAt = readSyncAt();
-    if (bundleHasData(remote) && remoteAt >= localAt) applyBundle(remote);
-    else if (localHasData() && (!bundleHasData(remote) || localAt > remoteAt)) await pushCloud();
-    cloudReady = true;
-    skipCloud = false;
-    setSyncNote("手機與電腦共用同一份資料。改完後另一台重新打開或等幾秒就會對上。");
-    render();
-  } catch (_) {
-    cloudReady = false;
-    skipCloud = true;
-    setSyncNote("現在還不能跨裝置同步：網站仍是靜態頁。請把 Render 改成 Web Service（啟動指令 node server.js）後再打開這個網址。");
-  }
-}
-async function pollCloud() {
-  if (!cloudReady) return;
-  try {
-    const remote = await pullCloud();
-    const remoteAt = Number(remote.updatedAt) || 0;
-    if (remoteAt > readSyncAt() && bundleHasData(remote)) {
+    const remoteOk = bundleHasData(remote);
+    const localOk = localHasData();
+    if (localOk && !remoteOk) {
+      await pushCloud(true);
+      setSyncNote("已把本機填寫傳到共用。手機重新整理即可看到同一份。");
+    } else if (remoteOk && (!localOk || remoteAt > localAt)) {
       applyBundle(remote);
       render();
+      setSyncNote("已從共用載入資料。");
+    } else if (localOk && remoteOk && localAt > remoteAt) {
+      await pushCloud(true);
+      setSyncNote("已把較新的本機資料補傳到共用。");
+    } else {
+      setSyncNote("電腦與手機共用同一份資料。");
     }
-  } catch (_) {}
+    cloudReady = true;
+    return true;
+  } catch (err) {
+    cloudReady = false;
+    skipCloud = false;
+    setSyncNote("同步暫時失敗，會自動再試。");
+    console.error(err);
+    return false;
+  }
+}
+async function bootCloudSync() {
+  await healCloudSync();
+}
+async function pollCloud() {
+  await healCloudSync();
 }
 
 ensureHaHistory();
 render();
 bootCloudSync();
-setInterval(pollCloud, 8000);
+setInterval(healCloudSync, 8000);

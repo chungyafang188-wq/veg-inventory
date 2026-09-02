@@ -818,76 +818,108 @@ function lineQtyForSku(o, skuId) {
   for (const l of o.lines || []) if (l.skuId === skuId) n += l.qty;
   return round(n);
 }
+function lineQtyForSkus(o, ids) {
+  let n = 0;
+  for (const id of ids) n += lineQtyForSku(o, id);
+  return round(n);
+}
+function planGroups() {
+  if (co === "ha") {
+    return companySkus().map((sku, i) => ({
+      key: sku.id,
+      label: skuShortName(sku),
+      unit: sku.unit,
+      skuIds: [sku.id],
+      tone: `t${i % 6}`,
+    }));
+  }
+  return [
+    { key: "sl-zhi", label: "地瓜葉／誌", unit: "籃", skuIds: ["sl-zhi"], tone: "leaf-zhi" },
+    { key: "sl-fang", label: "地瓜葉／芳", unit: "籃", skuIds: ["sl-fang"], tone: "leaf-fang" },
+    { key: "rb", label: "九層塔／紅骨", unit: "箱", skuIds: ["rb-fang", "rb-lin", "rb-oth"], tone: "rb" },
+    { key: "gb", label: "九層塔／綠骨", unit: "箱", skuIds: ["gb-fang", "gb-lin", "gb-oth"], tone: "gb" },
+    { key: "mint-kg", label: "薄荷散賣", unit: "kg", skuIds: ["mint-kg"], tone: "mint" },
+    { key: "shiso-kg", label: "紫蘇散賣", unit: "kg", skuIds: ["shiso-kg", "shiso-jin"], tone: "shiso" },
+    { key: "basil-kg", label: "九層塔散賣", unit: "kg", skuIds: ["basil-kg"], tone: "herb" },
+  ];
+}
+function planLineNote(o, skuIds) {
+  const bits = [];
+  for (const l of o.lines || []) {
+    if (!skuIds.includes(l.skuId)) continue;
+    const b = BASIL_REV[l.skuId];
+    if (b) bits.push(b.val);
+    if (l.pack) bits.push(l.pack);
+    if (l.note) bits.push(l.note);
+  }
+  return [...new Set(bits.filter(Boolean))].join("　");
+}
 function renderPlan() {
   const shortBox = document.getElementById("plan-short");
   const box = document.getElementById("plan");
   if (!box) return;
   const day = today();
   const orders = state.orders.filter((o) => o.co === co && o.status !== "cancelled");
+  const groups = planGroups();
   const shorts = [];
-  for (const sku of companySkus()) {
+  for (const g of groups) {
     let need = 0;
-    for (const o of orders) {
-      if (o.status !== "open") continue;
-      need += lineQtyForSku(o, sku.id);
+    let have = 0;
+    for (const id of g.skuIds) {
+      const sku = skuById(id);
+      if (!sku) continue;
+      for (const o of orders) {
+        if (o.status === "open") need += lineQtyForSku(o, id);
+      }
+      have += ready(sku);
     }
-    if (!need) continue;
-    const gap = round(need - ready(sku));
-    if (gap > 0) shorts.push({ sku, gap });
+    need = round(need);
+    have = round(have);
+    if (need && round(need - have) > 0) shorts.push({ label: g.label, gap: round(need - have), unit: g.unit });
   }
   if (shortBox) {
     shortBox.innerHTML = shorts.length
-      ? shorts
-          .map((s) => `<p class="bad">${esc(skuShortName(s.sku))} 共缺 ${fmt(s.gap)} ${esc(s.sku.unit)}</p>`)
-          .join("")
+      ? shorts.map((s) => `<p class="bad">${esc(s.label)} 共缺 ${fmt(s.gap)} ${esc(s.unit)}</p>`).join("")
       : '<p class="empty">目前沒有缺貨品項。</p>';
   }
   const isTodayShipped = (o) => o.status === "shipped" && (o.shippedOn || o.shipDate) === day;
-  const used = companySkus().filter((sku) =>
-    orders.some((o) => lineQtyForSku(o, sku.id) > 0 && (o.status === "open" || isTodayShipped(o))),
+  const used = groups.filter((g) =>
+    orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && (o.status === "open" || isTodayShipped(o))),
   );
   if (!used.length) {
     box.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
     return;
   }
-  const personList = (rows, sku) => {
-    if (!rows.length) return '<p class="empty">無</p>';
-    return `<ul class="list">${rows
-      .map(
-        (r) =>
-          `<li><strong>${esc(r.customer)}</strong><p class="lines">${fmt(r.qty)} ${esc(sku.unit)}　${esc(r.date)}${r.extra ? `　${esc(r.extra)}` : ""}</p></li>`,
-      )
-      .join("")}</ul>`;
+  const personList = (rows, unit, kind) => {
+    if (!rows.length) return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><p class="empty">無</p></div>`;
+    return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><ul class="list plan-people">${rows
+      .map((r) => {
+        const note = r.note ? `<span class="plan-note">${esc(r.note)}</span>` : "";
+        return `<li><strong>${esc(r.customer)}</strong><span class="plan-qty">${fmt(r.qty)} ${esc(unit)}</span>${note}</li>`;
+      })
+      .join("")}</ul></div>`;
   };
   box.innerHTML = used
-    .map((sku) => {
+    .map((g) => {
       const pending = [];
       const shipped = [];
       for (const o of orders) {
-        const qty = lineQtyForSku(o, sku.id);
+        const qty = lineQtyForSkus(o, g.skuIds);
         if (!qty) continue;
-        const extra = o.lines
-          .filter((l) => l.skuId === sku.id)
-          .map((l) => [l.pack, l.note].filter(Boolean).join(" "))
-          .filter(Boolean)
-          .join("、");
         const rec = {
           customer: o.customer,
           qty,
-          date: o.status === "shipped" ? o.shippedOn || o.shipDate : o.shipDate,
-          extra,
+          note: planLineNote(o, g.skuIds),
         };
         if (o.status === "open") pending.push(rec);
         else if (isTodayShipped(o)) shipped.push(rec);
       }
-      pending.sort((a, b) => a.date.localeCompare(b.date) || a.customer.localeCompare(b.customer, "zh-Hant"));
+      pending.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
       shipped.sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
-      return `<section class="plan-sku">
-        <h3>${esc(skuShortName(sku))}</h3>
-        <h4>待出貨</h4>
-        ${personList(pending, sku)}
-        <h4>當天已出貨</h4>
-        ${personList(shipped, sku)}
+      return `<section class="plan-sku tone-${esc(g.tone)}">
+        <h3>${esc(g.label)}</h3>
+        ${personList(pending, g.unit, "pending")}
+        ${personList(shipped, g.unit, "shipped")}
       </section>`;
     })
     .join("");

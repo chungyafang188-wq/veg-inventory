@@ -257,7 +257,51 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .leaf-inbound { margin-top: 0.85rem; padding-top: 0.7rem; border-top: 1px dashed var(--line); }
 .leaf-inbound h3 { margin: 0 0 0.2rem; font-size: 0.95rem; }
 .inbound-table { min-width: 32rem; }
-.basil-grid { min-width: 28rem; }
+.plan-sku {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.8rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.plan-sku:first-child { margin-top: 0.35rem; }
+.plan-sku h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.05rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid currentColor;
+}
+.plan-sku.tone-leaf-zhi { background: #eef7f0; color: #1b5e3b; }
+.plan-sku.tone-leaf-fang { background: #eaf4fb; color: #1a4f73; }
+.plan-sku.tone-rb { background: #fdeeee; color: #8a1f1f; }
+.plan-sku.tone-gb { background: #eef8e8; color: #2d6a1e; }
+.plan-sku.tone-mint { background: #f3eef8; color: #5a3d7a; }
+.plan-sku.tone-shiso { background: #f8f0e8; color: #7a4a28; }
+.plan-sku.tone-herb { background: #eef6ee; color: #355c3a; }
+.plan-sku.tone-t0 { background: #eef6ee; color: #1b5e3b; }
+.plan-sku.tone-t1 { background: #eaf4fb; color: #1a4f73; }
+.plan-sku.tone-t2 { background: #fdeeee; color: #8a1f1f; }
+.plan-sku.tone-t3 { background: #fff6e8; color: #8a4b12; }
+.plan-sku.tone-t4 { background: #f3eef8; color: #5a3d7a; }
+.plan-sku.tone-t5 { background: #f8f0e8; color: #7a4a28; }
+.plan-block {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.65rem;
+}
+.plan-block h4 { margin: 0 0 0.25rem; font-size: 0.82rem; }
+.plan-block.pending { background: #ffe7c2; }
+.plan-block.shipped { background: #cfe8d4; }
+.plan-people { margin: 0; }
+.plan-people li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.55rem;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.plan-qty { font-variant-numeric: tabular-nums; }
+.plan-note { color: var(--muted); font-size: 0.85rem; }
 .inbound-table .ok, .inbound-table .bad { padding: 0.2rem 0.3rem; border-radius: 0.35rem; }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }

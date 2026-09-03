@@ -400,6 +400,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .daily-sheet-card .hint { margin-bottom: 0.45rem; }
 .sheet-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.35rem; }
 .daily-grid { min-width: 28rem; border-collapse: collapse; font-size: 0.78rem; }
+.daily-grid.basil-grid { min-width: 38rem; }
 .daily-grid th, .daily-grid td {
   border: 1px solid var(--line); padding: 0.28rem 0.3rem; text-align: center; white-space: nowrap;
 }

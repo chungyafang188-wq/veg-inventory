@@ -22,13 +22,14 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "無叫貨請填「休」，會列入當日清單，表示已確認該客戶叫貨狀態。",
-    formHint: "紅骨／綠骨／廠商／備註。無叫貨填「休」。",
+    hint: "無叫貨請填「休」。紅骨與綠骨可各選廠商（芳／琳／其他），同一客人可以一邊芳、一邊琳。",
+    formHint: "紅骨、綠骨分開選廠商。無叫貨填「休」。",
     skuIds: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
       { key: "rb", label: "紅骨", kind: "qty" },
+      { key: "rbVendor", label: "紅骨廠商", kind: "rbVendor" },
       { key: "gb", label: "綠骨", kind: "qty" },
-      { key: "vendor", label: "廠商", kind: "vendor" },
+      { key: "gbVendor", label: "綠骨廠商", kind: "gbVendor" },
       { key: "note", label: "備註", kind: "note" },
     ],
   },
@@ -995,27 +996,36 @@ function applyQtyCellValue(row, who, col, raw, date) {
 function rowVendor(row) {
   const v = String(row?.vendor || "").trim();
   if (VENDOR_OPTS.includes(v)) return v;
+  if (VENDOR_OPTS.includes(row?.rbVendor)) return row.rbVendor;
+  if (VENDOR_OPTS.includes(row?.gbVendor)) return row.gbVendor;
   if (row?.vendors && typeof row.vendors === "object") {
     return VENDOR_OPTS.find((k) => row.vendors[k]) || "芳";
   }
-  if (row?.rbVendor && VENDOR_OPTS.includes(row.rbVendor)) return row.rbVendor;
-  if (row?.gbVendor && VENDOR_OPTS.includes(row.gbVendor)) return row.gbVendor;
   return "芳";
 }
+function basilVendorOf(row, which) {
+  const key = which === "gb" ? "gbVendor" : "rbVendor";
+  const v = String(row?.[key] || "").trim();
+  if (VENDOR_OPTS.includes(v)) return v;
+  return rowVendor(row);
+}
 function migrateBasilDailyRow(row) {
-  if (!row || row._basil3) return row;
-  const rb =
-    qtyN(row.rb) + qtyN(row.rbFang) + qtyN(row.rbOth) + qtyN(row.rbLin);
-  const gb =
-    qtyN(row.gb) + qtyN(row.gbFang) + qtyN(row.gbOth) + qtyN(row.gbLin);
-  if (!row.note) {
-    const bits = [row.rbOthNote, row.gbOthNote].filter(Boolean);
-    if (bits.length) row.note = bits.join("、");
+  if (!row) return row;
+  if (!row._basil3) {
+    const rb = qtyN(row.rb) + qtyN(row.rbFang) + qtyN(row.rbOth) + qtyN(row.rbLin);
+    const gb = qtyN(row.gb) + qtyN(row.gbFang) + qtyN(row.gbOth) + qtyN(row.gbLin);
+    if (!row.note) {
+      const bits = [row.rbOthNote, row.gbOthNote].filter(Boolean);
+      if (bits.length) row.note = bits.join("、");
+    }
+    if (rb) row.rb = rb;
+    if (gb) row.gb = gb;
+    if (!row.vendor) row.vendor = rowVendor(row);
+    row._basil3 = true;
   }
-  if (rb) row.rb = rb;
-  if (gb) row.gb = gb;
-  if (!row.vendor) row.vendor = rowVendor(row);
-  row._basil3 = true;
+  const fallback = rowVendor(row);
+  if (!VENDOR_OPTS.includes(String(row.rbVendor || "").trim())) row.rbVendor = fallback;
+  if (!VENDOR_OPTS.includes(String(row.gbVendor || "").trim())) row.gbVendor = fallback;
   return row;
 }
 function linesFromDailyRow(row, meta) {
@@ -1031,15 +1041,14 @@ function linesFromDailyRow(row, meta) {
     migrateBasilDailyRow(row);
     const r = qtyN(row.rb);
     const g = qtyN(row.gb);
-    const vendor = rowVendor(row);
     const note = String(row.note || "").trim();
     if (r) {
-      const line = { skuId: BASIL_SKU.rb[vendor], qty: r };
+      const line = { skuId: BASIL_SKU.rb[basilVendorOf(row, "rb")], qty: r };
       if (note) line.note = note;
       lines.push(line);
     }
     if (g) {
-      const line = { skuId: BASIL_SKU.gb[vendor], qty: g };
+      const line = { skuId: BASIL_SKU.gb[basilVendorOf(row, "gb")], qty: g };
       if (note) line.note = note;
       lines.push(line);
     }
@@ -1071,7 +1080,9 @@ function linesToDailyRow(lines) {
     else if (BASIL_REV[l.skuId]) {
       const b = BASIL_REV[l.skuId];
       row[b.qty] = round((qtyN(row[b.qty]) || 0) + l.qty);
-      row.vendor = b.val;
+      if (b.qty === "rb") row.rbVendor = b.val;
+      if (b.qty === "gb") row.gbVendor = b.val;
+      row.vendor = row.rbVendor || row.gbVendor || b.val;
       if (l.note) row.note = l.note;
       row._basil3 = true;
     }
@@ -2068,8 +2079,9 @@ function renderDailyGrid() {
         );
         return `<td><select class="cell-pack" ${pos}>${opts.join("")}</select></td>`;
       }
-      if (col.kind === "vendor") {
-        const vendor = rowVendor(row);
+      if (col.kind === "vendor" || col.kind === "rbVendor" || col.kind === "gbVendor") {
+        const which = col.kind === "gbVendor" ? "gb" : col.kind === "rbVendor" ? "rb" : "";
+        const vendor = which ? basilVendorOf(row, which) : rowVendor(row);
         const opts = VENDOR_OPTS.map(
           (p) => `<option value="${esc(p)}"${vendor === p ? " selected" : ""}>${p}</option>`,
         );

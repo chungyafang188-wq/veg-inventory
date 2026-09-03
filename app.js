@@ -588,12 +588,16 @@ function staffNote(o) {
 function renderStaffChips() {
   const box = document.getElementById("operator-chips");
   const input = document.getElementById("operator");
+  const nowEl = document.getElementById("operator-now");
+  const bar = document.getElementById("operator-bar");
   if (!box) return;
   const now = currentStaff();
   if (input && !input.value && now) input.value = now;
+  if (nowEl) nowEl.textContent = now ? `現在是：${now}` : "尚未填寫，入單前請先填名字";
+  if (bar) bar.classList.toggle("filled", !!now);
   const names = loadStaffList();
   if (!names.length) {
-    box.innerHTML = '<p class="hint chip-empty">填名字後入單，下次可點選。電腦／手機會共用名單。</p>';
+    box.innerHTML = '<p class="hint chip-empty">填過的名字會出現在這裡，下次直接點。</p>';
     return;
   }
   box.innerHTML = names

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=77" />
+    <link rel="stylesheet" href="./styles.css?v=78" />
   </head>
   <body>
     <div class="app">
@@ -14,10 +14,14 @@
         <h1>產品出貨紀錄表</h1>
         <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。填數量後按確認即佔量。庫存頁把早上盤點「加入」才有可出貨件數。出貨扣庫會扣可出，並把出貨數量累計入今日進貨。</p>
         <p class="muted" id="sync-note"></p>
-        <div class="operator-bar">
-          <label class="field operator-field">目前會計
-            <input id="operator" type="text" placeholder="處理單的人，例如小陳" autocomplete="off" />
+        <div class="operator-bar" id="operator-bar">
+          <p class="operator-kicker">處理單的人</p>
+          <h2 class="operator-title">目前會計</h2>
+          <p class="operator-now" id="operator-now">尚未填寫，入單前請先填名字</p>
+          <label class="operator-field" for="operator">請填或點選姓名
+            <input id="operator" type="text" placeholder="例如：小陳" autocomplete="off" />
           </label>
+          <p class="operator-help">入單、修改、出貨都會記這個人。換人處理請改名字。</p>
           <div id="operator-chips" class="chips" aria-label="會計名單"></div>
         </div>
       </header>
@@ -135,7 +139,7 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=77"></script>
-    <script src="./app.js?v=77"></script>
+    <script src="./line-parse.js?v=78"></script>
+    <script src="./app.js?v=78"></script>
   </body>
 </html>

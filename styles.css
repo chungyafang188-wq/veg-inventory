@@ -157,9 +157,54 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .qty { width: 4.8rem; padding: 0.35rem 0.4rem; }
 .pack-label { display: grid; gap: 0.2rem; margin-top: 0.3rem; font-size: 0.75rem; color: var(--muted); font-weight: normal; }
 .pack { width: 6.2rem; padding: 0.3rem 0.35rem; font-size: 0.8rem; }
-.operator-bar { margin-top: 0.65rem; }
-.operator-field { max-width: 16rem; }
-.operator-bar .chips { margin-top: 0.35rem; }
+.operator-bar {
+  margin-top: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border: 2px solid var(--green);
+  border-radius: 0.9rem;
+  background: #e8f4ec;
+}
+.operator-bar.filled {
+  background: #dff3e6;
+}
+.operator-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--green);
+}
+.operator-title {
+  margin: 0.1rem 0 0;
+  font-size: 1.15rem;
+}
+.operator-now {
+  margin: 0.25rem 0 0.55rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #8a3d0c;
+}
+.operator-bar.filled .operator-now { color: var(--green); }
+.operator-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.operator-field input {
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 0.55rem 0.65rem;
+  border: 2px solid var(--green);
+  background: #fff;
+}
+.operator-help {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.operator-bar .chips { margin-top: 0.45rem; }
 .chip {
   font: inherit; border: 1px solid var(--line); background: var(--card);
   border-radius: 999px; padding: 0.15rem 0.25rem 0.15rem 0.55rem; cursor: pointer;

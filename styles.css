@@ -148,7 +148,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .warn { background: #fff4e5; color: var(--warn); }
 .bad { background: #f8e4e4; color: var(--bad); }
 .alerts { margin-top: 0.85rem; }
-.status { margin-top: 0.85rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: #e4f0e4; }
+.status { margin-top: 0.85rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: #e4f0e4; white-space: pre-wrap; }
 .status.err { background: #fff4e5; }
 .empty { margin: 0.45rem 0 0; }
 .safety-edit { width: 4.2rem; padding: 0.25rem 0.35rem; font-size: 0.85rem; }

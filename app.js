@@ -1090,10 +1090,31 @@ function dupHint(dupes) {
     })
     .join("；");
 }
+let lineDupAck = new Set();
+let formDupAck = "";
+let nqDupAck = "";
+let inboundLotAck = "";
+
 function warnIfDup(company, customer, shipDate, skipId) {
   const dupes = suspectDupes(company, customer, shipDate, skipId);
   if (!dupes.length) return true;
-  return confirm(`疑似重複入單：「${customer}」${shipDate || today()} 已有訂單（${dupHint(dupes)}）。仍要再入一筆？`);
+  const key = `${company}|${customer}|${shipDate || today()}`;
+  if (formDupAck === key) return true;
+  formDupAck = key;
+  setStatus(
+    `疑似重複入單：「${customer}」${shipDate || today()} 已有（${dupHint(dupes)}）。畫面不會跳窗，請先看排程／已填紀錄，確定後再按一次「確認輸入訂單」。`,
+    true,
+  );
+  return false;
+}
+function warnIfInboundDup(skuId, qty, date) {
+  const hit = suspectInboundDupes(skuId, qty, date);
+  if (!hit) return true;
+  const key = `${skuId}|${round(Number(qty))}|${date}`;
+  if (inboundLotAck === key) return true;
+  inboundLotAck = key;
+  setStatus(`疑似重複進貨：${inboundDupNote(hit)}。請先核對今日已進貨，確定後再按一次「記入」。`, true);
+  return false;
 }
 function inboundSkuLabel(skuId) {
   return NQ_INBOUND.find((r) => r.id === skuId)?.label || skuById(skuId)?.name || skuId;
@@ -1113,19 +1134,30 @@ function inboundDupNote(hit) {
   const unit = sku?.unit || "";
   return `「${inboundSkuLabel(hit.skuId)}」再記入 ${fmt(hit.qty)} ${unit}（今日已 ${fmt(hit.inbound)} ${unit}）`;
 }
-function warnIfInboundDup(skuId, qty, date) {
-  const hit = suspectInboundDupes(skuId, qty, date);
-  if (!hit) return true;
-  return confirm(`疑似重複進貨：${inboundDupNote(hit)}。仍要再記入？`);
-}
-function warnIfInboundDupes(lines, date) {
+function inboundDupNotes(lines, date) {
   const notes = [];
   for (const l of lines || []) {
     const hit = suspectInboundDupes(l.skuId, l.qty, date);
     if (hit) notes.push(inboundDupNote(hit));
   }
-  if (!notes.length) return true;
-  return confirm(`疑似重複進貨（${date}）：\n${notes.join("\n")}\n仍要再記入？`);
+  return notes;
+}
+function parsedDupInfo(parsed, date) {
+  if (!parsed) return null;
+  const day = date || parsed.date || today();
+  if (parsed.inbound) {
+    const notes = inboundDupNotes(parsed.lines, day);
+    return notes.length ? { inbound: true, notes } : null;
+  }
+  const who = (parsed.customer || "").trim();
+  if (!who) return null;
+  const lines = parsed.lines || [];
+  const ha = lines.filter((l) => (skuById(l.skuId) || {}).co === "ha");
+  const nq = lines.filter((l) => (skuById(l.skuId) || {}).co === "nq");
+  const dupHa = ha.length ? suspectDupes("ha", who, day) : [];
+  const dupNq = nq.length ? suspectDupes("nq", who, day) : [];
+  if (!dupHa.length && !dupNq.length) return null;
+  return { inbound: false, who, day, hint: dupHint([...dupHa, ...dupNq]) };
 }
 function commitStatus(worst) {
   if (worst === "bad") setStatus("有品項不夠，仍已佔量列入排程，請看紅字。", true);
@@ -1164,9 +1196,15 @@ function confirmNqSchedule() {
     .map((e) => ({ e, dupes: suspectDupes("nq", e.customer, date) }))
     .filter((x) => x.dupes.length);
   if (dups.length) {
-    const msg = dups.map((x) => `「${x.e.customer}」${dupHint(x.dupes)}`).join("\n");
-    if (!confirm(`疑似重複入單：\n${msg}\n仍要再入單？`)) return;
+    const key = dups.map((x) => x.e.customer).sort().join(",") + "|" + date;
+    if (nqDupAck !== key) {
+      nqDupAck = key;
+      const msg = dups.map((x) => `「${x.e.customer}」${dupHint(x.dupes)}`).join("；");
+      setStatus(`疑似重複入單：${msg}。畫面不會跳窗，請先看排程／已填紀錄，確定後再按一次「確認輸入訂單」。`, true);
+      return;
+    }
   }
+  nqDupAck = "";
   for (const e of entries) addOpenOrder(e.customer, date, e.lines);
   clearDailyRows(entries.map((e) => e.customer), date);
   save();
@@ -2054,8 +2092,8 @@ function confirmParsedInbound(parsed, date) {
   const lines = (parsed.lines || []).filter((l) => skuById(l.skuId) && Number(l.qty) > 0);
   if (!lines.length) return setStatus("沒有對到進貨品項，請改文字再解析。", true);
   const day = date || today();
-  if (!warnIfInboundDupes(lines, day)) return false;
   for (const l of lines) addInboundLot(l.skuId, l.qty, day, true);
+  inboundLotAck = "";
   setStatus(`已記入進貨 ${lines.length} 項。`, false);
   render();
   return true;
@@ -2069,8 +2107,6 @@ function confirmParsedOrder(parsed, date) {
   const ha = lines.filter((l) => (skuById(l.skuId) || {}).co === "ha");
   const nq = lines.filter((l) => (skuById(l.skuId) || {}).co === "nq");
   const day = date || document.getElementById("ship-date")?.value || today();
-  if (ha.length && !warnIfDup("ha", who, day)) return false;
-  if (nq.length && !warnIfDup("nq", who, day)) return false;
   if (ha.length) {
     addOpenOrderFor("ha", who, day, ha);
     rememberHaCustomer(who);
@@ -2114,19 +2150,21 @@ function renderLineDrafts() {
       const unk = (d.unknown || []).length
         ? `<p class="draft-miss">原文沒對到：${esc(d.unknown.join("、"))}</p>`
         : "";
-      const dupHa = !inbound && d.customer ? suspectDupes("ha", d.customer, day) : [];
-      const dupNq = !inbound && d.customer ? suspectDupes("nq", d.customer, day) : [];
-      const dupNote =
-        dupHa.length || dupNq.length
-          ? `<p class="bad">疑似重複：${esc(d.customer)} ${esc(day)} 已有訂單（${esc(dupHint([...dupHa, ...dupNq]))}）。確認入單時會再問一次。</p>`
-          : "";
-      const inDupes = inbound
-        ? (d.lines || []).map((l) => suspectInboundDupes(l.skuId, l.qty, day)).filter(Boolean)
-        : [];
-      const inDupNote = inDupes.length
-        ? `<p class="bad">疑似重複進貨：${esc(inDupes.map(inboundDupNote).join("；"))}。確認記入時會再問一次。</p>`
+      const dupInfo = parsedDupInfo(d, day);
+      const waiting = dupInfo && lineDupAck.has(d.id);
+      const dupNote = dupInfo
+        ? d.inbound
+          ? `<p class="bad">疑似重複進貨：${esc(dupInfo.notes.join("；"))}。請先核對庫存頁今日已進貨，確定後再按「仍要記入進貨」。</p>`
+          : `<p class="bad">疑似重複出貨訂單：${esc(dupInfo.who)} ${esc(dupInfo.day)} 已有（${esc(dupInfo.hint)}）。請先切到「排程」核對，確定不是重複後再按「仍要列入出貨訂單」。</p>`
         : "";
       const src = d.text || d.raw || "";
+      const okLabel = d.inbound
+        ? waiting
+          ? "仍要記入進貨"
+          : "確認記入進貨"
+        : waiting
+          ? "仍要列入出貨訂單"
+          : "確認列入出貨訂單";
       return `<article class="line-draft ${inbound ? "is-in" : "is-out"}">
         <div class="draft-head">
           <span class="draft-kind">${esc(draftKindLabel(inbound))}</span>
@@ -2138,13 +2176,12 @@ function renderLineDrafts() {
         ${draftCheckRowsHtml(d)}
         ${unk}
         ${dupNote}
-        ${inDupNote}
         <details class="draft-src">
           <summary>原文</summary>
           <pre>${esc(src)}</pre>
         </details>
         <div class="btn-row">
-          <button type="button" class="primary" data-line-ok="${esc(d.id)}">${inbound ? "確認記入進貨" : "確認列入出貨訂單"}</button>
+          <button type="button" class="primary" data-line-ok="${esc(d.id)}">${okLabel}</button>
           <button type="button" class="ghost" data-line-no="${esc(d.id)}">丟掉</button>
         </div>
       </article>`;
@@ -2300,17 +2337,31 @@ document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
   const no = e.target.closest("[data-line-no]");
   if (ok) {
     const id = ok.dataset.lineOk;
+    const parsed = id === "paste" ? linePastePreview : lineDraftsCache.find((x) => x.id === id);
+    if (!parsed) return;
+    const dup = parsedDupInfo(parsed, parsed.date);
+    if (dup && !lineDupAck.has(id)) {
+      lineDupAck.add(id);
+      renderLineDrafts();
+      setStatus(
+        dup.inbound
+          ? "疑似重複進貨。畫面不會跳窗，請先核對庫存，確定後再按「仍要記入進貨」。"
+          : "疑似重複出貨訂單。畫面不會跳窗，請先看「排程」或已填紀錄，確定後再按「仍要列入出貨訂單」。",
+        true,
+      );
+      return;
+    }
     if (id === "paste") {
       if (confirmParsedOrder(linePastePreview)) {
+        lineDupAck.delete("paste");
         linePastePreview = null;
         const ta = document.getElementById("line-paste");
         if (ta) ta.value = "";
       }
       return;
     }
-    const d = lineDraftsCache.find((x) => x.id === id);
-    if (!d) return;
-    if (confirmParsedOrder(d, d.date)) {
+    if (confirmParsedOrder(parsed, parsed.date)) {
+      lineDupAck.delete(id);
       await dropLineDraft(id);
       await refreshLineDrafts();
     }
@@ -2560,6 +2611,7 @@ document.getElementById("order-form").onsubmit = (e) => {
     });
   }
   if (co === "ha") rememberHaCustomer(who);
+  formDupAck = "";
   save();
   document.getElementById("customer").value = "";
   commitStatus(worst);

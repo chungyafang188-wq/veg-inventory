@@ -31,47 +31,46 @@
     return `on-${origin}-${spec12 ? "12" : "20"}`;
   }
 
+  function normOrderText(s) {
+    return String(s || "")
+      .replace(/[Ｋｋ]/g, "K")
+      .replace(/／/g, "/")
+      .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xff10 + 48));
+  }
+
   function takeOnionSpecQty(s) {
-    const slash = String(s).match(/(12|20)\s*[Kk]?\s*[/／]\s*(\d+(?:\.\d+)?)/);
-    if (slash) {
-      return {
-        spec12: slash[1] === "12",
-        qty: Number(slash[2]),
-        text: s.replace(slash[0], ""),
-      };
-    }
-    const glued = String(s).match(/(12|20)\s*[Kk]\s*(\d+(?:\.\d+)?)/);
-    if (glued) {
-      return {
-        spec12: glued[1] === "12",
-        qty: Number(glued[2]),
-        text: s.replace(glued[0], ""),
-      };
-    }
-    let rest = s;
+    let rest = normOrderText(s);
     let spec12 = null;
-    const labeled = rest.match(/(12|20)\s*[Kk]/);
+    const labeled = rest.match(/(12|20)\s*K/i);
     if (labeled) {
       spec12 = labeled[1] === "12";
-      rest = rest.replace(labeled[0], "");
-    } else if (/特大/.test(rest) && !/20/.test(rest)) {
+      rest = rest.replace(labeled[0], " ");
+    } else if (/特大|大球/.test(rest) && !/20/.test(rest)) {
       spec12 = true;
-      rest = rest.replace(/特大/g, "");
     }
-    const { qty, text } = takeQty(rest);
+    const { qty, text } = takeQty(rest.replace(/\//g, " "));
     return { spec12, qty, text };
   }
 
   function leafPack(s) {
-    if (/箱裝/.test(s) && !/籃裝/.test(s)) return "箱裝";
-    if (/籃裝/.test(s)) return "籃裝";
-    if (/箱/.test(s) && !/籃/.test(s)) return "箱裝";
+    const t = String(s || "");
+    if (/箱裝/.test(t) && !/籃裝/.test(t)) return "箱裝";
+    if (/籃裝/.test(t)) return "籃裝";
+    if (/箱/.test(t) && !/籃/.test(t)) return "箱裝";
     return "籃裝";
+  }
+
+  function isLeafZhi(t) {
+    return /誌/.test(t) && /葉|地瓜/.test(t);
+  }
+
+  function isLeafFang(t) {
+    return /芳/.test(t) && /葉|地瓜/.test(t) && !/綠骨|紅骨|綠九層|紅九層|綠塔|紅塔|九層/.test(t);
   }
 
   function peelCustomer(line) {
     const m = String(line || "").match(
-      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|綠骨|紅骨|綠九|紅九|九層)/,
+      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層)/,
     );
     if (!m) return { customer: "", rest: String(line || "").trim() };
     return { customer: m[1].trim(), rest: String(line).slice(m[0].length).trim() };
@@ -83,11 +82,11 @@
     const onionBits = takeOnionSpecQty(s);
     const { qty, text } = onionBits;
     const t = text.replace(/\s+/g, "");
-    if (/葉誌|誌葉|地瓜葉.?誌/.test(t) || (t.includes("誌") && /葉|地瓜/.test(t))) {
-      return { skuId: "sl-zhi", qty, pack: leafPack(t), pallet };
+    if (isLeafZhi(t)) {
+      return { skuId: "sl-zhi", qty, pack: leafPack(raw + t), pallet };
     }
-    if (/葉芳|芳葉|地瓜葉.?芳/.test(t) || (t.includes("芳") && /葉|地瓜/.test(t) && !/綠骨|紅骨|綠九層|紅九層|九層/.test(t))) {
-      return { skuId: "sl-fang", qty, pack: leafPack(t), pallet };
+    if (isLeafFang(t)) {
+      return { skuId: "sl-fang", qty, pack: leafPack(raw + t), pallet };
     }
     const greenBasil = /綠骨|綠九層塔|綠九層|綠塔|綠芳|綠琳/;
     const redBasil = /紅骨|紅九層塔|紅九層|紅塔|紅芳|紅琳/;
@@ -118,14 +117,19 @@
   }
 
   function looksLikeItems(line) {
-    return /袋|箱|籃|kg|公斤|密本|阿成|紐|韓|澳|越|葉|塔|骨|洋蔥|南瓜|九層/.test(line);
+    return /袋|箱|籃|kg|公斤|密本|阿成|紐|韓|澳|越|葉|塔|骨|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
+  }
+
+  function looksLikeInbound(raw) {
+    return /進貨|入貨|到貨/.test(String(raw || ""));
   }
 
   function parseLineOrderText(raw) {
     const text = String(raw || "").replace(/\r/g, "").trim();
     const unknown = [];
     const lines = [];
-    if (!text) return { customer: "", lines, unknown, raw: "" };
+    const inbound = looksLikeInbound(text);
+    if (!text) return { customer: "", lines, unknown, raw: "", inbound: false };
     const parts = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
     let customer = "";
     let body = parts;
@@ -144,7 +148,7 @@
       .map((x) => x.trim())
       .filter(Boolean);
     for (const chunk of chunks) {
-      if (/^(好|喔|哦|收到|謝謝|ok|OK)$/.test(chunk)) continue;
+      if (/^(好|喔|哦|收到|謝謝|ok|OK|進貨|入貨|到貨)$/.test(chunk)) continue;
       const hit = matchChunk(chunk);
       if (hit && hit.qty > 0) {
         const line = { skuId: hit.skuId, qty: hit.qty };
@@ -153,13 +157,14 @@
         lines.push(line);
       } else unknown.push(chunk);
     }
-    return { customer, lines, unknown, raw: text };
+    if (inbound && /^(進貨|入貨|到貨)/.test(customer)) customer = "";
+    return { customer, lines, unknown, raw: text, inbound };
   }
 
   function worthKeeping(parsed) {
     if (!parsed) return false;
     if (parsed.lines && parsed.lines.length) return true;
-    return /袋|箱|籃|密本|紐|葉誌|綠骨|紅骨|綠九層|紅九層|綠芳|紅芳|綠塔|紅塔|九層塔/.test(parsed.raw || "");
+    return /袋|箱|籃|密本|紐|葉誌|綠骨|紅骨|綠九層|紅九層|綠芳|紅芳|綠塔|紅塔|九層塔|進貨|入貨|到貨/.test(parsed.raw || "");
   }
 
   return { parseLineOrderText, worthKeeping };

@@ -215,11 +215,16 @@ function handleLineWebhook(req, res) {
           customer: parsed.customer || "",
           lines: parsed.lines || [],
           unknown: parsed.unknown || [],
+          inbound: !!parsed.inbound,
         });
         added += 1;
-        const reply = parsed.lines.length
-          ? "已收到，待會計在網頁確認入單。"
-          : "已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
+        const reply = parsed.inbound
+          ? parsed.lines.length
+            ? "已收到進貨，待會計在網頁確認記入。"
+            : "已收到進貨，但沒對到品項。請寫例如：地瓜葉誌進貨57。"
+          : parsed.lines.length
+            ? "已收到，待會計在網頁確認入單。"
+            : "已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
         replies.push(lineReply(ev.replyToken, reply));
       }
       if (store.drafts.length > 80) store.drafts = store.drafts.slice(0, 80);

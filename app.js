@@ -1082,6 +1082,38 @@ function warnIfDup(company, customer, shipDate, skipId) {
   if (!dupes.length) return true;
   return confirm(`疑似重複入單：「${customer}」${shipDate || today()} 已有訂單（${dupHint(dupes)}）。仍要再入一筆？`);
 }
+function inboundSkuLabel(skuId) {
+  return NQ_INBOUND.find((r) => r.id === skuId)?.label || skuById(skuId)?.name || skuId;
+}
+function suspectInboundDupes(skuId, qty, date) {
+  const n = round(Number(qty));
+  if (!(n > 0)) return null;
+  const b = bookRow(skuId, date);
+  ensureLots(b);
+  const lotHits = (b.lots || []).filter((x) => Number(x.qty) > 0 && round(x.qty) === n).length;
+  const total = round(b.inbound || 0);
+  if (!lotHits && total !== n) return null;
+  return { skuId, qty: n, inbound: total, lotHits, totalMatch: total === n };
+}
+function inboundDupNote(hit) {
+  const sku = skuById(hit.skuId);
+  const unit = sku?.unit || "";
+  return `「${inboundSkuLabel(hit.skuId)}」再記入 ${fmt(hit.qty)} ${unit}（今日已 ${fmt(hit.inbound)} ${unit}）`;
+}
+function warnIfInboundDup(skuId, qty, date) {
+  const hit = suspectInboundDupes(skuId, qty, date);
+  if (!hit) return true;
+  return confirm(`疑似重複進貨：${inboundDupNote(hit)}。仍要再記入？`);
+}
+function warnIfInboundDupes(lines, date) {
+  const notes = [];
+  for (const l of lines || []) {
+    const hit = suspectInboundDupes(l.skuId, l.qty, date);
+    if (hit) notes.push(inboundDupNote(hit));
+  }
+  if (!notes.length) return true;
+  return confirm(`疑似重複進貨（${date}）：\n${notes.join("\n")}\n仍要再記入？`);
+}
 function commitStatus(worst) {
   if (worst === "bad") setStatus("有品項不夠，仍已佔量列入排程，請看紅字。", true);
   else if (worst === "warn") setStatus("已確認列入排程，但有品項將低於安全庫存。", false);
@@ -1601,6 +1633,7 @@ function addInboundLot(skuId, raw, date = stockViewDay(), quiet) {
     if (!quiet) setStatus("本批進貨必須大於 0，記入後可再打下一批。", true);
     return;
   }
+  if (!quiet && !warnIfInboundDup(skuId, n, date)) return;
   const b = bookRow(skuId, date);
   ensureLots(b);
   b.lots.push({ qty: round(n), at: Date.now() });
@@ -1969,7 +2002,18 @@ function lineSkuLabel(id) {
   const s = skuById(id);
   return s ? `${s.name} ${s.unit}` : id;
 }
+function confirmParsedInbound(parsed, date) {
+  const lines = (parsed.lines || []).filter((l) => skuById(l.skuId) && Number(l.qty) > 0);
+  if (!lines.length) return setStatus("沒有對到進貨品項，請改文字再解析。", true);
+  const day = date || today();
+  if (!warnIfInboundDupes(lines, day)) return false;
+  for (const l of lines) addInboundLot(l.skuId, l.qty, day, true);
+  setStatus(`已記入進貨 ${lines.length} 項。`, false);
+  render();
+  return true;
+}
 function confirmParsedOrder(parsed, date) {
+  if (parsed?.inbound) return confirmParsedInbound(parsed, date);
   const who = (parsed.customer || document.getElementById("customer")?.value || "").trim();
   if (!who) return setStatus("請先寫客人名字（第一行或出貨對象欄）。", true);
   const lines = parsed.lines || [];
@@ -2023,22 +2067,30 @@ function renderLineDrafts() {
         })
         .join("");
       const unk = (d.unknown || []).length ? `<p class="hint">沒對到：${esc(d.unknown.join("、"))}</p>` : "";
-      const who = d.customer ? esc(d.customer) : "（未寫客人）";
+      const inbound = !!d.inbound;
+      const who = inbound ? "進貨" : d.customer ? esc(d.customer) : "（未寫客人）";
       const day = d.date || today();
-      const dupHa = d.customer ? suspectDupes("ha", d.customer, day) : [];
-      const dupNq = d.customer ? suspectDupes("nq", d.customer, day) : [];
+      const dupHa = !inbound && d.customer ? suspectDupes("ha", d.customer, day) : [];
+      const dupNq = !inbound && d.customer ? suspectDupes("nq", d.customer, day) : [];
       const dupNote =
         dupHa.length || dupNq.length
           ? `<p class="bad">疑似重複：${esc(d.customer)} ${esc(day)} 已有訂單（${esc(dupHint([...dupHa, ...dupNq]))}）。確認入單時會再問一次。</p>`
           : "";
+      const inDupes = inbound
+        ? (d.lines || []).map((l) => suspectInboundDupes(l.skuId, l.qty, day)).filter(Boolean)
+        : [];
+      const inDupNote = inDupes.length
+        ? `<p class="bad">疑似重複進貨：${esc(inDupes.map(inboundDupNote).join("；"))}。確認記入時會再問一次。</p>`
+        : "";
       return `<article class="line-draft">
         <strong>${who}</strong>　<span class="muted">${esc(d.date || "")}</span>
         <pre>${esc(d.text || d.raw || "")}</pre>
         <ul>${bits || "<li>沒有對到品項</li>"}</ul>
         ${unk}
         ${dupNote}
+        ${inDupNote}
         <div class="btn-row">
-          <button type="button" class="primary" data-line-ok="${esc(d.id)}">確認入單</button>
+          <button type="button" class="primary" data-line-ok="${esc(d.id)}">${inbound ? "確認進貨" : "確認入單"}</button>
           <button type="button" class="ghost" data-line-no="${esc(d.id)}">丟掉</button>
         </div>
       </article>`;
@@ -2185,7 +2237,8 @@ document.getElementById("line-parse-btn")?.addEventListener("click", () => {
   const parsed = parse(raw);
   linePastePreview = { ...parsed, text: raw, date: today() };
   renderLineDrafts();
-  if (!parsed.lines.length) setStatus("沒對到品項。第一行寫客人，下面寫紐20兩袋、密本一箱。", true);
+  if (!parsed.lines.length) setStatus("沒對到品項。下單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
+  else if (parsed.inbound) setStatus("已解析為進貨，請看預覽再按確認進貨。", false);
   else setStatus("已解析，請看預覽再按確認入單。", false);
 });
 document.getElementById("line-drafts")?.addEventListener("click", async (e) => {

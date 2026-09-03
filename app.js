@@ -2209,8 +2209,7 @@ async function refreshLineDrafts() {
     const s = await fetch("/api/line/status", { cache: "no-store" }).then((r) => r.json());
     if (st) {
       if (!s.configured) st.textContent = "伺服器還沒填 LINE 金鑰。可先用下方貼上解析。";
-      else if (!s.lastWebhookAt) st.textContent = "LINE 頻道已接上。群組請先 @鴻安農業科技 再傳下單內容。";
-      else st.textContent = "LINE 頻道已接上。群組請先 @鴻安農業科技 再傳下單內容。";
+      else st.textContent = "LINE 頻道已接上。群組一定要先 @鴻安農業科技，沒 @ 不會入單。一對一聊天不必 @。";
     }
   } catch (_) {
     if (st) st.textContent = "本機或尚未部署 webhook。可先貼上文字解析。";

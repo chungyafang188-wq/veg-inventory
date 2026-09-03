@@ -137,6 +137,22 @@ function stripLineMentions(text, mention) {
   return t.replace(/^[@＠][^\s]+[ \t]*/gm, "").trim();
 }
 
+function isGroupChat(ev) {
+  const t = ev.source?.type;
+  return t === "group" || t === "room";
+}
+
+function mentionedThisBot(ev) {
+  const mentionees = ev.message?.mention?.mentionees;
+  if (Array.isArray(mentionees)) {
+    if (mentionees.some((m) => m && m.isSelf === true)) return true;
+    const botId = process.env.LINE_BOT_USER_ID || "";
+    if (botId && mentionees.some((m) => m && m.userId === botId)) return true;
+  }
+  const raw = String(ev.message?.text || "");
+  return /[@＠]\s*(鴻安農業科技|鴻安)/.test(raw);
+}
+
 function lineReply(replyToken, text) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
   if (!token || !replyToken || !text) {
@@ -218,6 +234,10 @@ function handleLineWebhook(req, res) {
           continue;
         }
         if (ev.type !== "message" || ev.message?.type !== "text") continue;
+        if (isGroupChat(ev) && !mentionedThisBot(ev)) {
+          lineHookStats.lastTextPreview = "(群組未@機器人，略過)";
+          continue;
+        }
         const rawText = String(ev.message.text || "").trim();
         const text = stripLineMentions(rawText, ev.message.mention);
         if (!text) continue;

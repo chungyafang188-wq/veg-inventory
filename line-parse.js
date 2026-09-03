@@ -108,7 +108,7 @@
   function worthKeeping(parsed) {
     if (!parsed) return false;
     if (parsed.lines && parsed.lines.length) return true;
-    return /袋|箱|籃|密本|紐|葉誌|綠骨|紅骨|綠九層|紅九層|九層塔/.test(parsed.raw || "");
+    return /袋|箱|籃|密本|紐|葉誌|綠骨|紅骨|綠九層|紅九層|綠芳|紅芳|綠塔|紅塔|九層塔/.test(parsed.raw || "");
   }
 
   return { parseLineOrderText, worthKeeping };

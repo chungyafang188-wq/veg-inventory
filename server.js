@@ -93,25 +93,66 @@ function saveLineDrafts(data) {
   fs.writeFileSync(tmp, JSON.stringify(data));
   fs.renameSync(tmp, LINE_FILE);
 }
+const lineHookStats = {
+  lastAt: 0,
+  lastSigOk: null,
+  lastTypes: [],
+  lastSource: "",
+  lastReply: "",
+  lastTextPreview: "",
+};
+
+function stripLineMentions(text, mention) {
+  let t = String(text || "");
+  const mentionees = Array.isArray(mention?.mentionees) ? mention.mentionees.slice() : [];
+  mentionees.sort((a, b) => (b.index || 0) - (a.index || 0));
+  for (const m of mentionees) {
+    const i = Number(m.index);
+    const n = Number(m.length);
+    if (Number.isFinite(i) && Number.isFinite(n) && i >= 0 && n > 0) {
+      t = t.slice(0, i) + t.slice(i + n);
+    }
+  }
+  return t.replace(/^[@＠][^\s]+[ \t]*/gm, "").trim();
+}
+
 function lineReply(replyToken, text) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
-  if (!token || !replyToken || !text) return;
+  if (!token || !replyToken || !text) {
+    lineHookStats.lastReply = !token ? "no-token" : "skip";
+    return Promise.resolve();
+  }
   const body = JSON.stringify({ replyToken, messages: [{ type: "text", text }] });
-  const req = https.request(
-    {
-      hostname: "api.line.me",
-      path: "/v2/bot/message/reply",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "Content-Length": Buffer.byteLength(body),
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: "api.line.me",
+        path: "/v2/bot/message/reply",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "Content-Length": Buffer.byteLength(body),
+        },
       },
-    },
-    () => {},
-  );
-  req.on("error", () => {});
-  req.end(body);
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const raw = Buffer.concat(chunks).toString("utf8").slice(0, 200);
+          lineHookStats.lastReply = `${res.statusCode} ${raw}`;
+          console.log("[line] reply", res.statusCode, raw);
+          resolve();
+        });
+      },
+    );
+    req.on("error", (err) => {
+      lineHookStats.lastReply = String(err.message || err);
+      console.log("[line] reply error", err.message);
+      resolve();
+    });
+    req.end(body);
+  });
 }
 function handleLineWebhook(req, res) {
   if (req.method === "GET") {
@@ -125,7 +166,13 @@ function handleLineWebhook(req, res) {
   readBodyBuf(req)
     .then((raw) => {
       const sig = req.headers["x-line-signature"];
-      if (!lineSigOk(raw, sig)) return send(res, 401, '{"ok":false}', TYPES[".json"]);
+      const sigOk = lineSigOk(raw, sig);
+      lineHookStats.lastAt = Date.now();
+      lineHookStats.lastSigOk = sigOk;
+      if (!sigOk) {
+        console.log("[line] webhook 401 bad signature");
+        return send(res, 401, '{"ok":false}', TYPES[".json"]);
+      }
       let payload;
       try {
         payload = JSON.parse(raw.toString("utf8"));
@@ -133,14 +180,30 @@ function handleLineWebhook(req, res) {
         return send(res, 400, '{"ok":false}', TYPES[".json"]);
       }
       const events = Array.isArray(payload.events) ? payload.events : [];
+      lineHookStats.lastTypes = events.map((ev) => ev.type || "");
+      lineHookStats.lastSource = events[0]?.source?.type || "";
+      console.log("[line] events", lineHookStats.lastTypes.join(",") || "(none)", "source", lineHookStats.lastSource);
       const store = loadLineDrafts();
       let added = 0;
+      const replies = [];
       for (const ev of events) {
+        if (ev.type === "join" || ev.type === "follow") {
+          replies.push(
+            lineReply(
+              ev.replyToken,
+              "下單請先 @鴻安農業科技，第一行寫客人，下面寫品項，例如：\n小琳\n紐20兩袋、密本一箱",
+            ),
+          );
+          continue;
+        }
         if (ev.type !== "message" || ev.message?.type !== "text") continue;
-        const text = String(ev.message.text || "").trim();
+        const rawText = String(ev.message.text || "").trim();
+        const text = stripLineMentions(rawText, ev.message.mention);
         if (!text) continue;
+        lineHookStats.lastTextPreview = text.slice(0, 80);
         const parsed = parseLineOrderText(text);
-        if (!worthKeeping(parsed)) continue;
+        const keep = worthKeeping(parsed) || parsed.lines.length > 0 || parsed.unknown.length > 0;
+        if (!keep) continue;
         store.drafts.unshift({
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
           at: Date.now(),
@@ -154,11 +217,15 @@ function handleLineWebhook(req, res) {
           unknown: parsed.unknown || [],
         });
         added += 1;
-        if (parsed.lines.length) lineReply(ev.replyToken, "已收到，待會計確認。");
+        const reply = parsed.lines.length
+          ? "已收到，待會計在網頁確認入單。"
+          : "已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
+        replies.push(lineReply(ev.replyToken, reply));
       }
       if (store.drafts.length > 80) store.drafts = store.drafts.slice(0, 80);
       if (added) saveLineDrafts(store);
       send(res, 200, '{"ok":true}', TYPES[".json"]);
+      Promise.all(replies).catch(() => {});
     })
     .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
   return true;
@@ -201,6 +268,12 @@ function handleApi(req, res) {
       200,
       JSON.stringify({
         configured: !!(process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN),
+        lastWebhookAt: lineHookStats.lastAt || null,
+        lastSigOk: lineHookStats.lastSigOk,
+        lastTypes: lineHookStats.lastTypes,
+        lastSource: lineHookStats.lastSource,
+        lastReply: lineHookStats.lastReply,
+        lastTextPreview: lineHookStats.lastTextPreview,
       }),
       TYPES[".json"],
     );

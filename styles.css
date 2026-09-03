@@ -108,7 +108,34 @@ button {
   align-items: baseline;
   gap: 0.5rem;
 }
-.order-who { font-size: 1.05rem; }
+.order-who { font-size: 1.12rem; font-weight: 700; color: var(--ink); }
+.order-st {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  background: #efe6d4;
+  color: var(--warn);
+  white-space: nowrap;
+}
+.order-st.st-shipped { background: #dcefe3; color: var(--green); }
+.order-st.st-cancelled { background: #f8e4e4; color: var(--bad); }
+.order-meta { margin: 0.15rem 0 0; font-size: 0.82rem; color: var(--ink); }
+.order-staff {
+  margin: 0.1rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #9aa59d;
+}
+.order-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.order-chip {
+  display: inline-block;
+  padding: 0.22rem 0.55rem;
+  border-radius: 0.4rem;
+  background: #e4eee6;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
 .order-st {
   font-size: 0.78rem;
   padding: 0.1rem 0.4rem;
@@ -233,11 +260,25 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .stock-item { padding: 0.8rem 0; border-bottom: 1px solid var(--line); }
 .stock-item:last-child { border-bottom: none; }
 .stock-item h3 { margin: 0 0 0.5rem; font-size: 0.92rem; }
-.inbound-main { width: 100%; min-width: 36rem; border-collapse: collapse; }
+.inbound-main { width: 100%; min-width: 28rem; border-collapse: collapse; }
 .inbound-main th, .inbound-main td {
   border: 1px solid var(--line); padding: 0.45rem 0.5rem; text-align: left;
 }
 .inbound-main th { background: #dcefe3; color: var(--green); }
+.count-main { width: 100%; min-width: 28rem; border-collapse: collapse; }
+.count-main th, .count-main td {
+  border: 1px solid var(--line); padding: 0.45rem 0.5rem; text-align: left;
+}
+.count-main th { background: #efe6d4; color: var(--warn); }
+.stock-count-card {
+  border-color: #e0c08a;
+  background: #fffaf0;
+}
+.stock-in-card {
+  border-color: #b7d4c0;
+  background: #f4faf5;
+}
+.stock-count-actions { margin-top: 0.75rem; }
 .inbound-main .inbound-qty { justify-content: flex-end; }
 .in-sum .tag { margin-right: 0.25rem; }
 .in-sum { text-align: right; }
@@ -606,8 +647,15 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   border-bottom: 1px solid rgba(0,0,0,0.06);
   font-size: 0.88rem;
 }
-.plan-qty { font-variant-numeric: tabular-nums; }
-#stock { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.45rem; }
+.plan-qty { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
+.plan-people li strong { color: var(--ink); }
+.plan-note { color: var(--ink); }
+.plan-by {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #9aa59d;
+}
+#stock-count, #stock-in { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.45rem; }
 .stock-guides { margin: 0.45rem 0 0; display: grid; gap: 0.4rem; }
 .stock-guides p {
   margin: 0;

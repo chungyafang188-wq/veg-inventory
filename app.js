@@ -9,8 +9,8 @@ const FORM_KINDS = {
     label: "地瓜葉",
     title: "穠全 地瓜葉出貨",
     formTitle: "填寫地瓜葉出貨數量",
-    hint: "地瓜葉分誌／芳填當天叫貨。無叫貨請填「休」，會列入當日清單，表示已確認該客戶叫貨狀態。裝箱預設籃裝。出貨對象預設小琳、欣儒，其他可自行新增。件數直接打數字，↑↓←→ 換格。",
-    formHint: "填地瓜葉／誌與地瓜葉／芳數量。裝箱預設籃裝。",
+    hint: "手打或點出貨對象，下拉選誌／芳，裝箱選籃裝或箱裝，可＋加下一項。無叫貨按「今日無叫貨」。",
+    formHint: "地瓜葉：下拉選誌或芳，裝箱樣式每筆可不同。用＋加一筆、刪拿掉。",
     skuIds: ["sl-zhi", "sl-fang"],
     cols: [
       { key: "slZhi", label: "地瓜葉／誌", kind: "qty" },
@@ -22,8 +22,8 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "無叫貨請填「休」。紅骨與綠骨可各選廠商（芳／琳／其他），同一客人可以一邊芳、一邊琳。",
-    formHint: "紅骨、綠骨分開選廠商。無叫貨填「休」。",
+    hint: "手打或點出貨對象，下拉選紅骨／綠骨與廠商，可＋加下一項。同一客人紅骨、綠骨可不同廠商。無叫貨按「今日無叫貨」。",
+    formHint: "九層塔：下拉選紅骨或綠骨，再選廠商（芳／琳／其他）。用＋加一筆、刪拿掉。",
     skuIds: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
       { key: "rb", label: "紅骨", kind: "qty" },
@@ -90,6 +90,14 @@ const SKUS = [
   { id: "on-kr-12", co: "ha", name: "洋蔥／韓國／12K", unit: "袋", onion: true, site: true },
   { id: "on-vn-20", co: "ha", name: "洋蔥／越南／20K", unit: "袋", onion: true, site: true },
   { id: "on-vn-12", co: "ha", name: "洋蔥／越南／12K", unit: "袋", onion: true, site: true },
+  { id: "onp-nz-20", co: "ha", name: "紫洋蔥／紐西蘭／20K", unit: "袋", onion: true, site: true },
+  { id: "onp-nz-12", co: "ha", name: "紫洋蔥／紐西蘭／12K", unit: "袋", onion: true, site: true },
+  { id: "onp-au-20", co: "ha", name: "紫洋蔥／澳洲／20K", unit: "袋", onion: true, site: true },
+  { id: "onp-au-12", co: "ha", name: "紫洋蔥／澳洲／12K", unit: "袋", onion: true, site: true },
+  { id: "onp-kr-20", co: "ha", name: "紫洋蔥／韓國／20K", unit: "袋", onion: true, site: true },
+  { id: "onp-kr-12", co: "ha", name: "紫洋蔥／韓國／12K", unit: "袋", onion: true, site: true },
+  { id: "onp-vn-20", co: "ha", name: "紫洋蔥／越南／20K", unit: "袋", onion: true, site: true },
+  { id: "onp-vn-12", co: "ha", name: "紫洋蔥／越南／12K", unit: "袋", onion: true, site: true },
   { id: "on-b-kg", co: "ha", name: "洋蔥／B級", unit: "kg", onion: true, site: true },
   { id: "pk-mi-18", co: "ha", name: "南瓜／密本／18K", unit: "箱", site: true },
   { id: "pk-mi-20", co: "ha", name: "南瓜／密本／20K", unit: "箱", site: true },
@@ -728,9 +736,10 @@ function lineLabel(l, withUnit) {
   const name = s ? s.name : l.skuId;
   const unit = s && withUnit ? ` ${s.unit}` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
+  const size = l.size ? `（${l.size}）` : "";
   const note = l.note ? `（${l.note}）` : "";
   const pallet = l.pallet ? "（疊棧板）" : "";
-  return `${name} ${fmt(l.qty)}${unit}${pack}${note}${pallet}`;
+  return `${name} ${fmt(l.qty)}${unit}${pack}${size}${note}${pallet}`;
 }
 
 function setStatus(text, err) {
@@ -761,6 +770,7 @@ function lineChecks(qtyMap, current) {
 
 const HA_ONION_ORIGINS = ["紐西蘭", "澳洲", "韓國", "越南"];
 const HA_ONION_SPECS = ["20K", "12K"];
+const HA_ONION_SIZES = ["大球", "特大", "中球"];
 const HA_PK_VARS = ["密本", "阿成"];
 const HA_PK_SPECS = ["18K", "20K"];
 const HA_ORIGIN_CODE = { 紐西蘭: "nz", 澳洲: "au", 韓國: "kr", 越南: "vn" };
@@ -768,10 +778,10 @@ const HA_PK_CODE = { 密本: "mi", 阿成: "ch" };
 function optsHtml(list, selected) {
   return list.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`).join("");
 }
-function haOnionSku(origin, spec) {
+function haOnionSku(origin, spec, purple) {
   const o = HA_ORIGIN_CODE[origin] || "nz";
   const s = spec === "12K" ? "12" : "20";
-  return `on-${o}-${s}`;
+  return `${purple ? "onp" : "on"}-${o}-${s}`;
 }
 function haPkSku(kind, spec) {
   const k = HA_PK_CODE[kind] || "mi";
@@ -781,6 +791,11 @@ function haPkSku(kind, spec) {
 function haParseSku(id) {
   if (id === "on-b-kg") return { kind: "on-b" };
   if (id === "pk-b-kg") return { kind: "pk-b" };
+  const onp = String(id || "").match(/^onp-(nz|au|kr|vn)-(20|12)$/);
+  if (onp) {
+    const origin = { nz: "紐西蘭", au: "澳洲", kr: "韓國", vn: "越南" }[onp[1]];
+    return { kind: "on-p", origin, spec: onp[2] === "12" ? "12K" : "20K" };
+  }
   const on = String(id || "").match(/^on-(nz|au|kr|vn)-(20|12)$/);
   if (on) {
     const origin = { nz: "紐西蘭", au: "澳洲", kr: "韓國", vn: "越南" }[on[1]];
@@ -794,13 +809,17 @@ function haParseSku(id) {
 }
 function haUnitOf(kind) {
   if (kind === "pk") return "箱";
-  if (kind === "on") return "袋";
+  if (kind === "on" || kind === "on-p") return "袋";
   return "kg";
 }
+function haOnionSizeOf(rec = {}) {
+  return HA_ONION_SIZES.includes(rec.size) ? rec.size : "大球";
+}
 function haExtrasHtml(kind, rec = {}) {
-  if (kind === "on") {
+  if (kind === "on" || kind === "on-p") {
     return `<select data-ha-origin aria-label="產地">${optsHtml(HA_ONION_ORIGINS, rec.origin || "紐西蘭")}</select>
-      <select data-ha-spec aria-label="規格">${optsHtml(HA_ONION_SPECS, rec.spec || "20K")}</select>`;
+      <select data-ha-spec aria-label="規格">${optsHtml(HA_ONION_SPECS, rec.spec || "20K")}</select>
+      <select data-ha-size aria-label="尺寸">${optsHtml(HA_ONION_SIZES, haOnionSizeOf(rec))}</select>`;
   }
   if (kind === "pk") {
     return `<select data-ha-var aria-label="品種">${optsHtml(HA_PK_VARS, rec.variety || "密本")}</select>
@@ -810,10 +829,12 @@ function haExtrasHtml(kind, rec = {}) {
 }
 function haLineHtml(rec = {}) {
   const parsed = rec.skuId ? haParseSku(rec.skuId) : { kind: rec.kind || "on", origin: "紐西蘭", spec: "20K", variety: "密本" };
+  parsed.size = rec.size;
   const kind = parsed.kind || "on";
   const qty = rec.qty > 0 ? rec.qty : "";
   const kinds = [
     ["on", "洋蔥"],
+    ["on-p", "紫洋蔥"],
     ["pk", "南瓜"],
     ["on-b", "洋蔥B級"],
     ["pk-b", "南瓜B級"],
@@ -835,32 +856,105 @@ function renderHaSheet(lines) {
 }
 function haLinesFromForm() {
   const out = [];
-  document.querySelectorAll("#ha-lines .ha-line").forEach((row) => {
+  document.querySelectorAll("#ha-lines .ha-line:not(.nq-line)").forEach((row) => {
     const kind = row.querySelector("[data-ha-kind]")?.value || "on";
     const qty = Number(row.querySelector("[data-ha-qty]")?.value);
     if (!(qty > 0)) return;
     let skuId = "on-nz-20";
     if (kind === "on-b") skuId = "on-b-kg";
     else if (kind === "pk-b") skuId = "pk-b-kg";
-    else if (kind === "on") {
-      skuId = haOnionSku(row.querySelector("[data-ha-origin]")?.value, row.querySelector("[data-ha-spec]")?.value);
+    else if (kind === "on" || kind === "on-p") {
+      skuId = haOnionSku(
+        row.querySelector("[data-ha-origin]")?.value,
+        row.querySelector("[data-ha-spec]")?.value,
+        kind === "on-p",
+      );
     } else {
       skuId = haPkSku(row.querySelector("[data-ha-var]")?.value, row.querySelector("[data-ha-spec]")?.value);
     }
     const line = { skuId, qty: round(qty) };
+    if (kind === "on" || kind === "on-p") line.size = haOnionSizeOf({ size: row.querySelector("[data-ha-size]")?.value });
     if (row.querySelector("[data-ha-pallet]")?.checked) line.pallet = true;
     out.push(line);
   });
   return out;
 }
 
+function useNqLineForm() {
+  return co === "nq" && (formKind === "leaf" || formKind === "basil");
+}
+function useItemLines() {
+  return co === "ha" || useNqLineForm();
+}
+function nqLineHtml(rec = {}) {
+  const qty = rec.qty > 0 ? rec.qty : "";
+  if (formKind === "basil") {
+    const parsed = BASIL_REV[rec.skuId] || { qty: "rb", val: "芳" };
+    const kind = parsed.qty === "gb" ? "gb" : "rb";
+    const vendor = VENDOR_OPTS.includes(parsed.val) ? parsed.val : "芳";
+    const kindOpts = [
+      ["rb", "紅骨"],
+      ["gb", "綠骨"],
+    ]
+      .map(([v, lab]) => `<option value="${v}"${v === kind ? " selected" : ""}>${lab}</option>`)
+      .join("");
+    return `<div class="ha-line nq-line">
+      <select data-nq-kind aria-label="品項">${kindOpts}</select>
+      <select data-nq-vendor aria-label="廠商">${optsHtml(VENDOR_OPTS, vendor)}</select>
+      <input class="qty" data-nq-qty type="number" min="0" step="1" inputmode="decimal" value="${esc(qty)}" placeholder="數量" aria-label="數量" />
+      <span class="unit">箱</span>
+      <button type="button" class="tiny-btn ghost" data-ha-del>刪</button>
+    </div>`;
+  }
+  const skuId = rec.skuId === "sl-fang" ? "sl-fang" : "sl-zhi";
+  const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
+  const skuOpts = [
+    ["sl-zhi", "地瓜葉／誌"],
+    ["sl-fang", "地瓜葉／芳"],
+  ]
+    .map(([v, lab]) => `<option value="${v}"${v === skuId ? " selected" : ""}>${lab}</option>`)
+    .join("");
+  const unit = pack === "箱裝" ? "箱" : "籃";
+  return `<div class="ha-line nq-line">
+    <select data-nq-sku aria-label="品項">${skuOpts}</select>
+    <select data-nq-pack aria-label="裝箱">${optsHtml(PACK_OPTS, pack)}</select>
+    <input class="qty" data-nq-qty type="number" min="0" step="1" inputmode="decimal" value="${esc(qty)}" placeholder="數量" aria-label="數量" />
+    <span class="unit">${unit}</span>
+    <button type="button" class="tiny-btn ghost" data-ha-del>刪</button>
+  </div>`;
+}
+function itemLineHtml(rec = {}) {
+  return co === "ha" ? haLineHtml(rec) : nqLineHtml(rec);
+}
+function renderItemSheet(lines) {
+  const rows = Array.isArray(lines) && lines.length ? lines : [{}];
+  document.getElementById("sheet").innerHTML = `<div id="ha-lines">${rows.map((l) => itemLineHtml(l)).join("")}</div>
+    <button type="button" class="ghost" id="ha-add-line" data-ha-add>+ 加一筆</button>`;
+}
+function nqLinesFromForm() {
+  const out = [];
+  document.querySelectorAll("#ha-lines .nq-line").forEach((row) => {
+    const qty = Number(row.querySelector("[data-nq-qty]")?.value);
+    if (!(qty > 0)) return;
+    if (formKind === "basil") {
+      const kind = row.querySelector("[data-nq-kind]")?.value === "gb" ? "gb" : "rb";
+      const vendor = row.querySelector("[data-nq-vendor]")?.value || "芳";
+      const skuId = BASIL_SKU[kind][vendor] || BASIL_SKU[kind]["芳"];
+      out.push({ skuId, qty: round(qty) });
+      return;
+    }
+    const skuId = row.querySelector("[data-nq-sku]")?.value || "sl-zhi";
+    const pack = row.querySelector("[data-nq-pack]")?.value || "籃裝";
+    out.push({ skuId, qty: round(qty), pack });
+  });
+  return out;
+}
 function renderSheet() {
-  const current = currentRecord();
-  const leaf = co === "nq" && formKind === "leaf";
-  if (co === "ha") {
-    renderHaSheet(current?.lines);
+  if (useItemLines()) {
+    renderItemSheet(currentRecord()?.lines);
     return;
   }
+  const current = currentRecord();
   const html = formSkus()
     .map((sku) => {
       const av = available(sku, current);
@@ -868,21 +962,18 @@ function renderSheet() {
         <td><input class="qty" data-sku="${sku.id}" type="number" min="0" step="${skuStep(sku)}" /></td></tr>`;
     })
     .join("");
-  const pack = leaf
-    ? `<label class="field">裝箱樣式（籃裝／箱裝，僅備註，同一庫存）
-        <select id="leaf-pack">
-          ${PACK_OPTS.map((p) => `<option value="${p}"${p === "籃裝" ? " selected" : ""}>${p}</option>`).join("")}
-        </select>
-      </label>`
-    : "";
   document.getElementById("sheet").innerHTML =
-    `<table><thead><tr><th>品項（不混貨）</th><th>可出</th><th>數量</th></tr></thead><tbody>${html}</tbody></table>${pack}`;
+    `<table><thead><tr><th>品項（不混貨）</th><th>可出</th><th>數量</th></tr></thead><tbody>${html}</tbody></table>`;
 }
 
 function qtyMapFromForm() {
   const map = {};
   if (co === "ha") {
     for (const l of haLinesFromForm()) map[l.skuId] = round((map[l.skuId] || 0) + l.qty);
+    return map;
+  }
+  if (useNqLineForm()) {
+    for (const l of nqLinesFromForm()) map[l.skuId] = round((map[l.skuId] || 0) + l.qty);
     return map;
   }
   document.querySelectorAll("#sheet [data-sku]").forEach((input) => {
@@ -906,6 +997,7 @@ function packMapFromForm() {
 }
 function linesFromForm() {
   if (co === "ha") return haLinesFromForm();
+  if (useNqLineForm()) return nqLinesFromForm();
   const qty = qtyMapFromForm();
   const packs = packMapFromForm();
   return Object.entries(qty).map(([skuId, n]) => {
@@ -973,11 +1065,12 @@ function removeRest(name, date, kind = formKind) {
   save();
 }
 function sheetDate() {
+  if (useNqLineForm()) return document.getElementById("ship-date")?.value || today();
   return document.getElementById("daily-sheet-date")?.value || today();
 }
 function ordersViewDay() {
-  if (co === "nq") return sheetDate();
-  return document.getElementById("ship-date")?.value || today();
+  if (useItemLines()) return document.getElementById("ship-date")?.value || today();
+  return document.getElementById("daily-sheet-date")?.value || today();
 }
 function applyQtyCellValue(row, who, col, raw, date) {
   const val = String(raw || "").trim();
@@ -1301,7 +1394,7 @@ function confirmNqSchedule() {
 }
 
 function renderCheck() {
-  if (co === "nq") {
+  if (co === "nq" && !useNqLineForm()) {
     const box = document.getElementById("nq-check");
     if (!box) return;
     const { entries, errors, rests } = collectNqEntries();
@@ -1340,18 +1433,20 @@ function renderCheck() {
   const { rows, worst } = lineChecks(map, currentRecord());
   const box = document.getElementById("check");
   const packMsgs = [];
-  const packs = packMapFromForm();
-  const sharedPack = document.getElementById("leaf-pack");
-  if (sharedPack) {
-    const hasQty = formSkus().some((s) => (map[s.id] || 0) > 0);
-    if (hasQty && !sharedPack.value) {
-      packMsgs.push("地瓜葉有數量時請選擇裝箱樣式（籃裝或箱裝，僅出貨備註）");
-    }
-  } else {
-    for (const sku of formSkus()) {
-      if (!sku.packRemark) continue;
-      if ((map[sku.id] || 0) > 0 && !packs[sku.id]) {
-        packMsgs.push(`請選裝箱樣式：${sku.name}（籃裝或箱裝，僅出貨備註）`);
+  if (!useNqLineForm()) {
+    const packs = packMapFromForm();
+    const sharedPack = document.getElementById("leaf-pack");
+    if (sharedPack) {
+      const hasQty = formSkus().some((s) => (map[s.id] || 0) > 0);
+      if (hasQty && !sharedPack.value) {
+        packMsgs.push("地瓜葉有數量時請選擇裝箱樣式（籃裝或箱裝，僅出貨備註）");
+      }
+    } else {
+      for (const sku of formSkus()) {
+        if (!sku.packRemark) continue;
+        if ((map[sku.id] || 0) > 0 && !packs[sku.id]) {
+          packMsgs.push(`請選裝箱樣式：${sku.name}（籃裝或箱裝，僅出貨備註）`);
+        }
       }
     }
   }
@@ -1448,7 +1543,8 @@ function renderOrders() {
             <strong class="order-who">${tag}${esc(o.customer)}</strong>
             <span class="order-st st-${esc(o.status)}">${esc(st)}</span>
           </div>
-          <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}　${esc(staffNote(o))}</p>
+          <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}</p>
+          <p class="order-staff">${esc(staffNote(o))}</p>
           <div class="order-chips">${lines}</div>
           ${acts}
         </div>
@@ -1473,7 +1569,7 @@ function renderRestList() {
     .slice()
     .sort((a, b) => a.customer.localeCompare(b.customer, "zh-Hant"));
   if (!rows.length) {
-    box.innerHTML = `<div class="rest-box"><h3>無叫貨（休）· ${esc(kindLabel)}</h3><p class="empty">數量欄填「休」即列入，表示已確認當日不叫貨。</p></div>`;
+    box.innerHTML = `<div class="rest-box"><h3>無叫貨（休）· ${esc(kindLabel)}</h3><p class="empty">按「今日無叫貨」列入，表示已確認當日不叫貨。</p></div>`;
     return;
   }
   box.innerHTML = `<div class="rest-box"><h3>無叫貨（休）· ${esc(kindLabel)} ${esc(date)}</h3>
@@ -1536,6 +1632,7 @@ function planLineNote(o, skuIds) {
     const b = BASIL_REV[l.skuId];
     if (b) bits.push(b.val);
     if (l.pack) bits.push(l.pack);
+    if (l.size) bits.push(l.size);
     if (l.note) bits.push(l.note);
   }
   return [...new Set(bits.filter(Boolean))].join("　");
@@ -1591,7 +1688,7 @@ function renderPlan() {
     return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><ul class="list plan-people">${rows
       .map((r) => {
         const note = r.note ? `<span class="plan-note">${esc(r.note)}</span>` : "";
-        return `<li><strong>${esc(r.customer)}</strong><span class="plan-qty">${fmt(r.qty)} ${esc(unit)}</span>${note}${r.by ? `<span class="plan-note">${esc(r.by)}</span>` : ""}</li>`;
+        return `<li><strong>${esc(r.customer)}</strong><span class="plan-qty">${fmt(r.qty)} ${esc(unit)}</span>${note}${r.by ? `<span class="plan-by">${esc(r.by)}</span>` : ""}</li>`;
       })
       .join("")}</ul></div>`;
   };
@@ -1760,7 +1857,7 @@ function unlockMorning(skuId) {
 }
 function unlockAllMorning() {
   for (const row of NQ_INBOUND) unlockMorning(row.id);
-  setStatus("已解開早上盤點，改完請再按確認。", false);
+  setStatus("已解開早上盤點，先前因盤點自動記入的進貨已拿掉。改完請再按確認盤點。", false);
   renderStock();
   renderCheck();
   renderAlerts();
@@ -1808,14 +1905,18 @@ function renderStock() {
   if (co === "ha") {
     const inDay = document.getElementById("in-day-card");
     if (inDay) inDay.hidden = true;
+    const countCard = document.getElementById("count-card");
+    if (countCard) countCard.hidden = true;
     const fillBtn = document.getElementById("fill-count");
     if (fillBtn) fillBtn.hidden = true;
     const fixM = document.getElementById("fix-morning");
     if (fixM) fixM.hidden = true;
     document.getElementById("process").hidden = true;
     document.getElementById("receive").hidden = true;
-    const stockBox = document.getElementById("stock");
-    if (stockBox) stockBox.innerHTML = "";
+    const countBox = document.getElementById("stock-count");
+    if (countBox) countBox.innerHTML = "";
+    const inBox = document.getElementById("stock-in");
+    if (inBox) inBox.innerHTML = "";
     return;
   }
   const date = stockViewDay();
@@ -1825,7 +1926,9 @@ function renderStock() {
   const bookDateEl = document.getElementById("book-date");
   if (bookDateEl) bookDateEl.textContent = date;
   const lookingBack = date !== today();
-  document.getElementById("stock-title").textContent = "庫存/進貨";
+  document.getElementById("stock-title").textContent = lookingBack ? `庫存（${date}）` : "庫存";
+  const countCard = document.getElementById("count-card");
+  if (countCard) countCard.hidden = false;
   const inDay = document.getElementById("in-day-card");
   if (inDay) inDay.hidden = false;
   const tot = document.getElementById("in-day-totals");
@@ -1843,17 +1946,13 @@ function renderStock() {
   const gs = document.getElementById("guide-stock");
   const gi = document.getElementById("guide-in");
   const gc = document.getElementById("guide-count");
-  if (inDay) {
-    const h2 = inDay.querySelector("h2");
-    const hint = inDay.querySelector(".hint");
-    if (h2) h2.textContent = "當日進貨總數";
-    if (hint) hint.textContent = lookingBack
-      ? `查 ${date} 已記入的進貨合計。可在這天直接改、記入或修正。`
-      : "各品項今天已記入的進貨合計（分批會加總）。";
-  }
-  if (gs) gs.innerHTML = "<strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。";
-    if (gi) gi.innerHTML = "<strong>進貨</strong>早上盤點填現場總數，比昨晚結算多的，確認後自動算進貨（例：誌帶入13、現場70 → 進貨57）。也可在本批欄手記入；打錯按「修正」。";
-    if (gc) gc.innerHTML = "<strong>盤點／結算</strong>昨晚結算會帶入早上盤點，可改數字。對就按該列「確認」（或一次按「確認今日早上盤點」）。改過帶入值再確認會出現「修正」。打錯按「修正」解開再改。";
+  if (gs) gs.textContent = "當日可出＝早上盤點＋今日進貨合計－當日已出貨。盤點與進貨分開填，改盤點不會記入進貨。";
+  if (gi) gi.textContent = lookingBack
+    ? `查 ${date} 的進貨。有貨進來才記入；打錯按「修正進貨」。`
+    : "有貨進來才在這裡記入。本批填數量按「記入進貨」；打錯在本批填正確總數再按「修正進貨」。改盤點不會增加進貨。";
+  if (gc) gc.textContent = lookingBack
+    ? `查 ${date} 的早上盤點與結算。`
+    : "填現場早上數量後按確認盤點。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。";
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
   const morningDone = nqMorningDone();
@@ -1869,7 +1968,7 @@ function renderStock() {
     .join("");
   document.getElementById("in-sku").innerHTML = opts;
   document.getElementById("pr-sku").innerHTML = opts;
-  const body = NQ_INBOUND.map((row) => {
+  const countBody = NQ_INBOUND.map((row) => {
     const sku = skuById(row.id);
     const b = bookRow(row.id, date);
     const step = skuStep(sku);
@@ -1881,31 +1980,14 @@ function renderStock() {
     const done = locked ? "已確認" : "";
     const carryHint = !locked && carried != null && Number.isFinite(carried) ? `<span class="settle-calc">帶入 ${fmt(carried)}</span>` : "";
     const morningBtns = locked
-      ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正</button>`
-      : `<button type="button" class="tiny-btn" data-confirm-morning="${row.id}">確認</button>`;
+      ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正盤點</button>`
+      : `<button type="button" class="tiny-btn" data-confirm-morning="${row.id}">確認盤點</button>`;
     return `<tr>
       <td class="name-cell">${esc(row.label)}</td>
       <td>
-        <div class="in-sum">
-          ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
-          ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">自動判定</span>' : ""}
-          <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
-          <span class="unit">${esc(sku.unit)}</span>
-          <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>
-        </div>
-      </td>
-      <td>
-        <div class="ha-process inbound-qty">
-          <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="" placeholder="本批" inputmode="decimal" aria-label="${esc(row.label)} 本批進貨" />
-          <span class="unit">${esc(sku.unit)}</span>
-          <button type="button" class="tiny-btn" data-add-inbound="${row.id}">記入</button>
-          <button type="button" class="tiny-btn ghost" data-fix-inbound="${row.id}">修正</button>
-        </div>
-      </td>
-      <td>
         <div class="ha-process morning-count">
-          ${edited ? '<span class="tag">修正</span>' : ""}
-          <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="0" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
+          ${edited ? '<span class="tag">已改帶入</span>' : ""}
+          <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="現場數量" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
           <span class="unit">${esc(sku.unit)}</span>
           ${carryHint}
           <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span>
@@ -1915,8 +1997,41 @@ function renderStock() {
       <td>${settleCellHtml(sku)}</td>
     </tr>`;
   }).join("");
-  document.getElementById("stock").innerHTML =
-    `<table class="inbound-main"><thead><tr><th>品項</th><th>今日已進貨</th><th>本批進貨</th><th>早上庫存盤點</th><th>庫存結算</th></tr></thead><tbody>${body}</tbody></table>`;
+  const inBody = NQ_INBOUND.map((row) => {
+    const sku = skuById(row.id);
+    const b = bookRow(row.id, date);
+    const step = skuStep(sku);
+    return `<tr>
+      <td class="name-cell">${esc(row.label)}</td>
+      <td>
+        <div class="in-sum">
+          ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
+          ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">舊自動判定</span>' : ""}
+          <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
+          <span class="unit">${esc(sku.unit)}</span>
+          <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>
+        </div>
+      </td>
+      <td>
+        <div class="ha-process inbound-qty">
+          <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="" placeholder="本批數量" inputmode="decimal" aria-label="${esc(row.label)} 本批進貨" />
+          <span class="unit">${esc(sku.unit)}</span>
+          <button type="button" class="tiny-btn" data-add-inbound="${row.id}">記入進貨</button>
+          <button type="button" class="tiny-btn ghost" data-fix-inbound="${row.id}">修正進貨</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+  const countBox = document.getElementById("stock-count");
+  if (countBox) {
+    countBox.innerHTML =
+      `<table class="count-main"><thead><tr><th>品項</th><th>早上現場盤點</th><th>庫存結算</th></tr></thead><tbody>${countBody}</tbody></table>`;
+  }
+  const inBox = document.getElementById("stock-in");
+  if (inBox) {
+    inBox.innerHTML =
+      `<table class="inbound-main"><thead><tr><th>品項</th><th>今日已進貨</th><th>本批進貨</th></tr></thead><tbody>${inBody}</tbody></table>`;
+  }
 }
 
 function dailyStore() {
@@ -2038,8 +2153,8 @@ function moveDailyCell(el, dr, dc) {
 function renderDailyGrid() {
   const card = document.getElementById("daily-sheet-card");
   if (!card) return;
-  card.hidden = co !== "nq";
-  if (co !== "nq") return;
+  card.hidden = co !== "nq" || useNqLineForm();
+  if (card.hidden) return;
   const def = FORM_KINDS[formKind] || FORM_KINDS.leaf;
   document.getElementById("daily-sheet-title").textContent = editing
     ? "修改數量（確認後更新排程）"
@@ -2116,6 +2231,18 @@ function renderDailyGrid() {
 function renderCustChips() {
   const who = document.getElementById("customer").value.trim();
   const box = document.getElementById("cust-chips");
+  if (useNqLineForm()) {
+    const names = loadNqCustomers();
+    box.innerHTML = names
+      .map((name) => {
+        const drop = NQ_DEFAULT_CUSTOMERS.includes(name)
+          ? ""
+          : `<button type="button" class="chip-x" data-forget-nq="${esc(name)}" aria-label="從名單移除 ${esc(name)}">×</button>`;
+        return `<span class="chip${who === name ? " on" : ""}"><button type="button" class="chip-name" data-cust="${esc(name)}">${esc(name)}</button>${drop}</span>`;
+      })
+      .join("");
+    return;
+  }
   if (co === "nq") {
     box.innerHTML = "";
     return;
@@ -2180,7 +2307,7 @@ function draftCheckRowsHtml(d) {
     .map((l) => {
       const sku = skuById(l.skuId);
       const coName = sku?.co === "ha" ? "鴻安" : sku?.co === "nq" ? "穠全" : "";
-      const remarks = [l.pack, l.pallet ? "疊棧板" : "", l.note].filter(Boolean).join("、") || "—";
+      const remarks = [l.pack, l.size, l.pallet ? "疊棧板" : "", l.note].filter(Boolean).join("、") || "—";
       return `<tr>
         <td>${esc(coName)}</td>
         <td>${esc(shortSkuName(l.skuId))}</td>
@@ -2328,19 +2455,22 @@ function applyCopy() {
     intro.textContent =
       "鴻安：手打或點出貨對象，加品項填數量後確認。接單不看可出；出貨才扣庫。";
     formTitle.textContent = editing ? "修改數量" : "訂單輸入";
-    formHint.textContent = "洋蔥：紐西蘭／澳洲／韓國／越南，規格 20K／12K。南瓜：密本／阿成，規格 18K（預設）／20K。B級按 kg。疊棧板可勾、可不勾。用＋加一筆、刪拿掉。已填紀錄跟出貨日同一天。";
+    formHint.textContent = "";
+    formHint.hidden = true;
     ordersHint.textContent = "只顯示所選出貨日當天的已填紀錄。未出貨可用 ↑↓ 調整出貨順序。";
     cust.placeholder = "請輸入出貨對象";
     cust.readOnly = false;
     return;
   }
   const def = FORM_KINDS[formKind] || FORM_KINDS.leaf;
-  intro.textContent =
-    "穠全：在上方表格填當天叫貨數量。地瓜葉／九層塔無叫貨請填「休」，會列清單表示已確認當日狀態。出貨對象預設小琳、欣儒，可自行新增。底部按「確認輸入訂單」即佔量。出貨順序在已填紀錄用 ↑↓ 調整。";
-  formTitle.textContent = editing ? "修改數量" : def.formTitle;
-  formHint.textContent = def.formHint;
+  intro.textContent = useNqLineForm()
+    ? "穠全：手打或點出貨對象，下拉加品項填數量後確認。無叫貨按「今日無叫貨」。底部確認後佔量。出貨順序在已填紀錄用 ↑↓ 調整。"
+    : "穠全：在上方表格填當天叫貨數量。出貨對象預設小琳、欣儒，可自行新增。底部按「確認輸入訂單」即佔量。出貨順序在已填紀錄用 ↑↓ 調整。";
+  formTitle.textContent = editing ? "修改數量" : useNqLineForm() ? "訂單輸入" : def.formTitle;
+  formHint.textContent = def.formHint || "";
+  formHint.hidden = !def.formHint;
   ordersHint.textContent = formAllowsRest()
-    ? "只顯示所選日期當天的已填紀錄。無叫貨填「休」會列在上方。待出貨可用 ↑↓ 調整出貨順序。"
+    ? "只顯示所選日期當天的已填紀錄。無叫貨會列在上方。待出貨可用 ↑↓ 調整出貨順序。"
     : "只顯示所選日期當天的已填紀錄。待出貨可用 ↑↓ 調整出貨順序。";
   cust.readOnly = false;
   cust.placeholder = "請輸入出貨對象";
@@ -2368,9 +2498,11 @@ function render() {
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = page !== "stock" || co === "ha";
   applyCopy();
-  document.getElementById("order-form").hidden = co !== "ha";
+  document.getElementById("order-form").hidden = !useItemLines();
+  const restBtn = document.getElementById("nq-rest-btn");
+  if (restBtn) restBtn.hidden = !useNqLineForm();
   const nqCancel = document.getElementById("nq-cancel-edit");
-  if (nqCancel) nqCancel.hidden = !(co === "nq" && editing);
+  if (nqCancel) nqCancel.hidden = !(co === "nq" && !useNqLineForm() && editing);
   const run = (fn) => {
     try {
       fn();
@@ -2512,23 +2644,31 @@ document.getElementById("sheet").addEventListener("change", (e) => {
     if (unit) unit.textContent = haUnitOf(kind.value);
     if (qty) qty.step = kind.value.endsWith("-b") ? "0.1" : "1";
   }
+  const packSel = e.target.closest("[data-nq-pack]");
+  if (packSel) {
+    const unit = packSel.closest(".ha-line")?.querySelector(".unit");
+    if (unit) unit.textContent = packSel.value === "箱裝" ? "箱" : "籃";
+  }
   renderCheck();
 });
 document.getElementById("sheet").addEventListener("click", (e) => {
   if (e.target.closest("[data-ha-add]")) {
-    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", haLineHtml({}));
+    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", itemLineHtml({}));
     return;
   }
   const del = e.target.closest("[data-ha-del]");
   if (!del) return;
   del.closest(".ha-line")?.remove();
   if (!document.querySelector("#ha-lines .ha-line")) {
-    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", haLineHtml({}));
+    document.getElementById("ha-lines")?.insertAdjacentHTML("beforeend", itemLineHtml({}));
   }
 });
 document.getElementById("ship-date").value = today();
 document.getElementById("ship-date").addEventListener("change", () => {
-  if (co === "ha") renderOrders();
+  if (useItemLines()) {
+    renderOrders();
+    renderRestList();
+  }
 });
 document.getElementById("daily-sheet-date").value = today();
 document.getElementById("daily-sheet-date").addEventListener("change", () => {
@@ -2678,6 +2818,18 @@ document.getElementById("nq-cancel-edit").onclick = () => {
   document.getElementById("nq-cancel-edit").hidden = true;
   render();
 };
+document.getElementById("nq-rest-btn")?.addEventListener("click", () => {
+  if (!useNqLineForm()) return;
+  if (!requireStaff()) return;
+  const who = document.getElementById("customer").value.trim();
+  if (!who) return setStatus("請填出貨對象", true);
+  const day = document.getElementById("ship-date").value || today();
+  upsertRest(who, day);
+  addNqCustomer(who);
+  setStatus(`已記錄「${who}」今日無叫貨。`, false);
+  document.getElementById("customer").value = "";
+  render();
+});
 document.getElementById("operator-chips")?.addEventListener("click", (e) => {
   const forget = e.target.closest("[data-forget-staff]");
   if (forget) {
@@ -2705,6 +2857,16 @@ document.getElementById("operator")?.addEventListener("change", () => {
   renderStaffChips();
 });
 document.getElementById("cust-chips").addEventListener("click", (e) => {
+  const forgetNq = e.target.closest("[data-forget-nq]");
+  if (forgetNq) {
+    e.preventDefault();
+    const name = forgetNq.dataset.forgetNq;
+    if (!confirm(`從「${FORM_KINDS[formCustKey()]?.label || "本表"}」出貨對象移除「${name}」？已填的訂單不會刪除。`)) return;
+    removeNqCustomer(name);
+    renderCustChips();
+    setStatus(`已從名單移除「${name}」。`, false);
+    return;
+  }
   const forget = e.target.closest("[data-forget]");
   if (forget) {
     e.preventDefault();
@@ -2762,6 +2924,10 @@ document.getElementById("order-form").onsubmit = (e) => {
     });
   }
   if (co === "ha") rememberHaCustomer(who);
+  if (useNqLineForm()) {
+    addNqCustomer(who);
+    removeRest(who, day);
+  }
   formDupAck = "";
   save();
   document.getElementById("customer").value = "";
@@ -2833,6 +2999,14 @@ document.getElementById("orders").onclick = (e) => {
     if (co === "nq") {
       if (o.lines[0]) formKind = formKindOfSku(o.lines[0].skuId);
       addNqCustomer(o.customer, formKind);
+      if (useNqLineForm()) {
+        document.getElementById("customer").value = o.customer;
+        document.getElementById("ship-date").value = o.shipDate;
+        document.getElementById("cancel-edit").hidden = false;
+        render();
+        renderCheck();
+        return;
+      }
       document.getElementById("daily-sheet-date").value = o.shipDate;
       const { data, book } = dailyBook(o.shipDate);
       book[o.customer] = { ...(book[o.customer] || {}), ...linesToDailyRow(o.lines) };
@@ -2998,18 +3172,9 @@ function confirmMorningCount(skuId, raw, quiet) {
   const counted = round(n);
   const carried = b.morningCarried != null && b.morningCarried !== "" ? round(Number(b.morningCarried)) : null;
   stripAutoMorningInbound(b);
-  let autoIn = 0;
-  if (carried != null && counted > carried) {
-    autoIn = round(counted - carried);
-    b.morning = carried;
-    b.opening = carried;
-    b.morningEdited = false;
-    addAutoMorningInbound(b, autoIn);
-  } else {
-    b.morning = counted;
-    b.opening = counted;
-    b.morningEdited = carried != null && counted !== carried;
-  }
+  b.morning = counted;
+  b.opening = counted;
+  b.morningEdited = carried != null && counted !== carried;
   b.morningConfirmed = true;
   syncNqQty(sku);
   save();
@@ -3020,18 +3185,12 @@ function confirmMorningCount(skuId, raw, quiet) {
     input.value = b.morning;
     input.readOnly = true;
   }
-  if (quiet) return autoIn;
+  if (quiet) return;
   const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
-  setStatus(
-    autoIn
-      ? `已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}，系統判定今早進貨 ${fmt(autoIn)} ${sku.unit}。`
-      : `已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}。`,
-    false,
-  );
+  setStatus(`已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}。進貨請到下方進貨區另外記入。`, false);
   renderStock();
   renderCheck();
   renderAlerts();
-  return autoIn;
 }
 function addMorningAvail(skuId, raw) {
   const sku = skuById(skuId);
@@ -3050,7 +3209,7 @@ function addMorningAvail(skuId, raw) {
   renderAlerts();
 }
 
-const stockEl = document.getElementById("stock");
+const stockEl = document.getElementById("page-stock");
 stockEl.addEventListener("change", (e) => {
   const input = e.target.closest("[data-safety]");
   if (!input) return;
@@ -3100,7 +3259,7 @@ stockEl.addEventListener("click", (e) => {
   const fixOne = e.target.closest("[data-fix-morning]");
   if (fixOne) {
     unlockMorning(fixOne.dataset.fixMorning);
-    setStatus("已解開此品項早上盤點，改完請再按確認。", false);
+    setStatus("已解開此品項早上盤點，先前因盤點自動記入的進貨已拿掉。改完請再按確認盤點。", false);
     renderStock();
     return;
   }

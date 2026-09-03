@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=79" />
+    <link rel="stylesheet" href="./styles.css?v=83" />
   </head>
   <body>
     <div class="app">
@@ -72,7 +72,7 @@
         </section>
         <form id="order-form" class="card">
           <h2 id="form-title">訂單輸入</h2>
-          <p class="hint" id="form-hint">洋蔥分產地與 20K／12K；南瓜密本／阿成預設 18K；B級按 kg。可自行加減品項。</p>
+          <p class="hint" id="form-hint" hidden></p>
           <input id="edit-id" type="hidden" />
           <div id="cust-chips" class="chips" role="group" aria-label="出貨對象"></div>
           <label class="field">出貨對象 <input id="customer" type="text" required placeholder="請輸入出貨對象" autocomplete="off" /></label>
@@ -81,6 +81,7 @@
           <div id="check" class="check"></div>
           <div class="btn-row">
             <button type="submit" class="primary">確認輸入訂單</button>
+            <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
             <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
           </div>
         </form>
@@ -104,24 +105,27 @@
         </section>
       </section>
       <section id="page-stock" hidden>
-        <section class="card" id="in-day-card" hidden>
-          <h2>當日進貨總數</h2>
-          <p class="hint">各品項該日已記入的進貨合計（分批會加總）。</p>
-          <div id="in-day-totals" class="live-totals-row"></div>
-        </section>
-        <section class="card">
+        <section class="card" id="stock-head-card">
           <div class="head">
-            <h2 id="stock-title">庫存/進貨</h2>
+            <h2 id="stock-title">庫存</h2>
             <label class="date-inline">日期 <input id="stock-date" type="date" /></label>
           </div>
-          <div id="stock-guides" class="stock-guides">
-            <p id="guide-stock"><strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。</p>
-            <p id="guide-in"><strong>進貨</strong>早上現場總數比昨晚結算多的，確認盤點後自動判定為進貨。也可本批手記入；打錯按「修正」。</p>
-            <p id="guide-count"><strong>盤點</strong>昨晚結算會帶入早上數量，可改。按該列「確認」或一次「確認今日早上盤點」才鎖定。跟帶入不同會顯示「修正」。</p>
+          <p class="hint" id="guide-stock">當日可出＝早上盤點＋今日進貨合計－當日已出貨。盤點與進貨分開填，改盤點不會記入進貨。</p>
+        </section>
+        <section class="card stock-count-card" id="count-card">
+          <h2>早上盤點</h2>
+          <p class="hint" id="guide-count">填現場早上數量後按確認。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。</p>
+          <div id="stock-count"></div>
+          <div class="btn-row stock-count-actions">
+            <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
+            <button type="button" id="fix-morning" class="ghost" hidden>修正早上盤點</button>
           </div>
-          <div id="stock"></div>
-          <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
-          <button type="button" id="fix-morning" class="ghost" hidden>修正早上盤點</button>
+        </section>
+        <section class="card stock-in-card" id="in-day-card" hidden>
+          <h2>進貨</h2>
+          <p class="hint" id="guide-in">有貨進來才在這裡記入。本批填數量按「記入」；打錯在本批填正確總數再按「修正」。</p>
+          <div id="in-day-totals" class="live-totals-row"></div>
+          <div id="stock-in"></div>
         </section>
         <form id="receive" class="card" hidden>
           <h2 id="recv-title">進貨</h2>
@@ -139,7 +143,7 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=79"></script>
-    <script src="./app.js?v=79"></script>
+    <script src="./line-parse.js?v=81"></script>
+    <script src="./app.js?v=83"></script>
   </body>
 </html>

@@ -27,8 +27,8 @@
     return { qty: 1, text: s };
   }
 
-  function onionSku(origin, spec12) {
-    return `on-${origin}-${spec12 ? "12" : "20"}`;
+  function onionSku(origin, spec12, purple) {
+    return `${purple ? "onp" : "on"}-${origin}-${spec12 ? "12" : "20"}`;
   }
 
   function normOrderText(s) {
@@ -39,17 +39,23 @@
   }
 
   function takeOnionSpecQty(s) {
-    let rest = normOrderText(s);
+    const orig = normOrderText(s);
+    let rest = orig;
     let spec12 = null;
+    let size = "";
+    if (/特大/.test(rest)) size = "特大";
+    else if (/中球/.test(rest)) size = "中球";
+    else if (/大球/.test(rest)) size = "大球";
     const labeled = rest.match(/(12|20)\s*K/i);
     if (labeled) {
       spec12 = labeled[1] === "12";
       rest = rest.replace(labeled[0], " ");
-    } else if (/特大|大球/.test(rest) && !/20/.test(rest)) {
+    } else if (/特大|大球/.test(orig) && !/20/.test(orig) && !/中球/.test(orig)) {
       spec12 = true;
     }
+    rest = rest.replace(/特大|中球|大球/g, " ");
     const { qty, text } = takeQty(rest.replace(/\//g, " "));
-    return { spec12, qty, text };
+    return { spec12, qty, text, size };
   }
 
   function leafPack(s) {
@@ -72,11 +78,11 @@
   const KNOWN_CUSTOMERS = ["冠瑋", "小琳", "欣儒", "佳合", "張紀惠"];
   const NOT_CUSTOMER = /誌|芳|琳|早上|下午|晚上|中午|今日|今天|進貨|入貨|到貨|地瓜|紅骨|綠骨|紐|韓|澳|越/;
   const ITEM_HEAD =
-    /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|誌|芳|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨|早上)/;
+    /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|誌|芳|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|紫洋蔥|紫洋|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨|早上)/;
   const STUCK_ITEM =
-    /(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇)/;
+    /(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|紫洋蔥|紫洋|洋蔥|密本|阿成|薄荷|紫蘇)/;
   const NEXT_ITEM =
-    /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|九層塔|紐洋|紐大|紐特|韓洋|韓大|密本|阿成|薄荷|紫蘇|洋蔥|(?<![誌芳])地瓜葉)/;
+    /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|九層塔|紐洋|紐大|紐特|韓洋|韓大|紫洋蔥|紫洋|密本|阿成|薄荷|紫蘇|洋蔥|(?<![誌芳])地瓜葉)/;
 
   function uniqNames(extra) {
     const set = new Set(KNOWN_CUSTOMERS);
@@ -102,7 +108,7 @@
     const known = peelKnownName(raw, names);
     if (known) return known;
     const spaced = raw.match(
-      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{2,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇)/,
+      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{2,12})\s+(?=紐|韓|澳|越|紫洋|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇)/,
     );
     if (spaced && !NOT_CUSTOMER.test(spaced[1])) {
       return { customer: spaced[1].trim(), rest: raw.slice(spaced[0].length).trim() };
@@ -140,6 +146,7 @@
     if (/紫蘇/.test(t) && /斤/.test(t)) return { skuId: "shiso-jin", qty, pallet };
     if (/紫蘇/.test(t)) return { skuId: "shiso-kg", qty, pallet };
     if (/九層塔散|塔散|塔kg/.test(t)) return { skuId: "basil-kg", qty, pallet };
+    const purple = /紫洋蔥|紫洋|紫蔥/.test(t);
     let origin = "";
     for (const [word, code] of ORIGIN) {
       if (t.includes(word)) {
@@ -147,15 +154,18 @@
         break;
       }
     }
-    if (origin) {
+    if (origin || purple) {
       const use12 = onionBits.spec12 === true || (onionBits.spec12 == null && /12/.test(t) && !/20/.test(t));
-      return { skuId: onionSku(origin, use12), qty, pallet };
+      const line = { skuId: onionSku(origin || "nz", use12, purple), qty, pallet };
+      if (onionBits.size) line.size = onionBits.size;
+      else if (purple || origin) line.size = "大球";
+      return line;
     }
     return null;
   }
 
   function looksLikeItems(line) {
-    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐|韓|澳|越|葉|塔|骨|誌|芳|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
+    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐|韓|澳|越|葉|塔|骨|誌|芳|紫洋|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
   }
 
   function looksLikeInbound(raw) {

@@ -48,6 +48,8 @@ const FORM_KINDS = {
 };
 const DAILY_KEY = "nongquan-daily-sheet-preview-v1";
 const HA_CUST_KEY = "hongan-customer-history-v1";
+const STAFF_NOW_KEY = "nongquan-staff-now-v1";
+const STAFF_LIST_KEY = "nongquan-staff-list-v1";
 const BASIL_SKU = {
   rb: { 芳: "rb-fang", 琳: "rb-lin", 其他: "rb-oth" },
   gb: { 芳: "gb-fang", 琳: "gb-lin", 其他: "gb-oth" },
@@ -532,6 +534,74 @@ function formRowKeys(kind = formCustKey()) {
 function clearFormFields(row, kind = formCustKey()) {
   if (!row) return;
   for (const k of formRowKeys(kind)) delete row[k];
+}
+function loadStaffList() {
+  try {
+    return asNameList(JSON.parse(localStorage.getItem(STAFF_LIST_KEY) || "[]"));
+  } catch (_) {
+    return [];
+  }
+}
+function saveStaffList(list) {
+  localStorage.setItem(STAFF_LIST_KEY, JSON.stringify(asNameList(list).slice(0, 20)));
+  scheduleCloudPush();
+}
+function currentStaff() {
+  const el = document.getElementById("operator");
+  const typed = (el?.value || "").trim();
+  if (typed) return typed;
+  try {
+    return String(localStorage.getItem(STAFF_NOW_KEY) || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+function rememberStaff(name) {
+  const n = String(name || "").trim();
+  if (!n) return;
+  try {
+    localStorage.setItem(STAFF_NOW_KEY, n);
+  } catch (_) {}
+  const list = loadStaffList().filter((x) => x !== n);
+  list.unshift(n);
+  saveStaffList(list);
+  const el = document.getElementById("operator");
+  if (el && el.value.trim() !== n) el.value = n;
+}
+function requireStaff() {
+  const n = currentStaff();
+  if (n) {
+    rememberStaff(n);
+    return n;
+  }
+  setStatus("請先在上方填「目前會計」（處理這筆單的人），已填紀錄才看得出是誰入單。", true);
+  document.getElementById("operator")?.focus();
+  return "";
+}
+function staffNote(o) {
+  const bits = [];
+  if (o.enteredBy) bits.push(`入單 ${o.enteredBy}`);
+  if (o.editedBy) bits.push(`修改 ${o.editedBy}`);
+  if (o.shippedBy) bits.push(`出貨 ${o.shippedBy}`);
+  return bits.length ? bits.join("　") : "入單未填會計";
+}
+function renderStaffChips() {
+  const box = document.getElementById("operator-chips");
+  const input = document.getElementById("operator");
+  if (!box) return;
+  const now = currentStaff();
+  if (input && !input.value && now) input.value = now;
+  const names = loadStaffList();
+  if (!names.length) {
+    box.innerHTML = '<p class="hint chip-empty">填名字後入單，下次可點選。電腦／手機會共用名單。</p>';
+    return;
+  }
+  box.innerHTML = names
+    .map(
+      (name) =>
+        `<span class="chip${now === name ? " on" : ""}"><button type="button" class="chip-name" data-staff="${esc(name)}">${esc(name)}</button><button type="button" class="chip-x" data-forget-staff="${esc(name)}" aria-label="從會計名單移除 ${esc(name)}">×</button></span>`,
+    )
+    .join("");
 }
 function loadHaCustomers() {
   try {
@@ -1067,6 +1137,7 @@ function addOpenOrderFor(company, customer, shipDate, lines) {
     status: "open",
     prio: m + 1,
     edited: false,
+    enteredBy: currentStaff() || "",
   });
 }
 function namesMatch(a, b) {
@@ -1167,6 +1238,7 @@ function commitStatus(worst) {
 function confirmNqSchedule() {
   const { date, entries, errors, rests } = collectNqEntries();
   if (errors.length) return setStatus(errors[0], true);
+  if (!requireStaff()) return;
   if (editing) {
     if (!entries.length) return setStatus("請填數量後再確認。", true);
     const o = state.orders.find((x) => x.id === editing);
@@ -1174,6 +1246,7 @@ function confirmNqSchedule() {
     o.shipDate = date;
     o.lines = entries[0].lines;
     o.edited = true;
+    o.editedBy = currentStaff();
     o.status = "open";
     editing = "";
     document.getElementById("edit-id").value = "";
@@ -1360,7 +1433,7 @@ function renderOrders() {
             <strong class="order-who">${tag}${esc(o.customer)}</strong>
             <span class="order-st st-${esc(o.status)}">${esc(st)}</span>
           </div>
-          <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}</p>
+          <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}　${esc(staffNote(o))}</p>
           <div class="order-chips">${lines}</div>
           ${acts}
         </div>
@@ -1503,7 +1576,7 @@ function renderPlan() {
     return `<div class="plan-block ${kind}"><h4>${kind === "pending" ? "待出貨" : "當天已出貨"}</h4><ul class="list plan-people">${rows
       .map((r) => {
         const note = r.note ? `<span class="plan-note">${esc(r.note)}</span>` : "";
-        return `<li><strong>${esc(r.customer)}</strong><span class="plan-qty">${fmt(r.qty)} ${esc(unit)}</span>${note}</li>`;
+        return `<li><strong>${esc(r.customer)}</strong><span class="plan-qty">${fmt(r.qty)} ${esc(unit)}</span>${note}${r.by ? `<span class="plan-note">${esc(r.by)}</span>` : ""}</li>`;
       })
       .join("")}</ul></div>`;
   };
@@ -1516,7 +1589,7 @@ function renderPlan() {
         for (const id of g.skuIds) qty += lineQtyForSkuPack(o, id, pack);
         qty = round(qty);
         if (!qty) continue;
-        list.push({ id: `${o.id}:${pack}`, customer: o.customer, qty, note: pack, prio: orderRank(o) });
+        list.push({ id: `${o.id}:${pack}`, customer: o.customer, qty, note: pack, prio: orderRank(o), by: o.enteredBy ? `入單 ${o.enteredBy}` : "" });
       }
       return;
     }
@@ -1530,7 +1603,7 @@ function renderPlan() {
           if (l.note) extra.push(l.note);
         }
         const note = [BASIL_REV[id]?.val, ...extra].filter(Boolean).join("　");
-        list.push({ id: `${o.id}:${id}`, customer: o.customer, qty, note, prio: orderRank(o) });
+        list.push({ id: `${o.id}:${id}`, customer: o.customer, qty, note, prio: orderRank(o), by: o.enteredBy ? `入單 ${o.enteredBy}` : "" });
       }
       return;
     }
@@ -1542,6 +1615,7 @@ function renderPlan() {
       qty,
       note: planLineNote(o, g.skuIds),
       prio: orderRank(o),
+      by: o.enteredBy ? `入單 ${o.enteredBy}` : "",
     });
   };
   const board = used
@@ -2106,6 +2180,7 @@ function draftCheckRowsHtml(d) {
   </table>`;
 }
 function confirmParsedInbound(parsed, date) {
+  if (!requireStaff()) return false;
   const lines = (parsed.lines || []).filter((l) => skuById(l.skuId) && Number(l.qty) > 0);
   if (!lines.length) return setStatus("沒有對到進貨品項，請改文字再解析。", true);
   const day = date || today();
@@ -2117,6 +2192,7 @@ function confirmParsedInbound(parsed, date) {
 }
 function confirmParsedOrder(parsed, date) {
   if (parsed?.inbound) return confirmParsedInbound(parsed, date);
+  if (!requireStaff()) return false;
   const who = (parsed.customer || document.getElementById("customer")?.value || "").trim();
   if (!who) return setStatus("請先寫客人名字（第一行或出貨對象欄）。", true);
   const lines = parsed.lines || [];
@@ -2286,6 +2362,7 @@ function render() {
       console.error(err);
     }
   };
+  run(renderStaffChips);
   run(renderLineDrafts);
   run(renderCustChips);
   run(renderDailyGrid);
@@ -2585,6 +2662,32 @@ document.getElementById("nq-cancel-edit").onclick = () => {
   document.getElementById("nq-cancel-edit").hidden = true;
   render();
 };
+document.getElementById("operator-chips")?.addEventListener("click", (e) => {
+  const forget = e.target.closest("[data-forget-staff]");
+  if (forget) {
+    e.preventDefault();
+    const name = forget.dataset.forgetStaff;
+    saveStaffList(loadStaffList().filter((x) => x !== name));
+    if (currentStaff() === name) {
+      try {
+        localStorage.removeItem(STAFF_NOW_KEY);
+      } catch (_) {}
+      const el = document.getElementById("operator");
+      if (el) el.value = "";
+    }
+    renderStaffChips();
+    return;
+  }
+  const btn = e.target.closest("[data-staff]");
+  if (!btn) return;
+  rememberStaff(btn.dataset.staff);
+  renderStaffChips();
+});
+document.getElementById("operator")?.addEventListener("change", () => {
+  const n = document.getElementById("operator").value.trim();
+  if (n) rememberStaff(n);
+  renderStaffChips();
+});
 document.getElementById("cust-chips").addEventListener("click", (e) => {
   const forget = e.target.closest("[data-forget]");
   if (forget) {
@@ -2614,6 +2717,7 @@ document.getElementById("order-form").onsubmit = (e) => {
   const { worst } = lineChecks(map, currentRecord());
   const who = document.getElementById("customer").value.trim();
   if (!who) return setStatus("請填出貨對象", true);
+  if (!requireStaff()) return;
   const day = document.getElementById("ship-date").value;
   if (!editing && !warnIfDup(co, who, day)) return;
   if (editing) {
@@ -2622,6 +2726,7 @@ document.getElementById("order-form").onsubmit = (e) => {
     o.shipDate = document.getElementById("ship-date").value;
     o.lines = lines;
     o.edited = true;
+    o.editedBy = currentStaff();
     o.status = "open";
     editing = "";
     document.getElementById("cancel-edit").hidden = true;
@@ -2637,6 +2742,7 @@ document.getElementById("order-form").onsubmit = (e) => {
       status: "open",
       prio: nextPrio(),
       edited: false,
+      enteredBy: currentStaff(),
     });
   }
   if (co === "ha") rememberHaCustomer(who);
@@ -2726,6 +2832,7 @@ document.getElementById("orders").onclick = (e) => {
     return;
   }
   if (btn.dataset.act === "ship") {
+    if (!requireStaff()) return;
     try {
       const need = {};
       for (const line of o.lines) {
@@ -2773,6 +2880,7 @@ document.getElementById("orders").onclick = (e) => {
       }
       o.status = "shipped";
       o.shippedOn = today();
+      o.shippedBy = currentStaff();
       const inLots = [...autoIn, ...(doAskIn ? askIn : [])];
       for (const lot of inLots) {
         addInboundLot(lot.skuId, lot.qty, o.shippedOn, true);
@@ -3123,6 +3231,7 @@ function localHasData() {
   const nq = loadNqLists();
   if (nq.leaf.length || nq.basil.length || nq.herb.length) return true;
   if (loadHaCustomers().length) return true;
+  if (loadStaffList().length) return true;
   return stockHasData(state.stock);
 }
 function collectBundle() {
@@ -3131,6 +3240,7 @@ function collectBundle() {
     orders: { stock: state.stock, orders: state.orders, daily: state.daily || {}, rests: state.rests || [] },
     nqCustomers: loadNqLists(),
     haCustomers: loadHaCustomers(),
+    accountants: loadStaffList(),
     dailySheet: dailyStore(),
   };
 }
@@ -3164,6 +3274,9 @@ function applyBundle(b) {
     }
     if (Array.isArray(b.haCustomers)) {
       localStorage.setItem(HA_CUST_KEY, JSON.stringify(asNameList(b.haCustomers)));
+    }
+    if (Array.isArray(b.accountants)) {
+      localStorage.setItem(STAFF_LIST_KEY, JSON.stringify(asNameList(b.accountants)));
     }
     if (b.dailySheet && typeof b.dailySheet === "object") {
       localStorage.setItem(DAILY_KEY, JSON.stringify(b.dailySheet));

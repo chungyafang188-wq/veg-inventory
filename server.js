@@ -80,6 +80,27 @@ function lineSigOk(rawBuf, header) {
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
 }
+function loadSyncBundle() {
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (data && typeof data === "object") return data;
+  } catch (_) {}
+  return null;
+}
+function knownCustomersFromStore() {
+  const names = [];
+  const data = loadSyncBundle();
+  if (!data) return names;
+  for (const n of data.haCustomers || []) names.push(n);
+  const nq = data.nqCustomers || {};
+  for (const k of ["leaf", "basil", "herb"]) {
+    for (const n of nq[k] || []) names.push(n);
+  }
+  for (const o of data.orders?.orders || []) {
+    if (o?.customer) names.push(o.customer);
+  }
+  return names;
+}
 function loadLineDrafts() {
   try {
     const data = JSON.parse(fs.readFileSync(LINE_FILE, "utf8"));
@@ -201,7 +222,7 @@ function handleLineWebhook(req, res) {
         const text = stripLineMentions(rawText, ev.message.mention);
         if (!text) continue;
         lineHookStats.lastTextPreview = text.slice(0, 80);
-        const parsed = parseLineOrderText(text);
+        const parsed = parseLineOrderText(text, knownCustomersFromStore());
         const keep = worthKeeping(parsed) || parsed.lines.length > 0 || parsed.unknown.length > 0;
         if (!keep) continue;
         store.drafts.unshift({
@@ -220,11 +241,11 @@ function handleLineWebhook(req, res) {
         added += 1;
         const reply = parsed.inbound
           ? parsed.lines.length
-            ? "已收到進貨，待會計在網頁確認記入。"
-            : "已收到進貨，但沒對到品項。請寫例如：地瓜葉誌進貨57。"
+            ? "【進貨】已收到，待會計在網頁確認記入庫存（不是出貨訂單）。"
+            : "【進貨】已收到，但沒對到品項。請寫例如：地瓜葉誌進貨57。"
           : parsed.lines.length
-            ? "已收到，待會計在網頁確認入單。"
-            : "已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
+            ? "【出貨訂單】已收到，待會計在網頁確認列入訂單（不是進貨）。"
+            : "【出貨訂單】已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
         replies.push(lineReply(ev.replyToken, reply));
       }
       if (store.drafts.length > 80) store.drafts = store.drafts.slice(0, 80);

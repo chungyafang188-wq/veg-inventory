@@ -553,6 +553,19 @@ function rememberHaCustomer(name) {
   list.unshift(n);
   saveHaCustomers(list.slice(0, 40));
 }
+function knownCustomersForParse() {
+  const set = new Set(NQ_DEFAULT_CUSTOMERS);
+  const nq = loadNqLists();
+  for (const k of ["leaf", "basil", "herb"]) {
+    for (const n of asNameList(nq[k])) set.add(n);
+  }
+  for (const n of loadHaCustomers()) set.add(n);
+  for (const o of state.orders || []) {
+    const n = (o.customer || "").trim();
+    if (n) set.add(n);
+  }
+  return [...set];
+}
 function removeHaCustomer(name) {
   saveHaCustomers(loadHaCustomers().filter((x) => x !== name));
 }
@@ -2002,6 +2015,41 @@ function lineSkuLabel(id) {
   const s = skuById(id);
   return s ? `${s.name} ${s.unit}` : id;
 }
+function shortSkuName(id) {
+  const s = skuById(id);
+  if (!s) return id;
+  return s.name.replace(/^本產蔬菜－/, "");
+}
+function draftKindLabel(inbound) {
+  return inbound ? "進貨" : "出貨訂單";
+}
+function draftKindHint(inbound) {
+  return inbound ? "這筆會記入庫存，不會產生出貨訂單。" : "這筆會列入出貨訂單，不會記入進貨。";
+}
+function draftCheckRowsHtml(d) {
+  const lines = d.lines || [];
+  if (!lines.length) {
+    return '<p class="draft-miss">沒有對到品項，請改文字再解析。</p>';
+  }
+  const rows = lines
+    .map((l) => {
+      const sku = skuById(l.skuId);
+      const coName = sku?.co === "ha" ? "鴻安" : sku?.co === "nq" ? "穠全" : "";
+      const remarks = [l.pack, l.pallet ? "疊棧板" : "", l.note].filter(Boolean).join("、") || "—";
+      return `<tr>
+        <td>${esc(coName)}</td>
+        <td>${esc(shortSkuName(l.skuId))}</td>
+        <td class="draft-qty">${esc(fmt(l.qty))}</td>
+        <td>${esc(sku?.unit || "")}</td>
+        <td>${esc(remarks)}</td>
+      </tr>`;
+    })
+    .join("");
+  return `<table class="draft-check">
+    <thead><tr><th>公司</th><th>品項</th><th>數量</th><th>單位</th><th>備註</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
 function confirmParsedInbound(parsed, date) {
   const lines = (parsed.lines || []).filter((l) => skuById(l.skuId) && Number(l.qty) > 0);
   if (!lines.length) return setStatus("沒有對到進貨品項，請改文字再解析。", true);
@@ -2060,16 +2108,12 @@ function renderLineDrafts() {
   }
   box.innerHTML = list
     .map((d) => {
-      const bits = (d.lines || [])
-        .map((l) => {
-          const extra = [l.pack, l.pallet ? "疊棧板" : ""].filter(Boolean).join(" ");
-          return `<li>${esc(lineSkuLabel(l.skuId))} ${esc(fmt(l.qty))}${extra ? ` ${esc(extra)}` : ""}</li>`;
-        })
-        .join("");
-      const unk = (d.unknown || []).length ? `<p class="hint">沒對到：${esc(d.unknown.join("、"))}</p>` : "";
       const inbound = !!d.inbound;
-      const who = inbound ? "進貨" : d.customer ? esc(d.customer) : "（未寫客人）";
       const day = d.date || today();
+      const who = inbound ? "無出貨對象（進貨）" : d.customer ? d.customer : "尚未寫出貨對象";
+      const unk = (d.unknown || []).length
+        ? `<p class="draft-miss">原文沒對到：${esc(d.unknown.join("、"))}</p>`
+        : "";
       const dupHa = !inbound && d.customer ? suspectDupes("ha", d.customer, day) : [];
       const dupNq = !inbound && d.customer ? suspectDupes("nq", d.customer, day) : [];
       const dupNote =
@@ -2082,15 +2126,25 @@ function renderLineDrafts() {
       const inDupNote = inDupes.length
         ? `<p class="bad">疑似重複進貨：${esc(inDupes.map(inboundDupNote).join("；"))}。確認記入時會再問一次。</p>`
         : "";
-      return `<article class="line-draft">
-        <strong>${who}</strong>　<span class="muted">${esc(d.date || "")}</span>
-        <pre>${esc(d.text || d.raw || "")}</pre>
-        <ul>${bits || "<li>沒有對到品項</li>"}</ul>
+      const src = d.text || d.raw || "";
+      return `<article class="line-draft ${inbound ? "is-in" : "is-out"}">
+        <div class="draft-head">
+          <span class="draft-kind">${esc(draftKindLabel(inbound))}</span>
+          <span class="draft-who">${esc(who)}</span>
+          <span class="muted">${esc(day)}</span>
+        </div>
+        <p class="draft-hint">${esc(draftKindHint(inbound))}</p>
+        <p class="draft-label">系統判定（請核對）</p>
+        ${draftCheckRowsHtml(d)}
         ${unk}
         ${dupNote}
         ${inDupNote}
+        <details class="draft-src">
+          <summary>原文</summary>
+          <pre>${esc(src)}</pre>
+        </details>
         <div class="btn-row">
-          <button type="button" class="primary" data-line-ok="${esc(d.id)}">${inbound ? "確認進貨" : "確認入單"}</button>
+          <button type="button" class="primary" data-line-ok="${esc(d.id)}">${inbound ? "確認記入進貨" : "確認列入出貨訂單"}</button>
           <button type="button" class="ghost" data-line-no="${esc(d.id)}">丟掉</button>
         </div>
       </article>`;
@@ -2234,12 +2288,12 @@ document.getElementById("line-parse-btn")?.addEventListener("click", () => {
   const parse = globalThis.LineOrderParse?.parseLineOrderText;
   if (!parse) return setStatus("解析程式還沒載入。", true);
   const raw = document.getElementById("line-paste")?.value || "";
-  const parsed = parse(raw);
+  const parsed = parse(raw, knownCustomersForParse());
   linePastePreview = { ...parsed, text: raw, date: today() };
   renderLineDrafts();
-  if (!parsed.lines.length) setStatus("沒對到品項。下單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
-  else if (parsed.inbound) setStatus("已解析為進貨，請看預覽再按確認進貨。", false);
-  else setStatus("已解析，請看預覽再按確認入單。", false);
+  if (!parsed.lines.length) setStatus("沒對到品項。出貨訂單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
+  else if (parsed.inbound) setStatus("判定為【進貨】，請核對品項數量後按「確認記入進貨」。", false);
+  else setStatus("判定為【出貨訂單】，請核對對象與品項後按「確認列入出貨訂單」。", false);
 });
 document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
   const ok = e.target.closest("[data-line-ok]");

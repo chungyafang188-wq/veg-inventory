@@ -68,12 +68,46 @@
     return /芳/.test(t) && /葉|地瓜/.test(t) && !/綠骨|紅骨|綠九層|紅九層|綠塔|紅塔|九層/.test(t);
   }
 
-  function peelCustomer(line) {
-    const m = String(line || "").match(
-      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層)/,
+  const KNOWN_CUSTOMERS = ["冠瑋", "小琳", "欣儒", "佳合", "張紀惠"];
+  const ITEM_HEAD =
+    /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨)/;
+  const STUCK_ITEM =
+    /(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇)/;
+  const NEXT_ITEM =
+    /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|九層塔|紐洋|紐大|紐特|韓洋|韓大|密本|阿成|薄荷|紫蘇|洋蔥)/;
+
+  function uniqNames(extra) {
+    const set = new Set(KNOWN_CUSTOMERS);
+    for (const n of extra || []) {
+      const s = String(n || "").trim();
+      if (s.length >= 2) set.add(s);
+    }
+    return [...set].sort((a, b) => b.length - a.length);
+  }
+
+  function peelKnownName(line, names) {
+    const t = String(line || "").trim();
+    for (const n of names) {
+      if (!t.startsWith(n)) continue;
+      const rest = t.slice(n.length).replace(/^[\s　]+/, "");
+      if (rest && (ITEM_HEAD.test(rest) || looksLikeItems(rest))) return { customer: n, rest };
+    }
+    return null;
+  }
+
+  function peelCustomer(line, names) {
+    const raw = String(line || "").trim();
+    const known = peelKnownName(raw, names);
+    if (known) return known;
+    const spaced = raw.match(
+      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{2,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇)/,
     );
-    if (!m) return { customer: "", rest: String(line || "").trim() };
-    return { customer: m[1].trim(), rest: String(line).slice(m[0].length).trim() };
+    if (spaced) return { customer: spaced[1].trim(), rest: raw.slice(spaced[0].length).trim() };
+    const stuck = raw.match(new RegExp(`^([\\u4e00-\\u9fffA-Za-z0-9.·]{2,8})${STUCK_ITEM.source}`));
+    if (stuck && !ITEM_HEAD.test(stuck[1])) {
+      return { customer: stuck[1], rest: raw.slice(stuck[1].length).trim() };
+    }
+    return { customer: "", rest: raw };
   }
 
   function matchChunk(raw) {
@@ -124,7 +158,23 @@
     return /進貨|入貨|到貨/.test(String(raw || ""));
   }
 
-  function parseLineOrderText(raw) {
+  function splitItemChunks(body) {
+    const rough = body
+      .join("、")
+      .split(/[、，,;；。．\n]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const chunks = [];
+    for (const piece of rough) {
+      const bits = piece.split(NEXT_ITEM).map((x) => x.trim()).filter(Boolean);
+      if (bits.length) chunks.push(...bits);
+      else chunks.push(piece);
+    }
+    return chunks;
+  }
+
+  function parseLineOrderText(raw, extraNames) {
+    const names = uniqNames(extraNames);
     const text = String(raw || "").replace(/\r/g, "").trim();
     const unknown = [];
     const lines = [];
@@ -133,7 +183,7 @@
     const parts = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
     let customer = "";
     let body = parts;
-    const sameLine = peelCustomer(parts[0] || "");
+    const sameLine = peelCustomer(parts[0] || "", names);
     if (sameLine.customer) {
       customer = sameLine.customer;
       body = [sameLine.rest, ...parts.slice(1)].filter(Boolean);
@@ -142,11 +192,7 @@
       body = parts.slice(1);
       if (!body.length) body = parts;
     }
-    const chunks = body
-      .join("、")
-      .split(/[、，,;；\n]+/)
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const chunks = splitItemChunks(body);
     for (const chunk of chunks) {
       if (/^(好|喔|哦|收到|謝謝|ok|OK|進貨|入貨|到貨)$/.test(chunk)) continue;
       const hit = matchChunk(chunk);

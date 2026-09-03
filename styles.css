@@ -265,20 +265,89 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 #line-paste { min-height: 5.5rem; font: inherit; }
 .line-draft {
   margin-top: 0.55rem;
-  padding: 0.65rem 0.7rem;
+  padding: 0.7rem 0.75rem 0.75rem 0.85rem;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
-  background: #fffdf8;
+  border-left-width: 0.45rem;
+}
+.line-draft.is-out {
+  background: #fff7ec;
+  border-left-color: #c45c16;
+}
+.line-draft.is-in {
+  background: #eef8f2;
+  border-left-color: #1b5e3b;
+}
+.draft-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+}
+.draft-kind {
+  display: inline-block;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.18rem 0.6rem;
+}
+.line-draft.is-out .draft-kind { background: #c45c16; }
+.line-draft.is-in .draft-kind { background: #1b5e3b; }
+.draft-who { font-size: 1.08rem; font-weight: 800; }
+.draft-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.line-draft.is-out .draft-hint { color: #8a3d0c; }
+.line-draft.is-in .draft-hint { color: #1b5e3b; }
+.draft-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.draft-check {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin-bottom: 0.4rem;
+}
+.draft-check th, .draft-check td {
+  border: 1px solid var(--line);
+  padding: 0.38rem 0.4rem;
+  text-align: left;
+  vertical-align: middle;
+}
+.line-draft.is-out .draft-check th { background: #fde6cf; }
+.line-draft.is-in .draft-check th { background: #dcefe3; }
+.draft-check .draft-qty {
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+.draft-miss { margin: 0.25rem 0; color: #a33; font-weight: 700; }
+.draft-src { margin: 0.35rem 0 0.15rem; }
+.draft-src summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 .line-draft pre {
-  margin: 0.35rem 0;
+  margin: 0.3rem 0 0;
   white-space: pre-wrap;
   font: inherit;
   font-size: 0.88rem;
   color: var(--muted);
+  background: #f6f4ef;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.45rem;
 }
-.line-draft ul { margin: 0.25rem 0 0.45rem; padding-left: 1.1rem; }
-.line-draft .btn-row { margin-top: 0.35rem; }
+.line-draft .btn-row { margin-top: 0.5rem; }
 .plan-date-row { margin-top: 0.85rem; }
 .plan-date-row h2 { margin: 0; }
 .daily-sheet-card .hint { margin-bottom: 0.45rem; }

@@ -309,6 +309,29 @@ function shippedQty(skuId, date) {
   }
   return n;
 }
+function prevSettleQty(skuId, date) {
+  const yRow = state.daily?.[addDays(date, -1)]?.[skuId];
+  if (!yRow || !yRow.countConfirmed) return null;
+  if (yRow.count == null || yRow.count === "") return null;
+  const n = Number(yRow.count);
+  return Number.isFinite(n) ? round(n) : null;
+}
+function fillMorningFromPrevSettle(row, skuId, date) {
+  const carried = prevSettleQty(skuId, date);
+  if (carried == null) return false;
+  let changed = false;
+  if (row.opening == null) {
+    row.opening = carried;
+    changed = true;
+  }
+  const sku = skuById(skuId);
+  if (sku && isSiteSku(sku)) return changed;
+  if ((row.morning == null || row.morning === "") && !row.morningConfirmed) {
+    row.morning = carried;
+    changed = true;
+  }
+  return changed;
+}
 function seedOpening(skuId, date) {
   const yest = addDays(date, -1);
   const yRow = state.daily?.[yest]?.[skuId];
@@ -328,9 +351,11 @@ function ensureBooks(date = today()) {
   const book = bookOf(date);
   let changed = false;
   for (const sku of SKUS) {
-    if (book[sku.id]) continue;
-    book[sku.id] = { opening: seedOpening(sku.id, date), inbound: 0, count: null };
-    changed = true;
+    if (!book[sku.id]) {
+      book[sku.id] = { opening: seedOpening(sku.id, date), inbound: 0, count: null };
+      changed = true;
+    }
+    if (fillMorningFromPrevSettle(book[sku.id], sku.id, date)) changed = true;
   }
   return changed;
 }
@@ -1459,7 +1484,7 @@ function correctInbound(skuId, raw, date = stockViewDay()) {
   renderAlerts();
 }
 function unlockMorning(skuId) {
-  const b = bookRow(skuId);
+  const b = bookRow(skuId, stockViewDay());
   b.morningConfirmed = false;
   save();
 }
@@ -1509,7 +1534,19 @@ function shipInboundSku(sku) {
   return "";
 }
 function renderStock() {
-  const onion = co === "ha";
+  if (co === "ha") {
+    const inDay = document.getElementById("in-day-card");
+    if (inDay) inDay.hidden = true;
+    const fillBtn = document.getElementById("fill-count");
+    if (fillBtn) fillBtn.hidden = true;
+    const fixM = document.getElementById("fix-morning");
+    if (fixM) fixM.hidden = true;
+    document.getElementById("process").hidden = true;
+    document.getElementById("receive").hidden = true;
+    const stockBox = document.getElementById("stock");
+    if (stockBox) stockBox.innerHTML = "";
+    return;
+  }
   const date = stockViewDay();
   ensureBooks(date);
   const stockDateEl = document.getElementById("stock-date");
@@ -1517,16 +1554,12 @@ function renderStock() {
   const bookDateEl = document.getElementById("book-date");
   if (bookDateEl) bookDateEl.textContent = date;
   const lookingBack = date !== today();
-  const stockTab = document.querySelector('[data-page="stock"]');
-  if (stockTab) stockTab.textContent = onion ? "庫存" : "庫存/進貨";
-  document.getElementById("stock-title").textContent = onion ? "現場庫存" : "庫存/進貨";
+  document.getElementById("stock-title").textContent = "庫存/進貨";
   const inDay = document.getElementById("in-day-card");
   if (inDay) inDay.hidden = false;
   const tot = document.getElementById("in-day-totals");
   if (tot) {
-    const rows = onion
-      ? companySkus().map((sku) => ({ id: sku.id, label: skuShortName(sku) }))
-      : NQ_INBOUND;
+    const rows = NQ_INBOUND;
     tot.innerHTML = rows
       .map((row) => {
         const sku = skuById(row.id);
@@ -1539,75 +1572,32 @@ function renderStock() {
   const gs = document.getElementById("guide-stock");
   const gi = document.getElementById("guide-in");
   const gc = document.getElementById("guide-count");
-  if (onion) {
-    if (inDay) {
-      const h2 = inDay.querySelector("h2");
-      const hint = inDay.querySelector(".hint");
-      if (h2) h2.textContent = "今日進貨（出貨累計）";
-      if (hint) hint.textContent = lookingBack
-        ? `查 ${date} 的進貨（出貨扣庫累計）。可在這天直接改數字。`
-        : "由「出貨扣庫」累計，不另外做進貨。";
-    }
-    if (gs) gs.innerHTML = "<strong>庫存</strong>可出貨＝早上盤點「加入」的件數。出貨扣庫會扣可出。";
-    if (gi) gi.innerHTML = "<strong>進貨</strong>不另外填進貨。按「出貨扣庫」後，出貨數量會累計入今日進貨。";
-    if (gc) gc.innerHTML = "<strong>盤點／結算</strong>早上點完按「加入」。出貨後最右欄「庫存結算」會帶入剩餘，按確認鎖定；不對就改數字再確認，或按修正。";
-  } else {
-    if (inDay) {
-      const h2 = inDay.querySelector("h2");
-      const hint = inDay.querySelector(".hint");
-      if (h2) h2.textContent = "當日進貨總數";
-      if (hint) hint.textContent = lookingBack
-        ? `查 ${date} 已記入的進貨合計。可在這天直接改、記入或修正。`
-        : "各品項今天已記入的進貨合計（分批會加總）。";
-    }
-    if (gs) gs.innerHTML = "<strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。";
-    if (gi) gi.innerHTML = "<strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。";
-    if (gc) gc.innerHTML = "<strong>盤點／結算</strong>早上填完按「確認今日早上盤點」。出貨後最右欄「庫存結算」會帶入系統剩餘，按確認鎖定；不對就改數字再確認，或按修正。";
+  if (inDay) {
+    const h2 = inDay.querySelector("h2");
+    const hint = inDay.querySelector(".hint");
+    if (h2) h2.textContent = "當日進貨總數";
+    if (hint) hint.textContent = lookingBack
+      ? `查 ${date} 已記入的進貨合計。可在這天直接改、記入或修正。`
+      : "各品項今天已記入的進貨合計（分批會加總）。";
   }
+  if (gs) gs.innerHTML = "<strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。";
+  if (gi) gi.innerHTML = "<strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。";
+  if (gc) gc.innerHTML = "<strong>盤點／結算</strong>早上填完按「確認今日早上盤點」。出貨後最右欄「庫存結算」會帶入系統剩餘，按確認鎖定；不對就改數字再確認，或按修正。";
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
-  const morningDone = !onion && nqMorningDone();
-  const anyMorning = !onion && NQ_INBOUND.some((row) => bookRow(row.id, date).morningConfirmed);
+  const morningDone = nqMorningDone();
+  const anyMorning = NQ_INBOUND.some((row) => bookRow(row.id, date).morningConfirmed);
   const fillBtn = document.getElementById("fill-count");
-  fillBtn.hidden = onion || morningDone;
+  fillBtn.hidden = morningDone;
   fillBtn.textContent = "確認今日早上盤點";
   fillBtn.disabled = false;
   const fixM = document.getElementById("fix-morning");
-  if (fixM) fixM.hidden = onion || !anyMorning;
+  if (fixM) fixM.hidden = !anyMorning;
   const opts = companySkus()
     .map((s) => `<option value="${s.id}">${esc(s.name)}</option>`)
     .join("");
   document.getElementById("in-sku").innerHTML = opts;
   document.getElementById("pr-sku").innerHTML = opts;
-  if (onion) {
-    const body = companySkus()
-      .map((sku) => {
-        const rsv = reservedAll(sku.id);
-        const leftover = round(ready(sku) - rsv);
-        const st = state.stock[sku.id];
-        const b = bookRow(sku.id, date);
-        const morningAdded = Number(b.morning) || 0;
-        return `<tr>
-          <td class="name-cell">${esc(sku.name)}</td>
-          <td data-oh="${sku.id}">${fmt(st.processed)} ${esc(sku.unit)}</td>
-          <td>${fmt(b.inbound || 0)} ${esc(sku.unit)}</td>
-          <td>
-            <div class="ha-process">
-              <input class="qty process-in" data-morning-add="${sku.id}" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0" aria-label="${esc(sku.name)} 早上盤點加入" />
-              <button type="button" class="tiny-btn" data-add-morning="${sku.id}">加入</button>
-              <span class="morning-ok">已加入 ${fmt(morningAdded)}</span>
-            </div>
-          </td>
-          <td>${fmt(rsv)}</td>
-          <td>${fmt(leftover)} ${sku.unit}</td>
-          <td>${settleCellHtml(sku)}</td>
-        </tr>`;
-      })
-      .join("");
-    document.getElementById("stock").innerHTML =
-      `<table class="inbound-main"><thead><tr><th>規格</th><th>可出貨</th><th>今日進貨</th><th>早上盤點加入</th><th>已佔</th><th>剩餘</th><th>庫存結算</th></tr></thead><tbody>${body}</tbody></table>`;
-    return;
-  }
   const body = NQ_INBOUND.map((row) => {
     const sku = skuById(row.id);
     const b = bookRow(row.id, date);
@@ -1707,10 +1697,9 @@ function applySettleToNextMorning(skuId, date, qty) {
   const next = addDays(date, 1);
   const nb = bookRow(skuId, next);
   nb.opening = qty;
-  if (!nb.morningConfirmed) {
-    nb.morning = qty;
-    nb.morningConfirmed = true;
-  }
+  const sku = skuById(skuId);
+  if (sku && isSiteSku(sku)) return;
+  if (!nb.morningConfirmed) nb.morning = qty;
 }
 function confirmSettle(skuId, raw) {
   const sku = skuById(skuId);
@@ -1998,10 +1987,16 @@ function render() {
   }
   document.getElementById("co-name").textContent = co === "nq" ? "穠全公司" : "鴻安公司";
   document.querySelectorAll("[data-co]").forEach((b) => b.classList.toggle("on", b.dataset.co === co));
+  const stockTab = document.querySelector('[data-page="stock"]');
+  if (stockTab) {
+    stockTab.hidden = co === "ha";
+    stockTab.textContent = "庫存/進貨";
+  }
+  if (co === "ha" && page === "stock") page = "orders";
   document.querySelectorAll("[data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
-  document.getElementById("page-stock").hidden = page !== "stock";
+  document.getElementById("page-stock").hidden = page !== "stock" || co === "ha";
   applyCopy();
   document.getElementById("order-form").hidden = co !== "ha";
   const nqCancel = document.getElementById("nq-cancel-edit");
@@ -2038,6 +2033,7 @@ document.querySelectorAll("[data-co]").forEach((btn) => {
 });
 document.querySelectorAll("[data-page]").forEach((btn) => {
   btn.onclick = () => {
+    if (btn.dataset.page === "stock" && co === "ha") return;
     page = btn.dataset.page;
     render();
   };
@@ -2519,9 +2515,9 @@ document.getElementById("process").onsubmit = (e) => {
 function patchStockRow(skuId) {
   const sku = skuById(skuId);
   if (!sku) return;
-  const date = today();
-  const b = bookRow(skuId);
-  const oh = onHand(sku);
+  const date = stockViewDay();
+  const b = bookRow(skuId, date);
+  const oh = onHand(sku, date);
   const rsv = reservedAll(skuId);
   const av = available(sku);
   const shipped = shippedQty(skuId, date);
@@ -2610,14 +2606,14 @@ stockEl.addEventListener("change", (e) => {
 stockEl.addEventListener("input", (e) => {
   const t = e.target;
   if (t.dataset.morning != null) {
-    const b = bookRow(t.dataset.morning);
+    const b = bookRow(t.dataset.morning, stockViewDay());
     if (b.morningConfirmed) return;
     b.morning = t.value === "" ? "" : Math.max(0, Number(t.value) || 0);
     save();
     return;
   }
   if (t.dataset.settle != null) {
-    const b = bookRow(t.dataset.settle);
+    const b = bookRow(t.dataset.settle, stockViewDay());
     if (b.countConfirmed) return;
     b.count = t.value === "" ? null : Math.max(0, Number(t.value) || 0);
     save();
@@ -2705,7 +2701,7 @@ document.getElementById("fill-count").onclick = () => {
   const missing = [];
   for (const row of NQ_INBOUND) {
     const input = document.querySelector(`[data-morning="${row.id}"]`);
-    const raw = input ? input.value : bookRow(row.id).morning;
+    const raw = input ? input.value : bookRow(row.id, stockViewDay()).morning;
     if (raw === "" || raw == null) missing.push(row.label);
   }
   if (missing.length) return setStatus(`請先填完早上盤點：${missing.join("、")}`, true);
@@ -2806,6 +2802,7 @@ function collectBundle() {
 }
 function applyBundle(b) {
   skipCloud = true;
+  let carried = false;
   try {
     if (b.orders && b.orders.stock && Array.isArray(b.orders.orders)) {
       state.stock = b.orders.stock;
@@ -2816,6 +2813,7 @@ function applyBundle(b) {
         if (!state.stock[sku.id]) state.stock[sku.id] = { qty: 0, processed: 0, safety: 0 };
       }
       if (!state.daily) state.daily = {};
+      carried = ensureBooks(today());
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
       } catch (_) {}

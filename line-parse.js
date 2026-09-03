@@ -61,20 +61,22 @@
   }
 
   function isLeafZhi(t) {
-    return /誌/.test(t) && /葉|地瓜/.test(t);
+    return /誌/.test(t) && /地瓜葉|地瓜/.test(t);
   }
 
   function isLeafFang(t) {
-    return /芳/.test(t) && /葉|地瓜/.test(t) && !/綠骨|紅骨|綠九層|紅九層|綠塔|紅塔|九層/.test(t);
+    if (/綠骨|紅骨|綠九層|紅九層|綠塔|紅塔|九層/.test(t)) return false;
+    return /芳/.test(t) && /地瓜葉|地瓜/.test(t);
   }
 
   const KNOWN_CUSTOMERS = ["冠瑋", "小琳", "欣儒", "佳合", "張紀惠"];
+  const NOT_CUSTOMER = /誌|芳|琳|早上|下午|晚上|中午|今日|今天|進貨|入貨|到貨|地瓜|紅骨|綠骨|紐|韓|澳|越/;
   const ITEM_HEAD =
-    /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨)/;
+    /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|誌|芳|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨|早上)/;
   const STUCK_ITEM =
     /(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|洋蔥|密本|阿成|薄荷|紫蘇)/;
   const NEXT_ITEM =
-    /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|九層塔|紐洋|紐大|紐特|韓洋|韓大|密本|阿成|薄荷|紫蘇|洋蔥)/;
+    /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|九層塔|紐洋|紐大|紐特|韓洋|韓大|密本|阿成|薄荷|紫蘇|洋蔥|(?<![誌芳])地瓜葉)/;
 
   function uniqNames(extra) {
     const set = new Set(KNOWN_CUSTOMERS);
@@ -102,9 +104,11 @@
     const spaced = raw.match(
       /^([\u4e00-\u9fffA-Za-z0-9.·\-]{2,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇)/,
     );
-    if (spaced) return { customer: spaced[1].trim(), rest: raw.slice(spaced[0].length).trim() };
+    if (spaced && !NOT_CUSTOMER.test(spaced[1])) {
+      return { customer: spaced[1].trim(), rest: raw.slice(spaced[0].length).trim() };
+    }
     const stuck = raw.match(new RegExp(`^([\\u4e00-\\u9fffA-Za-z0-9.·]{2,8})${STUCK_ITEM.source}`));
-    if (stuck && !ITEM_HEAD.test(stuck[1])) {
+    if (stuck && !ITEM_HEAD.test(stuck[1]) && !NOT_CUSTOMER.test(stuck[1])) {
       return { customer: stuck[1], rest: raw.slice(stuck[1].length).trim() };
     }
     return { customer: "", rest: raw };
@@ -122,12 +126,12 @@
     if (isLeafFang(t)) {
       return { skuId: "sl-fang", qty, pack: leafPack(raw + t), pallet };
     }
-    const greenBasil = /綠骨|綠九層塔|綠九層|綠塔|綠芳|綠琳/;
-    const redBasil = /紅骨|紅九層塔|紅九層|紅塔|紅芳|紅琳/;
-    if (greenBasil.test(t) && /琳/.test(t)) return { skuId: "gb-lin", qty, pallet };
-    if (greenBasil.test(t)) return { skuId: "gb-fang", qty, pallet };
-    if (redBasil.test(t) && /琳/.test(t)) return { skuId: "rb-lin", qty, pallet };
-    if (redBasil.test(t)) return { skuId: "rb-fang", qty, pallet };
+    const greenBasil = /綠骨|綠九層塔|綠九層|綠塔/;
+    const redBasil = /紅骨|紅九層塔|紅九層|紅塔/;
+    if ((greenBasil.test(t) || /綠芳|綠琳/.test(t)) && /琳/.test(t)) return { skuId: "gb-lin", qty, pallet };
+    if (greenBasil.test(t) || /綠芳/.test(t)) return { skuId: "gb-fang", qty, pallet };
+    if ((redBasil.test(t) || /紅芳|紅琳/.test(t)) && /琳/.test(t)) return { skuId: "rb-lin", qty, pallet };
+    if (redBasil.test(t) || /紅芳/.test(t)) return { skuId: "rb-fang", qty, pallet };
     if (/洋蔥?\s*B|蔥B|洋B/.test(t)) return { skuId: "on-b-kg", qty, pallet };
     if (/南瓜?\s*B|瓜B/.test(t)) return { skuId: "pk-b-kg", qty, pallet };
     if (t.includes("密本")) return { skuId: /20/.test(t) ? "pk-mi-20" : "pk-mi-18", qty, pallet };
@@ -151,7 +155,7 @@
   }
 
   function looksLikeItems(line) {
-    return /袋|箱|籃|kg|公斤|密本|阿成|紐|韓|澳|越|葉|塔|骨|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
+    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐|韓|澳|越|葉|塔|骨|誌|芳|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
   }
 
   function looksLikeInbound(raw) {
@@ -183,14 +187,16 @@
     const parts = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
     let customer = "";
     let body = parts;
-    const sameLine = peelCustomer(parts[0] || "", names);
-    if (sameLine.customer) {
-      customer = sameLine.customer;
-      body = [sameLine.rest, ...parts.slice(1)].filter(Boolean);
-    } else if (parts.length && !looksLikeItems(parts[0]) && parts[0].length <= 20) {
-      customer = parts[0].replace(/^[\d.\s]+/, "").trim();
-      body = parts.slice(1);
-      if (!body.length) body = parts;
+    if (!inbound) {
+      const sameLine = peelCustomer(parts[0] || "", names);
+      if (sameLine.customer) {
+        customer = sameLine.customer;
+        body = [sameLine.rest, ...parts.slice(1)].filter(Boolean);
+      } else if (parts.length && !looksLikeItems(parts[0]) && parts[0].length <= 20) {
+        customer = parts[0].replace(/^[\d.\s]+/, "").trim();
+        body = parts.slice(1);
+        if (!body.length) body = parts;
+      }
     }
     const chunks = splitItemChunks(body);
     for (const chunk of chunks) {

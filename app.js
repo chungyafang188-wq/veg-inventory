@@ -1880,10 +1880,15 @@ function confirmParsedOrder(parsed, date) {
   if (ha.length) {
     addOpenOrderFor("ha", who, day, ha);
     rememberHaCustomer(who);
+    if (!nq.length) co = "ha";
   }
   if (nq.length) {
     addOpenOrderFor("nq", who, day, nq);
     addNqCustomer(who, formKindOfSku(nq[0].skuId));
+    if (!ha.length) {
+      co = "nq";
+      formKind = formKindOfSku(nq[0].skuId);
+    }
   }
   save();
   setStatus(`已把「${who}」拆成訂單（需再確認內容）。鴻安 ${ha.length} 項、穠全 ${nq.length} 項。`, false);
@@ -1904,7 +1909,7 @@ function renderLineDrafts() {
   if (linePastePreview) list.push({ ...linePastePreview, id: "paste", local: true });
   for (const d of lineDraftsCache) list.push(d);
   if (!list.length) {
-    box.innerHTML = '<p class="empty">目前沒有待確認的 LINE 單。</p>';
+    box.innerHTML = '<p class="empty">把文字貼上按「解析文字」，核對後會出現在這裡。</p>';
     return;
   }
   box.innerHTML = list

@@ -7,6 +7,7 @@
   const ORIGIN = [
     ["紐西蘭", "nz"],
     ["紐西", "nz"],
+    ["紐洋", "nz"],
     ["紐", "nz"],
     ["澳洲", "au"],
     ["澳", "au"],
@@ -30,10 +31,50 @@
     return `on-${origin}-${spec12 ? "12" : "20"}`;
   }
 
+  function takeOnionSpecQty(s) {
+    const slash = String(s).match(/(12|20)\s*[Kk]?\s*[/／]\s*(\d+(?:\.\d+)?)/);
+    if (slash) {
+      return {
+        spec12: slash[1] === "12",
+        qty: Number(slash[2]),
+        text: s.replace(slash[0], ""),
+      };
+    }
+    const glued = String(s).match(/(12|20)\s*[Kk]\s*(\d+(?:\.\d+)?)/);
+    if (glued) {
+      return {
+        spec12: glued[1] === "12",
+        qty: Number(glued[2]),
+        text: s.replace(glued[0], ""),
+      };
+    }
+    let rest = s;
+    let spec12 = null;
+    const labeled = rest.match(/(12|20)\s*[Kk]/);
+    if (labeled) {
+      spec12 = labeled[1] === "12";
+      rest = rest.replace(labeled[0], "");
+    } else if (/特大/.test(rest) && !/20/.test(rest)) {
+      spec12 = true;
+      rest = rest.replace(/特大/g, "");
+    }
+    const { qty, text } = takeQty(rest);
+    return { spec12, qty, text };
+  }
+
+  function peelCustomer(line) {
+    const m = String(line || "").match(
+      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|葉|綠骨|紅骨|綠九|紅九|九層)/,
+    );
+    if (!m) return { customer: "", rest: String(line || "").trim() };
+    return { customer: m[1].trim(), rest: String(line).slice(m[0].length).trim() };
+  }
+
   function matchChunk(raw) {
     const pallet = /疊棧板|棧板/.test(raw);
     let s = raw.replace(/疊棧板|棧板/g, "");
-    const { qty, text } = takeQty(s);
+    const onionBits = takeOnionSpecQty(s);
+    const { qty, text } = onionBits;
     const t = text.replace(/\s+/g, "");
     if (/葉誌|誌葉|地瓜葉.?誌/.test(t) || (t.includes("誌") && /葉|地瓜/.test(t))) {
       return { skuId: "sl-zhi", qty, pack: "籃裝", pallet };
@@ -63,8 +104,7 @@
       }
     }
     if (origin) {
-      const spec12 = /12/.test(t) && !/20/.test(t) ? true : /12/.test(t) && /12K|12k|12公斤/.test(t);
-      const use12 = /12/.test(t) && !t.includes("20");
+      const use12 = onionBits.spec12 === true || (onionBits.spec12 == null && /12/.test(t) && !/20/.test(t));
       return { skuId: onionSku(origin, use12), qty, pallet };
     }
     return null;
@@ -82,7 +122,11 @@
     const parts = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
     let customer = "";
     let body = parts;
-    if (parts.length && !looksLikeItems(parts[0]) && parts[0].length <= 20) {
+    const sameLine = peelCustomer(parts[0] || "");
+    if (sameLine.customer) {
+      customer = sameLine.customer;
+      body = [sameLine.rest, ...parts.slice(1)].filter(Boolean);
+    } else if (parts.length && !looksLikeItems(parts[0]) && parts[0].length <= 20) {
       customer = parts[0].replace(/^[\d.\s]+/, "").trim();
       body = parts.slice(1);
       if (!body.length) body = parts;

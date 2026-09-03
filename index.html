@@ -106,8 +106,8 @@
           </div>
           <div id="stock-guides" class="stock-guides">
             <p id="guide-stock"><strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。</p>
-            <p id="guide-in"><strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。</p>
-            <p id="guide-count"><strong>盤點</strong>每天早上填一次，全部填完按「確認今日早上盤點」。打錯按該列「修正」，改完再確認。</p>
+            <p id="guide-in"><strong>進貨</strong>早上現場總數比昨晚結算多的，確認盤點後自動判定為進貨。也可本批手記入；打錯按「修正」。</p>
+            <p id="guide-count"><strong>盤點</strong>昨晚結算會帶入早上數量，可改。按該列「確認」或一次「確認今日早上盤點」才鎖定。跟帶入不同會顯示「修正」。</p>
           </div>
           <div id="stock"></div>
           <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
@@ -129,7 +129,7 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=62"></script>
-    <script src="./app.js?v=62"></script>
+    <script src="./line-parse.js?v=65"></script>
+    <script src="./app.js?v=65"></script>
   </body>
 </html>

@@ -62,9 +62,16 @@
     return { spec12, qty, text };
   }
 
+  function leafPack(s) {
+    if (/箱裝/.test(s) && !/籃裝/.test(s)) return "箱裝";
+    if (/籃裝/.test(s)) return "籃裝";
+    if (/箱/.test(s) && !/籃/.test(s)) return "箱裝";
+    return "籃裝";
+  }
+
   function peelCustomer(line) {
     const m = String(line || "").match(
-      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|葉|綠骨|紅骨|綠九|紅九|九層)/,
+      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{1,12})\s+(?=紐|韓|澳|越|洋蔥|密本|阿成|地瓜|葉|綠骨|紅骨|綠九|紅九|九層)/,
     );
     if (!m) return { customer: "", rest: String(line || "").trim() };
     return { customer: m[1].trim(), rest: String(line).slice(m[0].length).trim() };
@@ -77,10 +84,10 @@
     const { qty, text } = onionBits;
     const t = text.replace(/\s+/g, "");
     if (/葉誌|誌葉|地瓜葉.?誌/.test(t) || (t.includes("誌") && /葉|地瓜/.test(t))) {
-      return { skuId: "sl-zhi", qty, pack: "籃裝", pallet };
+      return { skuId: "sl-zhi", qty, pack: leafPack(t), pallet };
     }
     if (/葉芳|芳葉|地瓜葉.?芳/.test(t) || (t.includes("芳") && /葉|地瓜/.test(t) && !/綠骨|紅骨|綠九層|紅九層|九層/.test(t))) {
-      return { skuId: "sl-fang", qty, pack: "籃裝", pallet };
+      return { skuId: "sl-fang", qty, pack: leafPack(t), pallet };
     }
     const greenBasil = /綠骨|綠九層塔|綠九層|綠塔|綠芳|綠琳/;
     const redBasil = /紅骨|紅九層塔|紅九層|紅塔|紅芳|紅琳/;

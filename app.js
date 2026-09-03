@@ -330,6 +330,10 @@ function fillMorningFromPrevSettle(row, skuId, date) {
     row.morning = carried;
     changed = true;
   }
+  if (row.morningCarried == null) {
+    row.morningCarried = carried;
+    changed = true;
+  }
   return changed;
 }
 function seedOpening(skuId, date) {
@@ -1281,6 +1285,16 @@ function renderRestList() {
 function skuShortName(sku) {
   return (sku?.name || "").replace("本產蔬菜－", "");
 }
+function lineQtyForSkuPack(o, skuId, pack) {
+  let n = 0;
+  const want = pack || "籃裝";
+  for (const l of o.lines || []) {
+    if (l.skuId !== skuId) continue;
+    const p = l.pack || "籃裝";
+    if (p === want) n += l.qty;
+  }
+  return round(n);
+}
 function lineQtyForSku(o, skuId) {
   let n = 0;
   for (const l of o.lines || []) if (l.skuId === skuId) n += l.qty;
@@ -1379,6 +1393,17 @@ function renderPlan() {
   };
   const addPlanRecs = (list, o, g, kind) => {
     const basil = g.skuIds.some((id) => BASIL_REV[id]);
+    const leaf = g.skuIds.some((id) => skuById(id)?.packRemark);
+    if (leaf) {
+      for (const pack of ["籃裝", "箱裝"]) {
+        let qty = 0;
+        for (const id of g.skuIds) qty += lineQtyForSkuPack(o, id, pack);
+        qty = round(qty);
+        if (!qty) continue;
+        list.push({ id: `${o.id}:${pack}`, customer: o.customer, qty, note: pack, prio: orderRank(o) });
+      }
+      return;
+    }
     if (basil) {
       for (const id of g.skuIds) {
         const qty = lineQtyForSku(o, id);
@@ -1430,18 +1455,37 @@ function renderPlan() {
         out = round(out);
         return { vendor: BASIL_REV[id].val, wait, out, all: round(wait + out) };
       });
+      const packRows = g.skuIds.some((id) => skuById(id)?.packRemark)
+        ? ["籃裝", "箱裝"].map((pack) => {
+            let wait = 0;
+            let out = 0;
+            for (const o of orders) {
+              let n = 0;
+              for (const id of g.skuIds) n += lineQtyForSkuPack(o, id, pack);
+              if (!n) continue;
+              if (isDayPending(o)) wait += n;
+              else if (isDayShipped(o)) out += n;
+            }
+            wait = round(wait);
+            out = round(out);
+            return { pack, wait, out, all: round(wait + out) };
+          })
+        : [];
       const vendText = (key) => {
         const bits = vendRows.filter((r) => r[key]).map((r) => `${r.vendor}${fmt(r[key])}`);
-        return bits.length ? `<span class="plan-vend-inline">${esc(bits.join("\u00a0\u00a0"))}</span>` : "";
+        const packs = packRows.filter((r) => r[key]).map((r) => `${r.pack}${fmt(r[key])}`);
+        const all = [...bits, ...packs];
+        return all.length ? `<span class="plan-vend-inline">${esc(all.join("\u00a0\u00a0"))}</span>` : "";
       };
+      const leafUnit = g.skuIds.some((id) => skuById(id)?.packRemark) ? "件" : g.unit;
       return `<section class="plan-sku tone-${esc(g.tone)}">
         <h3>${esc(g.label)}</h3>
-        ${personList(pending, g.unit, "pending")}
-        ${personList(shipped, g.unit, "shipped")}
+        ${personList(pending, leafUnit, "pending")}
+        ${personList(shipped, leafUnit, "shipped")}
         <div class="plan-stats">
-          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i>接</i><i>單</i></span><strong>${fmt(allQty)} ${esc(g.unit)}</strong>${vendText("all")}</p>
-          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i></i><i>出</i></span><strong>${fmt(outQty)} ${esc(g.unit)}</strong>${vendText("out")}</p>
-          <p class="plan-stat-row"><span class="plan-stat-label"><i>待</i><i></i><i>出</i></span><strong>${fmt(waitQty)} ${esc(g.unit)}</strong>${vendText("wait")}</p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i>接</i><i>單</i></span><strong>${fmt(allQty)} ${esc(leafUnit)}</strong>${vendText("all")}</p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>已</i><i></i><i>出</i></span><strong>${fmt(outQty)} ${esc(leafUnit)}</strong>${vendText("out")}</p>
+          <p class="plan-stat-row"><span class="plan-stat-label"><i>待</i><i></i><i>出</i></span><strong>${fmt(waitQty)} ${esc(leafUnit)}</strong>${vendText("wait")}</p>
         </div>
       </section>`;
     })
@@ -1456,7 +1500,12 @@ function nqMorningDone() {
 function lotLabel(b) {
   const lots = Array.isArray(b.lots) ? b.lots : [];
   if (!lots.length) return "";
-  return lots.map((x, i) => `第${i + 1}批 ${fmt(x.qty)}`).join("、");
+  return lots
+    .map((x, i) => {
+      const tag = x.auto ? "自動判定" : "";
+      return `第${i + 1}批 ${fmt(x.qty)}${tag ? `（${tag}）` : ""}`;
+    })
+    .join("、");
 }
 function ensureLots(b) {
   if (Array.isArray(b.lots)) return b.lots;
@@ -1483,9 +1532,25 @@ function correctInbound(skuId, raw, date = stockViewDay()) {
   renderCheck();
   renderAlerts();
 }
+function stripAutoMorningInbound(b) {
+  if (!b || !Array.isArray(b.lots)) return;
+  b.lots = b.lots.filter((x) => !x.auto);
+  b.inbound = round(b.lots.reduce((s, x) => s + Number(x.qty || 0), 0));
+}
+function addAutoMorningInbound(b, extra) {
+  const n = round(extra);
+  if (!(n > 0)) return;
+  ensureLots(b);
+  b.lots = b.lots.filter((x) => !x.auto);
+  b.lots.push({ qty: n, at: Date.now(), auto: true });
+  b.inbound = round(b.lots.reduce((s, x) => s + Number(x.qty || 0), 0));
+}
 function unlockMorning(skuId) {
   const b = bookRow(skuId, stockViewDay());
   b.morningConfirmed = false;
+  stripAutoMorningInbound(b);
+  const sku = skuById(skuId);
+  if (sku) syncNqQty(sku);
   save();
 }
 function unlockAllMorning() {
@@ -1581,8 +1646,8 @@ function renderStock() {
       : "各品項今天已記入的進貨合計（分批會加總）。";
   }
   if (gs) gs.innerHTML = "<strong>庫存</strong>當日可出＝早上盤點＋今日進貨合計－當日已出貨。";
-  if (gi) gi.innerHTML = "<strong>進貨</strong>本批填數量按「記入」會累加；打錯就在本批欄填正確總數，按「修正」。";
-  if (gc) gc.innerHTML = "<strong>盤點／結算</strong>早上填完按「確認今日早上盤點」。出貨後最右欄「庫存結算」會帶入系統剩餘，按確認鎖定；不對就改數字再確認，或按修正。";
+    if (gi) gi.innerHTML = "<strong>進貨</strong>早上盤點填現場總數，比昨晚結算多的，確認後自動算進貨（例：誌帶入13、現場70 → 進貨57）。也可在本批欄手記入；打錯按「修正」。";
+    if (gc) gc.innerHTML = "<strong>盤點／結算</strong>昨晚結算會帶入早上盤點，可改數字。對就按該列「確認」（或一次按「確認今日早上盤點」）。改過帶入值再確認會出現「修正」。打錯按「修正」解開再改。";
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
   const morningDone = nqMorningDone();
@@ -1604,12 +1669,20 @@ function renderStock() {
     const step = skuStep(sku);
     const morningVal = b.morning != null && b.morning !== "" ? b.morning : "";
     const locked = !!b.morningConfirmed;
+    const carried = b.morningCarried != null && b.morningCarried !== "" ? Number(b.morningCarried) : prevSettleQty(row.id, date);
+    const differs = carried != null && Number.isFinite(carried) && morningVal !== "" && round(Number(morningVal)) !== round(carried);
+    const edited = !!b.morningEdited || differs;
     const done = locked ? "已確認" : "";
+    const carryHint = !locked && carried != null && Number.isFinite(carried) ? `<span class="settle-calc">帶入 ${fmt(carried)}</span>` : "";
+    const morningBtns = locked
+      ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正</button>`
+      : `<button type="button" class="tiny-btn" data-confirm-morning="${row.id}">確認</button>`;
     return `<tr>
       <td class="name-cell">${esc(row.label)}</td>
       <td>
         <div class="in-sum">
           ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
+          ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">自動判定</span>' : ""}
           <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
           <span class="unit">${esc(sku.unit)}</span>
           <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>
@@ -1625,10 +1698,12 @@ function renderStock() {
       </td>
       <td>
         <div class="ha-process morning-count">
+          ${edited ? '<span class="tag">修正</span>' : ""}
           <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="0" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
           <span class="unit">${esc(sku.unit)}</span>
+          ${carryHint}
           <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span>
-          ${locked ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正</button>` : ""}
+          ${morningBtns}
         </div>
       </td>
       <td>${settleCellHtml(sku)}</td>
@@ -1699,7 +1774,10 @@ function applySettleToNextMorning(skuId, date, qty) {
   nb.opening = qty;
   const sku = skuById(skuId);
   if (sku && isSiteSku(sku)) return;
-  if (!nb.morningConfirmed) nb.morning = qty;
+  if (!nb.morningConfirmed) {
+    nb.morning = qty;
+    if (nb.morningCarried == null) nb.morningCarried = qty;
+  }
 }
 function confirmSettle(skuId, raw) {
   const sku = skuById(skuId);
@@ -2560,20 +2638,43 @@ function confirmMorningCount(skuId, raw, quiet) {
   if (!Number.isFinite(n) || n < 0) return setStatus("早上盤點請填 0 或正數。", true);
   const b = bookRow(skuId, stockViewDay());
   if (b.morningConfirmed) return;
-  b.morning = round(n);
+  const counted = round(n);
+  const carried = b.morningCarried != null && b.morningCarried !== "" ? round(Number(b.morningCarried)) : null;
+  stripAutoMorningInbound(b);
+  let autoIn = 0;
+  if (carried != null && counted > carried) {
+    autoIn = round(counted - carried);
+    b.morning = carried;
+    b.opening = carried;
+    b.morningEdited = false;
+    addAutoMorningInbound(b, autoIn);
+  } else {
+    b.morning = counted;
+    b.opening = counted;
+    b.morningEdited = carried != null && counted !== carried;
+  }
   b.morningConfirmed = true;
-  b.opening = round(n);
   syncNqQty(sku);
   save();
   const mark = document.querySelector(`[data-morning-ok="${skuId}"]`);
   if (mark) mark.textContent = "已確認";
   const input = document.querySelector(`[data-morning="${skuId}"]`);
-  if (input) input.readOnly = true;
-  if (quiet) return;
+  if (input) {
+    input.value = b.morning;
+    input.readOnly = true;
+  }
+  if (quiet) return autoIn;
   const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
-  setStatus(`已確認「${label}」早上盤點 ${fmt(n)} ${sku.unit}。`, false);
+  setStatus(
+    autoIn
+      ? `已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}，系統判定今早進貨 ${fmt(autoIn)} ${sku.unit}。`
+      : `已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}。`,
+    false,
+  );
+  renderStock();
   renderCheck();
   renderAlerts();
+  return autoIn;
 }
 function addMorningAvail(skuId, raw) {
   const sku = skuById(skuId);

@@ -207,11 +207,44 @@
     return { customer, lines, unknown, raw: text, inbound };
   }
 
+  function isBlockSep(ch) {
+    return !ch || /[\s、，,;；。．\n\/]/.test(ch);
+  }
+
+  function splitOrderBlocks(raw, extraNames) {
+    const names = uniqNames(extraNames);
+    const t = String(raw || "").replace(/\r/g, "");
+    if (!t.trim()) return [];
+    const starts = [];
+    for (let i = 0; i < t.length; i++) {
+      if (i > 0 && !isBlockSep(t[i - 1])) continue;
+      let hit = peelKnownName(t.slice(i), names);
+      if (!hit && (i === 0 || t[i - 1] === "\n")) hit = peelCustomer(t.slice(i), names);
+      if (hit && hit.customer) starts.push(i);
+    }
+    const uniq = [...new Set(starts)].sort((a, b) => a - b);
+    if (!uniq.length) return [t.trim()].filter(Boolean);
+    if (uniq[0] !== 0) uniq.unshift(0);
+    const blocks = [];
+    for (let i = 0; i < uniq.length; i++) {
+      const chunk = t.slice(uniq[i], uniq[i + 1]).trim();
+      if (chunk) blocks.push(chunk);
+    }
+    return blocks;
+  }
+
+  function parseLineOrderBlocks(raw, extraNames) {
+    const names = uniqNames(extraNames);
+    const blocks = splitOrderBlocks(raw, names);
+    if (!blocks.length) return [parseLineOrderText(raw, names)];
+    return blocks.map((block) => parseLineOrderText(block, names));
+  }
+
   function worthKeeping(parsed) {
     if (!parsed) return false;
     if (parsed.lines && parsed.lines.length) return true;
     return /袋|箱|籃|密本|紐|葉誌|綠骨|紅骨|綠九層|紅九層|綠芳|紅芳|綠塔|紅塔|九層塔|進貨|入貨|到貨/.test(parsed.raw || "");
   }
 
-  return { parseLineOrderText, worthKeeping };
+  return { parseLineOrderText, parseLineOrderBlocks, worthKeeping };
 });

@@ -2047,8 +2047,25 @@ function renderCustChips() {
   box.innerHTML = "";
 }
 
+const PASTE_DRAFT_KEY = "nongquan-line-paste-drafts-v1";
 let lineDraftsCache = [];
-let linePastePreview = null;
+let linePasteQueue = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(PASTE_DRAFT_KEY) || "[]");
+  if (Array.isArray(saved)) linePasteQueue = saved.filter((d) => d && d.id);
+} catch (_) {}
+function savePasteQueue() {
+  try {
+    localStorage.setItem(PASTE_DRAFT_KEY, JSON.stringify(linePasteQueue.slice(0, 80)));
+  } catch (_) {}
+}
+function findPendingDraft(id) {
+  return linePasteQueue.find((d) => d.id === id) || lineDraftsCache.find((d) => d.id === id);
+}
+function removePasteDraft(id) {
+  linePasteQueue = linePasteQueue.filter((d) => d.id !== id);
+  savePasteQueue();
+}
 function lineSkuLabel(id) {
   const s = skuById(id);
   return s ? `${s.name} ${s.unit}` : id;
@@ -2135,11 +2152,9 @@ async function dropLineDraft(id) {
 function renderLineDrafts() {
   const box = document.getElementById("line-drafts");
   if (!box) return;
-  const list = [];
-  if (linePastePreview) list.push({ ...linePastePreview, id: "paste", local: true });
-  for (const d of lineDraftsCache) list.push(d);
+  const list = [...linePasteQueue, ...lineDraftsCache];
   if (!list.length) {
-    box.innerHTML = '<p class="empty">把文字貼上按「解析文字」，核對後會出現在這裡。</p>';
+    box.innerHTML = '<p class="empty">可連續貼上多位客人再解析，待確認會一起列在這裡，不必立刻確認。</p>';
     return;
   }
   box.innerHTML = list
@@ -2322,22 +2337,40 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
   };
 });
 document.getElementById("line-parse-btn")?.addEventListener("click", () => {
-  const parse = globalThis.LineOrderParse?.parseLineOrderText;
-  if (!parse) return setStatus("解析程式還沒載入。", true);
+  const parseBlocks = globalThis.LineOrderParse?.parseLineOrderBlocks;
+  const parseOne = globalThis.LineOrderParse?.parseLineOrderText;
+  if (!parseBlocks && !parseOne) return setStatus("解析程式還沒載入。", true);
   const raw = document.getElementById("line-paste")?.value || "";
-  const parsed = parse(raw, knownCustomersForParse());
-  linePastePreview = { ...parsed, text: raw, date: today() };
+  const names = knownCustomersForParse();
+  const blocks = parseBlocks ? parseBlocks(raw, names) : [parseOne(raw, names)];
+  let added = 0;
+  for (const parsed of blocks) {
+    if (!parsed || (!(parsed.lines || []).length && !(parsed.unknown || []).length && !parsed.customer)) continue;
+    linePasteQueue.unshift({
+      ...parsed,
+      id: "paste-" + uid(),
+      text: parsed.raw || raw,
+      date: parsed.date || today(),
+      local: true,
+    });
+    added += 1;
+  }
+  if (linePasteQueue.length > 80) linePasteQueue = linePasteQueue.slice(0, 80);
+  savePasteQueue();
   renderLineDrafts();
-  if (!parsed.lines.length) setStatus("沒對到品項。出貨訂單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
-  else if (parsed.inbound) setStatus("判定為【進貨】，請核對品項數量後按「確認記入進貨」。", false);
-  else setStatus("判定為【出貨訂單】，請核對對象與品項後按「確認列入出貨訂單」。", false);
+  if (!added) setStatus("沒對到品項。出貨訂單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
+  else {
+    const ta = document.getElementById("line-paste");
+    if (ta) ta.value = "";
+    setStatus(`已加入 ${added} 筆待確認，目前共 ${linePasteQueue.length + lineDraftsCache.length} 筆。可繼續貼下一位，不必立刻確認。`, false);
+  }
 });
 document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
   const ok = e.target.closest("[data-line-ok]");
   const no = e.target.closest("[data-line-no]");
   if (ok) {
     const id = ok.dataset.lineOk;
-    const parsed = id === "paste" ? linePastePreview : lineDraftsCache.find((x) => x.id === id);
+    const parsed = findPendingDraft(id);
     if (!parsed) return;
     const dup = parsedDupInfo(parsed, parsed.date);
     if (dup && !lineDupAck.has(id)) {
@@ -2351,26 +2384,23 @@ document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
       );
       return;
     }
-    if (id === "paste") {
-      if (confirmParsedOrder(linePastePreview)) {
-        lineDupAck.delete("paste");
-        linePastePreview = null;
-        const ta = document.getElementById("line-paste");
-        if (ta) ta.value = "";
-      }
-      return;
-    }
     if (confirmParsedOrder(parsed, parsed.date)) {
       lineDupAck.delete(id);
-      await dropLineDraft(id);
-      await refreshLineDrafts();
+      if (String(id).startsWith("paste-")) {
+        removePasteDraft(id);
+        renderLineDrafts();
+      } else {
+        await dropLineDraft(id);
+        await refreshLineDrafts();
+      }
     }
     return;
   }
   if (no) {
     const id = no.dataset.lineNo;
-    if (id === "paste") {
-      linePastePreview = null;
+    lineDupAck.delete(id);
+    if (String(id).startsWith("paste-")) {
+      removePasteDraft(id);
       renderLineDrafts();
       return;
     }

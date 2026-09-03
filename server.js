@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { parseLineOrderText, worthKeeping } = require("./line-parse.js");
+const { parseLineOrderText, parseLineOrderBlocks, worthKeeping } = require("./line-parse.js");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5174;
@@ -222,30 +222,40 @@ function handleLineWebhook(req, res) {
         const text = stripLineMentions(rawText, ev.message.mention);
         if (!text) continue;
         lineHookStats.lastTextPreview = text.slice(0, 80);
-        const parsed = parseLineOrderText(text, knownCustomersFromStore());
-        const keep = worthKeeping(parsed) || parsed.lines.length > 0 || parsed.unknown.length > 0;
-        if (!keep) continue;
-        store.drafts.unshift({
-          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          at: Date.now(),
-          date: todayYmd(),
-          source: ev.source?.type || "",
-          groupId: ev.source?.groupId || "",
-          userId: ev.source?.userId || "",
-          text,
-          customer: parsed.customer || "",
-          lines: parsed.lines || [],
-          unknown: parsed.unknown || [],
-          inbound: !!parsed.inbound,
-        });
-        added += 1;
-        const reply = parsed.inbound
-          ? parsed.lines.length
-            ? "【進貨】已收到，待會計在網頁確認記入庫存（不是出貨訂單）。"
-            : "【進貨】已收到，但沒對到品項。請寫例如：地瓜葉誌進貨57。"
-          : parsed.lines.length
-            ? "【出貨訂單】已收到，待會計在網頁確認列入訂單（不是進貨）。"
-            : "【出貨訂單】已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
+        const names = knownCustomersFromStore();
+        const blocks = parseLineOrderBlocks(text, names);
+        const kept = [];
+        for (const parsed of blocks) {
+          const keep = worthKeeping(parsed) || parsed.lines.length > 0 || parsed.unknown.length > 0;
+          if (!keep) continue;
+          store.drafts.unshift({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            at: Date.now(),
+            date: todayYmd(),
+            source: ev.source?.type || "",
+            groupId: ev.source?.groupId || "",
+            userId: ev.source?.userId || "",
+            text: parsed.raw || text,
+            customer: parsed.customer || "",
+            lines: parsed.lines || [],
+            unknown: parsed.unknown || [],
+            inbound: !!parsed.inbound,
+          });
+          kept.push(parsed);
+          added += 1;
+        }
+        if (!kept.length) continue;
+        const n = kept.length;
+        const reply =
+          n > 1
+            ? `已收到 ${n} 筆待確認（可稍後在網頁一筆一筆核對）。`
+            : kept[0].inbound
+              ? kept[0].lines.length
+                ? "【進貨】已收到，待會計在網頁確認記入庫存（不是出貨訂單）。"
+                : "【進貨】已收到，但沒對到品項。請寫例如：地瓜葉誌進貨57。"
+              : kept[0].lines.length
+                ? "【出貨訂單】已收到，待會計在網頁確認列入訂單（不是進貨）。"
+                : "【出貨訂單】已收到，但沒對到品項。請第一行寫客人，下面寫例如：紐20兩袋、密本一箱。群組一定要先 @鴻安農業科技。";
         replies.push(lineReply(ev.replyToken, reply));
       }
       if (store.drafts.length > 80) store.drafts = store.drafts.slice(0, 80);

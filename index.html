@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=73" />
+    <link rel="stylesheet" href="./styles.css?v=74" />
   </head>
   <body>
     <div class="app">
@@ -28,7 +28,7 @@
       <section id="page-orders">
         <section class="card" id="line-draft-card">
           <h2>貼上文字下單／進貨</h2>
-          <p class="hint">把文字貼上按解析。有「進貨／入貨／到貨」會判定為<strong>進貨</strong>（綠）；沒有則判定為<strong>出貨訂單</strong>（橘）。核對標籤與表格後再確認。</p>
+          <p class="hint">可連續貼多位客人再解析，待確認會同時列出，不必立刻確認。一篇文字裡若有多個常用客戶名，也會拆成多筆。</p>
           <p class="muted" id="line-api-status"></p>
           <label class="field">下單文字
             <textarea id="line-paste" rows="5" placeholder="張紀惠 紐洋特大12K/50疊棧板"></textarea>
@@ -129,7 +129,7 @@
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=73"></script>
-    <script src="./app.js?v=73"></script>
+    <script src="./line-parse.js?v=74"></script>
+    <script src="./app.js?v=74"></script>
   </body>
 </html>

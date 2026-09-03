@@ -1056,6 +1056,32 @@ function addOpenOrderFor(company, customer, shipDate, lines) {
     edited: false,
   });
 }
+function namesMatch(a, b) {
+  return String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+}
+function suspectDupes(company, customer, shipDate, skipId) {
+  const day = shipDate || today();
+  return state.orders.filter((o) => {
+    if (skipId && o.id === skipId) return false;
+    if (o.co !== company || o.status === "cancelled") return false;
+    if ((o.shipDate || today()) !== day) return false;
+    return namesMatch(o.customer, customer);
+  });
+}
+function dupHint(dupes) {
+  return dupes
+    .map((o) => {
+      const bits = (o.lines || []).slice(0, 4).map((l) => lineLabel(l, false)).join("、");
+      const st = o.status === "shipped" ? "已出" : "待出";
+      return `#${o.no}${st}${bits ? ` ${bits}` : ""}`;
+    })
+    .join("；");
+}
+function warnIfDup(company, customer, shipDate, skipId) {
+  const dupes = suspectDupes(company, customer, shipDate, skipId);
+  if (!dupes.length) return true;
+  return confirm(`疑似重複入單：「${customer}」${shipDate || today()} 已有訂單（${dupHint(dupes)}）。仍要再入一筆？`);
+}
 function commitStatus(worst) {
   if (worst === "bad") setStatus("有品項不夠，仍已佔量列入排程，請看紅字。", true);
   else if (worst === "warn") setStatus("已確認列入排程，但有品項將低於安全庫存。", false);
@@ -1089,6 +1115,13 @@ function confirmNqSchedule() {
   for (const name of rests) upsertRest(name, date);
   const map = qtyMapFromLines(entries);
   const { worst } = lineChecks(map, currentRecord());
+  const dups = entries
+    .map((e) => ({ e, dupes: suspectDupes("nq", e.customer, date) }))
+    .filter((x) => x.dupes.length);
+  if (dups.length) {
+    const msg = dups.map((x) => `「${x.e.customer}」${dupHint(x.dupes)}`).join("\n");
+    if (!confirm(`疑似重複入單：\n${msg}\n仍要再入單？`)) return;
+  }
   for (const e of entries) addOpenOrder(e.customer, date, e.lines);
   clearDailyRows(entries.map((e) => e.customer), date);
   save();
@@ -1944,6 +1977,8 @@ function confirmParsedOrder(parsed, date) {
   const ha = lines.filter((l) => (skuById(l.skuId) || {}).co === "ha");
   const nq = lines.filter((l) => (skuById(l.skuId) || {}).co === "nq");
   const day = date || document.getElementById("ship-date")?.value || today();
+  if (ha.length && !warnIfDup("ha", who, day)) return false;
+  if (nq.length && !warnIfDup("nq", who, day)) return false;
   if (ha.length) {
     addOpenOrderFor("ha", who, day, ha);
     rememberHaCustomer(who);
@@ -1989,11 +2024,19 @@ function renderLineDrafts() {
         .join("");
       const unk = (d.unknown || []).length ? `<p class="hint">沒對到：${esc(d.unknown.join("、"))}</p>` : "";
       const who = d.customer ? esc(d.customer) : "（未寫客人）";
+      const day = d.date || today();
+      const dupHa = d.customer ? suspectDupes("ha", d.customer, day) : [];
+      const dupNq = d.customer ? suspectDupes("nq", d.customer, day) : [];
+      const dupNote =
+        dupHa.length || dupNq.length
+          ? `<p class="bad">疑似重複：${esc(d.customer)} ${esc(day)} 已有訂單（${esc(dupHint([...dupHa, ...dupNq]))}）。確認入單時會再問一次。</p>`
+          : "";
       return `<article class="line-draft">
         <strong>${who}</strong>　<span class="muted">${esc(d.date || "")}</span>
         <pre>${esc(d.text || d.raw || "")}</pre>
         <ul>${bits || "<li>沒有對到品項</li>"}</ul>
         ${unk}
+        ${dupNote}
         <div class="btn-row">
           <button type="button" class="primary" data-line-ok="${esc(d.id)}">確認入單</button>
           <button type="button" class="ghost" data-line-no="${esc(d.id)}">丟掉</button>
@@ -2384,6 +2427,8 @@ document.getElementById("order-form").onsubmit = (e) => {
   const { worst } = lineChecks(map, currentRecord());
   const who = document.getElementById("customer").value.trim();
   if (!who) return setStatus("請填出貨對象", true);
+  const day = document.getElementById("ship-date").value;
+  if (!editing && !warnIfDup(co, who, day)) return;
   if (editing) {
     const o = state.orders.find((x) => x.id === editing);
     o.customer = who;

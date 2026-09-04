@@ -299,6 +299,25 @@ function handleLineDrafts(req, res) {
         if (body.action === "drop" && body.id) {
           store.drafts = store.drafts.filter((d) => d.id !== body.id);
           saveLineDrafts(store);
+        } else if (body.action === "update" && body.id) {
+          const draft = store.drafts.find((d) => d.id === body.id);
+          if (draft) {
+            if ("customer" in body) draft.customer = String(body.customer || "").trim();
+            if (Array.isArray(body.lines)) {
+              draft.lines = body.lines.map((l) => {
+                const line = {
+                  skuId: String(l?.skuId || ""),
+                  qty: Number(l?.qty) || 0,
+                };
+                if (l?.pack) line.pack = String(l.pack);
+                if (l?.size) line.size = String(l.size);
+                if (l?.pallet) line.pallet = true;
+                if (l?.note) line.note = String(l.note);
+                return line;
+              });
+            }
+            saveLineDrafts(store);
+          }
         }
         send(res, 200, '{"ok":true}', TYPES[".json"]);
       })

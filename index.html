@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=83" />
+    <link rel="stylesheet" href="./styles.css?v=89" />
   </head>
   <body>
     <div class="app">
@@ -33,12 +33,13 @@
         <button type="button" class="tab on" data-page="orders">訂單輸入</button>
         <button type="button" class="tab" data-page="plan">排程</button>
         <button type="button" class="tab" data-page="stock">庫存</button>
+        <button type="button" class="tab" data-page="in" hidden>進貨</button>
       </nav>
       <p id="alerts" class="alerts" hidden></p>
       <section id="page-orders">
         <section class="card" id="line-draft-card">
           <h2>貼上文字下單／進貨</h2>
-          <p class="hint">第一行寫客人（可含「-南」「-北」），空格或換行後再寫品項與件數。也可寫「客人：金芳拍賣-南」。一篇可貼多位，待確認會一起列出。</p>
+          <p class="hint">第一行寫客人（可含「-南」「-北」），空格或換行後再寫品項與件數。解析後可直接改出貨對象、品項、件數再確認，不必丟掉重貼。一篇可貼多位。</p>
           <p class="muted" id="line-api-status"></p>
           <label class="field">下單文字
             <textarea id="line-paste" rows="5" placeholder="金芳拍賣-南 紐大12K/20&#10;金芳拍賣-北 紐洋20K/30"></textarea>
@@ -110,20 +111,40 @@
             <h2 id="stock-title">庫存</h2>
             <label class="date-inline">日期 <input id="stock-date" type="date" /></label>
           </div>
-          <p class="hint" id="guide-stock">當日可出＝早上盤點＋今日進貨合計－當日已出貨。盤點與進貨分開填，改盤點不會記入進貨。</p>
+          <p class="hint" id="guide-stock">上方各品項大數字＝盤點＋進貨。小字是盤點數量與進貨總數。這頁只填早上盤點；進貨請按上方「進貨」。</p>
+          <div id="stock-overview" class="stock-overview"></div>
         </section>
+        <nav class="tabs stock-kind-tabs" id="stock-kind-tabs" aria-label="庫存品項">
+          <button type="button" class="tab on" data-stock-kind="leaf">地瓜葉</button>
+          <button type="button" class="tab" data-stock-kind="basil">九層塔</button>
+        </nav>
         <section class="card stock-count-card" id="count-card">
           <h2>早上盤點</h2>
-          <p class="hint" id="guide-count">填現場早上數量後按確認。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。</p>
+          <p class="hint" id="guide-count">填現場早上數量後按確認。可用＋／－。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。</p>
           <div id="stock-count"></div>
           <div class="btn-row stock-count-actions">
             <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
             <button type="button" id="fix-morning" class="ghost" hidden>修正早上盤點</button>
           </div>
         </section>
-        <section class="card stock-in-card" id="in-day-card" hidden>
-          <h2>進貨</h2>
-          <p class="hint" id="guide-in">有貨進來才在這裡記入。本批填數量按「記入」；打錯在本批填正確總數再按「修正」。</p>
+        <form id="process" class="card" hidden>
+          <h2>洋蔥加工</h2>
+          <p class="hint">從現有庫存轉成已加工好（可出）。</p>
+          <label class="field">規格 <select id="pr-sku"></select></label>
+          <label class="field">加工數量 <input id="pr-qty" type="number" min="0" step="0.1" /></label>
+          <button type="submit" class="primary">記入已加工</button>
+        </form>
+      </section>
+      <section id="page-in" hidden>
+        <section class="card" id="in-head-card">
+          <div class="head">
+            <h2 id="in-title">進貨</h2>
+            <label class="date-inline">日期 <input id="in-date" type="date" /></label>
+          </div>
+          <p class="hint" id="guide-in">有貨進來才記入。地瓜葉、九層塔並排，用＋／－調本批後按記入。打錯填正確總數再按修正。</p>
+        </section>
+        <section class="card stock-in-card" id="in-day-card">
+          <h2>本批進貨</h2>
           <div id="in-day-totals" class="live-totals-row"></div>
           <div id="stock-in"></div>
         </section>
@@ -133,17 +154,10 @@
           <label class="field">數量 <input id="in-qty" type="number" min="0" step="0.1" /></label>
           <button type="submit" id="recv-btn">入庫</button>
         </form>
-        <form id="process" class="card" hidden>
-          <h2>洋蔥加工</h2>
-          <p class="hint">從現有庫存轉成已加工好（可出）。</p>
-          <label class="field">規格 <select id="pr-sku"></select></label>
-          <label class="field">加工數量 <input id="pr-qty" type="number" min="0" step="0.1" /></label>
-          <button type="submit" class="primary">記入已加工</button>
-        </form>
       </section>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=83"></script>
-    <script src="./app.js?v=83"></script>
+    <script src="./line-parse.js?v=85"></script>
+    <script src="./app.js?v=89"></script>
   </body>
 </html>

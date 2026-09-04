@@ -82,22 +82,22 @@ const SKUS = [
   { id: "shiso-kg", co: "nq", name: "紫蘇散賣kg", unit: "kg" },
   { id: "basil-kg", co: "nq", name: "九層塔散賣kg", unit: "kg" },
   { id: "shiso-jin", co: "nq", name: "紫蘇散賣斤", unit: "斤" },
-  { id: "on-nz-20", co: "ha", name: "洋蔥／紐西蘭／20K", unit: "袋", onion: true, site: true },
-  { id: "on-nz-12", co: "ha", name: "洋蔥／紐西蘭／12K", unit: "袋", onion: true, site: true },
-  { id: "on-au-20", co: "ha", name: "洋蔥／澳洲／20K", unit: "袋", onion: true, site: true },
-  { id: "on-au-12", co: "ha", name: "洋蔥／澳洲／12K", unit: "袋", onion: true, site: true },
-  { id: "on-kr-20", co: "ha", name: "洋蔥／韓國／20K", unit: "袋", onion: true, site: true },
-  { id: "on-kr-12", co: "ha", name: "洋蔥／韓國／12K", unit: "袋", onion: true, site: true },
-  { id: "on-vn-20", co: "ha", name: "洋蔥／越南／20K", unit: "袋", onion: true, site: true },
-  { id: "on-vn-12", co: "ha", name: "洋蔥／越南／12K", unit: "袋", onion: true, site: true },
-  { id: "onp-nz-20", co: "ha", name: "紫洋蔥／紐西蘭／20K", unit: "袋", onion: true, site: true },
-  { id: "onp-nz-12", co: "ha", name: "紫洋蔥／紐西蘭／12K", unit: "袋", onion: true, site: true },
-  { id: "onp-au-20", co: "ha", name: "紫洋蔥／澳洲／20K", unit: "袋", onion: true, site: true },
-  { id: "onp-au-12", co: "ha", name: "紫洋蔥／澳洲／12K", unit: "袋", onion: true, site: true },
-  { id: "onp-kr-20", co: "ha", name: "紫洋蔥／韓國／20K", unit: "袋", onion: true, site: true },
-  { id: "onp-kr-12", co: "ha", name: "紫洋蔥／韓國／12K", unit: "袋", onion: true, site: true },
-  { id: "onp-vn-20", co: "ha", name: "紫洋蔥／越南／20K", unit: "袋", onion: true, site: true },
-  { id: "onp-vn-12", co: "ha", name: "紫洋蔥／越南／12K", unit: "袋", onion: true, site: true },
+  { id: "on-nz-20", co: "ha", name: "洋蔥／紐西蘭／20K", unit: "件", onion: true, site: true },
+  { id: "on-nz-12", co: "ha", name: "洋蔥／紐西蘭／12K", unit: "件", onion: true, site: true },
+  { id: "on-au-20", co: "ha", name: "洋蔥／澳洲／20K", unit: "件", onion: true, site: true },
+  { id: "on-au-12", co: "ha", name: "洋蔥／澳洲／12K", unit: "件", onion: true, site: true },
+  { id: "on-kr-20", co: "ha", name: "洋蔥／韓國／20K", unit: "件", onion: true, site: true },
+  { id: "on-kr-12", co: "ha", name: "洋蔥／韓國／12K", unit: "件", onion: true, site: true },
+  { id: "on-vn-20", co: "ha", name: "洋蔥／越南／20K", unit: "件", onion: true, site: true },
+  { id: "on-vn-12", co: "ha", name: "洋蔥／越南／12K", unit: "件", onion: true, site: true },
+  { id: "onp-nz-20", co: "ha", name: "紫洋蔥／紐西蘭／20K", unit: "件", onion: true, site: true },
+  { id: "onp-nz-12", co: "ha", name: "紫洋蔥／紐西蘭／12K", unit: "件", onion: true, site: true },
+  { id: "onp-au-20", co: "ha", name: "紫洋蔥／澳洲／20K", unit: "件", onion: true, site: true },
+  { id: "onp-au-12", co: "ha", name: "紫洋蔥／澳洲／12K", unit: "件", onion: true, site: true },
+  { id: "onp-kr-20", co: "ha", name: "紫洋蔥／韓國／20K", unit: "件", onion: true, site: true },
+  { id: "onp-kr-12", co: "ha", name: "紫洋蔥／韓國／12K", unit: "件", onion: true, site: true },
+  { id: "onp-vn-20", co: "ha", name: "紫洋蔥／越南／20K", unit: "件", onion: true, site: true },
+  { id: "onp-vn-12", co: "ha", name: "紫洋蔥／越南／12K", unit: "件", onion: true, site: true },
   { id: "on-b-kg", co: "ha", name: "洋蔥／B級", unit: "kg", onion: true, site: true },
   { id: "pk-mi-18", co: "ha", name: "南瓜／密本／18K", unit: "箱", site: true },
   { id: "pk-mi-20", co: "ha", name: "南瓜／密本／20K", unit: "箱", site: true },
@@ -114,6 +114,10 @@ const NQ_INBOUND = [
   { id: "gb-fang", label: "綠骨-芳" },
   { id: "gb-lin", label: "綠骨-琳" },
   { id: "gb-oth", label: "綠骨-其他" },
+];
+const NQ_STOCK_GROUPS = [
+  { id: "leaf", label: "地瓜葉", ids: ["sl-zhi", "sl-fang"] },
+  { id: "basil", label: "九層塔", ids: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"] },
 ];
 
 function uid() {
@@ -411,6 +415,7 @@ if (migrated || seeded) save();
 let co = "ha";
 let page = "orders";
 let formKind = "leaf";
+let stockKind = "leaf";
 let editing = "";
 let planDay = today();
 let stockDay = today();
@@ -436,6 +441,18 @@ function bindWorkDates() {
     if (!s.value) s.value = stockViewDay();
     s.addEventListener("change", () => {
       stockDay = s.value || today();
+      const other = document.getElementById("in-date");
+      if (other) other.value = stockDay;
+      renderStock();
+    });
+  }
+  const i = document.getElementById("in-date");
+  if (i && !i.dataset.bound) {
+    i.dataset.bound = "1";
+    if (!i.value) i.value = stockViewDay();
+    i.addEventListener("change", () => {
+      stockDay = i.value || today();
+      if (s) s.value = stockDay;
       renderStock();
     });
   }
@@ -809,7 +826,7 @@ function haParseSku(id) {
 }
 function haUnitOf(kind) {
   if (kind === "pk") return "箱";
-  if (kind === "on" || kind === "on-p") return "袋";
+  if (kind === "on" || kind === "on-p") return "件";
   return "kg";
 }
 function haOnionSizeOf(rec = {}) {
@@ -1795,9 +1812,51 @@ function renderPlan() {
   box.innerHTML = `<div class="plan-board">${board}</div>`;
 }
 
-function nqMorningDone() {
+function nqMorningQty(b) {
+  if (b?.morning != null && b.morning !== "") return Number(b.morning) || 0;
+  return 0;
+}
+function stockOverviewHtml(date = stockViewDay()) {
+  const groups = NQ_STOCK_GROUPS.map((g) => {
+    const items = NQ_INBOUND.filter((row) => g.ids.includes(row.id))
+      .map((row) => {
+        const sku = skuById(row.id);
+        const b = bookRow(row.id, date);
+        const countQty = round(nqMorningQty(b));
+        const inQty = round(b.inbound || 0);
+        const total = round(countQty + inQty);
+        return `<div class="stock-ov-item">
+          <p class="stock-ov-name">${esc(row.label)}</p>
+          <p class="stock-ov-total"><strong>${fmt(total)}</strong><span class="unit">${esc(sku.unit)}</span></p>
+          <p class="stock-ov-bits">盤點 ${fmt(countQty)}　進貨 ${fmt(inQty)}</p>
+        </div>`;
+      })
+      .join("");
+    return `<section class="stock-ov-group"><h3>${esc(g.label)}</h3><div class="stock-ov-grid">${items}</div></section>`;
+  }).join("");
+  return groups;
+}
+function refreshStockOverview() {
+  const box = document.getElementById("stock-overview");
+  if (box) box.innerHTML = stockOverviewHtml();
+}
+function nqStockGroup() {
+  return NQ_STOCK_GROUPS.find((g) => g.id === stockKind) || NQ_STOCK_GROUPS[0];
+}
+function nqStockFillRows() {
+  const g = nqStockGroup();
+  return NQ_INBOUND.filter((row) => g.ids.includes(row.id));
+}
+function qtyStepperHtml({ key, id, value, step, locked, placeholder, aria }) {
+  return `<div class="stepper">
+    <button type="button" class="step-btn" data-qty-step="-1" ${locked ? "disabled" : ""} aria-label="減">−</button>
+    <input class="qty book-input" data-${key}="${esc(id)}" type="number" min="0" step="${step}" value="${esc(value)}" placeholder="${esc(placeholder || "")}" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(aria)}" />
+    <button type="button" class="step-btn" data-qty-step="1" ${locked ? "disabled" : ""} aria-label="加">＋</button>
+  </div>`;
+}
+function nqMorningDone(rows = NQ_INBOUND) {
   const date = stockViewDay();
-  return NQ_INBOUND.every((row) => !!bookRow(row.id, date).morningConfirmed);
+  return rows.every((row) => !!bookRow(row.id, date).morningConfirmed);
 }
 function lotLabel(b) {
   const lots = Array.isArray(b.lots) ? b.lots : [];
@@ -1856,8 +1915,8 @@ function unlockMorning(skuId) {
   save();
 }
 function unlockAllMorning() {
-  for (const row of NQ_INBOUND) unlockMorning(row.id);
-  setStatus("已解開早上盤點，先前因盤點自動記入的進貨已拿掉。改完請再按確認盤點。", false);
+  for (const row of nqStockFillRows()) unlockMorning(row.id);
+  setStatus(`已解開${nqStockGroup().label}早上盤點。改完請再按確認盤點。`, false);
   renderStock();
   renderCheck();
   renderAlerts();
@@ -1917,49 +1976,54 @@ function renderStock() {
     if (countBox) countBox.innerHTML = "";
     const inBox = document.getElementById("stock-in");
     if (inBox) inBox.innerHTML = "";
+    const ov = document.getElementById("stock-overview");
+    if (ov) ov.innerHTML = "";
     return;
   }
   const date = stockViewDay();
   ensureBooks(date);
   const stockDateEl = document.getElementById("stock-date");
   if (stockDateEl && stockDateEl.value !== date) stockDateEl.value = date;
+  const inDateEl = document.getElementById("in-date");
+  if (inDateEl && inDateEl.value !== date) inDateEl.value = date;
   const bookDateEl = document.getElementById("book-date");
   if (bookDateEl) bookDateEl.textContent = date;
   const lookingBack = date !== today();
   document.getElementById("stock-title").textContent = lookingBack ? `庫存（${date}）` : "庫存";
+  const inTitle = document.getElementById("in-title");
+  if (inTitle) inTitle.textContent = lookingBack ? `進貨（${date}）` : "進貨";
+  refreshStockOverview();
   const countCard = document.getElementById("count-card");
   if (countCard) countCard.hidden = false;
   const inDay = document.getElementById("in-day-card");
   if (inDay) inDay.hidden = false;
   const tot = document.getElementById("in-day-totals");
   if (tot) {
-    const rows = NQ_INBOUND;
-    tot.innerHTML = rows
-      .map((row) => {
-        const sku = skuById(row.id);
-        const b = bookRow(row.id, date);
-        const edited = b.inboundEdited ? '<span class="tag">修正</span>' : "";
-        return `<div class="live-totals-item"><span>${edited}${esc(row.label)}</span><strong>${fmt(b.inbound || 0)} ${esc(sku.unit)}</strong></div>`;
-      })
-      .join("");
+    tot.innerHTML = NQ_INBOUND.map((row) => {
+      const sku = skuById(row.id);
+      const b = bookRow(row.id, date);
+      const edited = b.inboundEdited ? '<span class="tag">修正</span>' : "";
+      return `<div class="live-totals-item"><span>${edited}${esc(row.label)}</span><strong>${fmt(b.inbound || 0)}</strong></div>`;
+    }).join("");
   }
   const gs = document.getElementById("guide-stock");
   const gi = document.getElementById("guide-in");
   const gc = document.getElementById("guide-count");
-  if (gs) gs.textContent = "當日可出＝早上盤點＋今日進貨合計－當日已出貨。盤點與進貨分開填，改盤點不會記入進貨。";
+  if (gs) gs.textContent = "上方各品項大數字＝盤點＋進貨。小字是盤點數量與進貨總數。這頁只填早上盤點；進貨請按上方「進貨」。";
   if (gi) gi.textContent = lookingBack
     ? `查 ${date} 的進貨。有貨進來才記入；打錯按「修正進貨」。`
-    : "有貨進來才在這裡記入。本批填數量按「記入進貨」；打錯在本批填正確總數再按「修正進貨」。改盤點不會增加進貨。";
+    : "有貨進來才記入。地瓜葉與九層塔並排。＋／－調本批後按記入；打錯填正確總數再按修正。";
   if (gc) gc.textContent = lookingBack
     ? `查 ${date} 的早上盤點與結算。`
-    : "填現場早上數量後按確認盤點。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。";
+    : "用＋／－或直接填現場數量後按確認盤點。帶入是昨晚結算。確認後不會自動加進貨。";
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
-  const morningDone = nqMorningDone();
-  const anyMorning = NQ_INBOUND.some((row) => bookRow(row.id, date).morningConfirmed);
+  const fillRows = nqStockFillRows();
+  const morningDone = nqMorningDone(fillRows);
+  const anyMorning = fillRows.some((row) => bookRow(row.id, date).morningConfirmed);
   const fillBtn = document.getElementById("fill-count");
   fillBtn.hidden = morningDone;
-  fillBtn.textContent = "確認今日早上盤點";
+  fillBtn.textContent = `確認${nqStockGroup().label}早上盤點`;
   fillBtn.disabled = false;
   const fixM = document.getElementById("fix-morning");
   if (fixM) fixM.hidden = !anyMorning;
@@ -1968,70 +2032,60 @@ function renderStock() {
     .join("");
   document.getElementById("in-sku").innerHTML = opts;
   document.getElementById("pr-sku").innerHTML = opts;
-  const countBody = NQ_INBOUND.map((row) => {
-    const sku = skuById(row.id);
-    const b = bookRow(row.id, date);
-    const step = skuStep(sku);
-    const morningVal = b.morning != null && b.morning !== "" ? b.morning : "";
-    const locked = !!b.morningConfirmed;
-    const carried = b.morningCarried != null && b.morningCarried !== "" ? Number(b.morningCarried) : prevSettleQty(row.id, date);
-    const differs = carried != null && Number.isFinite(carried) && morningVal !== "" && round(Number(morningVal)) !== round(carried);
-    const edited = !!b.morningEdited || differs;
-    const done = locked ? "已確認" : "";
-    const carryHint = !locked && carried != null && Number.isFinite(carried) ? `<span class="settle-calc">帶入 ${fmt(carried)}</span>` : "";
-    const morningBtns = locked
-      ? `<button type="button" class="tiny-btn ghost" data-fix-morning="${row.id}">修正盤點</button>`
-      : `<button type="button" class="tiny-btn" data-confirm-morning="${row.id}">確認盤點</button>`;
-    return `<tr>
-      <td class="name-cell">${esc(row.label)}</td>
-      <td>
-        <div class="ha-process morning-count">
-          ${edited ? '<span class="tag">已改帶入</span>' : ""}
-          <input class="qty book-input" data-morning="${row.id}" type="number" min="0" step="${step}" value="${esc(morningVal)}" placeholder="現場數量" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(row.label)} 早上庫存盤點" />
-          <span class="unit">${esc(sku.unit)}</span>
-          ${carryHint}
-          <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span>
-          ${morningBtns}
-        </div>
-      </td>
-      <td>${settleCellHtml(sku)}</td>
-    </tr>`;
-  }).join("");
-  const inBody = NQ_INBOUND.map((row) => {
-    const sku = skuById(row.id);
-    const b = bookRow(row.id, date);
-    const step = skuStep(sku);
-    return `<tr>
-      <td class="name-cell">${esc(row.label)}</td>
-      <td>
-        <div class="in-sum">
-          ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
-          ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">舊自動判定</span>' : ""}
-          <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
-          <span class="unit">${esc(sku.unit)}</span>
-          <p class="in-lots" data-in-lots="${row.id}">${esc(lotLabel(b))}</p>
-        </div>
-      </td>
-      <td>
-        <div class="ha-process inbound-qty">
-          <input class="qty book-input" data-inbound="${row.id}" type="number" min="0" step="${step}" value="" placeholder="本批數量" inputmode="decimal" aria-label="${esc(row.label)} 本批進貨" />
-          <span class="unit">${esc(sku.unit)}</span>
-          <button type="button" class="tiny-btn" data-add-inbound="${row.id}">記入進貨</button>
-          <button type="button" class="tiny-btn ghost" data-fix-inbound="${row.id}">修正進貨</button>
-        </div>
-      </td>
-    </tr>`;
+  const countCards = fillRows
+    .map((row) => {
+      const sku = skuById(row.id);
+      const b = bookRow(row.id, date);
+      const step = skuStep(sku);
+      const morningVal = b.morning != null && b.morning !== "" ? b.morning : "";
+      const locked = !!b.morningConfirmed;
+      const carried = b.morningCarried != null && b.morningCarried !== "" ? Number(b.morningCarried) : prevSettleQty(row.id, date);
+      const differs = carried != null && Number.isFinite(carried) && morningVal !== "" && round(Number(morningVal)) !== round(carried);
+      const edited = !!b.morningEdited || differs;
+      const done = locked ? "已確認" : "";
+      const carryHint = !locked && carried != null && Number.isFinite(carried) ? `<span class="settle-calc">帶入 ${fmt(carried)}</span>` : "";
+      const morningBtns = locked
+        ? `<button type="button" class="ghost" data-fix-morning="${row.id}">修正盤點</button>`
+        : `<button type="button" class="primary" data-confirm-morning="${row.id}">確認盤點</button>`;
+      return `<article class="stock-fill-card">
+        <h3>${esc(row.label)} <span class="unit">${esc(sku.unit)}</span></h3>
+        <p class="stock-fill-kicker">早上現場盤點 ${edited ? '<span class="tag">已改帶入</span>' : ""} ${carryHint} <span class="morning-ok" data-morning-ok="${row.id}">${esc(done)}</span></p>
+        ${qtyStepperHtml({ key: "morning", id: row.id, value: morningVal, step, locked, placeholder: "現場數量", aria: `${row.label} 早上庫存盤點` })}
+        <div class="stock-fill-actions">${morningBtns}</div>
+        <p class="stock-fill-kicker">庫存結算</p>
+        ${settleCellHtml(sku)}
+      </article>`;
+    })
+    .join("");
+  const inCards = NQ_STOCK_GROUPS.map((g) => {
+    const items = NQ_INBOUND.filter((row) => g.ids.includes(row.id))
+      .map((row) => {
+        const sku = skuById(row.id);
+        const b = bookRow(row.id, date);
+        const step = skuStep(sku);
+        const lots = lotLabel(b);
+        return `<article class="stock-fill-card is-in">
+          <h3>${esc(row.label)} <span class="unit">${esc(sku.unit)}</span></h3>
+          <p class="in-sum">
+            ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
+            ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">舊自動判定</span>' : ""}
+            已進 <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
+          </p>
+          <p class="in-lots" data-in-lots="${row.id}">${esc(lots || "尚無本批")}</p>
+          ${qtyStepperHtml({ key: "inbound", id: row.id, value: "", step, locked: false, placeholder: "本批", aria: `${row.label} 本批進貨` })}
+          <div class="stock-fill-actions">
+            <button type="button" class="primary" data-add-inbound="${row.id}">記入</button>
+            <button type="button" class="ghost" data-fix-inbound="${row.id}">修正</button>
+          </div>
+        </article>`;
+      })
+      .join("");
+    return `<section class="in-group"><h3>${esc(g.label)}</h3><div class="stock-fill-list is-in">${items}</div></section>`;
   }).join("");
   const countBox = document.getElementById("stock-count");
-  if (countBox) {
-    countBox.innerHTML =
-      `<table class="count-main"><thead><tr><th>品項</th><th>早上現場盤點</th><th>庫存結算</th></tr></thead><tbody>${countBody}</tbody></table>`;
-  }
+  if (countBox) countBox.innerHTML = `<div class="stock-fill-list">${countCards}</div>`;
   const inBox = document.getElementById("stock-in");
-  if (inBox) {
-    inBox.innerHTML =
-      `<table class="inbound-main"><thead><tr><th>品項</th><th>今日已進貨</th><th>本批進貨</th></tr></thead><tbody>${inBody}</tbody></table>`;
-  }
+  if (inBox) inBox.innerHTML = inCards;
 }
 
 function dailyStore() {
@@ -2080,14 +2134,14 @@ function settleCellHtml(sku) {
   const step = skuStep(sku);
   const tag = locked && b.countEdited ? '<span class="tag">修正</span>' : "";
   const actions = locked
-    ? `<span class="morning-ok">已確認</span><button type="button" class="tiny-btn ghost" data-fix-settle="${sku.id}">修正</button>`
-    : `<span class="settle-calc">系統 ${fmt(calc)}</span><button type="button" class="tiny-btn" data-confirm-settle="${sku.id}">確認</button>`;
-  return `<div class="ha-process settle-count">
-    ${tag}
-    <input class="qty book-input" data-settle="${sku.id}" type="number" min="0" step="${step}" value="${esc(val)}" inputmode="decimal" ${locked ? "readonly" : ""} aria-label="${esc(sku.name)} 庫存結算" />
-    <span class="unit">${esc(sku.unit)}</span>
-    ${actions}
-  </div>`;
+    ? `<button type="button" class="ghost" data-fix-settle="${sku.id}">修正結算</button>`
+    : `<button type="button" class="primary" data-confirm-settle="${sku.id}">確認結算</button>`;
+  const status = locked
+    ? `<span class="morning-ok">已確認</span>${tag}`
+    : `<span class="settle-calc">系統 ${fmt(calc)}</span>${tag}`;
+  return `${status}
+    ${qtyStepperHtml({ key: "settle", id: sku.id, value: val, step, locked, placeholder: "", aria: `${sku.name} 庫存結算` })}
+    <div class="stock-fill-actions">${actions}</div>`;
 }
 function applySettleToNextMorning(skuId, date, qty) {
   const next = addDays(date, 1);
@@ -2296,31 +2350,98 @@ function draftKindLabel(inbound) {
   return inbound ? "進貨" : "出貨訂單";
 }
 function draftKindHint(inbound) {
-  return inbound ? "這筆會記入庫存，不會產生出貨訂單。" : "這筆會列入出貨訂單，不會記入進貨。";
+  return inbound
+    ? "這筆會記入庫存，不會產生出貨訂單。品項與件數可直接改。"
+    : "這筆會列入出貨訂單，不會記入進貨。出貨對象、品項、件數可直接改再確認。";
+}
+function draftSkuSelectHtml(skuId) {
+  const groups = [
+    ["鴻安", SKUS.filter((s) => s.co === "ha")],
+    ["穠全", SKUS.filter((s) => s.co === "nq")],
+  ];
+  return `<select class="draft-sku" data-draft-sku aria-label="品項">${groups
+    .map(
+      ([lab, list]) =>
+        `<optgroup label="${esc(lab)}">${list
+          .map(
+            (s) =>
+              `<option value="${esc(s.id)}"${s.id === skuId ? " selected" : ""}>${esc(s.name.replace(/^本產蔬菜－/, ""))}</option>`,
+          )
+          .join("")}</optgroup>`,
+    )
+    .join("")}</select>`;
+}
+function draftIsOnionSku(id) {
+  return /^(on|onp)-(nz|au|kr|vn)-(12|20)$/.test(String(id || ""));
+}
+function draftLineExtrasHtml(l) {
+  const sku = skuById(l.skuId);
+  const bits = [];
+  if (draftIsOnionSku(l.skuId)) {
+    bits.push(`<select data-draft-size aria-label="尺寸">${optsHtml(HA_ONION_SIZES, haOnionSizeOf(l))}</select>`);
+  }
+  if (sku?.packRemark) {
+    bits.push(`<select data-draft-pack aria-label="裝箱">${optsHtml(PACK_OPTS, l.pack === "箱裝" ? "箱裝" : "籃裝")}</select>`);
+  }
+  bits.push(
+    `<label class="ha-pallet"><input type="checkbox" data-draft-pallet ${l.pallet ? "checked" : ""} />疊棧板</label>`,
+  );
+  return bits.join("");
+}
+function draftLineRowHtml(l, i) {
+  const sku = skuById(l.skuId);
+  const qty = l.qty > 0 ? l.qty : "";
+  const step = sku ? skuStep(sku) : 1;
+  return `<tr data-draft-i="${i}">
+        <td>${draftSkuSelectHtml(l.skuId || "on-nz-20")}</td>
+        <td class="draft-qty"><input data-draft-qty type="number" min="0" step="${step}" inputmode="decimal" value="${esc(qty)}" aria-label="件數" /></td>
+        <td class="draft-unit">${esc(sku?.unit || "")}</td>
+        <td class="draft-extras">${draftLineExtrasHtml(l)}</td>
+        <td><button type="button" class="tiny-btn ghost" data-draft-del>刪</button></td>
+      </tr>`;
 }
 function draftCheckRowsHtml(d) {
-  const lines = d.lines || [];
-  if (!lines.length) {
-    return '<p class="draft-miss">沒有對到品項，請改文字再解析。</p>';
-  }
-  const rows = lines
-    .map((l) => {
-      const sku = skuById(l.skuId);
-      const coName = sku?.co === "ha" ? "鴻安" : sku?.co === "nq" ? "穠全" : "";
-      const remarks = [l.pack, l.size, l.pallet ? "疊棧板" : "", l.note].filter(Boolean).join("、") || "—";
-      return `<tr>
-        <td>${esc(coName)}</td>
-        <td>${esc(shortSkuName(l.skuId))}</td>
-        <td class="draft-qty">${esc(fmt(l.qty))}</td>
-        <td>${esc(sku?.unit || "")}</td>
-        <td>${esc(remarks)}</td>
-      </tr>`;
-    })
-    .join("");
+  const lines = Array.isArray(d.lines) ? d.lines : [];
+  const rows = lines.length
+    ? lines.map((l, i) => draftLineRowHtml(l, i)).join("")
+    : `<tr><td colspan="5" class="draft-miss">沒有對到品項，請用「加一筆」補上，或改文字再解析。</td></tr>`;
   return `<table class="draft-check">
-    <thead><tr><th>公司</th><th>品項</th><th>數量</th><th>單位</th><th>備註</th></tr></thead>
+    <thead><tr><th>品項</th><th>件數</th><th>單位</th><th>備註</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>
+  <button type="button" class="ghost draft-add" data-draft-add>＋加一筆</button>`;
+}
+const dirtyDraftIds = new Set();
+let draftSaveTimer = 0;
+function persistDraft(d) {
+  if (!d?.id) return;
+  dirtyDraftIds.add(d.id);
+  if (String(d.id).startsWith("paste-") || d.local) {
+    savePasteQueue();
+    return;
+  }
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(() => {
+    fetch("/api/line/drafts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        id: d.id,
+        customer: d.customer || "",
+        lines: d.lines || [],
+      }),
+    }).catch(() => {});
+  }, 400);
+}
+function draftFromEl(el) {
+  const art = el?.closest?.(".line-draft");
+  if (!art) return null;
+  return findPendingDraft(art.dataset.draftId);
+}
+function ensureDraftLines(d) {
+  if (!Array.isArray(d.lines)) d.lines = [];
+  return d.lines;
 }
 function confirmParsedInbound(parsed, date) {
   if (!requireStaff()) return false;
@@ -2338,8 +2459,8 @@ function confirmParsedOrder(parsed, date) {
   if (!requireStaff()) return false;
   const who = (parsed.customer || document.getElementById("customer")?.value || "").trim();
   if (!who) return setStatus("請先寫客人名字（第一行或出貨對象欄）。", true);
-  const lines = parsed.lines || [];
-  if (!lines.length) return setStatus("沒有對到品項，請改文字再解析。", true);
+  const lines = (parsed.lines || []).filter((l) => skuById(l.skuId) && Number(l.qty) > 0);
+  if (!lines.length) return setStatus("沒有可入單的品項（件數要大於 0）。可在上方直接改。", true);
   const ha = lines.filter((l) => (skuById(l.skuId) || {}).co === "ha");
   const nq = lines.filter((l) => (skuById(l.skuId) || {}).co === "nq");
   const day = date || document.getElementById("ship-date")?.value || today();
@@ -2368,9 +2489,18 @@ async function dropLineDraft(id) {
     body: JSON.stringify({ action: "drop", id }),
   });
 }
-function renderLineDrafts() {
+function renderLineDrafts(force) {
   const box = document.getElementById("line-drafts");
   if (!box) return;
+  const focused = document.activeElement;
+  if (
+    !force &&
+    focused &&
+    box.contains(focused) &&
+    focused.matches("input, select, textarea")
+  ) {
+    return;
+  }
   const list = [...linePasteQueue, ...lineDraftsCache];
   if (!list.length) {
     box.innerHTML = '<p class="empty">可連續貼上多位客人再解析，待確認會一起列在這裡，不必立刻確認。</p>';
@@ -2380,15 +2510,14 @@ function renderLineDrafts() {
     .map((d) => {
       const inbound = !!d.inbound;
       const day = d.date || today();
-      const who = inbound ? "無出貨對象（進貨）" : d.customer ? d.customer : "尚未寫出貨對象";
       const unk = (d.unknown || []).length
-        ? `<p class="draft-miss">原文沒對到：${esc(d.unknown.join("、"))}</p>`
+        ? `<p class="draft-miss">原文沒對到：${esc(d.unknown.join("、"))}（可在表格加一筆補上）</p>`
         : "";
       const dupInfo = parsedDupInfo(d, day);
       const waiting = dupInfo && lineDupAck.has(d.id);
       const dupNote = dupInfo
         ? d.inbound
-          ? `<p class="bad">疑似重複進貨：${esc(dupInfo.notes.join("；"))}。請先核對庫存頁今日已進貨，確定後再按「仍要記入進貨」。</p>`
+          ? `<p class="bad">疑似重複進貨：${esc(dupInfo.notes.join("；"))}。請先核對「進貨」頁今日已進貨，確定後再按「仍要記入進貨」。</p>`
           : `<p class="bad">疑似重複出貨訂單：${esc(dupInfo.who)} ${esc(dupInfo.day)} 已有（${esc(dupInfo.hint)}）。請先切到「排程」核對，確定不是重複後再按「仍要列入出貨訂單」。</p>`
         : "";
       const src = d.text || d.raw || "";
@@ -2399,14 +2528,17 @@ function renderLineDrafts() {
         : waiting
           ? "仍要列入出貨訂單"
           : "確認列入出貨訂單";
-      return `<article class="line-draft ${inbound ? "is-in" : "is-out"}">
+      const whoField = inbound
+        ? `<span class="draft-who">無出貨對象（進貨）</span>`
+        : `<label class="draft-who-field">出貨對象 <input data-draft-who type="text" value="${esc(d.customer || "")}" placeholder="尚未寫出貨對象" autocomplete="off" /></label>`;
+      return `<article class="line-draft ${inbound ? "is-in" : "is-out"}" data-draft-id="${esc(d.id)}">
         <div class="draft-head">
           <span class="draft-kind">${esc(draftKindLabel(inbound))}</span>
-          <span class="draft-who">${esc(who)}</span>
+          ${whoField}
           <span class="muted">${esc(day)}</span>
         </div>
         <p class="draft-hint">${esc(draftKindHint(inbound))}</p>
-        <p class="draft-label">系統判定（請核對）</p>
+        <p class="draft-label">系統判定（請核對，可直接改）</p>
         ${draftCheckRowsHtml(d)}
         ${unk}
         ${dupNote}
@@ -2435,7 +2567,11 @@ async function refreshLineDrafts() {
   }
   try {
     const data = await fetch("/api/line/drafts", { cache: "no-store" }).then((r) => r.json());
-    lineDraftsCache = Array.isArray(data.drafts) ? data.drafts : [];
+    const incoming = Array.isArray(data.drafts) ? data.drafts : [];
+    lineDraftsCache = incoming.map((d) => {
+      if (!dirtyDraftIds.has(d.id)) return d;
+      return lineDraftsCache.find((x) => x.id === d.id) || d;
+    });
   } catch (_) {
     lineDraftsCache = [];
   }
@@ -2451,6 +2587,7 @@ function applyCopy() {
   const tabs = document.getElementById("form-kind-tabs");
   if (tabs) tabs.hidden = co !== "nq";
   document.querySelectorAll("[data-form]").forEach((b) => b.classList.toggle("on", b.dataset.form === formKind));
+  document.querySelectorAll("[data-stock-kind]").forEach((b) => b.classList.toggle("on", b.dataset.stockKind === stockKind));
   if (co === "ha") {
     intro.textContent =
       "鴻安：手打或點出貨對象，加品項填數量後確認。接單不看可出；出貨才扣庫。";
@@ -2488,15 +2625,19 @@ function render() {
   document.getElementById("co-name").textContent = co === "nq" ? "穠全公司" : "鴻安公司";
   document.querySelectorAll("[data-co]").forEach((b) => b.classList.toggle("on", b.dataset.co === co));
   const stockTab = document.querySelector('[data-page="stock"]');
+  const inTab = document.querySelector('[data-page="in"]');
   if (stockTab) {
     stockTab.hidden = co === "ha";
-    stockTab.textContent = "庫存/進貨";
+    stockTab.textContent = "庫存";
   }
-  if (co === "ha" && page === "stock") page = "orders";
+  if (inTab) inTab.hidden = co === "ha";
+  if (co === "ha" && (page === "stock" || page === "in")) page = "orders";
   document.querySelectorAll("[data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = page !== "stock" || co === "ha";
+  const pageIn = document.getElementById("page-in");
+  if (pageIn) pageIn.hidden = page !== "in" || co === "ha";
   applyCopy();
   document.getElementById("order-form").hidden = !useItemLines();
   const restBtn = document.getElementById("nq-rest-btn");
@@ -2536,7 +2677,7 @@ document.querySelectorAll("[data-co]").forEach((btn) => {
 });
 document.querySelectorAll("[data-page]").forEach((btn) => {
   btn.onclick = () => {
-    if (btn.dataset.page === "stock" && co === "ha") return;
+    if ((btn.dataset.page === "stock" || btn.dataset.page === "in") && co === "ha") return;
     page = btn.dataset.page;
     render();
   };
@@ -2560,6 +2701,13 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
     render();
   };
 });
+document.querySelectorAll("[data-stock-kind]").forEach((btn) => {
+  btn.onclick = () => {
+    stockKind = btn.dataset.stockKind;
+    renderStock();
+    applyCopy();
+  };
+});
 document.getElementById("line-parse-btn")?.addEventListener("click", () => {
   const parseBlocks = globalThis.LineOrderParse?.parseLineOrderBlocks;
   const parseOne = globalThis.LineOrderParse?.parseLineOrderText;
@@ -2581,7 +2729,7 @@ document.getElementById("line-parse-btn")?.addEventListener("click", () => {
   }
   if (linePasteQueue.length > 80) linePasteQueue = linePasteQueue.slice(0, 80);
   savePasteQueue();
-  renderLineDrafts();
+  renderLineDrafts(true);
   if (!added) setStatus("沒對到品項。出貨訂單請第一行寫客人；進貨請寫例如：地瓜葉誌進貨57。", true);
   else {
     const ta = document.getElementById("line-paste");
@@ -2599,7 +2747,7 @@ document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
     const dup = parsedDupInfo(parsed, parsed.date);
     if (dup && !lineDupAck.has(id)) {
       lineDupAck.add(id);
-      renderLineDrafts();
+      renderLineDrafts(true);
       setStatus(
         dup.inbound
           ? "疑似重複進貨。畫面不會跳窗，請先核對庫存，確定後再按「仍要記入進貨」。"
@@ -2610,9 +2758,10 @@ document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
     }
     if (confirmParsedOrder(parsed, parsed.date)) {
       lineDupAck.delete(id);
+      dirtyDraftIds.delete(id);
       if (String(id).startsWith("paste-")) {
         removePasteDraft(id);
-        renderLineDrafts();
+        renderLineDrafts(true);
       } else {
         await dropLineDraft(id);
         await refreshLineDrafts();
@@ -2623,13 +2772,93 @@ document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
   if (no) {
     const id = no.dataset.lineNo;
     lineDupAck.delete(id);
+    dirtyDraftIds.delete(id);
     if (String(id).startsWith("paste-")) {
       removePasteDraft(id);
-      renderLineDrafts();
+      renderLineDrafts(true);
       return;
     }
     await dropLineDraft(id);
     await refreshLineDrafts();
+    return;
+  }
+  const add = e.target.closest("[data-draft-add]");
+  if (add) {
+    const d = draftFromEl(add);
+    if (!d) return;
+    ensureDraftLines(d).push({ skuId: d.inbound ? "sl-zhi" : "on-nz-20", qty: 1 });
+    persistDraft(d);
+    renderLineDrafts(true);
+    return;
+  }
+  const del = e.target.closest("[data-draft-del]");
+  if (del) {
+    const d = draftFromEl(del);
+    const i = Number(del.closest("tr")?.dataset.draftI);
+    if (!d || !Number.isInteger(i)) return;
+    ensureDraftLines(d).splice(i, 1);
+    persistDraft(d);
+    renderLineDrafts(true);
+  }
+});
+document.getElementById("line-drafts")?.addEventListener("input", (e) => {
+  const who = e.target.closest("[data-draft-who]");
+  const qty = e.target.closest("[data-draft-qty]");
+  if (who) {
+    const d = draftFromEl(who);
+    if (!d) return;
+    d.customer = who.value;
+    persistDraft(d);
+    return;
+  }
+  if (qty) {
+    const d = draftFromEl(qty);
+    const i = Number(qty.closest("tr")?.dataset.draftI);
+    if (!d || !Number.isInteger(i) || !d.lines[i]) return;
+    d.lines[i].qty = Number(qty.value) || 0;
+    persistDraft(d);
+  }
+});
+document.getElementById("line-drafts")?.addEventListener("change", (e) => {
+  const skuSel = e.target.closest("[data-draft-sku]");
+  const sizeSel = e.target.closest("[data-draft-size]");
+  const packSel = e.target.closest("[data-draft-pack]");
+  const pal = e.target.closest("[data-draft-pallet]");
+  const d = draftFromEl(e.target);
+  const row = e.target.closest("tr");
+  const i = Number(row?.dataset.draftI);
+  if (!d || !Number.isInteger(i) || !d.lines?.[i]) return;
+  const line = d.lines[i];
+  if (skuSel) {
+    line.skuId = skuSel.value;
+    const sku = skuById(line.skuId);
+    if (!draftIsOnionSku(line.skuId)) delete line.size;
+    else if (!line.size) line.size = "大球";
+    if (!sku?.packRemark) delete line.pack;
+    else if (!line.pack) line.pack = "籃裝";
+    const unit = row.querySelector(".draft-unit");
+    if (unit) unit.textContent = sku?.unit || "";
+    const extras = row.querySelector(".draft-extras");
+    if (extras) extras.innerHTML = draftLineExtrasHtml(line);
+    const qtyInp = row.querySelector("[data-draft-qty]");
+    if (qtyInp && sku) qtyInp.step = String(skuStep(sku));
+    persistDraft(d);
+    return;
+  }
+  if (sizeSel) {
+    line.size = sizeSel.value;
+    persistDraft(d);
+    return;
+  }
+  if (packSel) {
+    line.pack = packSel.value;
+    persistDraft(d);
+    return;
+  }
+  if (pal) {
+    if (pal.checked) line.pallet = true;
+    else delete line.pallet;
+    persistDraft(d);
   }
 });
 document.getElementById("sheet").addEventListener("input", renderCheck);
@@ -3187,7 +3416,7 @@ function confirmMorningCount(skuId, raw, quiet) {
   }
   if (quiet) return;
   const label = NQ_INBOUND.find((r) => r.id === skuId)?.label || sku.name;
-  setStatus(`已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}。進貨請到下方進貨區另外記入。`, false);
+  setStatus(`已確認「${label}」早上盤點 ${fmt(b.morning)} ${sku.unit}。進貨請切到上方「進貨」頁記入。`, false);
   renderStock();
   renderCheck();
   renderAlerts();
@@ -3209,124 +3438,143 @@ function addMorningAvail(skuId, raw) {
   renderAlerts();
 }
 
-const stockEl = document.getElementById("page-stock");
-stockEl.addEventListener("change", (e) => {
-  const input = e.target.closest("[data-safety]");
-  if (!input) return;
-  const n = Number(input.value);
-  state.stock[input.dataset.safety].safety = n >= 0 ? n : 0;
-  save();
-  renderCheck();
-  renderAlerts();
-  setStatus("已更新安全庫存。", false);
-});
-stockEl.addEventListener("input", (e) => {
-  const t = e.target;
-  if (t.dataset.morning != null) {
-    const b = bookRow(t.dataset.morning, stockViewDay());
-    if (b.morningConfirmed) return;
-    b.morning = t.value === "" ? "" : Math.max(0, Number(t.value) || 0);
+function bindStockFillPage(el) {
+  if (!el || el.dataset.boundFill) return;
+  el.dataset.boundFill = "1";
+  el.addEventListener("change", (e) => {
+    const input = e.target.closest("[data-safety]");
+    if (!input) return;
+    const n = Number(input.value);
+    state.stock[input.dataset.safety].safety = n >= 0 ? n : 0;
     save();
-    return;
-  }
-  if (t.dataset.settle != null) {
-    const b = bookRow(t.dataset.settle, stockViewDay());
-    if (b.countConfirmed) return;
-    b.count = t.value === "" ? null : Math.max(0, Number(t.value) || 0);
-    save();
-    return;
-  }
-  if (t.dataset.opening != null) applyBookField(t.dataset.opening, "opening", t.value);
-  else if (t.dataset.count != null) applyBookField(t.dataset.count, "count", t.value);
-});
-stockEl.addEventListener("click", (e) => {
-  const addIn = e.target.closest("[data-add-inbound]");
-  if (addIn) {
-    const id = addIn.dataset.addInbound;
-    const input = document.querySelector(`[data-inbound="${id}"]`);
-    addInboundLot(id, input?.value);
-    return;
-  }
-  const fixIn = e.target.closest("[data-fix-inbound]");
-  if (fixIn) {
-    const id = fixIn.dataset.fixInbound;
-    const input = document.querySelector(`[data-inbound="${id}"]`);
-    const label = NQ_INBOUND.find((r) => r.id === id)?.label || id;
-    if (!confirm(`將「${label}」今日進貨改為輸入框的數字？`)) return;
-    correctInbound(id, input?.value);
-    return;
-  }
-  const fixOne = e.target.closest("[data-fix-morning]");
-  if (fixOne) {
-    unlockMorning(fixOne.dataset.fixMorning);
-    setStatus("已解開此品項早上盤點，先前因盤點自動記入的進貨已拿掉。改完請再按確認盤點。", false);
-    renderStock();
-    return;
-  }
-  const morningBtn = e.target.closest("[data-confirm-morning]");
-  if (morningBtn) {
-    const id = morningBtn.dataset.confirmMorning;
-    const input = document.querySelector(`[data-morning="${id}"]`);
-    confirmMorningCount(id, input?.value);
-    return;
-  }
-  const addM = e.target.closest("[data-add-morning]");
-  if (addM) {
-    const input = document.querySelector(`[data-morning-add="${addM.dataset.addMorning}"]`);
-    addMorningAvail(addM.dataset.addMorning, input?.value);
-    return;
-  }
-  const settleBtn = e.target.closest("[data-confirm-settle]");
-  if (settleBtn) {
-    const id = settleBtn.dataset.confirmSettle;
-    const input = document.querySelector(`[data-settle="${id}"]`);
-    confirmSettle(id, input?.value);
-    return;
-  }
-  const fixSettle = e.target.closest("[data-fix-settle]");
-  if (fixSettle) {
-    unlockSettle(fixSettle.dataset.fixSettle);
-    setStatus("已解開庫存結算，改完請再按確認。", false);
-    renderStock();
-  }
-});
-stockEl.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  const inbound = e.target.closest("[data-inbound]");
-  if (inbound) {
+    renderCheck();
+    renderAlerts();
+    setStatus("已更新安全庫存。", false);
+  });
+  el.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.dataset.morning != null) {
+      const b = bookRow(t.dataset.morning, stockViewDay());
+      if (b.morningConfirmed) return;
+      b.morning = t.value === "" ? "" : Math.max(0, Number(t.value) || 0);
+      save();
+      refreshStockOverview();
+      return;
+    }
+    if (t.dataset.settle != null) {
+      const b = bookRow(t.dataset.settle, stockViewDay());
+      if (b.countConfirmed) return;
+      b.count = t.value === "" ? null : Math.max(0, Number(t.value) || 0);
+      save();
+      return;
+    }
+    if (t.dataset.opening != null) applyBookField(t.dataset.opening, "opening", t.value);
+    else if (t.dataset.count != null) applyBookField(t.dataset.count, "count", t.value);
+  });
+  el.addEventListener("click", (e) => {
+    const bump = e.target.closest("[data-qty-step]");
+    if (bump) {
+      e.preventDefault();
+      const input = bump.closest(".stepper")?.querySelector("input");
+      if (!input || input.readOnly || input.disabled) return;
+      const step = Number(input.step) || 1;
+      const delta = Number(bump.dataset.qtyStep) * step;
+      const cur = input.value === "" ? 0 : Number(input.value);
+      input.value = String(round(Math.max(0, (Number.isFinite(cur) ? cur : 0) + delta)));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    const addIn = e.target.closest("[data-add-inbound]");
+    if (addIn) {
+      const id = addIn.dataset.addInbound;
+      const input = document.querySelector(`[data-inbound="${id}"]`);
+      addInboundLot(id, input?.value);
+      return;
+    }
+    const fixIn = e.target.closest("[data-fix-inbound]");
+    if (fixIn) {
+      const id = fixIn.dataset.fixInbound;
+      const input = document.querySelector(`[data-inbound="${id}"]`);
+      const label = NQ_INBOUND.find((r) => r.id === id)?.label || id;
+      if (!confirm(`將「${label}」今日進貨改為輸入框的數字？`)) return;
+      correctInbound(id, input?.value);
+      return;
+    }
+    const fixOne = e.target.closest("[data-fix-morning]");
+    if (fixOne) {
+      unlockMorning(fixOne.dataset.fixMorning);
+      setStatus("已解開此品項早上盤點，先前因盤點自動記入的進貨已拿掉。改完請再按確認盤點。", false);
+      renderStock();
+      return;
+    }
+    const morningBtn = e.target.closest("[data-confirm-morning]");
+    if (morningBtn) {
+      const id = morningBtn.dataset.confirmMorning;
+      const input = document.querySelector(`[data-morning="${id}"]`);
+      confirmMorningCount(id, input?.value);
+      return;
+    }
+    const addM = e.target.closest("[data-add-morning]");
+    if (addM) {
+      const input = document.querySelector(`[data-morning-add="${addM.dataset.addMorning}"]`);
+      addMorningAvail(addM.dataset.addMorning, input?.value);
+      return;
+    }
+    const settleBtn = e.target.closest("[data-confirm-settle]");
+    if (settleBtn) {
+      const id = settleBtn.dataset.confirmSettle;
+      const input = document.querySelector(`[data-settle="${id}"]`);
+      confirmSettle(id, input?.value);
+      return;
+    }
+    const fixSettle = e.target.closest("[data-fix-settle]");
+    if (fixSettle) {
+      unlockSettle(fixSettle.dataset.fixSettle);
+      setStatus("已解開庫存結算，改完請再按確認。", false);
+      renderStock();
+    }
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const inbound = e.target.closest("[data-inbound]");
+    if (inbound) {
+      e.preventDefault();
+      addInboundLot(inbound.dataset.inbound, inbound.value);
+      return;
+    }
+    const morning = e.target.closest("[data-morning]");
+    if (morning) {
+      e.preventDefault();
+      return;
+    }
+    const settle = e.target.closest("[data-settle]");
+    if (settle) {
+      e.preventDefault();
+      confirmSettle(settle.dataset.settle, settle.value);
+      return;
+    }
+    const addIn = e.target.closest("[data-morning-add]");
+    if (!addIn) return;
     e.preventDefault();
-    addInboundLot(inbound.dataset.inbound, inbound.value);
-    return;
-  }
-  const morning = e.target.closest("[data-morning]");
-  if (morning) {
-    e.preventDefault();
-    return;
-  }
-  const settle = e.target.closest("[data-settle]");
-  if (settle) {
-    e.preventDefault();
-    confirmSettle(settle.dataset.settle, settle.value);
-    return;
-  }
-  const addIn = e.target.closest("[data-morning-add]");
-  if (!addIn) return;
-  e.preventDefault();
-  addMorningAvail(addIn.dataset.morningAdd, addIn.value);
-});
+    addMorningAvail(addIn.dataset.morningAdd, addIn.value);
+  });
+}
+bindStockFillPage(document.getElementById("page-stock"));
+bindStockFillPage(document.getElementById("page-in"));
 document.getElementById("fill-count").onclick = () => {
+  const rows = nqStockFillRows();
   const missing = [];
-  for (const row of NQ_INBOUND) {
+  for (const row of rows) {
     const input = document.querySelector(`[data-morning="${row.id}"]`);
     const raw = input ? input.value : bookRow(row.id, stockViewDay()).morning;
     if (raw === "" || raw == null) missing.push(row.label);
   }
   if (missing.length) return setStatus(`請先填完早上盤點：${missing.join("、")}`, true);
-  for (const row of NQ_INBOUND) {
+  for (const row of rows) {
     const input = document.querySelector(`[data-morning="${row.id}"]`);
     confirmMorningCount(row.id, input?.value, true);
   }
-  setStatus("已確認今日早上盤點。隔天再填新的一趟。", false);
+  setStatus(`已確認${nqStockGroup().label}早上盤點。另一類請再切換填。`, false);
   renderStock();
   renderCheck();
   renderAlerts();

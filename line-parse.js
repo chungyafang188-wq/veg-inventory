@@ -19,12 +19,21 @@
   ];
 
   function takeQty(s) {
-    const num = String(s).match(/(\d+(?:\.\d+)?)/);
-    if (num) return { qty: Number(num[1]), text: s.replace(num[1], "") };
-    for (const [k, v] of Object.entries(CN)) {
-      if (s.includes(k)) return { qty: v, text: s.replace(k, "") };
+    const t = String(s);
+    const labeled = t.match(/(\d+(?:\.\d+)?)\s*(?:件|袋|箱|籃)/);
+    if (labeled) return { qty: Number(labeled[1]), text: t.replace(labeled[0], " ") };
+    const slash = t.match(/\/\s*(\d+(?:\.\d+)?)\s*K?/i);
+    if (slash) return { qty: Number(slash[1]), text: t.replace(slash[0], " ") };
+    const extraK = t.match(/(\d+(?:\.\d+)?)\s*K/i);
+    if (extraK && !/^(12|18|20)$/.test(extraK[1])) {
+      return { qty: Number(extraK[1]), text: t.replace(extraK[0], " ") };
     }
-    return { qty: 1, text: s };
+    const num = t.match(/(\d+(?:\.\d+)?)/);
+    if (num) return { qty: Number(num[1]), text: t.replace(num[1], "") };
+    for (const [k, v] of Object.entries(CN)) {
+      if (t.includes(k)) return { qty: v, text: t.replace(k, "") };
+    }
+    return { qty: 1, text: t };
   }
 
   function onionSku(origin, spec12, purple) {
@@ -53,9 +62,9 @@
     } else if (/特大|大球/.test(orig) && !/20/.test(orig) && !/中球/.test(orig)) {
       spec12 = true;
     }
-    rest = rest.replace(/\d+\s*K/gi, " ");
+    rest = rest.replace(/\b18\s*K\b/gi, " ");
     rest = rest.replace(/特大|中球|大球/g, " ");
-    const { qty, text } = takeQty(rest.replace(/\//g, " "));
+    const { qty, text } = takeQty(rest);
     return { spec12, qty, text, size };
   }
 
@@ -169,8 +178,8 @@
     if (redBasil.test(t) || /紅芳/.test(t)) return { skuId: "rb-fang", qty, pallet };
     if (/洋蔥?\s*B|蔥B|洋B/.test(t)) return { skuId: "on-b-kg", qty, pallet };
     if (/南瓜?\s*B|瓜B/.test(t)) return { skuId: "pk-b-kg", qty, pallet };
-    if (t.includes("密本")) return { skuId: /20/.test(t) ? "pk-mi-20" : "pk-mi-18", qty, pallet };
-    if (t.includes("阿成")) return { skuId: /20/.test(t) ? "pk-ch-20" : "pk-ch-18", qty, pallet };
+    if (t.includes("密本")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-mi-20" : "pk-mi-18", qty, pallet };
+    if (t.includes("阿成")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-ch-20" : "pk-ch-18", qty, pallet };
     if (/薄荷/.test(t)) return { skuId: "mint-kg", qty, pallet };
     if (/紫蘇/.test(t) && /斤/.test(t)) return { skuId: "shiso-jin", qty, pallet };
     if (/紫蘇/.test(t)) return { skuId: "shiso-kg", qty, pallet };

@@ -53,6 +53,7 @@
     } else if (/特大|大球/.test(orig) && !/20/.test(orig) && !/中球/.test(orig)) {
       spec12 = true;
     }
+    rest = rest.replace(/\d+\s*K/gi, " ");
     rest = rest.replace(/特大|中球|大球/g, " ");
     const { qty, text } = takeQty(rest.replace(/\//g, " "));
     return { spec12, qty, text, size };
@@ -75,46 +76,74 @@
     return /芳/.test(t) && /地瓜葉|地瓜/.test(t);
   }
 
-  const KNOWN_CUSTOMERS = ["冠瑋", "小琳", "欣儒", "佳合", "張紀惠"];
-  const NOT_CUSTOMER = /誌|芳|琳|早上|下午|晚上|中午|今日|今天|進貨|入貨|到貨|地瓜|紅骨|綠骨|紐|韓|澳|越/;
+  const KNOWN_CUSTOMERS = [
+    "金芳拍賣-南",
+    "金芳拍賣-北",
+    "金芳拍賣南",
+    "金芳拍賣北",
+    "金芳-南",
+    "金芳-北",
+    "冠瑋",
+    "小琳",
+    "欣儒",
+    "佳合",
+    "張紀惠",
+  ];
+  const NAME_ONLY_BAN = /^(誌|芳|琳|早上|下午|晚上|中午|今日|今天|進貨|入貨|到貨|地瓜葉?|紅骨|綠骨|紐西蘭|韓國|澳洲|越南|紫洋蔥|洋蔥|密本|阿成|薄荷|紫蘇)$/;
   const ITEM_HEAD =
     /^(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|誌|芳|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|紫洋蔥|紫洋|洋蔥|密本|阿成|薄荷|紫蘇|葉誌|葉芳|進貨|入貨|到貨|早上)/;
   const STUCK_ITEM =
     /(紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|地瓜葉|地瓜|九層塔|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|韓國|澳洲|越南|紫洋蔥|紫洋|洋蔥|密本|阿成|薄荷|紫蘇)/;
   const NEXT_ITEM =
     /(?=紅骨|綠骨|紅九層|綠九層|紅塔|綠塔|九層塔|紐洋|紐大|紐特|韓洋|韓大|紫洋蔥|紫洋|密本|阿成|薄荷|紫蘇|洋蔥|(?<![誌芳])地瓜葉)/;
+  const NAME_CHARS = "\\u4e00-\\u9fffA-Za-z0-9.·\\-－—";
+
+  function foldHyphen(s) {
+    return String(s || "").replace(/[－—–]/g, "-");
+  }
+
+  function looksLikeCustomerName(name) {
+    const n = String(name || "").trim();
+    if (n.length < 2 || n.length > 24) return false;
+    if (ITEM_HEAD.test(n)) return false;
+    if (NAME_ONLY_BAN.test(n)) return false;
+    return true;
+  }
 
   function uniqNames(extra) {
     const set = new Set(KNOWN_CUSTOMERS);
     for (const n of extra || []) {
-      const s = String(n || "").trim();
+      const s = foldHyphen(String(n || "")).trim();
       if (s.length >= 2) set.add(s);
     }
     return [...set].sort((a, b) => b.length - a.length);
   }
 
   function peelKnownName(line, names) {
-    const t = String(line || "").trim();
+    const t = foldHyphen(String(line || "")).trim();
     for (const n of names) {
-      if (!t.startsWith(n)) continue;
-      const rest = t.slice(n.length).replace(/^[\s　]+/, "");
-      if (rest && (ITEM_HEAD.test(rest) || looksLikeItems(rest))) return { customer: n, rest };
+      const name = foldHyphen(n);
+      if (!t.startsWith(name)) continue;
+      const rest = t.slice(name.length).replace(/^[\s　:：]+/, "");
+      if (!rest || ITEM_HEAD.test(rest) || looksLikeItems(rest) || /^\d/.test(rest)) {
+        return { customer: name, rest };
+      }
     }
     return null;
   }
 
   function peelCustomer(line, names) {
-    const raw = String(line || "").trim();
+    let raw = foldHyphen(String(line || "")).trim();
+    const labeled = raw.match(/^(?:客人|客戶|出貨對象|收件)[:：\s]+(.+)$/);
+    if (labeled) raw = foldHyphen(labeled[1]).trim();
     const known = peelKnownName(raw, names);
     if (known) return known;
-    const spaced = raw.match(
-      /^([\u4e00-\u9fffA-Za-z0-9.·\-]{2,12})\s+(?=紐|韓|澳|越|紫洋|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇)/,
-    );
-    if (spaced && !NOT_CUSTOMER.test(spaced[1])) {
+    const spaced = raw.match(new RegExp(`^([${NAME_CHARS}]{2,24})\\s+(?=紐|韓|澳|越|紫洋|洋蔥|密本|阿成|地瓜|葉|誌|芳|箱|籃|綠|紅|九層|薄荷|紫蘇|\\d)`));
+    if (spaced && looksLikeCustomerName(spaced[1])) {
       return { customer: spaced[1].trim(), rest: raw.slice(spaced[0].length).trim() };
     }
-    const stuck = raw.match(new RegExp(`^([\\u4e00-\\u9fffA-Za-z0-9.·]{2,8})${STUCK_ITEM.source}`));
-    if (stuck && !ITEM_HEAD.test(stuck[1]) && !NOT_CUSTOMER.test(stuck[1])) {
+    const stuck = raw.match(new RegExp(`^([${NAME_CHARS}]{2,16})${STUCK_ITEM.source}`));
+    if (stuck && looksLikeCustomerName(stuck[1])) {
       return { customer: stuck[1], rest: raw.slice(stuck[1].length).trim() };
     }
     return { customer: "", rest: raw };
@@ -165,7 +194,9 @@
   }
 
   function looksLikeItems(line) {
-    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐|韓|澳|越|葉|塔|骨|誌|芳|紫洋|洋蔥|南瓜|九層|進貨|入貨|到貨/.test(line);
+    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|澳洲|越南|地瓜葉|地瓜|紫洋|洋蔥|南瓜|九層|紅骨|綠骨|進貨|入貨|到貨|\d+\s*K/i.test(
+      String(line || ""),
+    );
   }
 
   function looksLikeInbound(raw) {
@@ -189,7 +220,7 @@
 
   function parseLineOrderText(raw, extraNames) {
     const names = uniqNames(extraNames);
-    const text = String(raw || "").replace(/\r/g, "").trim();
+    const text = foldHyphen(String(raw || "").replace(/\r/g, "")).trim();
     const unknown = [];
     const lines = [];
     const inbound = looksLikeInbound(text);
@@ -202,7 +233,7 @@
       if (sameLine.customer) {
         customer = sameLine.customer;
         body = [sameLine.rest, ...parts.slice(1)].filter(Boolean);
-      } else if (parts.length && !looksLikeItems(parts[0]) && parts[0].length <= 20) {
+      } else if (parts.length && looksLikeCustomerName(parts[0]) && !looksLikeItems(parts[0]) && parts[0].length <= 24) {
         customer = parts[0].replace(/^[\d.\s]+/, "").trim();
         body = parts.slice(1);
         if (!body.length) body = parts;
@@ -215,6 +246,7 @@
       if (hit && hit.qty > 0) {
         const line = { skuId: hit.skuId, qty: hit.qty };
         if (hit.pack) line.pack = hit.pack;
+        if (hit.size) line.size = hit.size;
         if (hit.pallet) line.pallet = true;
         lines.push(line);
       } else unknown.push(chunk);
@@ -229,7 +261,7 @@
 
   function splitOrderBlocks(raw, extraNames) {
     const names = uniqNames(extraNames);
-    const t = String(raw || "").replace(/\r/g, "");
+    const t = foldHyphen(String(raw || "")).replace(/\r/g, "");
     if (!t.trim()) return [];
     const starts = [];
     for (let i = 0; i < t.length; i++) {

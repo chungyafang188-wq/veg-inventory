@@ -729,11 +729,13 @@ function bumpOrder(id, dir) {
   save();
   render();
 }
-function reservedAhead(skuId, current) {
+function reservedAhead(skuId, current, date) {
+  const day = date || current?.shipDate || today();
   let n = 0;
   const curRank = current ? orderRank(current) : Infinity;
   for (const o of state.orders) {
     if (o.co !== co || o.status !== "open") continue;
+    if ((o.shipDate || today()) !== day) continue;
     if (current) {
       if (o.id === current.id) continue;
       if (orderRank(o) >= curRank) continue;
@@ -742,11 +744,13 @@ function reservedAhead(skuId, current) {
   }
   return n;
 }
-function reservedAll(skuId) {
-  return reservedAhead(skuId);
+function reservedAll(skuId, date = today()) {
+  return reservedAhead(skuId, undefined, date);
 }
-function available(sku, current) {
-  return round(ready(sku) - reservedAhead(sku.id, current));
+function available(sku, current, date) {
+  const day = date || current?.shipDate || today();
+  const on = isSiteSku(sku) ? ready(sku) : onHand(sku, day);
+  return round(on - reservedAhead(sku.id, current, day));
 }
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
@@ -769,10 +773,11 @@ function setStatus(text, err) {
 function lineChecks(qtyMap, current) {
   const rows = [];
   let worst = "ok";
+  const day = current?.shipDate || ordersViewDay();
   for (const sku of companySkus()) {
     const need = qtyMap[sku.id] || 0;
     if (!(need > 0)) continue;
-    const av = available(sku, current);
+    const av = available(sku, current, day);
     const after = round(av - need);
     const safety = state.stock[sku.id].safety;
     let level = "ok";
@@ -972,9 +977,10 @@ function renderSheet() {
     return;
   }
   const current = currentRecord();
+  const day = current?.shipDate || ordersViewDay();
   const html = formSkus()
     .map((sku) => {
-      const av = available(sku, current);
+      const av = available(sku, current, day);
       return `<tr><td class="name-cell">${esc(sku.name)}</td><td>${fmt(av)} ${sku.unit}</td>
         <td><input class="qty" data-sku="${sku.id}" type="number" min="0" step="${skuStep(sku)}" /></td></tr>`;
     })
@@ -1622,6 +1628,36 @@ function lineQtyForSkus(o, ids) {
   for (const id of ids) n += lineQtyForSku(o, id);
   return round(n);
 }
+function planDayPendingQty(g, day) {
+  let n = 0;
+  for (const o of state.orders) {
+    if (o.co !== co || o.status !== "open") continue;
+    if ((o.shipDate || today()) !== day) continue;
+    n += lineQtyForSkus(o, g.skuIds);
+  }
+  return round(n);
+}
+function planOtherOpenQty(g, day) {
+  let n = 0;
+  for (const o of state.orders) {
+    if (o.co !== co || o.status !== "open") continue;
+    if ((o.shipDate || today()) === day) continue;
+    n += lineQtyForSkus(o, g.skuIds);
+  }
+  return round(n);
+}
+function groupOnHand(g, date) {
+  let n = 0;
+  for (const id of g.skuIds) {
+    const sku = skuById(id);
+    if (!sku) continue;
+    n = round(n + onHand(sku, date));
+  }
+  return n;
+}
+function groupLeftover(g, date = planViewDay()) {
+  return round(groupOnHand(g, date) - planDayPendingQty(g, date));
+}
 function planGroups() {
   if (co === "ha") {
     return companySkus().map((sku, i) => ({
@@ -1654,15 +1690,6 @@ function planLineNote(o, skuIds) {
   }
   return [...new Set(bits.filter(Boolean))].join("　");
 }
-function groupLeftover(g) {
-  let n = 0;
-  for (const id of g.skuIds) {
-    const sku = skuById(id);
-    if (!sku) continue;
-    n = round(n + available(sku));
-  }
-  return n;
-}
 function renderPlan() {
   const shortBox = document.getElementById("plan-short");
   const box = document.getElementById("plan");
@@ -1685,11 +1712,17 @@ function renderPlan() {
     } else {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
-          const left = groupLeftover(g);
+          const left = groupLeftover(g, day);
+          const need = planDayPendingQty(g, day);
+          const stock = groupOnHand(g, day);
+          const other = planOtherOpenQty(g, day);
           const over = left < 0;
           return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
             <h3>${esc(g.label)}</h3>
-            <p class="short-est"><span>預估庫存</span><strong>${fmt(left)} ${esc(g.unit)}</strong></p>
+            <p class="short-est"><span>當日需要（待出）</span><strong>${fmt(need)} ${esc(g.unit)}</strong></p>
+            <p class="short-est is-sub"><span>當日庫存（盤點＋進貨－已出）</span><strong>${fmt(stock)} ${esc(g.unit)}</strong></p>
+            <p class="short-est"><span>預估剩餘</span><strong>${fmt(left)} ${esc(g.unit)}</strong></p>
+            ${other ? `<p class="short-other">另有他日未出 ${fmt(other)} ${esc(g.unit)}，未計入今日需要</p>` : ""}
             <p class="short-can">${over ? "已超接，不宜再接單" : "尚可接單"}</p>
           </article>`;
         })
@@ -3263,7 +3296,7 @@ document.getElementById("orders").onclick = (e) => {
         if (!sku) continue;
         ensureStockRow(sku.id);
         if (isSiteSku(sku)) continue;
-        if (available(sku, o) < qty) {
+        if (available(sku, o, today()) < qty) {
           setStatus(`${sku.name} 可出不足，不能出貨。請先在庫存頁記入進貨或早上盤點。`, true);
           return;
         }
@@ -3356,8 +3389,8 @@ function patchStockRow(skuId) {
   const date = stockViewDay();
   const b = bookRow(skuId, date);
   const oh = onHand(sku, date);
-  const rsv = reservedAll(skuId);
-  const av = available(sku);
+  const rsv = reservedAll(skuId, date);
+  const av = available(sku, undefined, date);
   const shipped = shippedQty(skuId, date);
   const ohEl = document.querySelector(`[data-oh="${skuId}"]`);
   if (ohEl) ohEl.textContent = `${fmt(oh)} ${sku.unit}`;

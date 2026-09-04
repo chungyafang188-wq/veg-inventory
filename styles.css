@@ -907,10 +907,13 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-weight: 800;
   white-space: nowrap;
 }
-.short-can {
-  margin: 0.08rem 0 0;
-  font-size: 0.88rem;
-  font-weight: 800;
+.short-est.is-sub strong { font-size: 1.15rem; }
+.short-other {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  opacity: 0.9;
 }
 .short-est small {
   display: block;

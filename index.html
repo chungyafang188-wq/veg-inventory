@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=90" />
+    <link rel="stylesheet" href="./styles.css?v=92" />
   </head>
   <body>
     <div class="app">
@@ -88,7 +88,7 @@
         </form>
         <section class="card">
           <h2>已填紀錄</h2>
-          <p class="hint" id="orders-hint">已確認的訂單會列在這裡。未出貨可用 ↑↓ 調整出貨順序。</p>
+          <p class="hint" id="orders-hint">已確認的訂單會列在這裡。改過的單會標「已改單」並註明修改人員。未出貨可用 ↑↓ 調整出貨順序。</p>
           <div id="rest-list"></div>
           <div id="orders"></div>
         </section>
@@ -101,7 +101,7 @@
             <h2 class="plan-sub">出貨排程</h2>
             <label class="date-inline">日期 <input id="plan-date" type="date" /></label>
           </div>
-          <p class="hint">數字都依上方日期。當日需要＝該日待出；當日庫存＝盤點＋進貨－已出；預估剩餘＝當日庫存－當日待出。他日還沒出的單會另外註明，不併進今日需要。</p>
+          <p class="hint">數字都依上方日期。穠全、鴻安都依「出貨日」歸待出／已出，不是依按下扣庫的那天。當日需要＝該日出貨日的待出；當日庫存＝盤點＋進貨－已出；預估剩餘＝當日庫存－當日待出。他日還沒出的單會另外註明，不併進今日需要。</p>
           <div id="plan"></div>
         </section>
       </section>
@@ -111,7 +111,7 @@
             <h2 id="stock-title">庫存</h2>
             <label class="date-inline">日期 <input id="stock-date" type="date" /></label>
           </div>
-          <p class="hint" id="guide-stock">上方各品項大數字＝盤點＋進貨。小字是盤點數量與進貨總數。這頁只填早上盤點；進貨請按上方「進貨」。</p>
+          <p class="hint" id="guide-stock">上方大數字＝當日庫存（盤點＋進貨－已出）。早上盤點還沒填就以 0 計，不帶入前一天。小字分開顯示盤點、進貨、已出。</p>
           <div id="stock-overview" class="stock-overview"></div>
         </section>
         <nav class="tabs stock-kind-tabs" id="stock-kind-tabs" aria-label="庫存品項">
@@ -158,6 +158,6 @@
       <p id="status" class="status" hidden></p>
     </div>
     <script src="./line-parse.js?v=85"></script>
-    <script src="./app.js?v=91"></script>
+    <script src="./app.js?v=98"></script>
   </body>
 </html>

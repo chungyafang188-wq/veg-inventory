@@ -2351,6 +2351,142 @@ function rackSheetFileTitle() {
   const day = rackMode === "custom" && rackFrom ? `${rackFrom}至${rackTo}` : rackTo || today();
   return `鐵架對帳單_${rackPick || "客人"}_${day}`;
 }
+function rackFillRight(ctx, text, x, y) {
+  ctx.fillText(String(text ?? ""), x - ctx.measureText(String(text ?? "")).width, y);
+}
+function rackEllipsis(ctx, text, maxW) {
+  const t = String(text || "");
+  if (ctx.measureText(t).width <= maxW) return t;
+  let s = t;
+  while (s.length && ctx.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
+  return `${s}…`;
+}
+function rackSheetPngBlob() {
+  return new Promise((resolve, reject) => {
+    const { s, custom, rows, qty } = rackSheetRows();
+    const dpr = 2;
+    const W = 980;
+    const pad = 36;
+    const rowH = 38;
+    const headH = 42;
+    const top = 168;
+    const H = top + headH + (Math.max(rows.length, 1) + 1) * rowH + pad + 36;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return reject(new Error("no canvas"));
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#fffdf8";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#1a6843";
+    ctx.font = '800 26px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    ctx.fillText("鴻安農業科技　鐵架對帳單", pad, 48);
+    ctx.fillStyle = "#16241c";
+    ctx.font = '800 22px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    ctx.fillText(`客人　${rackPick || ""}`, pad, 84);
+    ctx.fillStyle = "#5a6a61";
+    ctx.font = '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    ctx.fillText(`${rackSheetPeriodText()}　N＝穠全　H＝鴻安`, pad, 112);
+    ctx.fillText(`欠架合計 ${rackFmt(qty)}`, pad, 138);
+
+    const cols = custom
+      ? [
+          { key: "name", title: "品項", w: 0 },
+          { key: "opening", title: "期初", w: 92 },
+          { key: "out", title: "借出", w: 92 },
+          { key: "inn", title: "歸還", w: 92 },
+          { key: "closing", title: "欠架", w: 100 },
+          { key: "mark", title: "來源", w: 56 },
+        ]
+      : [
+          { key: "name", title: "品項", w: 0 },
+          { key: "out", title: "借出", w: 100 },
+          { key: "inn", title: "歸還", w: 100 },
+          { key: "closing", title: "欠架", w: 108 },
+          { key: "mark", title: "來源", w: 56 },
+        ];
+    const numW = cols.reduce((a, c) => a + c.w, 0);
+    cols[0].w = W - pad * 2 - numW;
+    const x0 = pad;
+    const y0 = top;
+    ctx.fillStyle = "#eef4ef";
+    ctx.fillRect(x0, y0, W - pad * 2, headH);
+    ctx.strokeStyle = "#d3ddd6";
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + headH);
+    ctx.lineTo(W - pad, y0 + headH);
+    ctx.stroke();
+    ctx.fillStyle = "#5a6a61";
+    ctx.font = '800 15px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    let x = x0;
+    for (const c of cols) {
+      const ty = y0 + 27;
+      if (c.key === "name") ctx.fillText(c.title, x + 8, ty);
+      else if (c.key === "mark") ctx.fillText(c.title, x + (c.w - ctx.measureText(c.title).width) / 2, ty);
+      else rackFillRight(ctx, c.title, x + c.w - 6, ty);
+      x += c.w;
+    }
+    const data = rows.concat([
+      {
+        frame: "",
+        opening: rows.reduce((a, r) => a + (r.opening || 0), 0),
+        out: rows.reduce((a, r) => a + (r.out || 0), 0),
+        inn: rows.reduce((a, r) => a + (r.inn || 0), 0),
+        closing: qty,
+        mark: "",
+        total: true,
+      },
+    ]);
+    data.forEach((r, i) => {
+      const y = y0 + headH + i * rowH;
+      if (i % 2) {
+        ctx.fillStyle = "#f7faf7";
+        ctx.fillRect(x0, y, W - pad * 2, rowH);
+      }
+      ctx.strokeStyle = "#e6ece7";
+      ctx.beginPath();
+      ctx.moveTo(x0, y + rowH);
+      ctx.lineTo(W - pad, y + rowH);
+      ctx.stroke();
+      ctx.font = r.total
+        ? '800 16px "Microsoft JhengHei","Noto Sans TC",sans-serif'
+        : '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+      let cx = x0;
+      for (const c of cols) {
+        const ty = y + 26;
+        if (c.key === "name") {
+          ctx.fillStyle = "#16241c";
+          ctx.fillText(rackEllipsis(ctx, r.total ? "合計" : rackLabel(s, r.frame), c.w - 16), cx + 8, ty);
+        } else if (c.key === "mark") {
+          ctx.fillStyle = "#1a6843";
+          const t = r.mark || "";
+          ctx.fillText(t, cx + (c.w - ctx.measureText(t).width) / 2, ty);
+        } else {
+          ctx.fillStyle = c.key === "closing" ? "#8d5a3a" : c.key === "inn" ? "#3a6d78" : "#16241c";
+          rackFillRight(ctx, rackFmt(r[c.key]), cx + c.w - 6, ty);
+        }
+        cx += c.w;
+      }
+    });
+    ctx.fillStyle = "#5a6a61";
+    ctx.font = '600 14px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    ctx.fillText("請核對尚欠數量，歸還時請告知。", pad, H - 22);
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("png"))), "image/png");
+  });
+}
+async function rackSheetPngFile() {
+  const blob = await rackSheetPngBlob();
+  const name = `${rackSheetFileTitle()}.png`;
+  return new File([blob], name, { type: "image/png" });
+}
+function downloadRackSheetPng(file) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
 function rackOpenPrint(asPdf) {
   const prev = document.title;
   document.title = rackSheetFileTitle();
@@ -2392,11 +2528,36 @@ async function copyRackSheet() {
   }
 }
 async function shareRackSheet() {
-  const text = rackSheetText();
+  setStatus("正在做成圖片…");
+  let file = null;
+  try {
+    file = await rackSheetPngFile();
+  } catch (_) {
+    setStatus("做成圖片失敗，改傳文字。", true);
+  }
   const title = rackSheetFileTitle();
+  const text = `${rackPick || ""} 鐵架對帳單（N＝穠全　H＝鴻安）`;
+  if (file) {
+    const payload = { title, text, files: [file] };
+    if (navigator.canShare?.({ files: [file] }) || navigator.canShare?.(payload)) {
+      try {
+        await navigator.share(payload);
+        setStatus("已打開分享，請選 LINE 傳送圖片。");
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") {
+          setStatus("");
+          return;
+        }
+      }
+    }
+    downloadRackSheetPng(file);
+    setStatus("已存成圖片檔，請傳到 LINE。電腦可再按一次「傳 LINE」選 LINE。");
+    return;
+  }
   if (navigator.share) {
     try {
-      await navigator.share({ title, text });
+      await navigator.share({ title, text: rackSheetText() });
       setStatus("已打開分享，請選 LINE。");
       return;
     } catch (err) {

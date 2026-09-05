@@ -2290,6 +2290,15 @@ function rackCoFromMark(mark) {
   if (mark === "N") return "穠全";
   return "";
 }
+function rackMergeMarks(marks) {
+  const set = [...new Set((marks || []).filter(Boolean))];
+  const hasN = set.includes("N");
+  const hasH = set.includes("H");
+  if (hasN && hasH) return "N+H";
+  if (hasN) return "N";
+  if (hasH) return "H";
+  return set.sort().join("+");
+}
 function rackCustomerSheetRows(customer) {
   const lib = window.RackLib;
   const sAll = rackSummary();
@@ -2301,7 +2310,7 @@ function rackCustomerSheetRows(customer) {
         { company: "穠全", mark: "N" },
         { company: "鴻安", mark: "H" },
       ];
-  const rows = [];
+  const parts = [];
   for (const src of sources) {
     const s = lib.summarize(rackTxns, {
       from: custom ? rackFrom || "" : "",
@@ -2310,10 +2319,38 @@ function rackCustomerSheetRows(customer) {
     });
     for (const r of lib.customerOwed(s, customer)) {
       if (!(r.closing > 0 || (custom && (r.out || r.inn || r.opening)))) continue;
-      rows.push({ ...r, company: src.company, mark: src.mark });
+      parts.push({ ...r, company: src.company, mark: src.mark });
     }
   }
-  rows.sort((a, b) => b.closing - a.closing || a.mark.localeCompare(b.mark));
+  let rows = parts;
+  if (!rackCo) {
+    const byFrame = new Map();
+    for (const r of parts) {
+      const cur = byFrame.get(r.frame) || {
+        frame: r.frame,
+        opening: 0,
+        out: 0,
+        inn: 0,
+        closing: 0,
+        marks: [],
+      };
+      cur.opening += r.opening || 0;
+      cur.out += r.out || 0;
+      cur.inn += r.inn || 0;
+      cur.closing += r.closing || 0;
+      if (r.mark) cur.marks.push(r.mark);
+      byFrame.set(r.frame, cur);
+    }
+    rows = [...byFrame.values()].map((r) => ({
+      frame: r.frame,
+      opening: r.opening,
+      out: r.out,
+      inn: r.inn,
+      closing: r.closing,
+      mark: rackMergeMarks(r.marks),
+    }));
+  }
+  rows.sort((a, b) => b.closing - a.closing || String(a.frame).localeCompare(String(b.frame)));
   return { s: sAll, custom, rows, qty: rows.reduce((a, r) => a + r.closing, 0) };
 }
 function rackSheetPeriodText() {
@@ -2328,7 +2365,7 @@ function rackSheetText() {
   const { s, custom, rows, qty } = rackSheetRows();
   const lines = [
     "鴻安農業科技　鐵架對帳單",
-    `公司：${rackCoLabel()}（N＝穠全　H＝鴻安）`,
+    `公司：${rackCoLabel()}（N＝穠全　H＝鴻安　N+H＝兩家加總）`,
     `客人：${rackPick}`,
     rackSheetPeriodText(),
     "",
@@ -2387,7 +2424,7 @@ function rackSheetPngBlob() {
     ctx.fillText(`客人　${rackPick || ""}`, pad, 84);
     ctx.fillStyle = "#5a6a61";
     ctx.font = '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
-    ctx.fillText(`${rackSheetPeriodText()}　N＝穠全　H＝鴻安`, pad, 112);
+    ctx.fillText(`${rackSheetPeriodText()}　N＝穠全　H＝鴻安　N+H＝兩家加總`, pad, 112);
     ctx.fillText(`欠架合計 ${rackFmt(qty)}`, pad, 138);
 
     const cols = custom
@@ -2397,14 +2434,14 @@ function rackSheetPngBlob() {
           { key: "out", title: "借出", w: 92 },
           { key: "inn", title: "歸還", w: 92 },
           { key: "closing", title: "欠架", w: 100 },
-          { key: "mark", title: "來源", w: 56 },
+          { key: "mark", title: "來源", w: 72 },
         ]
       : [
           { key: "name", title: "品項", w: 0 },
           { key: "out", title: "借出", w: 100 },
           { key: "inn", title: "歸還", w: 100 },
           { key: "closing", title: "欠架", w: 108 },
-          { key: "mark", title: "來源", w: 56 },
+          { key: "mark", title: "來源", w: 72 },
         ];
     const numW = cols.reduce((a, c) => a + c.w, 0);
     cols[0].w = W - pad * 2 - numW;
@@ -2769,7 +2806,10 @@ function renderRack() {
       const rows = sheet.rows.filter((r) => r.frame === rackLine && (!rackSrc || r.mark === rackSrc));
       const owed = rows.reduce((a, r) => a + (r.closing || 0), 0);
       const docs = rackCustomerFrameDocs(rackPick, rackLine);
-      const srcLab = rackSrc ? `來源 ${esc(rackSrc)}＝${esc(rackCoFromMark(rackSrc) || rackCoLabel())}` : "來源 N＝穠全　H＝鴻安";
+      const srcLab =
+        !rackSrc || rackSrc === "N+H"
+          ? "來源 N＝穠全　H＝鴻安（明細仍分公司）"
+          : `來源 ${esc(rackSrc)}＝${esc(rackCoFromMark(rackSrc) || rackCoLabel())}`;
       const lines = docs.lines.length
         ? docs.lines
             .map(
@@ -2814,7 +2854,7 @@ function renderRack() {
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架對帳單</p>
           <h3 class="rack-sheet-title">總單　${esc(rackPick)}</h3>
-          <p class="rack-stat">N＝穠全　H＝鴻安　${rows.length} 筆　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
+          <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　${rows.length} 種　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
           ${
             rows.length
               ? `<table class="rack-table rack-sheet-table">${head}<tbody>${body}${foot}</tbody></table>`

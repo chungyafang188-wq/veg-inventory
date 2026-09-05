@@ -416,8 +416,8 @@ export function flattenProductMovement(rows) {
       continue;
     }
     const isAdj = slip.includes("調整");
-    const isReturn = slip.includes("銷退");
-    const isSale = slip.includes("銷貨");
+    const isReturn = slip.includes("銷退") || slip.includes("退貨");
+    const isSale = slip.includes("銷貨") && !isReturn;
     const isTransferIn = slip.includes("撥入");
     const isTransferOut = slip.includes("撥出");
     if (!isAdj && !isReturn && !isSale && !isTransferIn && !isTransferOut) continue;
@@ -437,15 +437,17 @@ export function flattenProductMovement(rows) {
     const date = excelDate(rec["單據日期"]);
     if (!code || !date || !Number.isFinite(qty) || qty === 0) continue;
 
+    // 銷貨單：正數＝借出、負數＝歸還。退貨／銷退單：正數＝歸還。
     let signed = qty;
-    if (isReturn) signed = -qty;
-    if (isTransferOut) signed = -qty;
+    if (isReturn) signed = -Math.abs(qty);
+    if (isTransferOut) signed = -Math.abs(qty);
 
     rec["客戶簡稱"] = cust;
     rec["產品編號"] = code;
     rec["品名規格"] = name;
     rec["數量"] = signed;
     rec["單據日期"] = date;
+    rec["單據"] = slip;
     rec._row = i + 1;
     records.push(rec);
   }

@@ -969,15 +969,19 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .rack-search { flex: 1; min-width: 8rem; }
 .rack-search input { width: 100%; }
 #rack-pane-tabs { margin-top: 0.4rem; }
+#page-rack #rack-box {
+  max-width: 32rem;
+}
 .rack-table {
   width: 100%;
   margin-top: 0.25rem;
   border-collapse: collapse;
+  table-layout: auto;
   font-size: 0.84rem;
 }
 .rack-table th,
 .rack-table td {
-  padding: 0.32rem 0.2rem;
+  padding: 0.32rem 0.45rem 0.32rem 0.2rem;
   border-bottom: 1px solid var(--line);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -986,9 +990,23 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .rack-table td:first-child {
   text-align: left;
   font-weight: 700;
+  padding-right: 0.8rem;
+}
+.rack-table th:not(:first-child),
+.rack-table td:not(:first-child) {
+  width: 1%;
+  white-space: nowrap;
 }
 .rack-table tr[data-rack-pick] { cursor: pointer; }
 .rack-table .owed { color: var(--c-out); font-weight: 800; }
+.rack-table .rack-in { color: var(--c-in); font-weight: 800; }
+.rack-table .rack-src {
+  text-align: center !important;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  width: 1%;
+  color: var(--green);
+}
 .rack-back {
   margin: 0.35rem 0 0.15rem;
   width: auto;
@@ -1031,9 +1049,39 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-weight: 700;
   line-height: 1.35;
 }
+.rack-sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.25rem;
+}
+.rack-sheet-actions button {
+  margin: 0;
+  width: auto;
+  min-height: 2.15rem;
+  padding: 0.28rem 0.35rem;
+  font-size: 0.84rem;
+}
+.rack-print-brand {
+  display: none;
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--green);
+}
 .rack-sheet-title {
   margin: 0.35rem 0 0.1rem;
+  font-size: 1.18rem;
+}
+.rack-sheet .rack-stat {
   font-size: 0.95rem;
+}
+.rack-sheet-table {
+  font-size: 1rem;
+}
+.rack-sheet-table th,
+.rack-sheet-table td {
+  padding: 0.48rem 0.28rem;
 }
 .rack-owed-big {
   margin: 0.2rem 0 0.45rem;
@@ -1042,6 +1090,45 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   color: var(--c-out);
 }
 .rack-table tr[data-rack-line] { cursor: pointer; }
+@media print {
+  body.rack-printing {
+    background: #fff;
+  }
+  body.rack-printing .app {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  body.rack-printing .app-head,
+  body.rack-printing .tabs,
+  body.rack-printing .rack-head,
+  body.rack-printing .rack-import-msg,
+  body.rack-printing .rack-period,
+  body.rack-printing .rack-filters,
+  body.rack-printing #rack-pane-tabs,
+  body.rack-printing .rack-hint,
+  body.rack-printing .rack-range,
+  body.rack-printing .rack-back,
+  body.rack-printing .rack-sheet-actions,
+  body.rack-printing #status,
+  body.rack-printing #login-gate,
+  body.rack-printing #proof-gate,
+  body.rack-printing #flow-tabs,
+  body.rack-printing #co-tabs,
+  body.rack-printing #home-hub {
+    display: none !important;
+  }
+  body.rack-printing .rack-print-brand { display: block; }
+  body.rack-printing .rack-sheet-title { font-size: 1.35rem; }
+  body.rack-printing .rack-sheet .rack-stat { font-size: 1.05rem; color: #222; }
+  body.rack-printing .rack-sheet-table { font-size: 1.12rem; }
+  body.rack-printing .rack-sheet-table th,
+  body.rack-printing .rack-sheet-table td {
+    padding: 0.45rem 0.25rem;
+    border-bottom: 1px solid #ccc;
+  }
+}
 .in-ov-note {
   margin: 0.35rem 0 0.45rem;
   font-size: 0.8rem;
@@ -2064,6 +2151,8 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   body:has(#page-home:not([hidden])) .app { max-width: 54rem; }
   .hub.hub-pick { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   body:has(#page-plan:not([hidden])) .app { max-width: 96rem; }
+  body.on-rack .app,
+  body:has(#page-rack:not([hidden])) .app { max-width: 36rem; }
   .plan-board {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(13.8rem, 1fr));

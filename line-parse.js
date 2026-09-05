@@ -178,12 +178,37 @@
     if (redBasil.test(t) || /紅芳/.test(t)) return { skuId: "rb-fang", qty, pallet };
     if (/洋蔥?\s*B|蔥B|洋B/.test(t)) return { skuId: "on-b-kg", qty, pallet };
     if (/南瓜?\s*B|瓜B/.test(t)) return { skuId: "pk-b-kg", qty, pallet };
-    if (t.includes("密本")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-mi-20" : "pk-mi-18", qty, pallet };
     if (t.includes("阿成")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-ch-20" : "pk-ch-18", qty, pallet };
+    if (t.includes("密本") || /東昇/.test(t) || /南瓜/.test(t)) {
+      const use20 = onionBits.spec12 === false || /20/.test(raw);
+      const use18 = onionBits.spec12 === true || /18/.test(raw);
+      return { skuId: use20 && !use18 ? "pk-mi-20" : "pk-mi-18", qty, pallet };
+    }
     if (/薄荷/.test(t)) return { skuId: "mint-kg", qty, pallet };
     if (/紫蘇/.test(t) && /斤/.test(t)) return { skuId: "shiso-jin", qty, pallet };
     if (/紫蘇/.test(t)) return { skuId: "shiso-kg", qty, pallet };
     if (/九層塔散|塔散|塔kg/.test(t)) return { skuId: "basil-kg", qty, pallet };
+    if (/高麗菜/.test(t)) {
+      if (/印尼/.test(t)) return { skuId: "veg-cab-id", qty, pallet };
+      if (/越/.test(t)) return { skuId: "veg-cab-vn", qty, pallet };
+      return { skuId: "veg-cab-kr", qty, pallet };
+    }
+    if (/大白菜/.test(t)) {
+      if (/越/.test(t)) return { skuId: "veg-nap-vn", qty, pallet };
+      return { skuId: "veg-nap-kr", qty, pallet };
+    }
+    if (/小辣/.test(t)) return { skuId: "veg-chili-sm", qty, pallet };
+    if (/大辣|大辣椒|朝天椒/.test(t)) return { skuId: "veg-chili-lg", qty, pallet };
+    if (/美生菜/.test(t)) return { skuId: /韓/.test(t) ? "veg-ice-kr" : "veg-ice-vn", qty, pallet };
+    if (/西芹/.test(t)) return { skuId: /美/.test(t) ? "veg-cel-us" : "veg-cel-vn", qty, pallet };
+    if (/青花/.test(t)) return { skuId: "veg-bro-vn", qty, pallet };
+    if (/牛蒡|蘿蔔/.test(t)) return { skuId: /2L|2l/.test(t) ? "veg-bur-2l" : "veg-bur-l", qty, pallet };
+    if (/白K|白ｋ/.test(t)) {
+      if (/切頭/.test(t)) return { skuId: "veg-wk-cut", qty, pallet };
+      if (/2L|2l/.test(t)) return { skuId: "veg-wk-2l", qty, pallet };
+      if (/\bM\b|／M|M級/.test(t) || /白KM/.test(t)) return { skuId: "veg-wk-m", qty, pallet };
+      return { skuId: "veg-wk-l", qty, pallet };
+    }
     const purple = /紫洋蔥|紫洋|紫蔥/.test(t);
     let origin = "";
     for (const [word, code] of ORIGIN) {
@@ -203,7 +228,7 @@
   }
 
   function looksLikeItems(line) {
-    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|澳洲|越南|地瓜葉|地瓜|紫洋|洋蔥|南瓜|九層|紅骨|綠骨|進貨|入貨|到貨|\d+\s*K/i.test(
+    return /袋|箱|籃|kg|公斤|件|密本|阿成|紐洋|紐大|紐特|韓洋|韓大|紐西蘭|澳洲|越南|地瓜葉|地瓜|紫洋|洋蔥|南瓜|九層|紅骨|綠骨|高麗菜|大白菜|西芹|青花|牛蒡|蘿蔔|甜椒|朝天椒|美生菜|白K|東昇|進貨|入貨|到貨|\d+\s*K/i.test(
       String(line || ""),
     );
   }

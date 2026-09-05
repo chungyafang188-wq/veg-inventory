@@ -5,55 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1b5e3b" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=92" />
+    <link rel="stylesheet" href="./styles.css?v=113" />
   </head>
   <body>
     <div class="app">
-      <header>
-        <p class="eyebrow" id="co-name">鴻安公司</p>
-        <h1>產品出貨紀錄表</h1>
-        <p class="note" id="intro-note">鴻安：出貨對象請手打（打過的會出現在上方，可一鍵再選；名單旁 × 可移除）。填數量後按確認即佔量。庫存頁把早上盤點「加入」才有可出貨件數。出貨扣庫會扣可出，並把出貨數量累計入今日進貨。</p>
-        <p class="muted" id="sync-note"></p>
-        <div class="operator-bar" id="operator-bar">
-          <p class="operator-kicker">處理單的人</p>
-          <h2 class="operator-title">目前會計</h2>
-          <p class="operator-now" id="operator-now">尚未填寫，入單前請先填名字</p>
-          <label class="operator-field" for="operator">請填或點選姓名
-            <input id="operator" type="text" placeholder="例如：小陳" autocomplete="off" />
-          </label>
-          <p class="operator-help">入單、修改、出貨都會記這個人。換人處理請改名字。</p>
-          <div id="operator-chips" class="chips" aria-label="會計名單"></div>
+      <header class="app-head">
+        <p class="eyebrow" id="co-name">產品出貨</p>
+        <p class="muted" id="sync-note" hidden></p>
+        <div class="who-wrap">
+          <span class="who-now" id="who-now" hidden></span>
+          <button type="button" class="who-btn" id="who-btn">登入</button>
         </div>
       </header>
-      <nav class="tabs" aria-label="公司">
-        <button type="button" class="tab on" data-co="ha">鴻安公司</button>
-        <button type="button" class="tab" data-co="nq">穠全公司</button>
+      <div id="login-gate" class="login-gate" hidden>
+        <div class="login-card">
+          <h2>請選取使用者</h2>
+          <p class="hint">同一台手機或電腦登入一次即可，之後會記住。現場共用「現場」。其他人暫時不用密碼。</p>
+          <div id="login-people"></div>
+          <form id="login-pin" class="login-pin" hidden>
+            <p class="login-pin-who" id="login-pin-who">請輸入主管密碼</p>
+            <label class="field">密碼
+              <input id="login-pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+            </label>
+            <p class="login-pin-err" id="login-pin-err" hidden>密碼不對，請再試一次。</p>
+            <div class="btn-row">
+              <button type="submit" class="primary">確認</button>
+              <button type="button" class="ghost" id="login-pin-back">返回</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <nav class="tabs" id="flow-tabs" aria-label="流程">
+        <button type="button" class="tab on" data-page="orders">總訂單</button>
+        <button type="button" class="tab" data-page="plan">排程／派貨</button>
+        <button type="button" class="tab" data-page="books">後帳</button>
       </nav>
-      <nav class="tabs" aria-label="頁面">
-        <button type="button" class="tab on" data-page="orders">訂單輸入</button>
-        <button type="button" class="tab" data-page="plan">排程</button>
-        <button type="button" class="tab" data-page="stock">庫存</button>
-        <button type="button" class="tab" data-page="in" hidden>進貨</button>
+      <nav class="tabs" id="co-tabs" hidden aria-label="公司">
+        <button type="button" class="tab on" data-co="nq">穠全進銷</button>
+        <button type="button" class="tab" data-co="ha">鴻安進銷</button>
+      </nav>
+      <nav class="tabs" id="books-part-tabs" hidden aria-label="後帳項目">
+        <button type="button" class="tab on" data-books="stock">庫存盤點</button>
+        <button type="button" class="tab" data-books="in">進貨</button>
+        <button type="button" class="tab" data-books="sales">當日訂單</button>
       </nav>
       <p id="alerts" class="alerts" hidden></p>
       <section id="page-orders">
-        <section class="card" id="line-draft-card">
-          <h2>貼上文字下單／進貨</h2>
-          <p class="hint">第一行寫客人（可含「-南」「-北」），空格或換行後再寫品項與件數。解析後可直接改出貨對象、品項、件數再確認，不必丟掉重貼。一篇可貼多位。</p>
+        <nav class="tabs" id="orders-pane-tabs" aria-label="總訂單切換">
+          <button type="button" class="tab on" data-orders-pane="form">開單</button>
+          <button type="button" class="tab" data-orders-pane="today">今日已填</button>
+        </nav>
+        <div class="orders-swipe" id="orders-swipe">
+          <div class="orders-pane" data-orders-pane-page="form">
+        <details class="card" id="line-draft-card">
+          <summary>貼上文字下單／進貨</summary>
+          <p class="hint">第一行客人，其後品項與件數。可改完再確認。</p>
           <p class="muted" id="line-api-status"></p>
           <label class="field">下單文字
-            <textarea id="line-paste" rows="5" placeholder="金芳拍賣-南 紐大12K/20&#10;金芳拍賣-北 紐洋20K/30"></textarea>
+            <textarea id="line-paste" rows="4" placeholder="金芳拍賣-南 紐大12K/20"></textarea>
           </label>
           <div class="btn-row">
             <button type="button" id="line-parse-btn" class="primary">解析文字</button>
           </div>
           <div id="line-drafts"></div>
-        </section>
-        <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單">
-          <button type="button" class="tab on" data-form="leaf">地瓜葉</button>
-          <button type="button" class="tab" data-form="basil">九層塔</button>
-          <button type="button" class="tab" data-form="herb">散賣品項</button>
-        </nav>
+        </details>
+        <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單"></nav>
         <section class="card daily-sheet-card" id="daily-sheet-card" hidden>
           <div class="head">
             <h2 id="daily-sheet-title">穠全 地瓜葉出貨</h2>
@@ -72,37 +88,78 @@
           </div>
         </section>
         <form id="order-form" class="card">
-          <h2 id="form-title">訂單輸入</h2>
+          <div class="head">
+            <h2 id="form-title">總訂單</h2>
+            <details class="ship-more" id="ship-more">
+              <summary id="ship-more-sum">當日</summary>
+              <p class="ship-more-note">預設今天。改成明天以後會當成預訂單，當天再出貨。</p>
+              <label class="ship-more-field">出貨日 <input id="ship-date" type="date" required /></label>
+            </details>
+          </div>
           <p class="hint" id="form-hint" hidden></p>
           <input id="edit-id" type="hidden" />
-          <div id="cust-chips" class="chips" role="group" aria-label="出貨對象"></div>
-          <label class="field">出貨對象 <input id="customer" type="text" required placeholder="請輸入出貨對象" autocomplete="off" /></label>
-          <label class="field">出貨日 <input id="ship-date" type="date" required /></label>
+          <label class="field order-who-field" for="customer">出貨對象
+            <span class="cust-wrap">
+              <input id="customer" type="text" required placeholder="姓名或注音（如ㄉ）" autocomplete="off" spellcheck="false" lang="zh-Hant" />
+              <div id="cust-suggest" class="cust-suggest" hidden></div>
+            </span>
+          </label>
+          <div id="ticket" class="ticket">
+            <p class="ticket-empty">本單還沒有品項</p>
+          </div>
           <div id="sheet"></div>
           <div id="check" class="check"></div>
+          <div class="ship-addr-block" id="ship-addr-block">
+            <p class="pick-lab">送貨位置</p>
+            <div class="picks ship-addr-picks" id="ship-addr-picks" role="group" aria-label="送貨位置">
+              <button type="button" class="pick" data-ship-pick="冰庫">冰庫</button>
+              <button type="button" class="pick" data-ship-pick="市場">市場</button>
+              <button type="button" class="pick" data-ship-pick="其他">其他</button>
+            </div>
+            <label class="field ship-addr-other" id="ship-addr-other-wrap" hidden for="ship-addr">其他位置
+              <input id="ship-addr" type="text" placeholder="地址或送貨點" autocomplete="off" spellcheck="false" />
+            </label>
+          </div>
           <div class="btn-row">
-            <button type="submit" class="primary">確認輸入訂單</button>
+            <button type="submit" class="primary" id="order-submit">確認送出</button>
             <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
             <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
           </div>
         </form>
-        <section class="card">
-          <h2>已填紀錄</h2>
-          <p class="hint" id="orders-hint">已確認的訂單會列在這裡。改過的單會標「已改單」並註明修改人員。未出貨可用 ↑↓ 調整出貨順序。</p>
-          <div id="rest-list"></div>
-          <div id="orders"></div>
-        </section>
+          </div>
+          <div class="orders-pane" data-orders-pane-page="today">
+            <section class="card" id="orders-today-card">
+              <div class="head">
+                <h2 id="orders-today-title">今日已填</h2>
+                <label class="date-inline">日期 <input id="orders-today-date" type="date" /></label>
+              </div>
+              <p class="hint">下單後會出現在這裡。派工前請核對，點「改單」可改對象、位置與件數。</p>
+              <div id="orders-today-rest"></div>
+              <div id="orders-today"></div>
+            </section>
+          </div>
+        </div>
       </section>
       <section id="page-plan" hidden>
         <section class="card" id="plan-card">
-          <h2 id="plan-short-title">尚缺品項</h2>
+          <h2 id="plan-short-title">現場須出（現採／加工）</h2>
           <div id="plan-short"></div>
           <div class="head plan-date-row">
-            <h2 class="plan-sub">出貨排程</h2>
+            <h2 class="plan-sub" id="plan-sub-title">派貨</h2>
             <label class="date-inline">日期 <input id="plan-date" type="date" /></label>
           </div>
-          <p class="hint">數字都依上方日期。穠全、鴻安都依「出貨日」歸待出／已出，不是依按下扣庫的那天。當日需要＝該日出貨日的待出；當日庫存＝盤點＋進貨－已出；預估剩餘＝當日庫存－當日待出。他日還沒出的單會另外註明，不併進今日需要。</p>
-          <div id="plan"></div>
+          <nav class="tabs" id="plan-pane-tabs" aria-label="派貨切換">
+            <button type="button" class="tab on" data-plan-pane="pending">待處理</button>
+            <button type="button" class="tab" data-plan-pane="done">已出貨</button>
+          </nav>
+          <div class="orders-swipe" id="plan-swipe">
+            <div class="orders-pane" data-plan-pane-page="pending">
+              <div id="plan-pending"></div>
+            </div>
+            <div class="orders-pane" data-plan-pane-page="done">
+              <div id="plan-done"></div>
+            </div>
+          </div>
         </section>
       </section>
       <section id="page-stock" hidden>
@@ -135,6 +192,18 @@
           <button type="submit" class="primary">記入已加工</button>
         </form>
       </section>
+      <section id="page-sales" hidden>
+        <section class="card">
+          <div class="head">
+            <h2 id="sales-title">銷貨帳單</h2>
+            <label class="date-inline">日期 <input id="sales-date" type="date" /></label>
+          </div>
+          <p class="hint" id="sales-hint" hidden></p>
+          <div id="rest-list"></div>
+          <div id="orders"></div>
+          <div id="sales-list" hidden></div>
+        </section>
+      </section>
       <section id="page-in" hidden>
         <section class="card" id="in-head-card">
           <div class="head">
@@ -155,9 +224,33 @@
           <button type="submit" id="recv-btn">入庫</button>
         </form>
       </section>
+      <div id="proof-gate" class="login-gate" hidden>
+        <div class="login-card proof-card">
+          <h2 id="proof-title">確認送貨</h2>
+          <p class="hint" id="proof-hint">簽名或拍照擇一即可。確認後視為已送到，並立刻扣庫。件數不對請回報會計修改。</p>
+          <div class="btn-row proof-modes">
+            <button type="button" class="pick on" data-proof-mode="sign">電子簽單</button>
+            <button type="button" class="pick" data-proof-mode="photo">拍照上傳</button>
+          </div>
+          <div id="proof-sign-box">
+            <canvas id="proof-canvas" width="640" height="240" aria-label="簽名"></canvas>
+            <button type="button" class="ghost" id="proof-clear">清除簽名</button>
+          </div>
+          <div id="proof-photo-box" hidden>
+            <label class="field">現場照片
+              <input id="proof-file" type="file" accept="image/*" capture="environment" />
+            </label>
+            <img id="proof-preview" alt="" hidden />
+          </div>
+          <div class="btn-row">
+            <button type="button" class="primary" id="proof-ok">確認送貨並扣庫</button>
+            <button type="button" class="ghost" id="proof-cancel">取消</button>
+          </div>
+        </div>
+      </div>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=85"></script>
-    <script src="./app.js?v=98"></script>
+    <script src="./line-parse.js?v=88"></script>
+    <script src="./app.js?v=125"></script>
   </body>
 </html>

@@ -2334,15 +2334,15 @@ function rackSheetText() {
     "",
   ];
   if (custom) {
-    lines.push("來源\t品項\t期初\t借出\t歸還\t欠架");
+    lines.push("品項\t期初\t借出\t歸還\t欠架\t來源");
     for (const r of rows) {
-      lines.push(`${r.mark || ""}\t${rackLabel(s, r.frame)}\t${rackFmt(r.opening)}\t${rackFmt(r.out)}\t${rackFmt(r.inn)}\t${rackFmt(r.closing)}`);
+      lines.push(`${rackLabel(s, r.frame)}\t${rackFmt(r.opening)}\t${rackFmt(r.out)}\t${rackFmt(r.inn)}\t${rackFmt(r.closing)}\t${r.mark || ""}`);
     }
-    lines.push(`合計\t\t${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}\t${rackFmt(qty)}`);
+    lines.push(`合計\t${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}\t${rackFmt(qty)}\t`);
   } else {
-    lines.push("來源\t品項\t借出\t歸還\t欠架");
-    for (const r of rows) lines.push(`${r.mark || ""}\t${rackLabel(s, r.frame)}\t${rackFmt(r.out)}\t${rackFmt(r.inn)}\t${rackFmt(r.closing)}`);
-    lines.push(`合計\t\t${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}\t${rackFmt(qty)}`);
+    lines.push("品項\t借出\t歸還\t欠架\t來源");
+    for (const r of rows) lines.push(`${rackLabel(s, r.frame)}\t${rackFmt(r.out)}\t${rackFmt(r.inn)}\t${rackFmt(r.closing)}\t${r.mark || ""}`);
+    lines.push(`合計\t${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}\t${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}\t${rackFmt(qty)}\t`);
   }
   lines.push("", "請核對尚欠數量，歸還時請告知。");
   return lines.join("\n");
@@ -2613,7 +2613,7 @@ function renderRack() {
         ? docs.lines
             .map(
               (d) =>
-                `<tr><td class="rack-src">${esc(d.mark || "")}</td><td>${esc(d.doc)}</td><td>${esc(d.date || "")}</td><td>${esc(d.dir)}</td><td class="${d.dir === "歸還" ? "rack-in" : "owed"}">${rackFmt(d.qty)}</td></tr>`,
+                `<tr><td class="rack-col-date">${esc(d.date || "")}</td><td class="rack-col-doc">${esc(d.doc)}</td><td class="rack-col-kind">${esc(d.dir)}</td><td class="${d.dir === "歸還" ? "rack-in" : "owed"}">${rackFmt(d.qty)}</td><td class="rack-src">${esc(d.mark || "")}</td></tr>`,
             )
             .join("")
         : `<tr><td colspan="5">沒有單號明細</td></tr>`;
@@ -2621,7 +2621,7 @@ function renderRack() {
         <h3 class="rack-sheet-title">${esc(rackPick)}　${esc(rackLabel(s, rackLine))}</h3>
         <p class="rack-owed-big">欠架總數 ${rackFmt(owed)}</p>
         <p class="rack-stat">${srcLab}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}　${rackMode === "custom" && rackFrom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : ""}</p>
-        <table class="rack-table rack-sheet-table"><thead><tr><th>來源</th><th>單號</th><th>日期</th><th>別</th><th>數量</th></tr></thead><tbody>${lines}</tbody></table>`;
+        <table class="rack-table rack-sheet-table"><thead><tr><th>日期</th><th>單號</th><th>類別</th><th>數量</th><th>來源</th></tr></thead><tbody>${lines}</tbody></table>`;
       return;
     }
     if (rackPick) {
@@ -2632,18 +2632,18 @@ function renderRack() {
       const s = sheet.s;
       const span = rackDateSpan();
       const head = custom
-        ? `<thead><tr><th>來源</th><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th></tr></thead>`
-        : `<thead><tr><th>來源</th><th>品項</th><th>借出</th><th>歸還</th><th>欠架</th></tr></thead>`;
+        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th></tr></thead>`
+        : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th></tr></thead>`;
       const body = rows
         .map((r) =>
           custom
-            ? `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td class="rack-src">${esc(r.mark)}</td><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`
-            : `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td class="rack-src">${esc(r.mark)}</td><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`,
+            ? `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td></tr>`
+            : `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td></tr>`,
         )
         .join("");
       const foot = custom
-        ? `<tr><td colspan="2">合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td></tr>`
-        : `<tr><td colspan="2">合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td></tr>`;
+        ? `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td></tr>`
+        : `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td></tr>`;
       box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="list">返回客人</button>
         <div class="rack-sheet-actions">
           <button type="button" class="ghost" data-rack-print>列印</button>

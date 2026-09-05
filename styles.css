@@ -1007,6 +1007,15 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   width: 1%;
   color: var(--green);
 }
+.rack-sheet-table .rack-col-date,
+.rack-sheet-table .rack-col-doc {
+  text-align: left !important;
+  font-weight: 700;
+}
+.rack-sheet-table .rack-col-kind {
+  text-align: center !important;
+  font-weight: 700;
+}
 .rack-back {
   margin: 0.35rem 0 0.15rem;
   width: auto;

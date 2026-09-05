@@ -2389,6 +2389,68 @@ function rackSheetFileTitle() {
   const day = rackMode === "custom" && rackFrom ? `${rackFrom}至${rackTo}` : rackTo || today();
   return `鐵架對帳單_${rackPick || "客人"}_${day}`;
 }
+function rackSafeFileName(name) {
+  return String(name || "export").replace(/[\\/:*?"<>|]+/g, "_");
+}
+function csvCell(v) {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+function downloadCsv(name, headers, rows) {
+  const body = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + body], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${rackSafeFileName(name)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function exportRackExcel() {
+  if (rackPick && rackLine) {
+    const docs = rackCustomerFrameDocs(rackPick, rackLine);
+    const s = rackSummary();
+    const headers = ["日期", "單號", "類別", "數量", "來源"];
+    const lines = docs.lines.map((d) => [d.date || "", d.doc || "", d.dir || "", d.qty, d.mark || ""]);
+    lines.push(["", "", "借出合計", docs.out, ""]);
+    lines.push(["", "", "歸還合計", docs.inn, ""]);
+    downloadCsv(`${rackSheetFileTitle()}_${rackLabel(s, rackLine)}_明細`, headers, lines);
+    setStatus("已匯出 Excel，用 Excel 開啟即可。");
+    return;
+  }
+  const { s, custom, rows, qty } = rackSheetRows();
+  if (!rows.length) {
+    setStatus("沒有可匯出的總單。", true);
+    return;
+  }
+  if (custom) {
+    downloadCsv(
+      `${rackSheetFileTitle()}_總單`,
+      ["品項", "期初", "借出", "歸還", "欠架", "來源"],
+      rows
+        .map((r) => [rackLabel(s, r.frame), r.opening, r.out, r.inn, r.closing, r.mark || ""])
+        .concat([
+          [
+            "合計",
+            rows.reduce((a, r) => a + (r.opening || 0), 0),
+            rows.reduce((a, r) => a + (r.out || 0), 0),
+            rows.reduce((a, r) => a + (r.inn || 0), 0),
+            qty,
+            "",
+          ],
+        ]),
+    );
+  } else {
+    downloadCsv(
+      `${rackSheetFileTitle()}_總單`,
+      ["品項", "借出", "歸還", "欠架", "來源"],
+      rows
+        .map((r) => [rackLabel(s, r.frame), r.out, r.inn, r.closing, r.mark || ""])
+        .concat([["合計", rows.reduce((a, r) => a + (r.out || 0), 0), rows.reduce((a, r) => a + (r.inn || 0), 0), qty, ""]]),
+    );
+  }
+  setStatus("已匯出 Excel，用 Excel 開啟即可。");
+}
 function rackFillRight(ctx, text, x, y) {
   ctx.fillText(String(text ?? ""), x - ctx.measureText(String(text ?? "")).width, y);
 }
@@ -2820,10 +2882,17 @@ function renderRack() {
             .join("")
         : `<tr><td colspan="5">沒有單號明細</td></tr>`;
       box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="sheet">返回總單</button>
-        <h3 class="rack-sheet-title">${esc(rackPick)}　${esc(rackLabel(s, rackLine))}</h3>
-        <p class="rack-owed-big">欠架總數 ${rackFmt(owed)}</p>
-        <p class="rack-stat">${srcLab}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}　${rackMode === "custom" && rackFrom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : ""}</p>
-        <table class="rack-table rack-sheet-table"><thead><tr><th>日期</th><th>單號</th><th>類別</th><th>數量</th><th>來源</th></tr></thead><tbody>${lines}</tbody></table>`;
+        <div class="rack-sheet-actions">
+          <button type="button" class="ghost" data-rack-xlsx>匯出 Excel</button>
+          <button type="button" class="ghost" data-rack-pdf>匯出 PDF</button>
+        </div>
+        <article class="rack-sheet">
+          <p class="rack-print-brand">鴻安農業科技　鐵架明細</p>
+          <h3 class="rack-sheet-title">${esc(rackPick)}　${esc(rackLabel(s, rackLine))}</h3>
+          <p class="rack-owed-big">欠架總數 ${rackFmt(owed)}</p>
+          <p class="rack-stat">${srcLab}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}　${rackMode === "custom" && rackFrom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : ""}</p>
+          <table class="rack-table rack-sheet-table"><thead><tr><th>日期</th><th>單號</th><th>類別</th><th>數量</th><th>來源</th></tr></thead><tbody>${lines}</tbody></table>
+        </article>`;
       return;
     }
     if (rackPick) {
@@ -2849,7 +2918,8 @@ function renderRack() {
       box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="list">返回客人</button>
         <div class="rack-sheet-actions">
           <button type="button" class="ghost" data-rack-print>列印</button>
-          <button type="button" class="ghost" data-rack-pdf>存 PDF</button>
+          <button type="button" class="ghost" data-rack-xlsx>匯出 Excel</button>
+          <button type="button" class="ghost" data-rack-pdf>匯出 PDF</button>
           <button type="button" class="primary" data-rack-share>傳 LINE</button>
         </div>
         <article class="rack-sheet">
@@ -5343,6 +5413,11 @@ document.getElementById("rack-box")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-rack-print]")) {
     e.stopPropagation();
     rackOpenPrint(false);
+    return;
+  }
+  if (e.target.closest("[data-rack-xlsx]")) {
+    e.stopPropagation();
+    exportRackExcel();
     return;
   }
   if (e.target.closest("[data-rack-pdf]")) {

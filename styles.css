@@ -1060,7 +1060,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .rack-sheet-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.35rem;
   margin: 0.4rem 0 0.25rem;
 }

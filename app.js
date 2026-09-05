@@ -2266,11 +2266,30 @@ function rackMatch(name, q) {
   const qn = String(q || "").trim().toLowerCase();
   return !qn || n.includes(qn);
 }
+function rackRocYear() {
+  if (rackMode === "y114") return 114;
+  if (rackMode === "y115") return 115;
+  return 0;
+}
+function rackRocYearDates(roc) {
+  const y = 1911 + Number(roc);
+  return { from: `${y}-01-01`, to: `${y}-12-31` };
+}
+function rackIntervalOn() {
+  return !!rackRocYear() || (rackMode === "custom" && !!rackFrom);
+}
+function applyRackYearDates() {
+  const y = rackRocYear();
+  if (!y) return;
+  const d = rackRocYearDates(y);
+  rackFrom = d.from;
+  rackTo = d.to;
+}
 function rackSummary() {
   const lib = window.RackLib;
   if (!lib) return { customers: [], frames: [], cells: {}, frameLabels: {} };
   return lib.summarize(rackTxns, {
-    from: rackMode === "custom" ? rackFrom || "" : "",
+    from: rackIntervalOn() ? rackFrom || "" : "",
     to: rackTo,
     company: rackCo,
   });
@@ -2304,7 +2323,7 @@ function rackCustomerSheetRows(customer) {
   const lib = window.RackLib;
   const sAll = rackSummary();
   if (!lib || !customer) return { s: sAll, custom: false, rows: [], qty: 0 };
-  const custom = rackMode === "custom" && rackFrom;
+  const custom = rackIntervalOn();
   const sources = rackCo
     ? [{ company: rackCo, mark: rackCoMark(rackCo) }]
     : [
@@ -2357,6 +2376,8 @@ function rackCustomerSheetRows(customer) {
 }
 function rackSheetPeriodText() {
   const span = rackDateSpan();
+  const y = rackRocYear();
+  if (y) return `民國${y}年度 ${rackFrom}～${rackTo}`;
   if (rackMode === "custom" && rackFrom) return `區間 ${rackFrom}～${rackTo}`;
   return `資料至 ${span.to || "—"}`;
 }
@@ -2403,7 +2424,8 @@ function rackSheetText() {
   return lines.join("\n");
 }
 function rackSheetFileTitle() {
-  const day = rackMode === "custom" && rackFrom ? `${rackFrom}至${rackTo}` : rackTo || today();
+  const y = rackRocYear();
+  const day = y ? `${y}年度` : rackIntervalOn() ? `${rackFrom}至${rackTo}` : rackTo || today();
   return `鐵架對帳單_${rackPick || "客人"}_${day}`;
 }
 function rackSafeFileName(name) {
@@ -2486,7 +2508,7 @@ function rackSheetPngBlob() {
     const pad = 36;
     const rowH = 38;
     const headH = 42;
-    const top = 168;
+    const top = 180;
     const H = top + headH + (Math.max(rows.length, 1) + 1) * rowH + pad + 36;
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(W * dpr);
@@ -2505,7 +2527,9 @@ function rackSheetPngBlob() {
     ctx.fillStyle = "#5a6a61";
     ctx.font = '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
     ctx.fillText(`${rackSheetPeriodText()}　N＝穠全　H＝鴻安　N+H＝兩家加總`, pad, 112);
-    ctx.fillText(`欠架合計 ${rackFmt(qty)}`, pad, 138);
+    ctx.fillStyle = "#b42318";
+    ctx.font = '900 28px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+    ctx.fillText(`欠架合計 ${rackFmt(qty)}`, pad, 148);
 
     const cols = custom
       ? [
@@ -2513,14 +2537,14 @@ function rackSheetPngBlob() {
           { key: "opening", title: "期初", w: 92 },
           { key: "out", title: "借出", w: 92 },
           { key: "inn", title: "歸還", w: 92 },
-          { key: "closing", title: "欠架", w: 100 },
+          { key: "closing", title: "欠架", w: 118 },
           { key: "mark", title: "來源", w: 72 },
         ]
       : [
           { key: "name", title: "品項", w: 0 },
           { key: "out", title: "借出", w: 100 },
           { key: "inn", title: "歸還", w: 100 },
-          { key: "closing", title: "欠架", w: 108 },
+          { key: "closing", title: "欠架", w: 128 },
           { key: "mark", title: "來源", w: 72 },
         ];
     const numW = cols.reduce((a, c) => a + c.w, 0);
@@ -2539,7 +2563,15 @@ function rackSheetPngBlob() {
     let x = x0;
     for (const c of cols) {
       const ty = y0 + 27;
-      if (c.key === "name") ctx.fillText(c.title, x + 8, ty);
+      if (c.key === "closing") {
+        ctx.fillStyle = "#ffe4d4";
+        ctx.fillRect(x, y0, c.w, headH);
+        ctx.fillStyle = "#b42318";
+        ctx.font = '900 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+        rackFillRight(ctx, c.title, x + c.w - 6, ty);
+        ctx.fillStyle = "#5a6a61";
+        ctx.font = '800 15px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+      } else if (c.key === "name") ctx.fillText(c.title, x + 8, ty);
       else if (c.key === "mark") ctx.fillText(c.title, x + (c.w - ctx.measureText(c.title).width) / 2, ty);
       else rackFillRight(ctx, c.title, x + c.w - 6, ty);
       x += c.w;
@@ -2572,6 +2604,10 @@ function rackSheetPngBlob() {
       let cx = x0;
       for (const c of cols) {
         const ty = y + 26;
+        if (c.key === "closing") {
+          ctx.fillStyle = "#fff1e8";
+          ctx.fillRect(cx, y + 1, c.w, rowH - 2);
+        }
         if (c.key === "name") {
           ctx.fillStyle = "#16241c";
           ctx.fillText(rackEllipsis(ctx, r.total ? "合計" : rackLabel(s, r.frame), c.w - 16), cx + 8, ty);
@@ -2579,8 +2615,17 @@ function rackSheetPngBlob() {
           ctx.fillStyle = "#1a6843";
           const t = r.mark || "";
           ctx.fillText(t, cx + (c.w - ctx.measureText(t).width) / 2, ty);
+        } else if (c.key === "closing") {
+          ctx.fillStyle = "#b42318";
+          ctx.font = r.total
+            ? '900 22px "Microsoft JhengHei","Noto Sans TC",sans-serif'
+            : '900 20px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+          rackFillRight(ctx, rackFmt(r[c.key]), cx + c.w - 6, ty);
+          ctx.font = r.total
+            ? '800 16px "Microsoft JhengHei","Noto Sans TC",sans-serif'
+            : '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
         } else {
-          ctx.fillStyle = c.key === "closing" ? "#8d5a3a" : c.key === "inn" ? "#3a6d78" : "#16241c";
+          ctx.fillStyle = c.key === "inn" ? "#3a6d78" : "#16241c";
           rackFillRight(ctx, rackFmt(r[c.key]), cx + c.w - 6, ty);
         }
         cx += c.w;
@@ -2687,7 +2732,7 @@ function rackTxnPool() {
   return rackTxns.filter((t) => {
     if (rackCo && t.company !== rackCo) return false;
     if (rackTo && t.date > rackTo) return false;
-    if (rackMode === "custom" && rackFrom && t.date < rackFrom) return false;
+    if (rackIntervalOn() && rackFrom && t.date < rackFrom) return false;
     return true;
   });
 }
@@ -2713,11 +2758,10 @@ function paintRackRange() {
     return;
   }
   let text = `資料檔區間 ${span.from} ～ ${span.to}（以已匯入為準，不是系統今天）。`;
-  if (rackMode === "custom" && rackFrom) {
-    text += ` 比對區間 ${rackFrom} ～ ${rackTo}。`;
-  } else {
-    text += ` 查詢截至 ${rackTo}。`;
-  }
+  const y = rackRocYear();
+  if (y) text += ` 查詢民國${y}年度 ${rackFrom} ～ ${rackTo}。`;
+  else if (rackMode === "custom" && rackFrom) text += ` 比對區間 ${rackFrom} ～ ${rackTo}。`;
+  else text += ` 查詢截至 ${rackTo}。`;
   if (rackTo > span.to) text += ` 匯入最新只到 ${span.to}，之後尚未上傳。`;
   else if (rackTo < span.to) text += ` 目前只看到截至 ${rackTo}。`;
   el.textContent = text;
@@ -2824,8 +2868,17 @@ function renderRack() {
   if (toEl && toEl.value !== rackTo) toEl.value = rackTo;
   const fromEl = document.getElementById("rack-from");
   if (fromEl && fromEl.value !== rackFrom) fromEl.value = rackFrom;
+  applyRackYearDates();
+  const yearOn = !!rackRocYear();
   const fromWrap = document.getElementById("rack-from-wrap");
   if (fromWrap) fromWrap.hidden = rackMode !== "custom";
+  const toLab = document.getElementById("rack-to-lab");
+  if (toLab) toLab.hidden = yearOn;
+  const yearLab = document.getElementById("rack-year-lab");
+  if (yearLab) {
+    yearLab.hidden = !yearOn;
+    yearLab.textContent = yearOn ? `民國${rackRocYear()}年　${rackFrom} ～ ${rackTo}` : "";
+  }
   const toWord = document.getElementById("rack-to-word");
   if (toWord) toWord.textContent = rackMode === "custom" ? "迄" : "截至";
   document.querySelectorAll("[data-rack-mode]").forEach((b) => {
@@ -2906,23 +2959,22 @@ function renderRack() {
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架明細</p>
           <h3 class="rack-sheet-title">${esc(rackPick)}　${esc(rackLabel(s, rackLine))}</h3>
-          <p class="rack-owed-big">欠架總數 ${rackFmt(owed)}</p>
-          <p class="rack-stat">${srcLab}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}　${rackMode === "custom" && rackFrom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : ""}</p>
+          <p class="rack-owed-big">欠架總數 <span>${rackFmt(owed)}</span></p>
+          <p class="rack-stat">${srcLab}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}　${esc(rackSheetPeriodText())}</p>
           <table class="rack-table rack-sheet-table"><thead><tr><th>日期</th><th>單號</th><th>類別</th><th>數量</th><th>來源</th></tr></thead><tbody>${lines}</tbody></table>
         </article>`;
       return;
     }
     if (rackPick) {
-      const custom = rackMode === "custom" && rackFrom;
+      const custom = rackIntervalOn();
       const sheet = rackSheetRows();
       const rows = sheet.rows;
       const hidden = sheet.hidden || [];
       const qty = sheet.qty;
       const s = sheet.s;
-      const span = rackDateSpan();
       const head = custom
-        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`
-        : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`;
+        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th class="owed-col">欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`
+        : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th class="owed-col">欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`;
       const hideBtn = (r) =>
         `<td class="no-print"><button type="button" class="ghost rack-mini" data-rack-hide="${esc(rackRowKey(r))}">隱藏</button></td>`;
       const body = rows
@@ -2953,7 +3005,8 @@ function renderRack() {
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架對帳單</p>
           <h3 class="rack-sheet-title">總單　${esc(rackPick)}</h3>
-          <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　顯示 ${rows.length} 種${hidden.length ? `（已隱藏 ${hidden.length}）` : ""}　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
+          <p class="rack-owed-big">欠架合計 <span>${rackFmt(qty)}</span></p>
+          <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　顯示 ${rows.length} 種${hidden.length ? `（已隱藏 ${hidden.length}）` : ""}　${esc(rackSheetPeriodText())}</p>
           ${
             rows.length
               ? `<table class="rack-table rack-sheet-table">${head}<tbody>${body}${foot}</tbody></table>`
@@ -5361,8 +5414,11 @@ document.querySelectorAll("#rack-pane-tabs [data-rack-pane]").forEach((btn) => {
 });
 document.querySelectorAll("[data-rack-mode]").forEach((btn) => {
   btn.onclick = () => {
-    rackMode = btn.dataset.rackMode === "custom" ? "custom" : "asof";
-    if (rackMode === "custom" && !rackFrom) {
+    const mode = btn.dataset.rackMode || "asof";
+    rackMode = mode === "custom" || mode === "y114" || mode === "y115" ? mode : "asof";
+    if (rackRocYear()) applyRackYearDates();
+    else if (rackMode === "asof") rackTo = today();
+    else if (rackMode === "custom" && !rackFrom) {
       const span = rackDateSpan();
       rackFrom = span.from || rackTo;
     }

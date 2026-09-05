@@ -1110,30 +1110,27 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   padding: 0.48rem 0.28rem;
 }
 .rack-owed-big {
-  margin: 0.25rem 0 0.4rem;
-  font-size: 1.08rem;
-  font-weight: 800;
-  color: #8a3b22;
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
 }
 .rack-owed-big span {
-  display: inline-block;
-  margin-left: 0.2rem;
-  font-size: 1.72rem;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  color: #b42318;
-  font-variant-numeric: tabular-nums;
-}
-.rack-sheet-table th.owed-col,
-.rack-sheet-table td.owed {
-  color: #b42318;
-  font-weight: 900;
-  font-size: 1.28rem;
-  background: #fff4e8;
+  margin-left: 0.25rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--c-out);
   font-variant-numeric: tabular-nums;
 }
 .rack-sheet-table th.owed-col {
-  font-size: 1.05rem;
+  color: var(--c-out);
+  font-weight: 800;
+}
+.rack-sheet-table td.owed {
+  color: var(--c-out);
+  font-weight: 800;
+  font-size: 1.08rem;
+  font-variant-numeric: tabular-nums;
 }
 .rack-year-lab {
   margin: 0;
@@ -1174,13 +1171,11 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
     display: none !important;
   }
   body.rack-printing .rack-print-brand { display: block; }
-  body.rack-printing .rack-owed-big { font-size: 1.2rem; color: #8a3b22; }
-  body.rack-printing .rack-owed-big span { font-size: 1.85rem; color: #b42318; }
   body.rack-printing .rack-sheet-table th.owed-col,
   body.rack-printing .rack-sheet-table td.owed {
-    font-size: 1.4rem;
-    color: #b42318;
-    background: #fff4e8;
+    color: #8d5a3a;
+    font-size: 1.18rem;
+    font-weight: 800;
   }
   body.rack-printing .rack-sheet-table { font-size: 1.12rem; }
   body.rack-printing .rack-sheet-table th,

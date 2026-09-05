@@ -2508,7 +2508,7 @@ function rackSheetPngBlob() {
     const pad = 36;
     const rowH = 38;
     const headH = 42;
-    const top = 180;
+    const top = 148;
     const H = top + headH + (Math.max(rows.length, 1) + 1) * rowH + pad + 36;
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(W * dpr);
@@ -2527,9 +2527,6 @@ function rackSheetPngBlob() {
     ctx.fillStyle = "#5a6a61";
     ctx.font = '700 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
     ctx.fillText(`${rackSheetPeriodText()}　N＝穠全　H＝鴻安　N+H＝兩家加總`, pad, 112);
-    ctx.fillStyle = "#b42318";
-    ctx.font = '900 28px "Microsoft JhengHei","Noto Sans TC",sans-serif';
-    ctx.fillText(`欠架合計 ${rackFmt(qty)}`, pad, 148);
 
     const cols = custom
       ? [
@@ -2564,13 +2561,10 @@ function rackSheetPngBlob() {
     for (const c of cols) {
       const ty = y0 + 27;
       if (c.key === "closing") {
-        ctx.fillStyle = "#ffe4d4";
-        ctx.fillRect(x, y0, c.w, headH);
-        ctx.fillStyle = "#b42318";
-        ctx.font = '900 16px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+        ctx.fillStyle = "#8d5a3a";
+        ctx.font = '800 15px "Microsoft JhengHei","Noto Sans TC",sans-serif';
         rackFillRight(ctx, c.title, x + c.w - 6, ty);
         ctx.fillStyle = "#5a6a61";
-        ctx.font = '800 15px "Microsoft JhengHei","Noto Sans TC",sans-serif';
       } else if (c.key === "name") ctx.fillText(c.title, x + 8, ty);
       else if (c.key === "mark") ctx.fillText(c.title, x + (c.w - ctx.measureText(c.title).width) / 2, ty);
       else rackFillRight(ctx, c.title, x + c.w - 6, ty);
@@ -2604,10 +2598,6 @@ function rackSheetPngBlob() {
       let cx = x0;
       for (const c of cols) {
         const ty = y + 26;
-        if (c.key === "closing") {
-          ctx.fillStyle = "#fff1e8";
-          ctx.fillRect(cx, y + 1, c.w, rowH - 2);
-        }
         if (c.key === "name") {
           ctx.fillStyle = "#16241c";
           ctx.fillText(rackEllipsis(ctx, r.total ? "合計" : rackLabel(s, r.frame), c.w - 16), cx + 8, ty);
@@ -2616,10 +2606,10 @@ function rackSheetPngBlob() {
           const t = r.mark || "";
           ctx.fillText(t, cx + (c.w - ctx.measureText(t).width) / 2, ty);
         } else if (c.key === "closing") {
-          ctx.fillStyle = "#b42318";
+          ctx.fillStyle = "#8d5a3a";
           ctx.font = r.total
-            ? '900 22px "Microsoft JhengHei","Noto Sans TC",sans-serif'
-            : '900 20px "Microsoft JhengHei","Noto Sans TC",sans-serif';
+            ? '800 18px "Microsoft JhengHei","Noto Sans TC",sans-serif'
+            : '800 17px "Microsoft JhengHei","Noto Sans TC",sans-serif';
           rackFillRight(ctx, rackFmt(r[c.key]), cx + c.w - 6, ty);
           ctx.font = r.total
             ? '800 16px "Microsoft JhengHei","Noto Sans TC",sans-serif'
@@ -3005,7 +2995,6 @@ function renderRack() {
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架對帳單</p>
           <h3 class="rack-sheet-title">總單　${esc(rackPick)}</h3>
-          <p class="rack-owed-big">欠架合計 <span>${rackFmt(qty)}</span></p>
           <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　顯示 ${rows.length} 種${hidden.length ? `（已隱藏 ${hidden.length}）` : ""}　${esc(rackSheetPeriodText())}</p>
           ${
             rows.length

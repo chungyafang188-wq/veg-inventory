@@ -2318,7 +2318,7 @@ function rackCustomerSheetRows(customer) {
       company: src.company,
     });
     for (const r of lib.customerOwed(s, customer)) {
-      if (!(r.closing > 0 || (custom && (r.out || r.inn || r.opening)))) continue;
+      if (!(r.closing || r.out || r.inn || r.opening)) continue;
       parts.push({ ...r, company: src.company, mark: src.mark });
     }
   }
@@ -2350,6 +2350,7 @@ function rackCustomerSheetRows(customer) {
       mark: rackMergeMarks(r.marks),
     }));
   }
+  rows = rows.filter((r) => r.closing > 0 || (custom && (r.out || r.inn || r.opening)));
   rows.sort((a, b) => b.closing - a.closing || String(a.frame).localeCompare(String(b.frame)));
   return { s: sAll, custom, rows, qty: rows.reduce((a, r) => a + r.closing, 0) };
 }
@@ -2643,7 +2644,7 @@ function paintRackRange() {
   el.textContent = text;
 }
 function rackCustomerFrameDocs(customer, frame) {
-  const co = rackCoFromMark(rackSrc) || rackCo;
+  const co = rackCo;
   const rows = rackTxnPool().filter((t) => {
     if (t.customer !== customer || t.frame !== frame) return false;
     if (co && t.company !== co) return false;

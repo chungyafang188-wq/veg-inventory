@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1b5e3b" />
+    <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=113" />
+    <link rel="stylesheet" href="./styles.css?v=135" />
   </head>
   <body>
     <div class="app">
@@ -13,6 +13,10 @@
         <p class="eyebrow" id="co-name">產品出貨</p>
         <p class="muted" id="sync-note" hidden></p>
         <div class="who-wrap">
+          <button type="button" class="who-btn who-home" id="home-btn" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
+            首頁
+          </button>
           <span class="who-now" id="who-now" hidden></span>
           <button type="button" class="who-btn" id="who-btn">登入</button>
         </div>
@@ -35,7 +39,7 @@
           </form>
         </div>
       </div>
-      <nav class="tabs" id="flow-tabs" aria-label="流程">
+      <nav class="tabs" id="flow-tabs" hidden aria-label="流程">
         <button type="button" class="tab on" data-page="orders">總訂單</button>
         <button type="button" class="tab" data-page="plan">排程／派貨</button>
         <button type="button" class="tab" data-page="books">後帳</button>
@@ -50,25 +54,26 @@
         <button type="button" class="tab" data-books="sales">當日訂單</button>
       </nav>
       <p id="alerts" class="alerts" hidden></p>
-      <section id="page-orders">
+      <section id="page-home" hidden>
+        <p class="hint hub-lead">點區塊進入。</p>
+        <div id="home-hub" class="hub"></div>
+      </section>
+      <section id="page-soon" hidden>
+        <section class="card soon-card">
+          <span class="hub-mark hub-mark-soon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l3.5 2"/></svg>
+          </span>
+          <h2 id="soon-title">即將開放</h2>
+          <p class="hint" id="soon-hint">這項還在整理，先用其他區塊。</p>
+        </section>
+      </section>
+      <section id="page-orders" hidden>
         <nav class="tabs" id="orders-pane-tabs" aria-label="總訂單切換">
           <button type="button" class="tab on" data-orders-pane="form">開單</button>
           <button type="button" class="tab" data-orders-pane="today">今日已填</button>
         </nav>
         <div class="orders-swipe" id="orders-swipe">
           <div class="orders-pane" data-orders-pane-page="form">
-        <details class="card" id="line-draft-card">
-          <summary>貼上文字下單／進貨</summary>
-          <p class="hint">第一行客人，其後品項與件數。可改完再確認。</p>
-          <p class="muted" id="line-api-status"></p>
-          <label class="field">下單文字
-            <textarea id="line-paste" rows="4" placeholder="金芳拍賣-南 紐大12K/20"></textarea>
-          </label>
-          <div class="btn-row">
-            <button type="button" id="line-parse-btn" class="primary">解析文字</button>
-          </div>
-          <div id="line-drafts"></div>
-        </details>
         <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單"></nav>
         <section class="card daily-sheet-card" id="daily-sheet-card" hidden>
           <div class="head">
@@ -81,7 +86,6 @@
             <button type="button" id="nq-add-who-btn">新增</button>
           </div>
           <div class="sheet-scroll" id="daily-sheet"></div>
-          <div id="nq-check" class="check"></div>
           <div class="btn-row">
             <button type="button" id="nq-confirm" class="primary">確認輸入訂單</button>
             <button type="button" id="nq-cancel-edit" class="ghost" hidden>取消編輯</button>
@@ -100,32 +104,36 @@
           <input id="edit-id" type="hidden" />
           <label class="field order-who-field" for="customer">出貨對象
             <span class="cust-wrap">
-              <input id="customer" type="text" required placeholder="姓名或注音（如ㄉ）" autocomplete="off" spellcheck="false" lang="zh-Hant" />
+              <input id="customer" type="text" required placeholder="姓名、注音ㄉ，或拼音 dong" autocomplete="off" spellcheck="false" lang="zh-Hant" />
               <div id="cust-suggest" class="cust-suggest" hidden></div>
             </span>
           </label>
+          <input id="ship-addr" type="hidden" />
+          <div id="sheet"></div>
           <div id="ticket" class="ticket">
             <p class="ticket-empty">本單還沒有品項</p>
           </div>
-          <div id="sheet"></div>
-          <div id="check" class="check"></div>
-          <div class="ship-addr-block" id="ship-addr-block">
-            <p class="pick-lab">送貨位置</p>
-            <div class="picks ship-addr-picks" id="ship-addr-picks" role="group" aria-label="送貨位置">
-              <button type="button" class="pick" data-ship-pick="冰庫">冰庫</button>
-              <button type="button" class="pick" data-ship-pick="市場">市場</button>
-              <button type="button" class="pick" data-ship-pick="其他">其他</button>
-            </div>
-            <label class="field ship-addr-other" id="ship-addr-other-wrap" hidden for="ship-addr">其他位置
-              <input id="ship-addr" type="text" placeholder="地址或送貨點" autocomplete="off" spellcheck="false" />
-            </label>
-          </div>
-          <div class="btn-row">
+          <label class="field" for="order-note">備註
+            <input id="order-note" type="text" placeholder="可不填" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="btn-row order-submit-row">
             <button type="submit" class="primary" id="order-submit">確認送出</button>
             <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
             <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
           </div>
         </form>
+        <details class="card" id="line-draft-card">
+          <summary>貼上文字下單／進貨（待確認）</summary>
+          <p class="hint">第一行客人，其後品項與件數。可改完再確認。</p>
+          <p class="muted" id="line-api-status"></p>
+          <label class="field">下單文字
+            <textarea id="line-paste" rows="4" placeholder="金芳拍賣-南 紐大12K/20"></textarea>
+          </label>
+          <div class="btn-row">
+            <button type="button" id="line-parse-btn" class="primary">解析文字</button>
+          </div>
+          <div id="line-drafts"></div>
+        </details>
           </div>
           <div class="orders-pane" data-orders-pane-page="today">
             <section class="card" id="orders-today-card">
@@ -142,22 +150,25 @@
       </section>
       <section id="page-plan" hidden>
         <section class="card" id="plan-card">
-          <h2 id="plan-short-title">現場須出（現採／加工）</h2>
-          <div id="plan-short"></div>
           <div class="head plan-date-row">
-            <h2 class="plan-sub" id="plan-sub-title">派貨</h2>
+            <nav class="tabs" id="plan-main-tabs" aria-label="排程派貨切換">
+              <button type="button" class="tab on" data-plan-main="short">排程</button>
+              <button type="button" class="tab" data-plan-main="ship">派貨</button>
+            </nav>
             <label class="date-inline">日期 <input id="plan-date" type="date" /></label>
           </div>
-          <nav class="tabs" id="plan-pane-tabs" aria-label="派貨切換">
-            <button type="button" class="tab on" data-plan-pane="pending">待處理</button>
-            <button type="button" class="tab" data-plan-pane="done">已出貨</button>
-          </nav>
-          <div class="orders-swipe" id="plan-swipe">
-            <div class="orders-pane" data-plan-pane-page="pending">
-              <div id="plan-pending"></div>
+          <div class="orders-swipe" id="plan-main-swipe">
+            <div class="orders-pane" data-plan-main-page="short">
+              <h2 id="plan-short-title">現場須出（現採／加工）</h2>
+              <div id="plan-short"></div>
             </div>
-            <div class="orders-pane" data-plan-pane-page="done">
-              <div id="plan-done"></div>
+            <div class="orders-pane" data-plan-main-page="ship">
+              <nav class="tabs" id="plan-pane-tabs" aria-label="派貨切換">
+                <button type="button" class="tab on" data-plan-pane="pending">待處理</button>
+                <button type="button" class="tab" data-plan-pane="done">已出貨</button>
+              </nav>
+              <div id="plan-pending"></div>
+              <div id="plan-done" hidden></div>
             </div>
           </div>
         </section>
@@ -205,24 +216,80 @@
         </section>
       </section>
       <section id="page-in" hidden>
-        <section class="card" id="in-head-card">
-          <div class="head">
-            <h2 id="in-title">進貨</h2>
-            <label class="date-inline">日期 <input id="in-date" type="date" /></label>
+        <div class="in-toolbar">
+          <h2 id="in-title">進貨</h2>
+          <label class="date-inline">日期 <input id="in-date" type="date" /></label>
+        </div>
+        <nav class="tabs" id="in-pane-tabs" aria-label="進貨切換">
+          <button type="button" class="tab on" data-in-pane="form">進貨輸入</button>
+          <button type="button" class="tab" data-in-pane="view">進貨總覽</button>
+        </nav>
+        <div class="orders-swipe" id="in-swipe">
+          <div class="orders-pane" data-in-pane-page="form">
+            <p class="hint in-hint" id="guide-in">有貨進來才記入。＋／－調本批後按記入。</p>
+            <div id="stock-in"></div>
+            <section id="ha-excel" class="ha-excel" hidden>
+              <span class="ha-excel-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+              </span>
+              <div>
+                <h3>連結 Excel 匯入</h3>
+                <p>鴻安進貨之後直接連工作表匯入，不必在這裡逐筆打。匯入後請到總覽核對。</p>
+                <div class="ha-excel-actions">
+                  <button type="button" class="primary" id="ha-excel-link" disabled>連結工作表</button>
+                  <label class="ha-excel-file">選擇檔案<input type="file" id="ha-excel-file" accept=".xlsx,.xls,.csv" disabled /></label>
+                </div>
+                <p class="ha-excel-soon">即將開放</p>
+              </div>
+            </section>
+            <form id="receive" class="card in-recv" hidden>
+              <label class="field">品項 <select id="in-sku"></select></label>
+              <label class="field">數量 <input id="in-qty" type="number" min="0" step="0.1" /></label>
+              <button type="submit" id="recv-btn">入庫</button>
+            </form>
           </div>
-          <p class="hint" id="guide-in">有貨進來才記入。地瓜葉、九層塔並排，用＋／－調本批後按記入。打錯填正確總數再按修正。</p>
-        </section>
-        <section class="card stock-in-card" id="in-day-card">
-          <h2>本批進貨</h2>
-          <div id="in-day-totals" class="live-totals-row"></div>
-          <div id="stock-in"></div>
-        </section>
-        <form id="receive" class="card" hidden>
-          <h2 id="recv-title">進貨</h2>
-          <label class="field">品項 <select id="in-sku"></select></label>
-          <label class="field">數量 <input id="in-qty" type="number" min="0" step="0.1" /></label>
-          <button type="submit" id="recv-btn">入庫</button>
-        </form>
+          <div class="orders-pane" data-in-pane-page="view">
+            <div id="in-overview"></div>
+          </div>
+        </div>
+      </section>
+      <section id="page-rack" hidden>
+        <div class="in-toolbar rack-head">
+          <h2>鐵架／八格籃</h2>
+          <label class="rack-xls-btn">匯入 Excel<input id="rack-xls" type="file" accept=".xlsx,.xls,.csv" multiple /></label>
+        </div>
+        <p class="rack-import-msg" id="rack-import-msg" hidden></p>
+        <div class="rack-period">
+          <div class="btn-row rack-mode-row">
+            <button type="button" class="pick on" data-rack-mode="asof">截至某日</button>
+            <button type="button" class="pick" data-rack-mode="custom">自訂區間</button>
+          </div>
+          <label id="rack-from-wrap" class="date-inline" hidden>起 <input id="rack-from" type="date" /></label>
+          <label class="date-inline" id="rack-to-lab"><span id="rack-to-word">截至</span> <input id="rack-to" type="date" /></label>
+        </div>
+        <div class="rack-filters">
+          <label>公司
+            <select id="rack-co">
+              <option value="">兩家合計</option>
+              <option value="穠全">穠全</option>
+              <option value="鴻安">鴻安</option>
+            </select>
+          </label>
+          <label id="rack-frame-wrap">鐵架種類
+            <select id="rack-frame">
+              <option value="">全部</option>
+            </select>
+          </label>
+          <label class="rack-search" id="rack-q-wrap">搜尋 <input id="rack-q" type="search" placeholder="客人、貨運" /></label>
+        </div>
+        <nav class="tabs" id="rack-pane-tabs" aria-label="鐵架彙整">
+          <button type="button" class="tab on" data-rack-pane="frame">架種彙整</button>
+          <button type="button" class="tab" data-rack-pane="customer">客人尚欠</button>
+          <button type="button" class="tab" data-rack-pane="carrier">貨運行</button>
+        </nav>
+        <p class="hint in-hint rack-hint">還欠＝客人手上未還。點客人看總單，再點品項看出貨單。</p>
+        <p class="rack-range" id="rack-range">統計區間依已匯入資料為準。</p>
+        <div id="rack-box"></div>
       </section>
       <div id="proof-gate" class="login-gate" hidden>
         <div class="login-card proof-card">
@@ -251,6 +318,7 @@
       <p id="status" class="status" hidden></p>
     </div>
     <script src="./line-parse.js?v=88"></script>
-    <script src="./app.js?v=125"></script>
+    <script src="./racks.js?v=1"></script>
+    <script src="./app.js?v=149"></script>
   </body>
 </html>

@@ -6,6 +6,8 @@ const os = require("os");
 const path = require("path");
 const { parseLineOrderText, parseLineOrderBlocks, worthKeeping } = require("./line-parse.js");
 
+const { pathToFileURL } = require("url");
+
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5174;
 function pickDataDir() {
@@ -67,6 +69,91 @@ function readBodyBuf(req, max = 2e6) {
 }
 function readBody(req, max = 2e6) {
   return readBodyBuf(req, max).then((buf) => buf.toString("utf8"));
+}
+
+const RACK_STORE = path.join(DATA_DIR, "racks-txns.json");
+const RACK_SEED = path.join(ROOT, "racks-txns.json");
+let rackParseLib = null;
+
+function loadRackParse() {
+  if (rackParseLib) return Promise.resolve(rackParseLib);
+  return Promise.all([
+    import(pathToFileURL(path.join(ROOT, "rack-parse.mjs")).href),
+    import(pathToFileURL(path.join(ROOT, "rack-dedupe.mjs")).href),
+  ]).then(([parse, dedupe]) => {
+    rackParseLib = { ...parse, ...dedupe };
+    return rackParseLib;
+  });
+}
+
+function readRackFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const j = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const txns = Array.isArray(j?.txns) ? j.txns : Array.isArray(j) ? j : [];
+    return txns;
+  } catch (_) {
+    return null;
+  }
+}
+
+function loadRackTxns() {
+  const stored = readRackFile(RACK_STORE);
+  if (stored) return stored;
+  const seed = readRackFile(RACK_SEED);
+  if (seed) return seed;
+  const legacy = [
+    path.join(ROOT, "..", "frame-inout", "public", "data", "txns.json"),
+    path.join(os.homedir(), "frame-inout", "public", "data", "txns.json"),
+  ];
+  for (const p of legacy) {
+    const txns = readRackFile(p);
+    if (txns && txns.length) return txns;
+  }
+  return [];
+}
+
+function saveRackTxns(txns) {
+  const payload = JSON.stringify({ txns });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${RACK_STORE}.tmp`;
+  fs.writeFileSync(tmp, payload);
+  fs.renameSync(tmp, RACK_STORE);
+  try {
+    fs.writeFileSync(RACK_SEED, payload);
+  } catch (_) {}
+}
+
+function importRackBuffer(lib, name, buf) {
+  const analyzed = lib.analyzeWorkbook(buf, name);
+  if (!analyzed.ready) {
+    return { ok: false, error: "無法辨識 Excel 欄位", added: 0, dup: 0, skip: 0, total: loadRackTxns().length };
+  }
+  const mapped = lib.mapRecords(analyzed.records, analyzed.map, {
+    directionMode: analyzed.directionMode,
+    defaultCompany: analyzed.defaultCompany,
+    fileName: name,
+  });
+  const existing = loadRackTxns();
+  const filtered = lib.filterNewTxns(mapped.txns, existing);
+  const next = existing.concat(filtered.txns);
+  if (filtered.txns.length) saveRackTxns(next);
+  return {
+    ok: true,
+    added: filtered.txns.length,
+    dup: filtered.dup,
+    skip: mapped.skip.length,
+    total: next.length,
+    company: analyzed.defaultCompany || "",
+  };
+}
+
+function rackImportMessage(stats) {
+  if (!stats.ok) return stats.error || "匯入失敗";
+  if (stats.added === 0 && stats.dup > 0) return "上傳成功。比對資料重複無匯入";
+  if (stats.added === 0) return "上傳成功。沒有可匯入的異動列";
+  if (stats.dup > 0) return `上傳成功。新增 ${stats.added} 筆。比對資料重複無匯入 ${stats.dup} 筆`;
+  return `上傳成功。新增 ${stats.added} 筆`;
 }
 function todayYmd() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
@@ -337,6 +424,55 @@ function handleApi(req, res) {
   }
   if (urlPath === "/api/line/webhook") return handleLineWebhook(req, res);
   if (urlPath === "/api/line/drafts") return handleLineDrafts(req, res);
+  if (urlPath === "/api/racks-txns") {
+    if (req.method !== "GET") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    send(res, 200, JSON.stringify({ txns: loadRackTxns() }), TYPES[".json"]);
+    return true;
+  }
+  if (urlPath === "/api/racks-import") {
+    if (req.method !== "POST") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    readBody(req, 25e6)
+      .then((raw) => {
+        const body = JSON.parse(raw);
+        const files = Array.isArray(body?.files) ? body.files : body?.name ? [body] : [];
+        if (!files.length) throw new Error("no files");
+        return loadRackParse().then((lib) => {
+          let added = 0;
+          let dup = 0;
+          let skip = 0;
+          const names = [];
+          for (const f of files) {
+            const name = String(f.name || "upload.xls");
+            const b64 = String(f.data || "").replace(/^data:.*,/, "");
+            const buf = Buffer.from(b64, "base64");
+            const one = importRackBuffer(lib, name, buf);
+            if (!one.ok) return one;
+            added += one.added;
+            dup += one.dup;
+            skip += one.skip;
+            names.push(name);
+          }
+          const stats = { ok: true, added, dup, skip, total: loadRackTxns().length, files: names };
+          stats.message = rackImportMessage(stats);
+          return stats;
+        });
+      })
+      .then((stats) => {
+        send(res, stats.ok ? 200 : 400, JSON.stringify(stats), TYPES[".json"]);
+      })
+      .catch((err) => {
+        const msg = String(err?.message || err);
+        const code = msg === "too large" ? 413 : 400;
+        send(res, code, JSON.stringify({ ok: false, error: msg === "too large" ? "檔案太大" : "匯入失敗" }), TYPES[".json"]);
+      });
+    return true;
+  }
   if (urlPath === "/api/line/status") {
     send(
       res,

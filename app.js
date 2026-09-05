@@ -52,6 +52,7 @@ const HA_CUST_KEY = "hongan-customer-history-v1";
 const STAFF_NOW_KEY = "nongquan-staff-now-v1";
 const STAFF_LIST_KEY = "nongquan-staff-list-v1";
 const ADDR_KEY = "nongquan-ship-addr-v1";
+let ticketLines = [];
 const BASIL_SKU = {
   rb: { 芳: "rb-fang", 琳: "rb-lin", 其他: "rb-oth" },
   gb: { 芳: "gb-fang", 琳: "gb-lin", 其他: "gb-oth" },
@@ -541,20 +542,33 @@ syncAllNqQty();
 if (migrated || seeded || recounted) save();
 
 let co = "nq";
-let page = "orders";
+let hubOpen = "";
 let booksPart = "stock";
 let formKind = "leaf";
 let stockKind = "leaf";
 let editing = "";
 let ordersPane = "form";
 let ordersPaneLock = false;
+let inPane = "form";
+let inPaneLock = false;
+let rackPane = "frame";
+let rackPick = "";
+let rackLine = "";
+let rackQ = "";
+let rackCo = "";
+let rackMode = "asof";
+let rackFrom = "";
+let rackTo = today();
+let rackTxns = [];
+let rackLoad = "";
 let highlightOrderIds = [];
 let highlightTimer = 0;
 let planDay = today();
 let stockDay = today();
 let planOpenId = "";
 let planPane = "pending";
-let planPaneLock = false;
+let planMain = "short";
+let planMainLock = false;
 function planViewDay() {
   return planDay || today();
 }
@@ -620,6 +634,87 @@ function isSiteSku(sku) {
 }
 function isTradeSku(sku) {
   return !!(sku && sku.trade);
+}
+
+const HA_WAREHOUSES = {
+  A: "穠全",
+  B: "二崙",
+  C: "大庄",
+  D: "油1",
+  E: "油2",
+  F: "油3",
+  G: "周",
+};
+let formLot = null;
+let lotPickCtx = null;
+
+function warehouseLabel(code) {
+  if (!code) return "未對倉";
+  return `${code}倉 ${HA_WAREHOUSES[code] || ""}`.trim();
+}
+function skuLotGroup(sku) {
+  if (!sku) return "";
+  if (sku.vegFam === "nap") return sku.vegOpt === "kr" ? "nap-kr" : sku.vegOpt === "vn" ? "nap-vn" : "";
+  if (sku.vegFam === "cab") return sku.vegOpt === "id" ? "cab-id" : sku.vegOpt === "vn" ? "cab-vn" : "";
+  if (sku.vegFam === "ice") return sku.vegOpt === "vn" ? "ice-vn" : "";
+  if (sku.vegFam === "bro") return "bro";
+  if (sku.vegFam === "wk") return "wk";
+  if (sku.vegFam === "bur") return "bur";
+  if (sku.vegFam === "cel") return "cel";
+  if (sku.vegFam === "chili") return "chili";
+  const id = sku.id || "";
+  if (id.startsWith("onp-")) return "onp";
+  if (id.startsWith("on-") || id === "on-b-kg") return "on";
+  if (id.startsWith("pk-")) return "pk";
+  return "";
+}
+function allContainerLots() {
+  return Array.isArray(window.CONTAINER_LOTS?.lots) ? window.CONTAINER_LOTS.lots : [];
+}
+function lotsForSku(skuId) {
+  const g = skuLotGroup(skuById(skuId));
+  if (!g) return [];
+  return allContainerLots().filter((l) => l.group === g);
+}
+function skuNeedsShipLot(skuId) {
+  return lotsForSku(skuId).length > 0;
+}
+function lotUsedQty(uha, skip) {
+  let n = 0;
+  for (const o of state.orders || []) {
+    if (o.status === "cancelled") continue;
+    for (const line of o.lines || []) {
+      if (skip?.orderId && o.id === skip.orderId && skip.lineUha === undefined) continue;
+      if (line.lotUha === uha) n += Number(line.qty) || 0;
+    }
+  }
+  ticketLines.forEach((line, i) => {
+    if (skip?.ticketIndex === i) return;
+    if (line.lotUha === uha) n += Number(line.qty) || 0;
+  });
+  if (formLot?.uha === uha && skip?.source !== "form") n += Number(skip?.formQty) || 0;
+  return round(n);
+}
+function lotRemain(lot, skip) {
+  return round(Math.max(0, Number(lot.qty) || 0) - lotUsedQty(lot.uha, skip));
+}
+function clearLineLot(line) {
+  if (!line) return;
+  delete line.lotUha;
+  delete line.lotContainer;
+  delete line.lotWh;
+}
+function applyLotToLine(line, lot) {
+  if (!line || !lot) return;
+  line.lotUha = lot.uha;
+  line.lotContainer = lot.container;
+  if (lot.wh) line.lotWh = lot.wh;
+  else delete line.lotWh;
+}
+function lotBtnLabel(lot) {
+  if (!lot?.uha && !lot?.container) return "選出貨編號";
+  const no = lot.container || lot.uha;
+  return `${warehouseLabel(lot.wh)} · ${no}`;
 }
 function nqTradeSkus() {
   return SKUS.filter((s) => s.trade);
@@ -844,6 +939,7 @@ function finishLogin(name) {
   hideLoginPin();
   closeLoginGate();
   page = homePage();
+  hubOpen = "";
   render();
 }
 function pickLoginPerson(name) {
@@ -871,8 +967,132 @@ function submitLoginPin() {
   }
 }
 function homePage() {
-  const r = currentRole();
-  return r === "acct" || r === "boss" ? "orders" : "plan";
+  return "home";
+}
+function goHome() {
+  page = "home";
+  hubOpen = "";
+  render();
+}
+function soonCopy(kind) {
+  if (kind === "cust") return { title: "客戶", hint: "之後會放客戶資料、常用出貨對象與對帳。現在開單時直接填出貨對象即可。" };
+  if (kind === "vendor") return { title: "廠商", hint: "之後會放進貨廠商與對帳。現在請到倉管的進貨記入。" };
+  if (kind === "freight") return { title: "貨運核帳", hint: "之後會放貨運費用、對帳與核銷。目前先用派貨與出貨帳單核對。" };
+  return { title: "即將開放", hint: "這項還在整理。" };
+}
+function hubSvg(name) {
+  const d = {
+    clip: '<rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/><path d="M10 4h4v2h-4z"/>',
+    house: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/>',
+    form: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/>',
+    list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M5 6.2 6.2 7.5 8 5.2M5 12.2 6.2 13.5 8 11.2M5 18.2 6.2 19.5 8 17.2"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3.5v3M16 3.5v3M3.5 10h17"/>',
+    truck: '<path d="M3 16h1.2a2.4 2.4 0 0 0 4.6 0h5.2a2.4 2.4 0 0 0 4.6 0H21v-4.2L18 8h-5v8"/><path d="M3 16V9h10"/><circle cx="7.5" cy="16.2" r="1.5"/><circle cx="17.3" cy="16.2" r="1.5"/>',
+    box: '<path d="M3.5 8.2 12 4.2l8.5 4-8.5 4z"/><path d="M3.5 8.2v7.6L12 20l8.5-4.2V8.2M12 12.2V20"/>',
+    inbox: '<path d="M12 4v10"/><path d="M8 10.5 12 15l4-4.5"/><path d="M4.5 20h15"/><path d="M5 16.5 4.5 20h15L19 16.5"/>',
+    person: '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-3.4 3.2-5.2 6.5-5.2s5.9 1.8 6.5 5.2"/>',
+    shop: '<path d="M4 10V21h16V10"/><path d="M3 7.5 5.2 4h13.6L21 7.5a3.2 3.2 0 0 1-6.4 0 3.2 3.2 0 0 1-6.4 0A3.2 3.2 0 0 1 3 7.5z"/><path d="M10 21v-6h4v6"/>',
+    bill: '<path d="M7 3.5h10l.8 2.4V20l-2.6-1.2L12 20l-3.2-1.2L6.2 20V5.9z"/><path d="M9.5 10h5M9.5 13.5h5"/>',
+    crate: '<path d="M4 8h16v11H4z"/><path d="M4 8 7 4h10l3 4M12 8v11M4 13h16"/>',
+    rack: '<path d="M4 5h16M4 12h16M4 19h16M6 5v14M18 5v14"/>',
+    coin: '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4v9.2M9.4 9.2c.7-1 2.4-1.4 3.5-.4s.7 2.4-.6 3c-1.4.6-2.6.4-3.4 1.6-.6.9.1 2.4 2.1 2.6 1.5.2 2.8-.4 3.4-1.2"/>',
+  };
+  return `<span class="hub-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d[name] || d.clip}</svg></span>`;
+}
+function hubLink(attrs, icon, label, extraClass) {
+  return `<button type="button" class="hub-link${extraClass ? ` ${extraClass}` : ""}" ${attrs}>${hubSvg(icon)}<span class="hub-lab">${esc(label)}</span></button>`;
+}
+function renderHomeHub() {
+  const box = document.getElementById("home-hub");
+  if (!box) return;
+  if (!currentStaff()) {
+    box.innerHTML = "";
+    box.classList.remove("hub-pick");
+    return;
+  }
+  const orderBtns = [];
+  if (can("page-orders")) {
+    orderBtns.push(hubLink('data-go="orders" data-orders-pane="form"', "form", "開單"));
+    orderBtns.push(hubLink('data-go="orders" data-orders-pane="today"', "list", "今日已填"));
+  }
+  if (can("page-plan")) {
+    if (currentRole() !== "driver") orderBtns.push(hubLink('data-go="plan" data-plan-main="short"', "cal", "排程"));
+    orderBtns.push(hubLink('data-go="plan" data-plan-main="ship"', "truck", "派貨"));
+  }
+  const wareBtns = [];
+  if (can("page-books")) {
+    wareBtns.push(hubLink('data-go="books" data-books="stock"', "crate", "資材／庫存"));
+    wareBtns.push(hubLink('data-go="books" data-books="in"', "inbox", "進貨"));
+    wareBtns.push(hubLink('data-go="books" data-books="rack"', "rack", "鐵架／八格籃"));
+  }
+  const acctBtns = [];
+  if (can("page-books")) {
+    acctBtns.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
+    acctBtns.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
+    acctBtns.push(hubLink('data-go="soon" data-soon="freight"', "truck", "貨運核帳", "soon"));
+    acctBtns.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
+  }
+  const card = (id, tone, icon, title, btns) => {
+    if (!btns.length) return "";
+    return `<button type="button" class="hub-tile hub-${tone}" data-hub="${id}">
+      <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
+      <h2>${esc(title)}</h2>
+    </button>`;
+  };
+  const openCard = (id, tone, icon, title, btns) => {
+    return `<section class="hub-card hub-${tone} is-open">
+      <div class="hub-head">
+        <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
+        <h2>${esc(title)}</h2>
+        <button type="button" class="ghost hub-back" data-hub-back>返回</button>
+      </div>
+      <div class="hub-links">${btns.join("")}</div>
+    </section>`;
+  };
+  const tiles = [
+    { id: "orders", tone: "orders", icon: "clip", title: "訂單區", btns: orderBtns },
+    { id: "ware", tone: "ware", icon: "box", title: "倉管", btns: wareBtns },
+    { id: "acct", tone: "acct", icon: "coin", title: "帳款業務", btns: acctBtns },
+  ].filter((x) => x.btns.length);
+  if (hubOpen) {
+    const cur = tiles.find((x) => x.id === hubOpen);
+    box.classList.remove("hub-pick");
+    box.innerHTML = cur
+      ? openCard(cur.id, cur.tone, cur.icon, cur.title, cur.btns)
+      : tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns)).join("");
+    if (!cur) box.classList.add("hub-pick");
+    return;
+  }
+  box.classList.add("hub-pick");
+  box.innerHTML = tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns)).join("");
+}
+function goFromHub(btn) {
+  const go = btn.dataset.go;
+  if (go === "orders") {
+    if (!can("page-orders")) return setStatus("沒有訂單權限。", true);
+    page = "orders";
+    ordersPane = btn.dataset.ordersPane === "today" ? "today" : "form";
+  } else if (go === "plan") {
+    if (!can("page-plan")) return setStatus("沒有排程權限。", true);
+    page = "plan";
+    planMain = btn.dataset.planMain === "ship" ? "ship" : "short";
+  } else if (go === "books") {
+    if (!can("page-books")) return setStatus("沒有倉管／帳款權限。", true);
+    page = "books";
+    booksPart = btn.dataset.books || "stock";
+    if (booksPart === "rack") {
+      rackPick = "";
+      rackLine = "";
+    }
+  } else if (go === "soon") {
+    page = "soon";
+    const copy = soonCopy(btn.dataset.soon);
+    const title = document.getElementById("soon-title");
+    const hint = document.getElementById("soon-hint");
+    if (title) title.textContent = copy.title;
+    if (hint) hint.textContent = copy.hint;
+  }
+  render();
 }
 function openLoginGate() {
   const gate = document.getElementById("login-gate");
@@ -915,15 +1135,18 @@ function applyRoleUi() {
     openLoginGate();
     if (!loginPinName) renderLoginPeople();
   } else if (!loginPickerOpen) closeLoginGate();
-  const pages = [];
+  const pages = ["home"];
   if (can("page-orders")) pages.push("orders");
   if (can("page-plan")) pages.push("plan");
   if (can("page-books")) pages.push("books");
+  pages.push("soon");
   document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => {
-    b.hidden = logged ? !pages.includes(b.dataset.page) : true;
+    b.hidden = true;
   });
   const flow = document.getElementById("flow-tabs");
-  if (flow) flow.hidden = !logged || pages.length <= 1;
+  if (flow) flow.hidden = true;
+  const homeBtn = document.getElementById("home-btn");
+  if (homeBtn) homeBtn.hidden = !logged || page === "home";
   if (logged && page && !pages.includes(page)) page = homePage();
   if (!can("page-books") && page === "books") page = homePage();
 }
@@ -1045,57 +1268,99 @@ function shipAddrModeOf(v) {
   if (a) return "其他";
   return "";
 }
+function destFromRemembered(addr) {
+  const a = String(addr || "").trim();
+  if (!a) return "";
+  return a.split(/[／/]/)[0].trim();
+}
+function uniqueTicketDrops() {
+  const seen = [];
+  for (const l of ticketLines) {
+    const d = String(l.dest || "").trim();
+    if (d && !seen.includes(d)) seen.push(d);
+  }
+  return seen;
+}
+function lastTicketDest() {
+  for (let i = ticketLines.length - 1; i >= 0; i--) {
+    const d = String(ticketLines[i].dest || "").trim();
+    if (d) return d;
+  }
+  return "";
+}
+function rememberedDest() {
+  const last = lastTicketDest();
+  if (last) return last;
+  return destFromRemembered(lastShipAddr(document.getElementById("customer")?.value));
+}
+function lineDestMode(l) {
+  const d = String(l?.dest || "").trim();
+  if (SHIP_PRESETS.includes(d)) return d;
+  if (d || l?.destOther) return "其他";
+  return "";
+}
+function destPicksHtml(mode, attrs) {
+  return ["冰庫", "市場", "其他"]
+    .map(
+      (v) =>
+        `<button type="button" class="pick dest-chip${mode === v ? " on" : ""}" ${attrs(v)}>${v}</button>`,
+    )
+    .join("");
+}
+function applyDestToLine(line) {
+  if (!line || String(line.dest || "").trim()) return line;
+  const dest = rememberedDest();
+  if (dest) line.dest = dest;
+  return line;
+}
+function syncHiddenShipAddr() {
+  const el = document.getElementById("ship-addr");
+  if (el) el.value = uniqueTicketDrops().join("／");
+}
 function shipAddrValue() {
-  const mode = document.querySelector("#ship-addr-picks .pick.on")?.dataset.shipPick || "";
-  if (SHIP_PRESETS.includes(mode)) return mode;
-  return String(document.getElementById("ship-addr")?.value || "").trim();
+  const joined = uniqueTicketDrops().join("／");
+  const el = document.getElementById("ship-addr");
+  if (joined) {
+    if (el) el.value = joined;
+    return joined;
+  }
+  return String(el?.value || "").trim();
 }
 function syncShipAddrUi(v) {
-  const fromVal = v != null;
-  const addr = fromVal ? String(v || "").trim() : shipAddrValue();
-  const mode = fromVal
-    ? shipAddrModeOf(addr)
-    : document.querySelector("#ship-addr-picks .pick.on")?.dataset.shipPick || shipAddrModeOf(addr);
-  document.querySelectorAll("#ship-addr-picks [data-ship-pick]").forEach((b) => {
-    b.classList.toggle("on", b.dataset.shipPick === mode);
-  });
-  const other = document.getElementById("ship-addr-other-wrap");
-  const el = document.getElementById("ship-addr");
-  if (other) other.hidden = mode !== "其他";
-  if (!el) return;
-  if (mode === "其他") {
-    if (fromVal) el.value = addr;
-  } else {
-    el.value = mode || "";
+  if (v != null) {
+    const el = document.getElementById("ship-addr");
+    if (el && !uniqueTicketDrops().length) el.value = String(v || "").trim();
+    return;
   }
+  syncHiddenShipAddr();
 }
 function setShipAddr(v) {
   const el = document.getElementById("ship-addr");
-  const addr = String(v || "").trim();
-  if (el) el.value = SHIP_PRESETS.includes(addr) ? addr : addr;
-  syncShipAddrUi(addr);
+  if (el) el.value = String(v || "").trim();
 }
 function pickShipAddr(mode) {
   const next = String(mode || "").trim();
-  if (SHIP_PRESETS.includes(next)) {
-    setShipAddr(next);
-  } else if (next === "其他") {
-    const el = document.getElementById("ship-addr");
-    const cur = String(el?.value || "").trim();
-    if (el && SHIP_PRESETS.includes(cur)) el.value = "";
-    document.querySelectorAll("#ship-addr-picks [data-ship-pick]").forEach((b) => {
-      b.classList.toggle("on", b.dataset.shipPick === "其他");
-    });
-    const other = document.getElementById("ship-addr-other-wrap");
-    if (other) other.hidden = false;
-    el?.focus();
-  } else {
-    setShipAddr("");
-  }
+  if (SHIP_PRESETS.includes(next)) setShipAddr(next);
+  else setShipAddr("");
   renderTicket();
 }
+function orderNoteValue() {
+  return String(document.getElementById("order-note")?.value || "").trim();
+}
+function setOrderNote(v) {
+  const el = document.getElementById("order-note");
+  if (el) el.value = String(v || "");
+}
 function fillAddrForCustomer(name) {
-  setShipAddr(lastShipAddr(name));
+  const dest = destFromRemembered(lastShipAddr(name));
+  if (dest) {
+    for (const l of ticketLines) {
+      if (!String(l.dest || "").trim()) l.dest = dest;
+    }
+  }
+  if (!ticketLines.length) setShipAddr(lastShipAddr(name));
+  else syncHiddenShipAddr();
+  renderTicket();
 }
 function removeAllCustomer(name) {
   removeHaCustomer(name);
@@ -1207,9 +1472,10 @@ function lineLabel(l, withUnit) {
   const unit = s && withUnit ? ` ${s.unit}` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const size = l.size ? `（${l.size}）` : "";
+  const dest = l.dest ? `（${l.dest}）` : "";
   const note = l.note ? `（${l.note}）` : "";
   const pallet = l.pallet ? "（疊棧板）" : "";
-  return `${name} ${fmt(l.qty)}${unit}${pack}${size}${note}${pallet}`;
+  return `${name} ${fmt(l.qty)}${unit}${pack}${size}${dest}${note}${pallet}`;
 }
 function ticketLineName(l) {
   const s = skuById(l.skuId);
@@ -1217,7 +1483,8 @@ function ticketLineName(l) {
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
   const pallet = l.pallet ? " 疊棧板" : "";
-  return `${name}${pack}${size}${pallet}`;
+  const lot = l.lotContainer || l.lotUha ? ` ${l.lotContainer || l.lotUha}` : skuNeedsShipLot(l.skuId) ? " 未選編號" : "";
+  return `${name}${pack}${size}${lot}${pallet}`;
 }
 function ticketWhoText() {
   return document.getElementById("customer")?.value.trim() || "尚未填出貨對象";
@@ -1256,6 +1523,15 @@ function syncShipMore() {
     else submit.textContent = pre ? "確認預訂單" : "確認送出";
   }
 }
+function ticketDestHtml(l, i) {
+  const mode = lineDestMode(l);
+  const dest = String(l.dest || "").trim();
+  const otherVal = mode === "其他" ? dest : "";
+  return `<div class="ticket-dest">
+      <div class="picks dest-picks">${destPicksHtml(mode, (v) => `data-ticket-dest="${i}" data-dest="${v}"`)}</div>
+      <input class="dest-other" data-ticket-dest-other="${i}" type="text" placeholder="其他位置" value="${esc(otherVal)}" ${mode === "其他" ? "" : "hidden"} autocomplete="off" />
+    </div>`;
+}
 function renderTicket() {
   const box = document.getElementById("ticket");
   if (!box) return;
@@ -1263,12 +1539,14 @@ function renderTicket() {
   const who = ticketWhoText();
   if (!ticketLines.length) {
     box.classList.add("is-empty");
-    box.innerHTML = `<p class="ticket-empty">本單還沒有品項　<span class="ticket-kind">${esc(kind)}</span></p>`;
+    box.innerHTML = `<p class="ticket-empty">本單還沒有品項<span class="ticket-kind">${esc(kind)}</span></p>`;
+    syncOrderEntering();
     return;
   }
   box.classList.remove("is-empty");
-  box.innerHTML = `<p class="ticket-who"><span>${esc(who)}</span><span class="ticket-kind">${esc(kind)}</span></p>
-    ${shipAddrValue() ? `<p class="ticket-addr">${esc(shipAddrValue())}</p>` : ""}
+  const drops = uniqueTicketDrops();
+  box.innerHTML = `<p class="ticket-head">待確認 <span>${esc(who)}</span><span class="ticket-kind">${esc(kind)}</span></p>
+    ${drops.length ? `<p class="ticket-addr">${esc(drops.join("／"))}</p>` : ""}
     <ul class="ticket-list">${ticketLines
       .map((l, i) => {
         const sku = skuById(l.skuId);
@@ -1278,10 +1556,17 @@ function renderTicket() {
           <input class="qty" data-ticket-qty data-i="${i}" type="number" min="0" step="${step}" inputmode="decimal" value="${esc(l.qty)}" aria-label="數量" />
           <span class="unit">${esc(sku?.unit || "")}</span>
           <button type="button" class="pick ticket-pallet${l.pallet ? " on" : ""}" data-ticket-pallet="${i}" aria-pressed="${l.pallet ? "true" : "false"}">疊棧板</button>
+          ${
+            skuNeedsShipLot(l.skuId)
+              ? `<button type="button" class="ghost lot-pick-btn" data-ticket-lot="${i}">${esc(l.lotContainer || l.lotUha || "選出貨編號")}</button>`
+              : ""
+          }
           <button type="button" class="tiny-btn ghost" data-ticket-del="${i}">刪</button>
+          ${ticketDestHtml(l, i)}
         </li>`;
       })
       .join("")}</ul>`;
+  syncOrderEntering();
 }
 function selectPickerBig(big) {
   const row = document.querySelector("#ha-lines .item-line");
@@ -1299,7 +1584,13 @@ function pushPickerToTicket(nextBig) {
     setStatus("請先選品項並填數量", true);
     return false;
   }
-  for (const l of extra) ticketLines.push({ ...l });
+  const needLot = extra.find((l) => skuNeedsShipLot(l.skuId) && !l.lotUha);
+  if (needLot) {
+    openLotModal({ skuId: needLot.skuId, qty: needLot.qty, selectedUha: formLot?.uha, addAfter: true });
+    return false;
+  }
+  for (const l of extra) ticketLines.push(applyDestToLine({ ...l }));
+  formLot = null;
   renderItemSheet();
   if (nextBig) selectPickerBig(nextBig);
   renderTicket();
@@ -1311,8 +1602,40 @@ function clearTicket() {
   ticketLines = [];
   renderTicket();
 }
+function isOrderEntering() {
+  if (page !== "orders") return false;
+  const form = document.getElementById("order-form");
+  if (!form || form.hidden) return false;
+  const who = document.getElementById("customer")?.value?.trim();
+  const qtyOn = [...document.querySelectorAll("#sheet [data-line-qty]")].some((el) => Number(el.value) > 0);
+  const note = document.getElementById("order-note")?.value?.trim();
+  const edit = document.getElementById("edit-id")?.value;
+  return !!(who || qtyOn || ticketLines.length || note || edit);
+}
+function syncOrderEntering() {
+  const on = isOrderEntering();
+  const was = document.body.classList.contains("order-entering");
+  document.body.classList.toggle("order-entering", on);
+  if (on && ordersPane !== "form") {
+    ordersPane = "form";
+    applyOrdersPane(false);
+  }
+  if (on && !was) {
+    const drafts = document.getElementById("line-draft-card");
+    if (drafts) drafts.open = false;
+    document.getElementById("order-form")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+}
+function cleanLine(l) {
+  const out = { ...l };
+  delete out.destOther;
+  if (!String(out.dest || "").trim()) delete out.dest;
+  if (!String(out.note || "").trim()) delete out.note;
+  return out;
+}
 function workingLines() {
-  return [...ticketLines, ...unifiedLinesFromForm()];
+  const extra = unifiedLinesFromForm().map((l) => applyDestToLine({ ...l }));
+  return [...ticketLines, ...extra].map(cleanLine);
 }
 
 function setStatus(text, err) {
@@ -1559,6 +1882,7 @@ function syncLineMeta(row) {
   if (unit) unit.textContent = nqUnitOfCat(unitFam, pack);
   const qty = row.querySelector("[data-line-qty]");
   if (qty) qty.step = big === "on-b" || big === "pk-b" || big === "basil-kg" ? "0.1" : "1";
+  syncFormLotRow();
 }
 function lineFamOf(rec = {}) {
   const id = rec.skuId;
@@ -1598,12 +1922,17 @@ function unifiedLineHtml(rec = {}) {
     <div class="line-qty-row">
       <input class="qty" data-line-qty type="number" min="0" step="${step}" inputmode="decimal" value="${esc(qty)}" placeholder="數量" aria-label="數量" />
       <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
-      <button type="button" class="tiny-btn" data-ticket-add>加入本單</button>
       <button type="button" class="tiny-btn ghost" data-ha-del>清掉</button>
     </div>
-    <div class="pallet-row" role="group" aria-label="疊棧板">
-      <p class="pick-lab">疊棧板</p>
-      <div class="picks">${pickHtml("pallet", [["1", "要疊棧板"], ["0", "不用"]], rec.pallet ? "1" : "0")}</div>
+    <div class="lot-row" data-lot-row hidden>
+      <button type="button" class="ghost lot-pick-btn" data-lot-pick-form>${esc(lotBtnLabel(formLot))}</button>
+      <p class="hint lot-hint">8–9 月進櫃櫃號。改品項或數量會清掉已選編號。</p>
+    </div>
+    <div class="pallet-row">
+      <button type="button" class="pallet-toggle${rec.pallet ? " on" : ""}" data-pallet-toggle aria-pressed="${rec.pallet ? "true" : "false"}">疊棧板</button>
+    </div>
+    <div class="item-add-bar">
+      <button type="button" class="primary" data-ticket-add>加入本單</button>
     </div>
   </div>`;
 }
@@ -1615,9 +1944,103 @@ function itemLineHtml(rec = {}) {
 }
 function renderItemSheet() {
   document.getElementById("sheet").innerHTML = `<div id="ha-lines">${itemLineHtml({})}</div>`;
+  syncFormLotRow();
+}
+function draftSkuFromFormRow() {
+  const extra = unifiedLinesFromForm();
+  if (extra[0]?.skuId) return extra[0];
+  const row = document.querySelector("#ha-lines .item-line");
+  if (!row) return null;
+  const qty = Number(row.querySelector("[data-line-qty]")?.value) || 0;
+  const big = pickVal(row, "big");
+  if (!big) return null;
+  const fakeQty = qty > 0 ? qty : 1;
+  const qtyInput = row.querySelector("[data-line-qty]");
+  const prev = qtyInput?.value;
+  if (qtyInput && !(qty > 0)) qtyInput.value = "1";
+  const lines = unifiedLinesFromForm();
+  if (qtyInput) qtyInput.value = prev || "";
+  const line = lines[0];
+  if (!line) return null;
+  line.qty = round(qty);
+  return line;
+}
+function syncFormLotRow() {
+  const row = document.querySelector("[data-lot-row]");
+  const btn = document.querySelector("[data-lot-pick-form]");
+  if (!row || !btn) return;
+  const draft = draftSkuFromFormRow();
+  const need = !!(draft?.skuId && skuNeedsShipLot(draft.skuId));
+  row.hidden = !need;
+  btn.textContent = lotBtnLabel(formLot);
+}
+function closeLotModal() {
+  const gate = document.getElementById("lot-gate");
+  if (gate) gate.hidden = true;
+  lotPickCtx = null;
+}
+function openLotModal(ctx) {
+  const sku = skuById(ctx.skuId);
+  const qty = Number(ctx.qty) || 0;
+  if (!sku || !(qty > 0)) {
+    setStatus("請先選品項並填數量，再選出貨編號。", true);
+    return;
+  }
+  const lots = lotsForSku(ctx.skuId);
+  if (!lots.length) {
+    setStatus("這個品項在 8–9 月進櫃沒有可選櫃號。", true);
+    return;
+  }
+  lotPickCtx = ctx;
+  const skip = { ticketIndex: ctx.ticketIndex };
+  const list = lots
+    .map((lot) => {
+      const remain = lotRemain(lot, skip);
+      const ok = remain >= qty && remain > 0;
+      return { lot, remain, ok };
+    })
+    .sort((a, b) => Number(b.ok) - Number(a.ok) || String(a.lot.date).localeCompare(String(b.lot.date)));
+  const body = list
+    .map(({ lot, remain, ok }) => {
+      const on = ctx.selectedUha === lot.uha ? " on" : "";
+      const dis = ok ? "" : " disabled";
+      return `<button type="button" class="lot-choice${on}${ok ? "" : " dim"}"${dis} data-pick-uha="${esc(lot.uha)}">
+        <strong>${esc(lot.container || lot.uha)}</strong>
+        <span>${esc(lot.uha)}　${esc(warehouseLabel(lot.wh))}</span>
+        <span>進櫃 ${esc(lot.date)}　${esc(lot.product)}　剩餘 ${fmt(remain)}</span>
+      </button>`;
+    })
+    .join("");
+  const gate = document.getElementById("lot-gate");
+  const box = document.getElementById("lot-list");
+  const title = document.getElementById("lot-title");
+  if (title) title.textContent = `選出貨編號 · ${sku.name} ${fmt(qty)}${sku.unit || ""}`;
+  if (box) box.innerHTML = body || `<p class="empty">沒有可選櫃號</p>`;
+  if (gate) gate.hidden = false;
+}
+function chooseLot(uha) {
+  const ctx = lotPickCtx;
+  const lot = allContainerLots().find((l) => l.uha === uha);
+  if (!ctx || !lot) return;
+  const remain = lotRemain(lot, { ticketIndex: ctx.ticketIndex });
+  if (remain < Number(ctx.qty)) return;
+  if (ctx.ticketIndex != null) {
+    const line = ticketLines[ctx.ticketIndex];
+    if (line) applyLotToLine(line, lot);
+    closeLotModal();
+    renderTicket();
+    renderCheck();
+    return;
+  }
+  formLot = { uha: lot.uha, container: lot.container, wh: lot.wh };
+  closeLotModal();
+  syncFormLotRow();
+  if (ctx.addAfter) pushPickerToTicket();
 }
 function withPallet(row, line) {
-  if (pickVal(row, "pallet") === "1" || row.querySelector("[data-ha-pallet]")?.checked) line.pallet = true;
+  if (row.querySelector("[data-pallet-toggle]")?.classList.contains("on") || row.querySelector("[data-ha-pallet]")?.checked) {
+    line.pallet = true;
+  }
   return line;
 }
 function unifiedLinesFromForm() {
@@ -1811,20 +2234,346 @@ function applyOrdersPane(smooth) {
   if (swipe.clientWidth) go();
   else requestAnimationFrame(go);
 }
-function applyPlanPane(smooth) {
-  document.querySelectorAll("#plan-pane-tabs [data-plan-pane]").forEach((b) => {
-    b.classList.toggle("on", b.dataset.planPane === planPane);
+function applyInPane(smooth) {
+  const formBtn = document.querySelector('#in-pane-tabs [data-in-pane="form"]');
+  if (formBtn) formBtn.textContent = co === "ha" ? "Excel 匯入" : "進貨輸入";
+  document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.inPane === inPane);
   });
-  const swipe = document.getElementById("plan-swipe");
-  const pane = document.querySelector(`[data-plan-pane-page="${planPane}"]`);
-  if (!swipe || !pane || page !== "plan") return;
+  const swipe = document.getElementById("in-swipe");
+  const pane = document.querySelector(`#in-swipe [data-in-pane-page="${inPane}"]`);
+  if (!swipe || !pane || page !== "books" || booksPart !== "in") return;
   const go = () => {
-    planPaneLock = true;
+    inPaneLock = true;
     const left = pane.offsetLeft;
     if (smooth) swipe.scrollTo({ left, behavior: "smooth" });
     else swipe.scrollLeft = left;
     window.setTimeout(() => {
-      planPaneLock = false;
+      inPaneLock = false;
+    }, smooth ? 420 : 80);
+  };
+  if (swipe.clientWidth) go();
+  else requestAnimationFrame(go);
+}
+function rackFmt(n) {
+  return Number(n || 0).toLocaleString("zh-Hant-TW");
+}
+function rackMatch(name, q) {
+  const n = String(name || "").toLowerCase();
+  const qn = String(q || "").trim().toLowerCase();
+  return !qn || n.includes(qn);
+}
+function rackSummary() {
+  const lib = window.RackLib;
+  if (!lib) return { customers: [], frames: [], cells: {}, frameLabels: {} };
+  return lib.summarize(rackTxns, {
+    from: rackMode === "custom" ? rackFrom || "" : "",
+    to: rackTo,
+    company: rackCo,
+  });
+}
+function rackLabel(s, code) {
+  return s.frameLabels?.[code] || code;
+}
+function rackTxnPool() {
+  return rackTxns.filter((t) => {
+    if (rackCo && t.company !== rackCo) return false;
+    if (rackTo && t.date > rackTo) return false;
+    if (rackMode === "custom" && rackFrom && t.date < rackFrom) return false;
+    return true;
+  });
+}
+function rackDateSpan() {
+  const dates = rackTxns
+    .filter((t) => !rackCo || t.company === rackCo)
+    .map((t) => t.date)
+    .filter(Boolean)
+    .sort();
+  if (!dates.length) return { from: "", to: "" };
+  return { from: dates[0], to: dates[dates.length - 1] };
+}
+function paintRackRange() {
+  const el = document.getElementById("rack-range");
+  if (!el) return;
+  if (rackLoad !== "done") {
+    el.textContent = "統計區間載入中。匯入資料不一定到今天。";
+    return;
+  }
+  const span = rackDateSpan();
+  if (!span.to) {
+    el.textContent = "尚無匯入進出，沒有統計區間。";
+    return;
+  }
+  let text = `資料檔區間 ${span.from} ～ ${span.to}（以已匯入為準，不是系統今天）。`;
+  if (rackMode === "custom" && rackFrom) {
+    text += ` 比對區間 ${rackFrom} ～ ${rackTo}。`;
+  } else {
+    text += ` 查詢截至 ${rackTo}。`;
+  }
+  if (rackTo > span.to) text += ` 匯入最新只到 ${span.to}，之後尚未上傳。`;
+  else if (rackTo < span.to) text += ` 目前只看到截至 ${rackTo}。`;
+  el.textContent = text;
+}
+function rackCustomerFrameDocs(customer, frame) {
+  const rows = rackTxnPool().filter((t) => t.customer === customer && t.frame === frame);
+  const outMap = new Map();
+  let inn = 0;
+  for (const t of rows) {
+    if (t.direction === "in") {
+      inn += t.qty;
+      continue;
+    }
+    const doc = t.doc || "（無單號）";
+    const cur = outMap.get(doc) || { doc, date: t.date, qty: 0 };
+    cur.qty += t.qty;
+    if (t.date && (!cur.date || t.date < cur.date)) cur.date = t.date;
+    outMap.set(doc, cur);
+  }
+  return {
+    outs: [...outMap.values()].sort((a, b) => String(b.date).localeCompare(String(a.date))),
+    inn,
+  };
+}
+function ensureRackTxns() {
+  if (rackLoad === "done" || rackLoad === "busy") return;
+  rackLoad = "busy";
+  fetch("./api/racks-txns", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((j) => {
+      rackTxns = Array.isArray(j?.txns) ? j.txns : Array.isArray(j) ? j : [];
+      rackLoad = "done";
+      renderRack();
+    })
+    .catch(() => {
+      rackTxns = [];
+      rackLoad = "done";
+      renderRack();
+    });
+}
+function reloadRackTxns() {
+  rackLoad = "";
+  ensureRackTxns();
+}
+function bufToB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+function setRackImportMsg(text, kind) {
+  const el = document.getElementById("rack-import-msg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-dup", "is-err");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.classList.toggle("is-dup", kind === "dup");
+  el.classList.toggle("is-err", kind === "err");
+}
+function fillRackFrameSelect(s) {
+  const sel = document.getElementById("rack-frame");
+  const wrapF = document.getElementById("rack-frame-wrap");
+  const wrapQ = document.getElementById("rack-q-wrap");
+  if (wrapF) wrapF.hidden = rackPane !== "frame";
+  if (wrapQ) wrapQ.hidden = rackPane === "frame";
+  if (!sel) return;
+  const frames = (s?.frames || [])
+    .map((f) => ({ f, label: rackLabel(s, f) }))
+    .sort((a, b) => a.label.localeCompare(b.label, "zh-Hant"));
+  const cur = rackPane === "frame" ? rackPick : "";
+  sel.innerHTML = `<option value="">全部</option>${frames
+    .map((x) => `<option value="${esc(x.f)}"${x.f === cur ? " selected" : ""}>${esc(x.label)}</option>`)
+    .join("")}`;
+}
+function renderRack() {
+  const box = document.getElementById("rack-box");
+  if (!box || page !== "books" || booksPart !== "rack") return;
+  document.querySelectorAll("#rack-pane-tabs [data-rack-pane]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.rackPane === rackPane);
+  });
+  const toEl = document.getElementById("rack-to");
+  if (toEl && toEl.value !== rackTo) toEl.value = rackTo;
+  const fromEl = document.getElementById("rack-from");
+  if (fromEl && fromEl.value !== rackFrom) fromEl.value = rackFrom;
+  const fromWrap = document.getElementById("rack-from-wrap");
+  if (fromWrap) fromWrap.hidden = rackMode !== "custom";
+  const toWord = document.getElementById("rack-to-word");
+  if (toWord) toWord.textContent = rackMode === "custom" ? "迄" : "截至";
+  document.querySelectorAll("[data-rack-mode]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.rackMode === rackMode);
+  });
+  const coEl = document.getElementById("rack-co");
+  if (coEl && coEl.value !== rackCo) coEl.value = rackCo;
+  const qEl = document.getElementById("rack-q");
+  if (qEl && qEl.value !== rackQ) qEl.value = rackQ;
+  ensureRackTxns();
+  paintRackRange();
+  if (rackLoad !== "done") {
+    box.innerHTML = `<p class="empty">正在載入鐵架彙整…</p>`;
+    return;
+  }
+  const lib = window.RackLib;
+  if (!lib) {
+    box.innerHTML = `<p class="empty">彙整程式未載入。</p>`;
+    return;
+  }
+  if (!rackTxns.length) {
+    box.innerHTML = `<p class="empty">尚無進出資料。請用右上角「匯入 Excel」上傳異動報表。</p>`;
+    return;
+  }
+  const s = rackSummary();
+  fillRackFrameSelect(s);
+  paintRackRange();
+  const q = rackQ;
+  if (rackPane === "frame") {
+    if (rackPick) {
+      const rows = lib.frameAtCustomers(s, rackPick).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+      const qty = rows.reduce((a, r) => a + r.closing, 0);
+      box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back>返回架種</button>
+        <p class="rack-stat"><b>${esc(rackLabel(s, rackPick))}</b>　${rows.length} 戶　在外 ${rackFmt(qty)}</p>
+        <table class="rack-table"><thead><tr><th>客人</th><th>還欠</th></tr></thead><tbody>
+        ${rows.map((r) => `<tr><td>${esc(r.customer)}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`).join("")}
+        </tbody></table>`;
+      return;
+    }
+    const frames = s.frames
+      .map((f) => {
+        const list = lib.frameAtCustomers(s, f).filter((r) => r.closing > 0);
+        const qty = list.reduce((a, r) => a + r.closing, 0);
+        return { f, label: rackLabel(s, f), households: list.length, qty };
+      })
+      .filter((x) => x.qty > 0 && (rackMatch(x.label, q) || rackMatch(x.f, q)))
+      .sort((a, b) => b.qty - a.qty);
+    box.innerHTML = frames.length
+      ? `<table class="rack-table"><thead><tr><th>架種</th><th>戶數</th><th>在外</th></tr></thead><tbody>
+        ${frames.map((x) => `<tr data-rack-pick="${esc(x.f)}"><td>${esc(x.label)}</td><td>${rackFmt(x.households)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
+        </tbody></table>`
+      : `<p class="empty">沒有符合的架種尚欠。</p>`;
+    return;
+  }
+  if (rackPane === "customer") {
+    if (rackPick && rackLine) {
+      const rows = lib.customerOwed(s, rackPick).filter((r) => r.frame === rackLine);
+      const owed = rows.reduce((a, r) => a + (r.closing || 0), 0);
+      const docs = rackCustomerFrameDocs(rackPick, rackLine);
+      const lines = docs.outs.length
+        ? docs.outs
+            .map(
+              (d) =>
+                `<tr><td>${esc(d.doc)}</td><td>${esc(d.date || "")}</td><td class="owed">${rackFmt(d.qty)}</td></tr>`,
+            )
+            .join("")
+        : `<tr><td colspan="3">沒有出貨單號明細</td></tr>`;
+      box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="sheet">返回總單</button>
+        <h3 class="rack-sheet-title">${esc(rackPick)}　${esc(rackLabel(s, rackLine))}</h3>
+        <p class="rack-owed-big">欠架總數 ${rackFmt(owed)}</p>
+        ${rackMode === "custom" && rackFrom ? `<p class="rack-stat">區間 ${esc(rackFrom)}～${esc(rackTo)} 的出貨單</p>` : ""}
+        ${docs.inn ? `<p class="rack-stat">期間歸還 ${rackFmt(docs.inn)}</p>` : ""}
+        <table class="rack-table"><thead><tr><th>出貨單號</th><th>日期</th><th>數量</th></tr></thead><tbody>${lines}</tbody></table>`;
+      return;
+    }
+    if (rackPick) {
+      const custom = rackMode === "custom" && rackFrom;
+      const rows = lib
+        .customerOwed(s, rackPick)
+        .filter((r) => r.closing > 0 || (custom && (r.out || r.inn || r.opening)))
+        .sort((a, b) => b.closing - a.closing);
+      const qty = rows.reduce((a, r) => a + r.closing, 0);
+      const span = rackDateSpan();
+      const head = custom
+        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th></tr></thead>`
+        : `<thead><tr><th>品項</th><th>欠架</th></tr></thead>`;
+      const body = rows
+        .map((r) =>
+          custom
+            ? `<tr data-rack-line="${esc(r.frame)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td>${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`
+            : `<tr data-rack-line="${esc(r.frame)}"><td>${esc(rackLabel(s, r.frame))}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`,
+        )
+        .join("");
+      const foot = custom
+        ? `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td></tr>`
+        : `<tr><td>合計</td><td class="owed">${rackFmt(qty)}</td></tr>`;
+      box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="list">返回客人</button>
+        <h3 class="rack-sheet-title">總單　${esc(rackPick)}</h3>
+        <p class="rack-stat">各種品項缺漏　${rows.length} 種　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
+        ${
+          rows.length
+            ? `<table class="rack-table">${head}<tbody>${body}${foot}</tbody></table>`
+            : `<p class="empty">這個客人目前沒有欠架。</p>`
+        }`;
+      return;
+    }
+    const names = s.customers
+      .map((c) => {
+        const rows = lib.customerOwed(s, c).filter((r) => r.closing > 0);
+        return { c, kinds: rows.length, qty: rows.reduce((a, r) => a + r.closing, 0) };
+      })
+      .filter((x) => x.qty > 0 && rackMatch(x.c, q))
+      .sort((a, b) => b.qty - a.qty);
+    box.innerHTML = names.length
+      ? `<table class="rack-table"><thead><tr><th>客人</th><th>種類</th><th>還欠</th></tr></thead><tbody>
+        ${names.map((x) => `<tr data-rack-pick="${esc(x.c)}"><td>${esc(x.c)}</td><td>${rackFmt(x.kinds)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
+        </tbody></table>`
+      : `<p class="empty">沒有符合的客人尚欠。</p>`;
+    return;
+  }
+  const carriers = lib.uniqueCarriers(s.customers);
+  if (rackPick) {
+    const members = lib.customersOfCarrier(s.customers, rackPick);
+    const rows = lib.mergeOwed(s, members).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+    const qty = rows.reduce((a, r) => a + r.closing, 0);
+    box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back>返回貨運</button>
+      <p class="rack-stat"><b>${esc(rackPick)}</b>　${members.length} 戶　還欠 ${rackFmt(qty)}</p>
+      <table class="rack-table"><thead><tr><th>架種</th><th>還欠</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>${esc(rackLabel(s, r.frame))}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`).join("")}
+      </tbody></table>`;
+    return;
+  }
+  const list = carriers
+    .map((c) => {
+      const members = lib.customersOfCarrier(s.customers, c);
+      const rows = lib.mergeOwed(s, members).filter((r) => r.closing > 0);
+      return { c, households: members.length, qty: rows.reduce((a, r) => a + r.closing, 0) };
+    })
+    .filter((x) => x.qty > 0 && rackMatch(x.c, q))
+    .sort((a, b) => b.qty - a.qty);
+  box.innerHTML = list.length
+    ? `<table class="rack-table"><thead><tr><th>貨運行</th><th>戶數</th><th>還欠</th></tr></thead><tbody>
+      ${list.map((x) => `<tr data-rack-pick="${esc(x.c)}"><td>${esc(x.c)}</td><td>${rackFmt(x.households)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
+      </tbody></table>`
+    : `<p class="empty">沒有符合的貨運行尚欠。</p>`;
+}
+function applyPlanPane() {
+  document.querySelectorAll("#plan-pane-tabs [data-plan-pane]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.planPane === planPane);
+  });
+  const pending = document.getElementById("plan-pending");
+  const done = document.getElementById("plan-done");
+  if (pending) pending.hidden = planPane !== "pending";
+  if (done) done.hidden = planPane !== "done";
+}
+function applyPlanMain(smooth) {
+  if (currentRole() === "driver") planMain = "ship";
+  document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.planMain === planMain);
+  });
+  const swipe = document.getElementById("plan-main-swipe");
+  const pane = document.querySelector(`[data-plan-main-page="${planMain}"]`);
+  if (!swipe || !pane || page !== "plan") return;
+  const go = () => {
+    planMainLock = true;
+    const left = pane.offsetLeft;
+    if (smooth) swipe.scrollTo({ left, behavior: "smooth" });
+    else swipe.scrollLeft = left;
+    window.setTimeout(() => {
+      planMainLock = false;
     }, smooth ? 420 : 80);
   };
   if (swipe.clientWidth) go();
@@ -1992,6 +2741,7 @@ function addOpenOrderFor(company, customer, shipDate, lines, shipAddr) {
   const nos = state.orders.filter((o) => o.co === company).map((o) => o.no);
   const day = shipDate || today();
   const addr = String(shipAddr || "").trim();
+  const remark = orderNoteValue();
   const id = uid();
   state.orders.unshift({
     id,
@@ -1999,6 +2749,7 @@ function addOpenOrderFor(company, customer, shipDate, lines, shipAddr) {
     no: (nos.length ? Math.max(...nos) : 0) + 1,
     customer,
     shipAddr: addr,
+    remark,
     shipDate: day,
     preorder: isPreorderDay(day),
     lines,
@@ -2034,7 +2785,6 @@ let lineDupAck = new Set();
 let formDupAck = "";
 let nqDupAck = "";
 let inboundLotAck = "";
-let ticketLines = [];
 
 function warnIfDup(company, customer, shipDate, skipId) {
   const dupes = suspectDupes(company, customer, shipDate, skipId);
@@ -2345,6 +3095,7 @@ function ordersListHtml(opts = {}) {
             <span class="order-st st-${esc(o.status)}">${esc(st)}</span>
           </div>
           <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}${o.shipAddr ? `　送貨 ${esc(o.shipAddr)}` : ""}</p>
+          ${o.remark ? `<p class="order-remark">${esc(o.remark)}</p>` : ""}
           <p class="order-staff">${staffNoteHtml(o)}</p>
           <div class="order-chips">${lines}</div>
           ${acts}
@@ -2627,6 +3378,30 @@ function assignOrderDriver(orderId, driver) {
   setStatus(`已派「${o.customer}」#${o.no} 給${driver}。`, false);
   render();
 }
+function assignCustomerDriver(customer, driver) {
+  if (!requireCan("assign-driver", "沒有派單權限。")) return;
+  if (!driverNames().includes(driver)) return;
+  const orders = dayOpenOrdersForCustomer(customer);
+  if (!orders.length) return setStatus("這張單已出貨或找不到。", true);
+  const other = [...new Set(orders.map((o) => o.assignedDriver).filter((d) => d && d !== driver))];
+  if (other.length && !confirm(`「${customer}」目前派給${other.join("、")}。改派給${driver}？`)) return;
+  assignOrdersToDriver(orders, driver, false);
+  save();
+  setStatus(`已派「${customer}」給${driver}。`, false);
+  render();
+}
+function takeCustomerRun(customer) {
+  if (!requireCan("take-run", "沒有接單權限。")) return;
+  const me = currentStaff();
+  const orders = dayOpenOrdersForCustomer(customer);
+  if (!orders.length) return setStatus("這張單已出貨或找不到。", true);
+  const other = orders.find((o) => o.assignedDriver && o.assignedDriver !== me);
+  if (other) return setStatus(`這張已派給${other.assignedDriver}。`, true);
+  assignOrdersToDriver(orders, me, true);
+  save();
+  setStatus(`「${customer}」已接單，狀態：接單處理中。送到後請簽名或拍照。`, false);
+  render();
+}
 function takeOrderRun(orderId) {
   if (!requireCan("take-run", "沒有接單權限。")) return;
   const me = currentStaff();
@@ -2857,19 +3632,21 @@ function assignRowHtml(customer, orders, kind) {
     )
     .join("")}</div>`;
 }
-function driverActsHtml(customer, orders, kind) {
+function driverSideHtml(customer, orders, kind) {
   if (kind !== "pending" || currentRole() !== "driver") return "";
   const me = currentStaff();
+  const drivers = [...new Set(orders.map((o) => o.assignedDriver).filter(Boolean))];
   const mine = orders.every((o) => !o.assignedDriver || o.assignedDriver === me);
-  if (!mine) return `<p class="hint">已派給${esc(runLabel(orders) || "其他司機")}</p>`;
-  const taken = orders.every((o) => o.assignedDriver === me);
+  const taken = orders.every((o) => o.assignedDriver === me && o.runOut);
+  const who = drivers.length ? `<span class="drive-driver">${esc(drivers.join("、"))}</span>` : "";
+  if (!mine) return `<div class="assign-row drive-side">${who}</div>`;
   const take = !taken
-    ? `<button type="button" class="primary drive-ship" data-drive-take="${esc(customer)}">接單</button>`
+    ? `<button type="button" class="tiny-btn primary" data-drive-take="${esc(customer)}">接單</button>`
     : "";
   const deliver = taken
-    ? `<button type="button" class="primary drive-ship" data-drive-proof="${esc(customer)}">電子簽單／拍照</button>`
+    ? `<button type="button" class="tiny-btn primary" data-drive-proof="${esc(customer)}">電子簽單／拍照</button>`
     : "";
-  return `${take}${deliver}`;
+  return `<div class="assign-row drive-side">${who}${take}${deliver}</div>`;
 }
 function planJobHtml(customer, orders, kind) {
   const key = `${kind}:${customer}`;
@@ -2882,20 +3659,25 @@ function planJobHtml(customer, orders, kind) {
       ? `${esc(customer)}${tag ? `<span class="drive-tag">${esc(tag)}</span>` : ""}${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`
       : `${esc(customer)}<span class="drive-nos">${esc(nos)}</span>${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`;
   const body = orders.map(orderBlockHtml).join("");
+  const side = assignRowHtml(customer, orders, kind) || driverSideHtml(customer, orders, kind);
   return `<li class="drive-job ${kind === "done" ? "is-done" : ""} ${open ? "is-open" : ""}">
-    <button type="button" class="drive-who" data-drive-open="${esc(key)}" aria-expanded="${open ? "true" : "false"}">${head}</button>
-    <div class="drive-detail" ${open ? "" : "hidden"}>${body}${assignRowHtml(customer, orders, kind)}${driverActsHtml(customer, orders, kind)}</div>
+    <div class="drive-head">
+      <button type="button" class="drive-who" data-drive-open="${esc(key)}" aria-expanded="${open ? "true" : "false"}">${head}</button>
+      ${side}
+    </div>
+    <div class="drive-detail" ${open ? "" : "hidden"}>${body}</div>
   </li>`;
 }
 function syncPlanChrome(driver) {
   const card = document.getElementById("plan-card");
   const shortTitle = document.getElementById("plan-short-title");
   const shortBox = document.getElementById("plan-short");
-  const sub = document.getElementById("plan-sub-title");
+  const mainTabs = document.getElementById("plan-main-tabs");
   if (card) card.classList.toggle("is-driver", driver);
   if (shortTitle) shortTitle.hidden = driver;
   if (shortBox) shortBox.hidden = driver;
-  if (sub) sub.textContent = "派貨";
+  if (mainTabs) mainTabs.hidden = driver;
+  if (driver) planMain = "ship";
 }
 function renderDispatchLists(day) {
   const pendingBox = document.getElementById("plan-pending");
@@ -2928,6 +3710,8 @@ function renderDriverPlan() {
   if (planDateEl && planDateEl.value !== day) planDateEl.value = day;
   syncPlanChrome(true);
   renderDispatchLists(day);
+  applyPlanPane();
+  applyPlanMain(false);
 }
 function renderPlan() {
   const shortBox = document.getElementById("plan-short");
@@ -2972,6 +3756,8 @@ function renderPlan() {
     }
   }
   renderDispatchLists(day);
+  applyPlanPane();
+  applyPlanMain(false);
 }
 
 function nqMorningQty(b) {
@@ -3020,6 +3806,43 @@ function nqMorningDone(rows = NQ_INBOUND) {
   const date = stockViewDay();
   return rows.every((row) => !!bookRow(row.id, date).morningConfirmed);
 }
+function lotLabelShort(b) {
+  const lots = Array.isArray(b.lots) ? b.lots : [];
+  if (!lots.length) return "尚無批次";
+  return lots
+    .map((x) => `${fmt(x.qty)}${x.auto ? "自動" : ""}`)
+    .join(" · ");
+}
+function inboundOverviewHtml(date) {
+  if (co === "ha") {
+    const rows = SKUS.filter((s) => s.co === "ha")
+      .map((sku) => {
+        const st = ensureStockRow(sku.id);
+        return `<div class="in-ov-row is-ha">
+          <span class="in-ov-name">${esc(skuShortName(sku))}</span>
+          <span class="in-ov-total"><strong>${fmt(st.qty || 0)}</strong><span class="unit">${esc(sku.unit)}</span></span>
+        </div>`;
+      })
+      .join("");
+    return `<p class="in-ov-note">Excel 匯入後會列出當日進貨。現況先看原料庫。</p><div class="in-ov">${rows}</div>`;
+  }
+  return NQ_STOCK_GROUPS.map((g) => {
+    const rows = NQ_INBOUND.filter((row) => g.ids.includes(row.id))
+      .map((row) => {
+        const sku = skuById(row.id);
+        const b = bookRow(row.id, date);
+        return `<div class="in-ov-row">
+            <span class="in-ov-name">${esc(row.label)}</span>
+            <span class="in-ov-total"><strong>${fmt(b.inbound || 0)}</strong><span class="unit">${esc(sku.unit)}</span></span>
+            <input class="in-ov-fix qty" data-inbound-fix="${row.id}" type="number" min="0" step="${skuStep(sku)}" placeholder="改總數" inputmode="decimal" aria-label="${esc(row.label)} 修正進貨總數" />
+            <button type="button" class="ghost" data-fix-inbound="${row.id}">修正</button>
+          </div>
+          <p class="in-ov-lots">${esc(lotLabelShort(b))}${b.inboundEdited ? " · 已修正" : ""}</p>`;
+      })
+      .join("");
+    return `<section class="in-ov-group"><h3>${esc(g.label)}</h3>${rows}</section>`;
+  }).join("");
+}
 function lotLabel(b) {
   const lots = Array.isArray(b.lots) ? b.lots : [];
   if (!lots.length) return "";
@@ -3038,7 +3861,7 @@ function ensureLots(b) {
 function correctInbound(skuId, raw, date = stockViewDay()) {
   const sku = skuById(skuId);
   if (!sku) return;
-  if (raw === "" || raw == null) return setStatus("請在本批欄填正確的今日進貨總數，再按修正。", true);
+  if (raw === "" || raw == null) return setStatus("請在總覽的修正欄填正確總數，再按修正。", true);
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return setStatus("修正請填 0 或正數。", true);
   const b = bookRow(skuId, date);
@@ -3168,8 +3991,6 @@ function renderStock() {
   if (salesDateEl && salesDateEl.value !== date) salesDateEl.value = date;
   const lookingBack = date !== today();
   if (co === "ha") {
-    const inDay = document.getElementById("in-day-card");
-    if (inDay) inDay.hidden = true;
     const countCard = document.getElementById("count-card");
     if (countCard) countCard.hidden = true;
     const fillBtn = document.getElementById("fill-count");
@@ -3182,6 +4003,8 @@ function renderStock() {
     if (inBox) inBox.innerHTML = "";
     const ov = document.getElementById("stock-overview");
     if (ov) ov.innerHTML = haStockOverviewHtml();
+    const inOv = document.getElementById("in-overview");
+    if (inOv) inOv.innerHTML = inboundOverviewHtml(date);
     const opts = haProcessSkus()
       .map((s) => `<option value="${s.id}">${esc(s.name)}</option>`)
       .join("");
@@ -3193,16 +4016,24 @@ function renderStock() {
     if (inSku) inSku.innerHTML = inOpts;
     if (prSku) prSku.innerHTML = opts;
     document.getElementById("process").hidden = booksPart !== "stock";
-    document.getElementById("receive").hidden = booksPart !== "in";
+    document.getElementById("receive").hidden = true;
+    const haExcel = document.getElementById("ha-excel");
+    if (haExcel) haExcel.hidden = booksPart !== "in";
     document.getElementById("stock-title").textContent = lookingBack ? `鴻安庫存（${date}）` : "鴻安庫存／加工";
     const inTitle = document.getElementById("in-title");
-    if (inTitle) inTitle.textContent = lookingBack ? `鴻安進貨（${date}）` : "鴻安進貨入庫";
+    if (inTitle) inTitle.textContent = lookingBack ? `鴻安進貨（${date}）` : "鴻安進貨";
     const gs = document.getElementById("guide-stock");
     const gi = document.getElementById("guide-in");
     if (gs) gs.textContent = "大數字＝已加工可出。原料從進貨入庫增加，加工後轉成可出。出貨才扣可出。";
-    if (gi) gi.textContent = "鴻安進貨記入原料庫。加工請到「庫存盤點」。";
+    if (gi) {
+      gi.hidden = true;
+      gi.textContent = "";
+    }
+    applyInPane(false);
     return;
   }
+  const haExcelOff = document.getElementById("ha-excel");
+  if (haExcelOff) haExcelOff.hidden = true;
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
   document.getElementById("stock-title").textContent = lookingBack ? `庫存（${date}）` : "庫存";
@@ -3211,24 +4042,16 @@ function renderStock() {
   refreshStockOverview();
   const countCard = document.getElementById("count-card");
   if (countCard) countCard.hidden = false;
-  const inDay = document.getElementById("in-day-card");
-  if (inDay) inDay.hidden = false;
-  const tot = document.getElementById("in-day-totals");
-  if (tot) {
-    tot.innerHTML = NQ_INBOUND.map((row) => {
-      const sku = skuById(row.id);
-      const b = bookRow(row.id, date);
-      const edited = b.inboundEdited ? '<span class="tag">修正</span>' : "";
-      return `<div class="live-totals-item"><span>${edited}${esc(row.label)}</span><strong>${fmt(b.inbound || 0)}</strong></div>`;
-    }).join("");
-  }
   const gs = document.getElementById("guide-stock");
   const gi = document.getElementById("guide-in");
   const gc = document.getElementById("guide-count");
   if (gs) gs.textContent = "上方大數字＝當日庫存（盤點＋進貨－已出）。早上盤點還沒填就以 0 計，不帶入前一天。小字分開顯示盤點、進貨、已出。";
-  if (gi) gi.textContent = lookingBack
-    ? `查 ${date} 的進貨。有貨進來才記入；打錯按「修正進貨」。`
-    : "有貨進來才記入。地瓜葉與九層塔並排。＋／－調本批後按記入；打錯填正確總數再按修正。";
+  if (gi) {
+    gi.hidden = false;
+    gi.textContent = lookingBack
+      ? `查 ${date}。＋／－調本批後記入；打錯到總覽改總數。`
+      : "＋／－調本批後按記入。打錯請滑到總覽改總數。";
+  }
   if (gc) gc.textContent = lookingBack
     ? `查 ${date} 的早上盤點與結算。`
     : "請填現場早上數量後按確認。還沒填的品項盤點以 0 計算，不會帶入前一天。確認後不會自動加進貨。";
@@ -3282,22 +4105,11 @@ function renderStock() {
     const items = NQ_INBOUND.filter((row) => g.ids.includes(row.id))
       .map((row) => {
         const sku = skuById(row.id);
-        const b = bookRow(row.id, date);
         const step = skuStep(sku);
-        const lots = lotLabel(b);
-        return `<article class="stock-fill-card is-in">
+        return `<article class="in-enter">
           <h3>${esc(row.label)} <span class="unit">${esc(sku.unit)}</span></h3>
-          <p class="in-sum">
-            ${b.inboundEdited ? '<span class="tag">修正</span>' : ""}
-            ${Array.isArray(b.lots) && b.lots.some((x) => x.auto) ? '<span class="tag">舊自動判定</span>' : ""}
-            已進 <strong data-in-total="${row.id}">${fmt(b.inbound || 0)}</strong>
-          </p>
-          <p class="in-lots" data-in-lots="${row.id}">${esc(lots || "尚無本批")}</p>
           ${qtyStepperHtml({ key: "inbound", id: row.id, value: "", step, locked: false, placeholder: "本批", aria: `${row.label} 本批進貨` })}
-          <div class="stock-fill-actions">
-            <button type="button" class="primary" data-add-inbound="${row.id}">記入</button>
-            <button type="button" class="ghost" data-fix-inbound="${row.id}">修正</button>
-          </div>
+          <button type="button" class="primary" data-add-inbound="${row.id}">記入</button>
         </article>`;
       })
       .join("");
@@ -3307,6 +4119,9 @@ function renderStock() {
   if (countBox) countBox.innerHTML = `<div class="stock-fill-list">${countCards}</div>`;
   const inBox = document.getElementById("stock-in");
   if (inBox) inBox.innerHTML = inCards;
+  const inOv = document.getElementById("in-overview");
+  if (inOv) inOv.innerHTML = inboundOverviewHtml(date);
+  applyInPane(false);
 }
 function renderSalesBooks() {
   const title = document.getElementById("sales-title");
@@ -3509,9 +4324,38 @@ function renderDailyGrid() {
 const CUST_ZY = {};
 const CUST_PY = {};
 (function () {
-  const rows = [["\u6771","\u3109\u3128\u3125","dong"],["\u5927","\u3109\u311a","da"],["\u6234","\u3109\u311e","dai"],["\u9127","\u3109\u3125","deng"],["\u675c","\u3109\u3128","du"],["\u8463","\u3109\u3128\u3125","dong"],["\u4e01","\u3109\u3127\u3125","ding"],["\u5b9a","\u3109\u3127\u3125","ding"],["\u9054","\u3109\u311a","da"],["\u4ee3","\u3109\u311e","dai"],["\u9f0e","\u3109\u3127\u3125","ding"],["\u6bb5","\u3109\u3128\u3122","duan"],["\u5fb7","\u3109\u311b","de"],["\u9673","\u3113\u3123","chen"],["\u6797","\u310c\u3127\u3123","lin"],["\u9ec3","\u310f\u3128\u3124","huang"],["\u5f35","\u3113\u3124","zhang"],["\u674e","\u310c\u3127","li"],["\u738b","\u3128\u3124","wang"],["\u5433","\u3128","wu"],["\u5289","\u310c\u3127\u3122","liu"],["\u8521","\u311b\u311e","cai"],["\u694a","\u3127\u3124","yang"],["\u5c0f","\u3112\u3127\u3120","xiao"],["\u6b23","\u3112\u3127\u3123","xin"],["\u91d1","\u3110\u3127\u3123","jin"],["\u4f73","\u3110\u3127\u311a","jia"],["\u7433","\u310c\u3127\u3123","lin"],["\u82b3","\u3108\u3124","fang"],["\u9d3b","\u310f\u3128\u3125","hong"],["\u7a22","\u310b\u3128\u3125","nong"],["\u69ae","\u3116\u3128\u3125","rong"],["\u9707","\u3113\u3123","zhen"],["\u5112","\u3116\u3128","ru"],["\u963f","\u311a","a"]];
+  const rows = [["\u6771","\u3109\u3128\u3125","dong"],["\u5927","\u3109\u311a","da"],["\u6234","\u3109\u311e","dai"],["\u9127","\u3109\u3125","deng"],["\u675c","\u3109\u3128","du"],["\u8463","\u3109\u3128\u3125","dong"],["\u4e01","\u3109\u3127\u3125","ding"],["\u5b9a","\u3109\u3127\u3125","ding"],["\u9054","\u3109\u311a","da"],["\u4ee3","\u3109\u311e","dai"],["\u9f0e","\u3109\u3127\u3125","ding"],["\u6bb5","\u3109\u3128\u3122","duan"],["\u5fb7","\u3109\u311b","de"],["\u9673","\u3114\u3123","chen"],["\u6797","\u310c\u3127\u3123","lin"],["\u9ec3","\u310f\u3128\u3124","huang"],["\u5f35","\u3113\u3124","zhang"],["\u674e","\u310c\u3127","li"],["\u738b","\u3128\u3124","wang"],["\u5433","\u3128","wu"],["\u5289","\u310c\u3127\u3122","liu"],["\u8521","\u311b\u311e","cai"],["\u694a","\u3127\u3124","yang"],["\u5c0f","\u3112\u3127\u3120","xiao"],["\u6b23","\u3112\u3127\u3123","xin"],["\u91d1","\u3110\u3127\u3123","jin"],["\u4f73","\u3110\u3127\u311a","jia"],["\u7433","\u310c\u3127\u3123","lin"],["\u82b3","\u3108\u3124","fang"],["\u9d3b","\u310f\u3128\u3125","hong"],["\u7a22","\u310b\u3128\u3125","nong"],["\u69ae","\u3116\u3128\u3125","rong"],["\u9707","\u3113\u3123","zhen"],["\u5112","\u3116\u3128","ru"],["\u963f","\u311a","a"],["\u912d","\u3113\u3125","zheng"],["\u8b1d","\u3112\u3127\u311d","xie"],["\u8607","\u3119\u3128","su"],["\u838a","\u3113\u3128\u3124","zhuang"],["\u5442","\u310c\u3129","lu"],["\u856d","\u3112\u3127\u3120","xiao"],["\u7f85","\u310c\u3128\u311b","luo"],["\u7c21","\u3110\u3127\u3122","jian"],["\u937e","\u3113\u3128\u3125","zhong"],["\u8d99","\u3113\u3120","zhao"],["\u6eab","\u3128\u3123","wen"],["\u859b","\u3112\u3129\u311d","xue"],["\u97d3","\u310f\u3122","han"],["\u56b4","\u3127\u3122","yan"],["\u9f94","\u310d\u3128\u3125","gong"],["\u95bb","\u3127\u3122","yan"],["\u9023","\u310c\u3127\u3122","lian"],["\u99ac","\u3107\u311a","ma"],["\u8fb2","\u310b\u3128\u3125","nong"],["\u6eff","\u3107\u3122","man"]];
   for (const r of rows) { CUST_ZY[r[0]] = r[1]; CUST_PY[r[0]] = r[2]; }
 })();
+const SIMP_TO_TRAD = {
+  "\u4e1c": "\u6771",
+  "\u9648": "\u9673",
+  "\u9ec4": "\u9ec3",
+  "\u5f20": "\u5f35",
+  "\u5218": "\u5289",
+  "\u6768": "\u694a",
+  "\u90d1": "\u912d",
+  "\u8c22": "\u8b1d",
+  "\u82cf": "\u8607",
+  "\u5e84": "\u838a",
+  "\u5415": "\u5442",
+  "\u8427": "\u856d",
+  "\u7f57": "\u7f85",
+  "\u7b80": "\u7c21",
+  "\u949f": "\u937e",
+  "\u8d75": "\u8d99",
+  "\u9093": "\u9127",
+  "\u6e29": "\u6eab",
+  "\u97e9": "\u97d3",
+  "\u4e25": "\u56b4",
+  "\u9f9a": "\u9f94",
+  "\u960e": "\u95bb",
+  "\u8fde": "\u9023",
+  "\u9a6c": "\u99ac",
+  "\u519c": "\u8fb2",
+  "\u8363": "\u69ae",
+  "\u6ee1": "\u6eff",
+};
 const ZY_TONE_RE = /[\u02CA\u02C7\u02CB\u02D9]/g;
 let custCompose = "";
 function stripZhuyin(s) {
@@ -3521,7 +4365,7 @@ function isZhuyinQuery(s) {
   return /^[ㄅ-ㄩ]+$/.test(s);
 }
 function isPinyinQuery(s) {
-  return /^[a-zA-Z]+$/.test(s);
+  return /^[a-zA-Z]+$/.test(String(s || "").replace(/['’\s]/g, ""));
 }
 function pinyinInitial(py) {
   const t = String(py || "");
@@ -3532,7 +4376,8 @@ function pinyinInitial(py) {
 }
 function firstCharSound(name) {
   const ch = String(name || "").trim().charAt(0);
-  return { ch, zy: CUST_ZY[ch] || "", py: CUST_PY[ch] || "" };
+  const key = SIMP_TO_TRAD[ch] || ch;
+  return { ch, zy: CUST_ZY[key] || CUST_ZY[ch] || "", py: CUST_PY[key] || CUST_PY[ch] || "" };
 }
 function pyQueryMatch(py, q) {
   const s = String(q || "").toLowerCase();
@@ -3559,8 +4404,9 @@ function custSuggestHits(q, names) {
   const raw = String(q || "").trim();
   if (!raw) return [];
   const zy = stripZhuyin(raw);
+  const py = raw.replace(/['’\s]/g, "");
   const wantZy = isZhuyinQuery(zy);
-  const wantPy = isPinyinQuery(raw);
+  const wantPy = isPinyinQuery(py);
   const scored = [];
   for (const name of names) {
     if (name === raw) continue;
@@ -3569,18 +4415,30 @@ function custSuggestHits(q, names) {
     else if (name.includes(raw)) score = 3;
     const sound = firstCharSound(name);
     if (wantZy && sound.zy && sound.zy.startsWith(zy)) score = score || 2;
-    if (wantPy && pyQueryMatch(sound.py, raw)) score = score || 2;
+    if (wantPy && pyQueryMatch(sound.py, py)) score = score || 2;
     if (score) scored.push({ name, score });
   }
   scored.sort((a, b) => a.score - b.score || a.name.localeCompare(b.name, "zh-Hant"));
   return scored.slice(0, 12).map((x) => x.name);
 }
+function customerQueryText() {
+  const input = document.getElementById("customer");
+  const typed = String(input?.value || "").trim();
+  const composing = String(custCompose || "").trim();
+  if (input?.dataset.composing === "1") {
+    if (isPinyinQuery(composing) || isZhuyinQuery(stripZhuyin(composing))) return composing;
+    if (isPinyinQuery(typed) || isZhuyinQuery(stripZhuyin(typed))) return typed;
+    return composing || typed;
+  }
+  return typed || stripZhuyin(composing);
+}
 function renderCustSuggest() {
   const input = document.getElementById("customer");
   const box = document.getElementById("cust-suggest");
   if (!input || !box) return;
-  const q = input.value.trim() || stripZhuyin(custCompose).trim();
-  if (!q || document.activeElement !== input) {
+  const q = customerQueryText();
+  const keepOpen = document.activeElement === input || input.dataset.composing === "1";
+  if (!q || !keepOpen) {
     box.hidden = true;
     box.innerHTML = "";
     return;
@@ -3891,19 +4749,30 @@ function render() {
   }
   applyRoleUi();
   document.getElementById("co-name").textContent =
-    currentRole() === "driver"
-      ? "派貨"
-      : page === "books"
-        ? (co === "nq" ? "穠全公司 · 後帳" : "鴻安公司 · 後帳")
-        : "產品出貨";
+    page === "home"
+      ? "鴻安農業科技"
+      : currentRole() === "driver"
+        ? "派貨"
+        : page === "books" && booksPart === "rack"
+          ? "鐵架／八格籃"
+        : page === "books"
+          ? (co === "nq" ? "穠全公司 · 倉管／帳款" : "鴻安公司 · 倉管／帳款")
+          : page === "soon"
+            ? "帳款業務"
+            : "產品出貨";
   document.querySelectorAll("[data-co]").forEach((b) => b.classList.toggle("on", b.dataset.co === co));
   const onBooks = page === "books";
+  const onRack = onBooks && booksPart === "rack";
   const coTabs = document.getElementById("co-tabs");
   const booksTabs = document.getElementById("books-part-tabs");
-  if (coTabs) coTabs.hidden = !onBooks;
-  if (booksTabs) booksTabs.hidden = !onBooks;
-  document.querySelectorAll("[data-books]").forEach((b) => b.classList.toggle("on", b.dataset.books === booksPart));
+  if (coTabs) coTabs.hidden = !onBooks || onRack;
+  if (booksTabs) booksTabs.hidden = true;
+  document.querySelectorAll("#books-part-tabs [data-books]").forEach((b) => b.classList.toggle("on", b.dataset.books === booksPart));
   document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
+  const pageHome = document.getElementById("page-home");
+  if (pageHome) pageHome.hidden = page !== "home";
+  const pageSoon = document.getElementById("page-soon");
+  if (pageSoon) pageSoon.hidden = page !== "soon";
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = !(onBooks && booksPart === "stock");
@@ -3911,6 +4780,8 @@ function render() {
   if (pageIn) pageIn.hidden = !(onBooks && booksPart === "in");
   const pageSales = document.getElementById("page-sales");
   if (pageSales) pageSales.hidden = !(onBooks && booksPart === "sales");
+  const pageRack = document.getElementById("page-rack");
+  if (pageRack) pageRack.hidden = !onRack;
   const kindTabs = document.getElementById("stock-kind-tabs");
   if (kindTabs) kindTabs.hidden = co === "ha";
   applyCopy();
@@ -3928,6 +4799,7 @@ function render() {
       console.error(err);
     }
   };
+  run(renderHomeHub);
   run(renderStaffChips);
   run(renderLineDrafts);
   run(renderCustSuggest);
@@ -3938,10 +4810,14 @@ function render() {
   run(renderRestList);
   run(renderPlan);
   run(renderStock);
+  run(renderRack);
   run(renderSalesBooks);
   run(renderAlerts);
   run(() => applyOrdersPane(false));
-  run(() => applyPlanPane(false));
+  run(() => applyInPane(false));
+  run(() => applyPlanPane());
+  run(() => applyPlanMain(false));
+  run(syncOrderEntering);
 }
 
 document.querySelectorAll("[data-co]").forEach((btn) => {
@@ -3956,7 +4832,24 @@ document.querySelectorAll("[data-co]").forEach((btn) => {
     render();
   };
 });
-document.querySelectorAll("[data-page]").forEach((btn) => {
+document.getElementById("home-btn")?.addEventListener("click", goHome);
+document.getElementById("home-hub")?.addEventListener("click", (e) => {
+  if (e.target.closest("[data-hub-back]")) {
+    hubOpen = "";
+    renderHomeHub();
+    return;
+  }
+  const tile = e.target.closest("[data-hub]");
+  if (tile) {
+    hubOpen = tile.dataset.hub || "";
+    renderHomeHub();
+    return;
+  }
+  const btn = e.target.closest("[data-go]");
+  if (!btn) return;
+  goFromHub(btn);
+});
+document.querySelectorAll("#flow-tabs [data-page]").forEach((btn) => {
   btn.onclick = () => {
     const next = btn.dataset.page;
     if (next === "plan" && !can("page-plan")) return setStatus("沒有排程權限。", true);
@@ -3968,6 +4861,10 @@ document.querySelectorAll("[data-page]").forEach((btn) => {
 });
 document.querySelectorAll("[data-orders-pane]").forEach((btn) => {
   btn.onclick = () => {
+    if (document.body.classList.contains("order-entering") && btn.dataset.ordersPane === "today") {
+      setStatus("正在輸入訂單，請先確認送出或清掉本單。", true);
+      return;
+    }
     ordersPane = btn.dataset.ordersPane === "today" ? "today" : "form";
     applyOrdersPane(true);
   };
@@ -3986,6 +4883,10 @@ if (ordersSwipe) {
         if (!cur) return;
         const next = cur.dataset.ordersPanePage === "today" ? "today" : "form";
         if (next === ordersPane) return;
+        if (document.body.classList.contains("order-entering") && next === "today") {
+          applyOrdersPane(false);
+          return;
+        }
         ordersPane = next;
         document.querySelectorAll("#orders-pane-tabs [data-orders-pane]").forEach((b) => {
           b.classList.toggle("on", b.dataset.ordersPane === ordersPane);
@@ -3995,36 +4896,174 @@ if (ordersSwipe) {
     { passive: true },
   );
 }
-document.querySelectorAll("[data-books]").forEach((btn) => {
+document.querySelectorAll("#rack-pane-tabs [data-rack-pane]").forEach((btn) => {
+  btn.onclick = () => {
+    rackPane = btn.dataset.rackPane || "frame";
+    rackPick = "";
+    rackLine = "";
+    renderRack();
+  };
+});
+document.querySelectorAll("[data-rack-mode]").forEach((btn) => {
+  btn.onclick = () => {
+    rackMode = btn.dataset.rackMode === "custom" ? "custom" : "asof";
+    if (rackMode === "custom" && !rackFrom) {
+      const span = rackDateSpan();
+      rackFrom = span.from || rackTo;
+    }
+    if (rackFrom && rackTo && rackFrom > rackTo) {
+      const t = rackFrom;
+      rackFrom = rackTo;
+      rackTo = t;
+    }
+    rackPick = "";
+    rackLine = "";
+    renderRack();
+  };
+});
+document.getElementById("rack-from")?.addEventListener("change", () => {
+  rackFrom = document.getElementById("rack-from").value || "";
+  if (rackFrom && rackTo && rackFrom > rackTo) rackTo = rackFrom;
+  rackPick = "";
+  rackLine = "";
+  renderRack();
+});
+document.getElementById("rack-to")?.addEventListener("change", () => {
+  rackTo = document.getElementById("rack-to").value || today();
+  rackPick = "";
+  rackLine = "";
+  renderRack();
+});
+document.getElementById("rack-co")?.addEventListener("change", () => {
+  rackCo = document.getElementById("rack-co").value || "";
+  rackPick = "";
+  rackLine = "";
+  renderRack();
+});
+document.getElementById("rack-frame")?.addEventListener("change", () => {
+  rackPick = document.getElementById("rack-frame").value || "";
+  renderRack();
+});
+document.getElementById("rack-q")?.addEventListener("input", () => {
+  rackQ = document.getElementById("rack-q").value || "";
+  rackPick = "";
+  rackLine = "";
+  renderRack();
+});
+document.getElementById("rack-xls")?.addEventListener("change", async (e) => {
+  const input = e.target;
+  const files = [...(input.files || [])];
+  input.value = "";
+  if (!files.length) return;
+  setRackImportMsg("正在匯入…");
+  try {
+    const payload = [];
+    for (const f of files) {
+      payload.push({ name: f.name, data: bufToB64(await f.arrayBuffer()) });
+    }
+    const r = await fetch("./api/racks-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files: payload }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) {
+      setRackImportMsg(j.error || "匯入失敗", "err");
+      return;
+    }
+    const kind = j.added === 0 && j.dup > 0 ? "dup" : "";
+    setRackImportMsg(j.message || "上傳成功", kind);
+    reloadRackTxns();
+  } catch (_) {
+    setRackImportMsg("匯入失敗", "err");
+  }
+});
+document.getElementById("rack-box")?.addEventListener("click", (e) => {
+  const back = e.target.closest("[data-rack-back]");
+  if (back) {
+    if (back.dataset.rackBack === "sheet" || rackLine) rackLine = "";
+    else rackPick = "";
+    renderRack();
+    return;
+  }
+  const line = e.target.closest("[data-rack-line]");
+  if (line) {
+    rackLine = line.dataset.rackLine || "";
+    renderRack();
+    return;
+  }
+  const row = e.target.closest("[data-rack-pick]");
+  if (!row) return;
+  rackPick = row.dataset.rackPick || "";
+  rackLine = "";
+  renderRack();
+});
+document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((btn) => {
+  btn.onclick = () => {
+    inPane = btn.dataset.inPane === "view" ? "view" : "form";
+    applyInPane(true);
+  };
+});
+const inSwipe = document.getElementById("in-swipe");
+if (inSwipe) {
+  inSwipe.addEventListener(
+    "scroll",
+    () => {
+      if (inPaneLock || page !== "books" || booksPart !== "in") return;
+      window.clearTimeout(inSwipe._paneT);
+      inSwipe._paneT = window.setTimeout(() => {
+        const panes = [...inSwipe.querySelectorAll("[data-in-pane-page]")];
+        const mid = inSwipe.scrollLeft + inSwipe.clientWidth / 2;
+        const cur = panes.find((p) => p.offsetLeft <= mid && p.offsetLeft + p.offsetWidth > mid);
+        if (!cur) return;
+        const next = cur.dataset.inPanePage === "view" ? "view" : "form";
+        if (next === inPane) return;
+        inPane = next;
+        document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((b) => {
+          b.classList.toggle("on", b.dataset.inPane === inPane);
+        });
+      }, 60);
+    },
+    { passive: true },
+  );
+}
+document.querySelectorAll("#books-part-tabs [data-books]").forEach((btn) => {
   btn.onclick = () => {
     booksPart = btn.dataset.books;
     page = "books";
     render();
   };
 });
+document.querySelectorAll("[data-plan-main]").forEach((btn) => {
+  btn.onclick = () => {
+    if (currentRole() === "driver") return;
+    planMain = btn.dataset.planMain === "ship" ? "ship" : "short";
+    applyPlanMain(true);
+  };
+});
 document.querySelectorAll("[data-plan-pane]").forEach((btn) => {
   btn.onclick = () => {
     planPane = btn.dataset.planPane === "done" ? "done" : "pending";
-    applyPlanPane(true);
+    applyPlanPane();
   };
 });
-const planSwipe = document.getElementById("plan-swipe");
-if (planSwipe) {
-  planSwipe.addEventListener(
+const planMainSwipe = document.getElementById("plan-main-swipe");
+if (planMainSwipe) {
+  planMainSwipe.addEventListener(
     "scroll",
     () => {
-      if (planPaneLock || page !== "plan") return;
-      window.clearTimeout(planSwipe._paneT);
-      planSwipe._paneT = window.setTimeout(() => {
-        const panes = [...planSwipe.querySelectorAll("[data-plan-pane-page]")];
-        const mid = planSwipe.scrollLeft + planSwipe.clientWidth / 2;
+      if (planMainLock || page !== "plan" || currentRole() === "driver") return;
+      window.clearTimeout(planMainSwipe._paneT);
+      planMainSwipe._paneT = window.setTimeout(() => {
+        const panes = [...planMainSwipe.querySelectorAll("[data-plan-main-page]")];
+        const mid = planMainSwipe.scrollLeft + planMainSwipe.clientWidth / 2;
         const cur = panes.find((p) => p.offsetLeft <= mid && p.offsetLeft + p.offsetWidth > mid);
         if (!cur) return;
-        const next = cur.dataset.planPanePage === "done" ? "done" : "pending";
-        if (next === planPane) return;
-        planPane = next;
-        document.querySelectorAll("#plan-pane-tabs [data-plan-pane]").forEach((b) => {
-          b.classList.toggle("on", b.dataset.planPane === planPane);
+        const next = cur.dataset.planMainPage === "ship" ? "ship" : "short";
+        if (next === planMain) return;
+        planMain = next;
+        document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
+          b.classList.toggle("on", b.dataset.planMain === planMain);
         });
       }, 60);
     },
@@ -4047,6 +5086,7 @@ document.getElementById("plan-card").addEventListener("click", (e) => {
   const assign = e.target.closest("[data-assign-driver]");
   if (assign) {
     e.preventDefault();
+    e.stopPropagation();
     assignCustomerDriver(assign.dataset.assignWho, assign.dataset.assignDriver);
     return;
   }
@@ -4264,7 +5304,14 @@ document.getElementById("line-drafts")?.addEventListener("change", (e) => {
     persistDraft(d);
   }
 });
-document.getElementById("sheet").addEventListener("input", renderCheck);
+document.getElementById("sheet").addEventListener("input", (e) => {
+  if (e.target.closest("[data-line-qty]")) {
+    formLot = null;
+    syncFormLotRow();
+  }
+  renderCheck();
+  syncOrderEntering();
+});
 document.getElementById("sheet").addEventListener("change", (e) => {
   const famSel = e.target.closest("[data-fam]");
   if (famSel) {
@@ -4305,6 +5352,19 @@ document.getElementById("sheet").addEventListener("click", (e) => {
     pushPickerToTicket();
     return;
   }
+  if (e.target.closest("[data-lot-pick-form]")) {
+    const draft = unifiedLinesFromForm()[0] || draftSkuFromFormRow();
+    if (!draft?.skuId) return setStatus("請先選品項並填數量，再選出貨編號。", true);
+    const qty = Number(draft.qty) || Number(document.querySelector("[data-line-qty]")?.value);
+    openLotModal({ skuId: draft.skuId, qty, selectedUha: formLot?.uha });
+    return;
+  }
+  const palletBtn = e.target.closest("[data-pallet-toggle]");
+  if (palletBtn) {
+    palletBtn.classList.toggle("on");
+    palletBtn.setAttribute("aria-pressed", palletBtn.classList.contains("on") ? "true" : "false");
+    return;
+  }
   const pick = e.target.closest(".item-line .pick");
   const pickRow = pick?.closest(".item-line");
   if (pick && pickRow) {
@@ -4322,16 +5382,35 @@ document.getElementById("sheet").addEventListener("click", (e) => {
       const sub = pickRow.querySelector("[data-sub]");
       if (sub) sub.innerHTML = lineSubHtml(pick.dataset.v, {});
     }
+    formLot = null;
     syncLineMeta(pickRow);
     renderCheck();
     return;
   }
   const del = e.target.closest("[data-ha-del]");
   if (!del) return;
+  formLot = null;
   renderItemSheet();
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("click", (e) => {
+  const destBtn = e.target.closest("[data-ticket-dest]");
+  if (destBtn) {
+    const i = Number(destBtn.dataset.ticketDest);
+    const v = destBtn.dataset.dest;
+    if (!ticketLines[i]) return;
+    if (v === "其他") {
+      const cur = String(ticketLines[i].dest || "").trim();
+      if (SHIP_PRESETS.includes(cur)) ticketLines[i].dest = "";
+      ticketLines[i].destOther = true;
+    } else {
+      ticketLines[i].dest = v;
+      delete ticketLines[i].destOther;
+    }
+    syncHiddenShipAddr();
+    renderTicket();
+    return;
+  }
   const pal = e.target.closest("[data-ticket-pallet]");
   if (pal) {
     const i = Number(pal.dataset.ticketPallet);
@@ -4342,15 +5421,36 @@ document.getElementById("ticket")?.addEventListener("click", (e) => {
     renderCheck();
     return;
   }
+  const lotBtn = e.target.closest("[data-ticket-lot]");
+  if (lotBtn) {
+    const i = Number(lotBtn.dataset.ticketLot);
+    const line = ticketLines[i];
+    if (!line) return;
+    openLotModal({ skuId: line.skuId, qty: line.qty, selectedUha: line.lotUha, ticketIndex: i });
+    return;
+  }
   const del = e.target.closest("[data-ticket-del]");
   if (!del) return;
   const i = Number(del.dataset.ticketDel);
   if (!Number.isInteger(i)) return;
   ticketLines.splice(i, 1);
+  syncHiddenShipAddr();
   renderTicket();
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("input", (e) => {
+  const destOther = e.target.closest("[data-ticket-dest-other]");
+  if (destOther) {
+    const i = Number(destOther.dataset.ticketDestOther);
+    if (!ticketLines[i]) return;
+    ticketLines[i].dest = destOther.value.trim();
+    ticketLines[i].destOther = true;
+    syncHiddenShipAddr();
+    const addr = document.querySelector("#ticket .ticket-addr");
+    const drops = uniqueTicketDrops();
+    if (addr) addr.textContent = drops.join("／");
+    return;
+  }
   const inp = e.target.closest("[data-ticket-qty]");
   if (!inp) return;
   const i = Number(inp.dataset.i);
@@ -4358,8 +5458,16 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
   const n = Number(inp.value);
   if (!(n > 0)) {
     ticketLines.splice(i, 1);
+    syncHiddenShipAddr();
     renderTicket();
-  } else ticketLines[i].qty = round(n);
+  } else {
+    ticketLines[i].qty = round(n);
+    if (skuNeedsShipLot(ticketLines[i].skuId)) {
+      clearLineLot(ticketLines[i]);
+      setStatus("數量已改，請重選出貨編號。", true);
+      renderTicket();
+    }
+  }
   renderCheck();
 });
 document.getElementById("order-form")?.addEventListener("keydown", (e) => {
@@ -4573,6 +5681,7 @@ document.getElementById("nq-rest-btn")?.addEventListener("click", () => {
   setStatus(`已記錄「${who}」${isPreorderDay(day) ? shortDay(day) + " " : "今日"}無叫貨。`, false);
   document.getElementById("customer").value = "";
   ticketLines = [];
+  setOrderNote("");
   render();
 });
 document.getElementById("who-btn")?.addEventListener("click", () => {
@@ -4641,39 +5750,77 @@ document.getElementById("cust-suggest")?.addEventListener("mousedown", (e) => {
   }
   const first = document.querySelector("#sheet .qty");
   if (first) first.focus();
+  syncOrderEntering();
 });
-const customerEl = document.getElementById("customer");
-customerEl?.addEventListener("compositionstart", () => {
-  customerEl.dataset.composing = "1";
-});
-customerEl?.addEventListener("compositionend", () => {
-  customerEl.dataset.composing = "";
-  renderCustSuggest();
-});
-customerEl?.addEventListener("input", () => {
-  if (customerEl.dataset.composing === "1") return;
-  renderCustSuggest();
-  const whoEl = document.querySelector("#ticket .ticket-who span");
-  if (whoEl) whoEl.textContent = ticketWhoText();
-});
-customerEl?.addEventListener("focus", renderCustSuggest);
-customerEl?.addEventListener("blur", () => {
-  const who = customerEl.value.trim();
-  if (who && !shipAddrValue()) fillAddrForCustomer(who);
-  setTimeout(() => {
-    const box = document.getElementById("cust-suggest");
-    if (box) {
-      box.hidden = true;
-      box.innerHTML = "";
+function bindCustomerSuggest() {
+  const customerEl = document.getElementById("customer");
+  if (!customerEl) return;
+  const syncWho = () => {
+    const whoEl = document.querySelector("#ticket .ticket-who span");
+    if (whoEl) whoEl.textContent = ticketWhoText();
+  };
+  customerEl.addEventListener("compositionstart", (e) => {
+    customerEl.dataset.composing = "1";
+    custCompose = e.data || customerEl.value || "";
+  });
+  customerEl.addEventListener("compositionupdate", (e) => {
+    customerEl.dataset.composing = "1";
+    custCompose = e.data || customerEl.value || "";
+    renderCustSuggest();
+  });
+  customerEl.addEventListener("compositionend", () => {
+    customerEl.dataset.composing = "";
+    custCompose = "";
+    renderCustSuggest();
+    syncWho();
+    syncOrderEntering();
+  });
+  customerEl.addEventListener("input", (e) => {
+    if (e.isComposing || customerEl.dataset.composing === "1") {
+      if (!custCompose) custCompose = customerEl.value || "";
+      renderCustSuggest();
+      syncOrderEntering();
+      return;
     }
-  }, 150);
+    custCompose = "";
+    renderCustSuggest();
+    syncWho();
+    syncOrderEntering();
+  });
+  customerEl.addEventListener("focus", renderCustSuggest);
+  customerEl.addEventListener("blur", () => {
+    const who = customerEl.value.trim();
+    if (who && !shipAddrValue()) fillAddrForCustomer(who);
+    setTimeout(() => {
+      const box = document.getElementById("cust-suggest");
+      if (box) {
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+    }, 150);
+  });
+}
+bindCustomerSuggest();
+document.getElementById("order-note")?.addEventListener("input", syncOrderEntering);
+document.getElementById("lot-cancel")?.addEventListener("click", closeLotModal);
+document.getElementById("lot-gate")?.addEventListener("click", (e) => {
+  if (e.target.id === "lot-gate") closeLotModal();
+});
+document.getElementById("lot-list")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pick-uha]");
+  if (!btn || btn.disabled) return;
+  chooseLot(btn.dataset.pickUha);
 });
 
 document.getElementById("order-form").onsubmit = (e) => {
   e.preventDefault();
-  const lines = linesFromForm();
-  if (!lines.length) return setStatus("請填至少一項數量", true);
+  const leftover = unifiedLinesFromForm();
+  if (leftover.length) return setStatus("請先按「加入本單」。品項都加入後，再到最下方確認送出。", true);
+  const lines = ticketLines.map(cleanLine).filter((l) => Number(l.qty) > 0);
+  if (!lines.length) return setStatus("請先加入至少一項到本單，齊了再確認送出。", true);
   if (missingPack(lines)) return setStatus("地瓜葉有數量時請選擇裝箱樣式（籃裝或箱裝）", true);
+  const missingLot = lines.find((l) => skuNeedsShipLot(l.skuId) && !l.lotUha);
+  if (missingLot) return setStatus(`請選出貨編號：${ticketLineName(missingLot)}`, true);
   const map = qtyMapFromForm();
   const { worst } = lineChecks(map, currentRecord());
   const who = document.getElementById("customer").value.trim();
@@ -4698,6 +5845,7 @@ document.getElementById("order-form").onsubmit = (e) => {
     if (!mine.length) return setStatus(`這張是${coLabel(o.co)}單，請至少留一項${coLabel(o.co)}品項。`, true);
     o.customer = who;
     o.shipAddr = shipAddrValue();
+    o.remark = orderNoteValue();
     o.shipDate = day;
     o.preorder = isPreorderDay(day);
     o.lines = mine;
@@ -4727,6 +5875,7 @@ document.getElementById("order-form").onsubmit = (e) => {
   save();
   document.getElementById("customer").value = "";
   setShipAddr("");
+  setOrderNote("");
   goTodayAfterSave(savedIds, day);
   if (editNote) setStatus(editNote, false);
   else {
@@ -4744,6 +5893,7 @@ document.getElementById("cancel-edit").onclick = () => {
   ticketLines = [];
   document.getElementById("ship-date").value = today();
   setShipAddr("");
+  setOrderNote("");
   syncShipMore();
   render();
 };
@@ -4815,10 +5965,18 @@ function onOrdersListClick(e) {
     ordersPane = "form";
     document.getElementById("customer").value = o.customer;
     setShipAddr(o.shipAddr || lastShipAddr(o.customer));
+    setOrderNote(o.remark || "");
     syncOrderDates(o.shipDate || today());
     const more = document.getElementById("ship-more");
     if (more && (o.shipDate || today()) !== today()) more.open = true;
-    ticketLines = (o.lines || []).filter((l) => l.qty > 0).map((l) => ({ ...l }));
+    const fallbackDest = destFromRemembered(o.shipAddr || lastShipAddr(o.customer));
+    ticketLines = (o.lines || [])
+      .filter((l) => l.qty > 0)
+      .map((l) => {
+        const copy = { ...l };
+        if (!String(copy.dest || "").trim() && fallbackDest) copy.dest = fallbackDest;
+        return copy;
+      });
     document.getElementById("cancel-edit").hidden = false;
     render();
     renderCheck();
@@ -5058,7 +6216,7 @@ function bindStockFillPage(el) {
     const fixIn = e.target.closest("[data-fix-inbound]");
     if (fixIn) {
       const id = fixIn.dataset.fixInbound;
-      const input = document.querySelector(`[data-inbound="${id}"]`);
+      const input = document.querySelector(`[data-inbound-fix="${id}"]`) || document.querySelector(`[data-inbound="${id}"]`);
       const label = NQ_INBOUND.find((r) => r.id === id)?.label || id;
       if (!confirm(`將「${label}」今日進貨改為輸入框的數字？`)) return;
       correctInbound(id, input?.value);

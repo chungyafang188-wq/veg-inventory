@@ -1064,13 +1064,27 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   gap: 0.35rem;
   margin: 0.4rem 0 0.25rem;
 }
-.rack-sheet-actions button {
+.rack-mini {
   margin: 0;
   width: auto;
-  min-height: 2.15rem;
-  padding: 0.28rem 0.35rem;
-  font-size: 0.84rem;
+  min-height: 1.7rem;
+  padding: 0.12rem 0.4rem;
+  font-size: 0.72rem;
 }
+.rack-hidden-box {
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.55rem;
+  border: 1px dashed #c5d0c8;
+  border-radius: 0.7rem;
+  background: #f7f8f6;
+}
+.rack-hidden-box p {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.rack-hidden-box button { margin: 0.15rem 0.25rem 0 0; }
 .rack-print-brand {
   display: none;
   margin: 0 0 0.35rem;
@@ -1120,6 +1134,8 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   body.rack-printing .rack-range,
   body.rack-printing .rack-back,
   body.rack-printing .rack-sheet-actions,
+  body.rack-printing .no-print,
+  body.rack-printing .rack-hidden-box,
   body.rack-printing #status,
   body.rack-printing #login-gate,
   body.rack-printing #proof-gate,

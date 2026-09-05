@@ -555,6 +555,7 @@ let rackPane = "frame";
 let rackPick = "";
 let rackLine = "";
 let rackSrc = "";
+let rackHide = new Set();
 let rackQ = "";
 let rackCo = "";
 let rackMode = "asof";
@@ -2359,8 +2360,24 @@ function rackSheetPeriodText() {
   if (rackMode === "custom" && rackFrom) return `區間 ${rackFrom}～${rackTo}`;
   return `資料至 ${span.to || "—"}`;
 }
+function rackRowKey(r) {
+  return `${r.frame || ""}|${r.mark || ""}`;
+}
 function rackSheetRows() {
-  return rackCustomerSheetRows(rackPick);
+  const all = rackCustomerSheetRows(rackPick);
+  const rows = [];
+  const hidden = [];
+  for (const r of all.rows) {
+    if (rackHide.has(rackRowKey(r))) hidden.push(r);
+    else rows.push(r);
+  }
+  return {
+    ...all,
+    rows,
+    hidden,
+    qty: rows.reduce((a, r) => a + r.closing, 0),
+    allQty: all.qty,
+  };
 }
 function rackSheetText() {
   const { s, custom, rows, qty } = rackSheetRows();
@@ -2897,24 +2914,35 @@ function renderRack() {
     }
     if (rackPick) {
       const custom = rackMode === "custom" && rackFrom;
-      const sheet = rackCustomerSheetRows(rackPick);
+      const sheet = rackSheetRows();
       const rows = sheet.rows;
+      const hidden = sheet.hidden || [];
       const qty = sheet.qty;
       const s = sheet.s;
       const span = rackDateSpan();
       const head = custom
-        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th></tr></thead>`
-        : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th></tr></thead>`;
+        ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`
+        : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th>欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`;
+      const hideBtn = (r) =>
+        `<td class="no-print"><button type="button" class="ghost rack-mini" data-rack-hide="${esc(rackRowKey(r))}">隱藏</button></td>`;
       const body = rows
         .map((r) =>
           custom
-            ? `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td></tr>`
-            : `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td></tr>`,
+            ? `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td>${hideBtn(r)}</tr>`
+            : `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td>${hideBtn(r)}</tr>`,
         )
         .join("");
       const foot = custom
-        ? `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td></tr>`
-        : `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td></tr>`;
+        ? `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td><td class="no-print"></td></tr>`
+        : `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td><td class="no-print"></td></tr>`;
+      const hiddenBox = hidden.length
+        ? `<div class="rack-hidden-box no-print"><p>已隱藏 ${hidden.length} 筆，不會列入傳 LINE／列印／匯出。</p>${hidden
+            .map(
+              (r) =>
+                `<button type="button" class="ghost rack-mini" data-rack-show="${esc(rackRowKey(r))}">顯示 ${esc(rackLabel(s, r.frame))} ${esc(r.mark || "")}</button>`,
+            )
+            .join("")}</div>`
+        : "";
       box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back="list">返回客人</button>
         <div class="rack-sheet-actions">
           <button type="button" class="ghost" data-rack-print>列印</button>
@@ -2925,13 +2953,14 @@ function renderRack() {
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架對帳單</p>
           <h3 class="rack-sheet-title">總單　${esc(rackPick)}</h3>
-          <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　${rows.length} 種　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
+          <p class="rack-stat">${rackCo ? `來源 ${esc(rackCoMark(rackCo))}＝${esc(rackCo)}` : "兩家合計：同名同品項已加總。N＝穠全　H＝鴻安　N+H＝兩家都有"}　顯示 ${rows.length} 種${hidden.length ? `（已隱藏 ${hidden.length}）` : ""}　欠架合計 ${rackFmt(qty)}　${custom ? `區間 ${esc(rackFrom)}～${esc(rackTo)}` : `資料至 ${esc(span.to || "—")}`}</p>
           ${
             rows.length
               ? `<table class="rack-table rack-sheet-table">${head}<tbody>${body}${foot}</tbody></table>`
-              : `<p class="empty">這個客人目前沒有欠架。</p>`
+              : `<p class="empty">${hidden.length ? "目前列都已隱藏，傳給客人會是空白。請先顯示要給的品項。" : "這個客人目前沒有欠架。"}</p>`
           }
-        </article>`;
+        </article>
+        ${hiddenBox}`;
       return;
     }
     const names = s.customers
@@ -5430,6 +5459,20 @@ document.getElementById("rack-box")?.addEventListener("click", (e) => {
     shareRackSheet();
     return;
   }
+  const hideBtn = e.target.closest("[data-rack-hide]");
+  if (hideBtn) {
+    e.stopPropagation();
+    rackHide.add(hideBtn.dataset.rackHide || "");
+    renderRack();
+    return;
+  }
+  const showBtn = e.target.closest("[data-rack-show]");
+  if (showBtn) {
+    e.stopPropagation();
+    rackHide.delete(showBtn.dataset.rackShow || "");
+    renderRack();
+    return;
+  }
   const back = e.target.closest("[data-rack-back]");
   if (back) {
     if (back.dataset.rackBack === "sheet" || rackLine) {
@@ -5438,6 +5481,7 @@ document.getElementById("rack-box")?.addEventListener("click", (e) => {
     } else {
       rackPick = "";
       rackSrc = "";
+      rackHide = new Set();
     }
     renderRack();
     return;
@@ -5454,6 +5498,7 @@ document.getElementById("rack-box")?.addEventListener("click", (e) => {
   rackPick = row.dataset.rackPick || "";
   rackLine = "";
   rackSrc = "";
+  rackHide = new Set();
   renderRack();
 });
 document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((btn) => {

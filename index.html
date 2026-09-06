@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=145" />
+    <link rel="stylesheet" href="./styles.css?v=146" />
   </head>
   <body>
     <div class="app">
@@ -269,6 +269,10 @@
           <p class="rack-year-lab" id="rack-year-lab" hidden></p>
           <label id="rack-from-wrap" class="date-inline" hidden>起 <input id="rack-from" type="date" /></label>
           <label class="date-inline" id="rack-to-lab"><span id="rack-to-word">截至</span> <input id="rack-to" type="date" /></label>
+          <label class="rack-prior" id="rack-prior-wrap" hidden>
+            <input id="rack-prior" type="checkbox" checked />
+            含前期尚欠
+          </label>
         </div>
         <div class="rack-filters">
           <label>公司
@@ -290,7 +294,7 @@
           <button type="button" class="tab" data-rack-pane="customer">客人尚欠</button>
           <button type="button" class="tab" data-rack-pane="carrier">貨運行</button>
         </nav>
-        <p class="hint in-hint rack-hint">還欠＝客人手上未還。點客人看總單，再點品項看出貨單。</p>
+        <p class="hint in-hint rack-hint">還欠＝客人手上未還。點客人看總單，再點品項看出貨單。選年度或區間時可取消「含前期尚欠」，只看本期進出。</p>
         <p class="rack-range" id="rack-range">統計區間依已匯入資料為準。</p>
         <div id="rack-box"></div>
       </section>
@@ -322,6 +326,7 @@
     </div>
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
-    <script src="./app.js?v=161"></script>
+    <script src="./rack-png.js?v=1"></script>
+    <script src="./app.js?v=162"></script>
   </body>
 </html>

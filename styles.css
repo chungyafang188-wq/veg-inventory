@@ -1138,6 +1138,17 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-weight: 800;
   color: var(--ink);
 }
+.rack-prior {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rack-prior input { width: 1rem; height: 1rem; margin: 0; }
 .rack-table tr[data-rack-line] { cursor: pointer; }
 @media print {
   body.rack-printing {

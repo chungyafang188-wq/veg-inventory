@@ -561,6 +561,7 @@ let rackCo = "";
 let rackMode = "asof";
 let rackFrom = "";
 let rackTo = today();
+let rackPrior = true;
 let rackTxns = [];
 let rackLoad = "";
 let highlightOrderIds = [];
@@ -2278,6 +2279,17 @@ function rackRocYearDates(roc) {
 function rackIntervalOn() {
   return !!rackRocYear() || (rackMode === "custom" && !!rackFrom);
 }
+function rackKeepPrior() {
+  return !rackIntervalOn() || rackPrior;
+}
+function rackViewCell(cell) {
+  const out = cell.out || 0;
+  const inn = cell.inn || 0;
+  if (rackKeepPrior()) {
+    return { ...cell, opening: cell.opening || 0, out, inn, closing: cell.closing || 0 };
+  }
+  return { ...cell, opening: 0, out, inn, closing: out - inn };
+}
 function applyRackYearDates() {
   const y = rackRocYear();
   if (!y) return;
@@ -2370,16 +2382,25 @@ function rackCustomerSheetRows(customer) {
       mark: rackMergeMarks(r.marks),
     }));
   }
-  rows = rows.filter((r) => r.closing > 0 || (custom && (r.out || r.inn || r.opening)));
+  rows = rows.map(rackViewCell).filter((r) => {
+    if (r.closing > 0) return true;
+    if (!custom) return false;
+    if (r.out || r.inn) return true;
+    return rackKeepPrior() && r.opening;
+  });
   rows.sort((a, b) => b.closing - a.closing || String(a.frame).localeCompare(String(b.frame)));
-  return { s: sAll, custom, rows, qty: rows.reduce((a, r) => a + r.closing, 0) };
+  return { s: sAll, custom, showOpen: custom && rackKeepPrior(), rows, qty: rows.reduce((a, r) => a + r.closing, 0) };
 }
 function rackSheetPeriodText() {
   const span = rackDateSpan();
   const y = rackRocYear();
-  if (y) return `民國${y}年度 ${rackFrom}～${rackTo}`;
-  if (rackMode === "custom" && rackFrom) return `區間 ${rackFrom}～${rackTo}`;
-  return `資料至 ${span.to || "—"}`;
+  let text = y
+    ? `民國${y}年度 ${rackFrom}～${rackTo}`
+    : rackMode === "custom" && rackFrom
+      ? `區間 ${rackFrom}～${rackTo}`
+      : `資料至 ${span.to || "—"}`;
+  if (rackIntervalOn() && !rackKeepPrior()) text += "　不含前期尚欠";
+  return text;
 }
 function rackRowKey(r) {
   return `${r.frame || ""}|${r.mark || ""}`;
@@ -2401,7 +2422,7 @@ function rackSheetRows() {
   };
 }
 function rackSheetText() {
-  const { s, custom, rows, qty } = rackSheetRows();
+  const { s, showOpen, rows, qty } = rackSheetRows();
   const lines = [
     "鴻安農業科技　鐵架對帳單",
     `公司：${rackCoLabel()}（N＝穠全　H＝鴻安　N+H＝兩家加總）`,
@@ -2409,7 +2430,7 @@ function rackSheetText() {
     rackSheetPeriodText(),
     "",
   ];
-  if (custom) {
+  if (showOpen) {
     lines.push("品項\t期初\t借出\t歸還\t欠架\t來源");
     for (const r of rows) {
       lines.push(`${rackLabel(s, r.frame)}\t${rackFmt(r.opening)}\t${rackFmt(r.out)}\t${rackFmt(r.inn)}\t${rackFmt(r.closing)}\t${r.mark || ""}`);
@@ -2457,12 +2478,12 @@ function exportRackExcel() {
     setStatus("已匯出 Excel，用 Excel 開啟即可。");
     return;
   }
-  const { s, custom, rows, qty } = rackSheetRows();
+  const { s, showOpen, rows, qty } = rackSheetRows();
   if (!rows.length) {
     setStatus("沒有可匯出的總單。", true);
     return;
   }
-  if (custom) {
+  if (showOpen) {
     downloadCsv(
       `${rackSheetFileTitle()}_總單`,
       ["品項", "期初", "借出", "歸還", "欠架", "來源"],
@@ -2499,6 +2520,222 @@ function rackEllipsis(ctx, text, maxW) {
   let s = t;
   while (s.length && ctx.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
   return `${s}…`;
+}
+function rackShareSpec() {
+  const lib = window.RackLib;
+  const s = rackSummary();
+  const period = rackSheetPeriodText();
+  const co = rackCo ? `來源 ${rackCoMark(rackCo)}＝${rackCo}` : "N＝穠全　H＝鴻安　N+H＝兩家加總";
+  const fileBase = rackSheetFileTitle();
+  if (rackPane === "customer" && rackPick && rackLine) {
+    const docs = rackCustomerFrameDocs(rackPick, rackLine);
+    return {
+      title: "鴻安農業科技　鐵架明細",
+      heading: `${rackPick}　${rackLabel(s, rackLine)}`,
+      sub: `${period}　${co}　借出 ${rackFmt(docs.out)}　歸還 ${rackFmt(docs.inn)}`,
+      note: "請核對尚欠數量，歸還時請告知。",
+      file: `${fileBase}_明細`,
+      cols: [
+        { key: "date", title: "日期", w: 130 },
+        { key: "doc", title: "單號", w: 0 },
+        { key: "dir", title: "類別", w: 88, center: true },
+        { key: "qty", title: "數量", w: 90, owed: true },
+        { key: "mark", title: "來源", w: 72, center: true },
+      ],
+      rows: docs.lines.map((d) => ({ date: d.date || "", doc: d.doc || "", dir: d.dir || "", qty: rackFmt(d.qty), mark: d.mark || "" })),
+    };
+  }
+  if (rackPane === "customer" && rackPick) {
+    const { showOpen, rows, qty } = rackSheetRows();
+    const mapped = rows.map((r) => ({
+      name: rackLabel(s, r.frame),
+      opening: rackFmt(r.opening),
+      out: rackFmt(r.out),
+      inn: rackFmt(r.inn),
+      closing: rackFmt(r.closing),
+      mark: r.mark || "",
+    }));
+    const total = {
+      total: true,
+      name: "合計",
+      opening: rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0)),
+      out: rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0)),
+      inn: rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0)),
+      closing: rackFmt(qty),
+      mark: "",
+    };
+    return {
+      title: "鴻安農業科技　鐵架對帳單",
+      heading: `總單　${rackPick}`,
+      sub: `${period}　${co}`,
+      note: "請核對尚欠數量，歸還時請告知。",
+      file: fileBase,
+      totalRow: total,
+      cols: showOpen
+        ? [
+            { key: "name", title: "品項", w: 0 },
+            { key: "opening", title: "期初", w: 92, right: true },
+            { key: "out", title: "借出", w: 92, right: true },
+            { key: "inn", title: "歸還", w: 92, right: true, tint: "#3a6d78" },
+            { key: "closing", title: "欠架", w: 118, owed: true },
+            { key: "mark", title: "來源", w: 72, center: true },
+          ]
+        : [
+            { key: "name", title: "品項", w: 0 },
+            { key: "out", title: "借出", w: 100, right: true },
+            { key: "inn", title: "歸還", w: 100, right: true, tint: "#3a6d78" },
+            { key: "closing", title: "欠架", w: 128, owed: true },
+            { key: "mark", title: "來源", w: 72, center: true },
+          ],
+      rows: mapped,
+    };
+  }
+  if (rackPane === "customer") {
+    const q = rackQ;
+    const names = s.customers
+      .map((c) => {
+        const rows = lib.customerOwed(s, c).map(rackViewCell).filter((r) => r.closing > 0);
+        return { name: c, kinds: rackFmt(rows.length), closing: rackFmt(rows.reduce((a, r) => a + r.closing, 0)), qty: rows.reduce((a, r) => a + r.closing, 0) };
+      })
+      .filter((x) => x.qty > 0 && rackMatch(x.name, q))
+      .sort((a, b) => b.qty - a.qty);
+    return {
+      title: "鴻安農業科技　鐵架統計",
+      heading: "客人尚欠",
+      sub: `${period}　${co}`,
+      note: "",
+      file: `鐵架_客人尚欠_${rackTo || today()}`,
+      cols: [
+        { key: "name", title: "客人", w: 0 },
+        { key: "kinds", title: "種類", w: 90, right: true },
+        { key: "closing", title: "還欠", w: 110, owed: true },
+      ],
+      rows: names,
+    };
+  }
+  if (rackPane === "frame" && rackPick) {
+    const rows = lib.frameAtCustomers(s, rackPick).map(rackViewCell).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+    return {
+      title: "鴻安農業科技　鐵架統計",
+      heading: rackLabel(s, rackPick),
+      sub: `${period}　${co}　${rows.length} 戶`,
+      note: "",
+      file: `鐵架_${rackLabel(s, rackPick)}_${rackTo || today()}`,
+      cols: [
+        { key: "name", title: "客人", w: 0 },
+        { key: "closing", title: "還欠", w: 120, owed: true },
+      ],
+      rows: rows.map((r) => ({ name: r.customer, closing: rackFmt(r.closing) })),
+    };
+  }
+  if (rackPane === "frame") {
+    const q = rackQ;
+    const frames = s.frames
+      .map((f) => {
+        const list = lib.frameAtCustomers(s, f).map(rackViewCell).filter((r) => r.closing > 0);
+        const qty = list.reduce((a, r) => a + r.closing, 0);
+        return { name: rackLabel(s, f), households: rackFmt(list.length), closing: rackFmt(qty), qty };
+      })
+      .filter((x) => x.qty > 0 && rackMatch(x.name, q))
+      .sort((a, b) => b.qty - a.qty);
+    return {
+      title: "鴻安農業科技　鐵架統計",
+      heading: "架種彙整",
+      sub: `${period}　${co}`,
+      note: "",
+      file: `鐵架_架種彙整_${rackTo || today()}`,
+      cols: [
+        { key: "name", title: "架種", w: 0 },
+        { key: "households", title: "戶數", w: 90, right: true },
+        { key: "closing", title: "在外", w: 110, owed: true },
+      ],
+      rows: frames,
+    };
+  }
+  if (rackPane === "carrier" && rackPick) {
+    const members = lib.customersOfCarrier(s.customers, rackPick);
+    const rows = lib.mergeOwed(s, members).map(rackViewCell).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+    return {
+      title: "鴻安農業科技　鐵架統計",
+      heading: rackPick,
+      sub: `${period}　${members.length} 戶`,
+      note: "",
+      file: `鐵架_${rackPick}_${rackTo || today()}`,
+      cols: [
+        { key: "name", title: "架種", w: 0 },
+        { key: "closing", title: "還欠", w: 120, owed: true },
+      ],
+      rows: rows.map((r) => ({ name: rackLabel(s, r.frame), closing: rackFmt(r.closing) })),
+    };
+  }
+  if (rackPane === "carrier") {
+    const q = rackQ;
+    const list = lib
+      .uniqueCarriers(s.customers)
+      .map((c) => {
+        const members = lib.customersOfCarrier(s.customers, c);
+        const rows = lib.mergeOwed(s, members).map(rackViewCell).filter((r) => r.closing > 0);
+        const qty = rows.reduce((a, r) => a + r.closing, 0);
+        return { name: c, households: rackFmt(members.length), closing: rackFmt(qty), qty };
+      })
+      .filter((x) => x.qty > 0 && rackMatch(x.name, q))
+      .sort((a, b) => b.qty - a.qty);
+    return {
+      title: "鴻安農業科技　鐵架統計",
+      heading: "貨運行",
+      sub: `${period}　${co}`,
+      note: "",
+      file: `鐵架_貨運行_${rackTo || today()}`,
+      cols: [
+        { key: "name", title: "貨運行", w: 0 },
+        { key: "households", title: "戶數", w: 90, right: true },
+        { key: "closing", title: "還欠", w: 110, owed: true },
+      ],
+      rows: list,
+    };
+  }
+  return null;
+}
+async function shareRackSheet() {
+  const spec = rackShareSpec();
+  if (!spec || !(spec.rows && spec.rows.length)) {
+    setStatus("沒有可傳的統計資料。", true);
+    return;
+  }
+  setStatus("正在做成圖片…");
+  const png = window.RackPng;
+  let files = [];
+  try {
+    const blobs = png ? await png.pages(spec) : [await rackSheetPngBlob()];
+    files = blobs.map((blob, i) => {
+      const n = blobs.length > 1 ? `_${i + 1}of${blobs.length}` : "";
+      return new File([blob], `${rackSafeFileName(spec.file || rackSheetFileTitle())}${n}.png`, { type: "image/png" });
+    });
+  } catch (_) {
+    setStatus("做成圖片失敗。", true);
+    return;
+  }
+  const title = spec.heading || spec.title;
+  const text = `${title}　${spec.sub || ""}`;
+  if (files.length > 1) {
+    files.slice(1).forEach(downloadRackSheetPng);
+  }
+  const first = files[0];
+  const payload = { title, text, files: files.length === 1 ? files : [first] };
+  if (navigator.canShare?.({ files: [first] }) || navigator.canShare?.(payload)) {
+    try {
+      await navigator.share(payload);
+      setStatus(files.length > 1 ? `已打開分享（第 1 頁）。其餘 ${files.length - 1} 頁已下載，請一併傳到 LINE。` : "已打開分享，請選 LINE 傳送圖片。");
+      return;
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        setStatus("");
+        return;
+      }
+    }
+  }
+  files.forEach(downloadRackSheetPng);
+  setStatus(files.length > 1 ? `共 ${files.length} 頁圖片已存，請傳到 LINE。` : "已存成圖片檔，請傳到 LINE。");
 }
 function rackSheetPngBlob() {
   return new Promise((resolve, reject) => {
@@ -2752,6 +2989,7 @@ function paintRackRange() {
   if (y) text += ` 查詢民國${y}年度 ${rackFrom} ～ ${rackTo}。`;
   else if (rackMode === "custom" && rackFrom) text += ` 比對區間 ${rackFrom} ～ ${rackTo}。`;
   else text += ` 查詢截至 ${rackTo}。`;
+  if (rackIntervalOn() && !rackKeepPrior()) text += " 不含前期尚欠。";
   if (rackTo > span.to) text += ` 匯入最新只到 ${span.to}，之後尚未上傳。`;
   else if (rackTo < span.to) text += ` 目前只看到截至 ${rackTo}。`;
   el.textContent = text;
@@ -2869,6 +3107,10 @@ function renderRack() {
     yearLab.hidden = !yearOn;
     yearLab.textContent = yearOn ? `民國${rackRocYear()}年　${rackFrom} ～ ${rackTo}` : "";
   }
+  const priorWrap = document.getElementById("rack-prior-wrap");
+  if (priorWrap) priorWrap.hidden = !rackIntervalOn();
+  const priorEl = document.getElementById("rack-prior");
+  if (priorEl) priorEl.checked = rackPrior;
   const toWord = document.getElementById("rack-to-word");
   if (toWord) toWord.textContent = rackMode === "custom" ? "迄" : "截至";
   document.querySelectorAll("[data-rack-mode]").forEach((b) => {
@@ -2899,9 +3141,10 @@ function renderRack() {
   const q = rackQ;
   if (rackPane === "frame") {
     if (rackPick) {
-      const rows = lib.frameAtCustomers(s, rackPick).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+      const rows = lib.frameAtCustomers(s, rackPick).map(rackViewCell).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
       const qty = rows.reduce((a, r) => a + r.closing, 0);
       box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back>返回架種</button>
+        <div class="rack-sheet-actions"><button type="button" class="primary" data-rack-share>傳 LINE</button></div>
         <p class="rack-stat"><b>${esc(rackLabel(s, rackPick))}</b>　${rows.length} 戶　在外 ${rackFmt(qty)}</p>
         <table class="rack-table"><thead><tr><th>客人</th><th>還欠</th></tr></thead><tbody>
         ${rows.map((r) => `<tr><td>${esc(r.customer)}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`).join("")}
@@ -2910,14 +3153,15 @@ function renderRack() {
     }
     const frames = s.frames
       .map((f) => {
-        const list = lib.frameAtCustomers(s, f).filter((r) => r.closing > 0);
+        const list = lib.frameAtCustomers(s, f).map(rackViewCell).filter((r) => r.closing > 0);
         const qty = list.reduce((a, r) => a + r.closing, 0);
         return { f, label: rackLabel(s, f), households: list.length, qty };
       })
       .filter((x) => x.qty > 0 && (rackMatch(x.label, q) || rackMatch(x.f, q)))
       .sort((a, b) => b.qty - a.qty);
     box.innerHTML = frames.length
-      ? `<table class="rack-table"><thead><tr><th>架種</th><th>戶數</th><th>在外</th></tr></thead><tbody>
+      ? `<div class="rack-sheet-actions"><button type="button" class="primary" data-rack-share>傳 LINE</button></div>
+        <table class="rack-table"><thead><tr><th>架種</th><th>戶數</th><th>在外</th></tr></thead><tbody>
         ${frames.map((x) => `<tr data-rack-pick="${esc(x.f)}"><td>${esc(x.label)}</td><td>${rackFmt(x.households)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
         </tbody></table>`
       : `<p class="empty">沒有符合的架種尚欠。</p>`;
@@ -2945,6 +3189,7 @@ function renderRack() {
         <div class="rack-sheet-actions">
           <button type="button" class="ghost" data-rack-xlsx>匯出 Excel</button>
           <button type="button" class="ghost" data-rack-pdf>匯出 PDF</button>
+          <button type="button" class="primary" data-rack-share>傳 LINE</button>
         </div>
         <article class="rack-sheet">
           <p class="rack-print-brand">鴻安農業科技　鐵架明細</p>
@@ -2962,19 +3207,20 @@ function renderRack() {
       const hidden = sheet.hidden || [];
       const qty = sheet.qty;
       const s = sheet.s;
-      const head = custom
+      const showOpen = sheet.showOpen;
+      const head = showOpen
         ? `<thead><tr><th>品項</th><th>期初</th><th>借出</th><th>歸還</th><th class="owed-col">欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`
         : `<thead><tr><th>品項</th><th>借出</th><th>歸還</th><th class="owed-col">欠架</th><th>來源</th><th class="no-print"></th></tr></thead>`;
       const hideBtn = (r) =>
         `<td class="no-print"><button type="button" class="ghost rack-mini" data-rack-hide="${esc(rackRowKey(r))}">隱藏</button></td>`;
       const body = rows
         .map((r) =>
-          custom
+          showOpen
             ? `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.opening)}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td>${hideBtn(r)}</tr>`
             : `<tr data-rack-line="${esc(r.frame)}" data-rack-src="${esc(r.mark)}"><td>${esc(rackLabel(s, r.frame))}</td><td>${rackFmt(r.out)}</td><td class="rack-in">${rackFmt(r.inn)}</td><td class="owed">${rackFmt(r.closing)}</td><td class="rack-src">${esc(r.mark)}</td>${hideBtn(r)}</tr>`,
         )
         .join("");
-      const foot = custom
+      const foot = showOpen
         ? `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.opening || 0), 0))}</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td><td class="no-print"></td></tr>`
         : `<tr><td>合計</td><td>${rackFmt(rows.reduce((a, r) => a + (r.out || 0), 0))}</td><td class="rack-in">${rackFmt(rows.reduce((a, r) => a + (r.inn || 0), 0))}</td><td class="owed">${rackFmt(qty)}</td><td></td><td class="no-print"></td></tr>`;
       const hiddenBox = hidden.length
@@ -3007,13 +3253,14 @@ function renderRack() {
     }
     const names = s.customers
       .map((c) => {
-        const rows = lib.customerOwed(s, c).filter((r) => r.closing > 0);
+        const rows = lib.customerOwed(s, c).map(rackViewCell).filter((r) => r.closing > 0);
         return { c, kinds: rows.length, qty: rows.reduce((a, r) => a + r.closing, 0) };
       })
       .filter((x) => x.qty > 0 && rackMatch(x.c, q))
       .sort((a, b) => b.qty - a.qty);
     box.innerHTML = names.length
-      ? `<table class="rack-table"><thead><tr><th>客人</th><th>種類</th><th>還欠</th></tr></thead><tbody>
+      ? `<div class="rack-sheet-actions"><button type="button" class="primary" data-rack-share>傳 LINE</button></div>
+        <table class="rack-table"><thead><tr><th>客人</th><th>種類</th><th>還欠</th></tr></thead><tbody>
         ${names.map((x) => `<tr data-rack-pick="${esc(x.c)}"><td>${esc(x.c)}</td><td>${rackFmt(x.kinds)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
         </tbody></table>`
       : `<p class="empty">沒有符合的客人尚欠。</p>`;
@@ -3022,9 +3269,10 @@ function renderRack() {
   const carriers = lib.uniqueCarriers(s.customers);
   if (rackPick) {
     const members = lib.customersOfCarrier(s.customers, rackPick);
-    const rows = lib.mergeOwed(s, members).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
+    const rows = lib.mergeOwed(s, members).map(rackViewCell).filter((r) => r.closing > 0).sort((a, b) => b.closing - a.closing);
     const qty = rows.reduce((a, r) => a + r.closing, 0);
     box.innerHTML = `<button type="button" class="ghost rack-back" data-rack-back>返回貨運</button>
+      <div class="rack-sheet-actions"><button type="button" class="primary" data-rack-share>傳 LINE</button></div>
       <p class="rack-stat"><b>${esc(rackPick)}</b>　${members.length} 戶　還欠 ${rackFmt(qty)}</p>
       <table class="rack-table"><thead><tr><th>架種</th><th>還欠</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td>${esc(rackLabel(s, r.frame))}</td><td class="owed">${rackFmt(r.closing)}</td></tr>`).join("")}
@@ -3034,13 +3282,14 @@ function renderRack() {
   const list = carriers
     .map((c) => {
       const members = lib.customersOfCarrier(s.customers, c);
-      const rows = lib.mergeOwed(s, members).filter((r) => r.closing > 0);
+      const rows = lib.mergeOwed(s, members).map(rackViewCell).filter((r) => r.closing > 0);
       return { c, households: members.length, qty: rows.reduce((a, r) => a + r.closing, 0) };
     })
     .filter((x) => x.qty > 0 && rackMatch(x.c, q))
     .sort((a, b) => b.qty - a.qty);
   box.innerHTML = list.length
-    ? `<table class="rack-table"><thead><tr><th>貨運行</th><th>戶數</th><th>還欠</th></tr></thead><tbody>
+    ? `<div class="rack-sheet-actions"><button type="button" class="primary" data-rack-share>傳 LINE</button></div>
+      <table class="rack-table"><thead><tr><th>貨運行</th><th>戶數</th><th>還欠</th></tr></thead><tbody>
       ${list.map((x) => `<tr data-rack-pick="${esc(x.c)}"><td>${esc(x.c)}</td><td>${rackFmt(x.households)}</td><td class="owed">${rackFmt(x.qty)}</td></tr>`).join("")}
       </tbody></table>`
     : `<p class="empty">沒有符合的貨運行尚欠。</p>`;
@@ -5428,6 +5677,10 @@ document.getElementById("rack-from")?.addEventListener("change", () => {
   rackPick = "";
   rackLine = "";
   rackSrc = "";
+  renderRack();
+});
+document.getElementById("rack-prior")?.addEventListener("change", () => {
+  rackPrior = !!document.getElementById("rack-prior").checked;
   renderRack();
 });
 document.getElementById("rack-to")?.addEventListener("change", () => {

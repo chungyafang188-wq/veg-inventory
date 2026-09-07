@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=146" />
+    <link rel="stylesheet" href="./styles.css?v=151" />
   </head>
   <body>
     <div class="app">
@@ -71,6 +71,7 @@
         <nav class="tabs" id="orders-pane-tabs" aria-label="總訂單切換">
           <button type="button" class="tab on" data-orders-pane="form">開單</button>
           <button type="button" class="tab" data-orders-pane="today">今日已填</button>
+          <button type="button" class="tab" data-orders-pane="line">LINE判讀</button>
         </nav>
         <div class="orders-swipe" id="orders-swipe">
           <div class="orders-pane" data-orders-pane-page="form">
@@ -122,18 +123,20 @@
             <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
           </div>
         </form>
-        <details class="card" id="line-draft-card">
-          <summary>貼上文字下單／進貨（待確認）</summary>
-          <p class="hint">第一行客人，其後品項與件數。可改完再確認。</p>
+          </div>
+          <div class="orders-pane" data-orders-pane-page="line">
+        <section class="card" id="line-draft-card">
+          <h2>LINE判讀／訂單確認</h2>
+          <p class="hint">貼上客人傳來的叫貨文字會直接解析。第一行寫客人，其後品項與件數。判讀結果可改完再確認列入出貨。</p>
           <p class="muted" id="line-api-status"></p>
           <label class="field">下單文字
-            <textarea id="line-paste" rows="4" placeholder="金芳拍賣-南 紐大12K/20"></textarea>
+            <textarea id="line-paste" rows="6" placeholder="文福&#10;地瓜葉誌 20"></textarea>
           </label>
           <div class="btn-row">
             <button type="button" id="line-parse-btn" class="primary">解析文字</button>
           </div>
           <div id="line-drafts"></div>
-        </details>
+        </section>
           </div>
           <div class="orders-pane" data-orders-pane-page="today">
             <section class="card" id="orders-today-card">
@@ -161,6 +164,7 @@
             <div class="orders-pane" data-plan-main-page="short">
               <h2 id="plan-short-title">現場須出（現採／加工）</h2>
               <div id="plan-short"></div>
+              <div id="plan-break"></div>
             </div>
             <div class="orders-pane" data-plan-main-page="ship">
               <nav class="tabs" id="plan-pane-tabs" aria-label="派貨切換">
@@ -327,6 +331,6 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=162"></script>
+    <script src="./app.js?v=167"></script>
   </body>
 </html>

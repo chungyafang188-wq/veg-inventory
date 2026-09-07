@@ -542,6 +542,7 @@ syncAllNqQty();
 if (migrated || seeded || recounted) save();
 
 let co = "nq";
+let page = "home";
 let hubOpen = "";
 let booksPart = "stock";
 let formKind = "leaf";
@@ -999,6 +1000,7 @@ function hubSvg(name) {
     crate: '<path d="M4 8h16v11H4z"/><path d="M4 8 7 4h10l3 4M12 8v11M4 13h16"/>',
     rack: '<path d="M4 5h16M4 12h16M4 19h16M6 5v14M18 5v14"/>',
     coin: '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4v9.2M9.4 9.2c.7-1 2.4-1.4 3.5-.4s.7 2.4-.6 3c-1.4.6-2.6.4-3.4 1.6-.6.9.1 2.4 2.1 2.6 1.5.2 2.8-.4 3.4-1.2"/>',
+    chat: '<path d="M5 6.5h14v9.2H9.2L5 19.2z"/>',
   };
   return `<span class="hub-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d[name] || d.clip}</svg></span>`;
 }
@@ -1017,6 +1019,7 @@ function renderHomeHub() {
   if (can("page-orders")) {
     orderBtns.push(hubLink('data-go="orders" data-orders-pane="form"', "form", "開單"));
     orderBtns.push(hubLink('data-go="orders" data-orders-pane="today"', "list", "今日已填"));
+    orderBtns.push(hubLink('data-go="orders" data-orders-pane="line"', "chat", "LINE判讀"));
   }
   if (can("page-plan")) {
     if (currentRole() !== "driver") orderBtns.push(hubLink('data-go="plan" data-plan-main="short"', "cal", "排程"));
@@ -1069,12 +1072,16 @@ function renderHomeHub() {
   box.classList.add("hub-pick");
   box.innerHTML = tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns)).join("");
 }
+function normalizeOrdersPane(v) {
+  if (v === "today" || v === "line") return v;
+  return "form";
+}
 function goFromHub(btn) {
   const go = btn.dataset.go;
   if (go === "orders") {
     if (!can("page-orders")) return setStatus("沒有訂單權限。", true);
     page = "orders";
-    ordersPane = btn.dataset.ordersPane === "today" ? "today" : "form";
+    ordersPane = normalizeOrdersPane(btn.dataset.ordersPane);
   } else if (go === "plan") {
     if (!can("page-plan")) return setStatus("沒有排程權限。", true);
     page = "plan";
@@ -1625,8 +1632,6 @@ function syncOrderEntering() {
     applyOrdersPane(false);
   }
   if (on && !was) {
-    const drafts = document.getElementById("line-draft-card");
-    if (drafts) drafts.open = false;
     document.getElementById("order-form")?.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 }
@@ -3914,6 +3919,89 @@ function lineQtyForSkus(o, ids) {
   for (const id of ids) n += lineQtyForSku(o, id);
   return round(n);
 }
+function planLeafBasilVendor(skuId) {
+  if (skuId === "sl-zhi") return "誌";
+  if (skuId === "sl-fang") return "芳";
+  const b = BASIL_REV[skuId];
+  return b ? b.val : "";
+}
+function planDayLineRows(day) {
+  const rows = [];
+  for (const o of state.orders) {
+    if (o.status === "cancelled" || o.status === "deleted") continue;
+    if ((o.shipDate || today()) !== day) continue;
+    if (o.status !== "open" && o.status !== "shipped" && o.status !== "delivered") continue;
+    for (const l of o.lines || []) {
+      if (!(l.qty > 0) || !l.skuId) continue;
+      const sku = skuById(l.skuId);
+      if (!sku) continue;
+      rows.push({
+        customer: o.customer || "未填",
+        skuId: l.skuId,
+        name: skuShortName(sku),
+        qty: round(l.qty),
+        unit: sku.unit,
+        vendor: planLeafBasilVendor(l.skuId),
+        done: o.status !== "open",
+      });
+    }
+  }
+  return rows;
+}
+function planBreakHtml(day) {
+  const rows = planDayLineRows(day);
+  if (!rows.length) return "";
+  const byCust = new Map();
+  for (const r of rows) {
+    if (!byCust.has(r.customer)) byCust.set(r.customer, []);
+    byCust.get(r.customer).push(r);
+  }
+  const custNames = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const custHtml = custNames
+    .map((name) => {
+      const lines = byCust
+        .get(name)
+        .map((r) => {
+          const vendor = r.vendor ? `　${esc(r.vendor)}` : "";
+          return `<p>${esc(r.name)}　${fmt(r.qty)} ${esc(r.unit)}${vendor}${r.done ? "　已出" : ""}</p>`;
+        })
+        .join("");
+      return `<div class="plan-cust"><h4>${esc(name)}</h4>${lines}</div>`;
+    })
+    .join("");
+  const byVendor = new Map();
+  for (const r of rows) {
+    if (!r.vendor) continue;
+    const key = `${r.vendor}\t${r.skuId}`;
+    const cur = byVendor.get(key);
+    if (cur) cur.qty = round(cur.qty + r.qty);
+    else byVendor.set(key, { vendor: r.vendor, name: r.name, unit: r.unit, qty: r.qty });
+  }
+  const vendorRank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3 };
+  const vendorRows = [...byVendor.values()].sort((a, b) => {
+    const ra = vendorRank[a.vendor] ?? 9;
+    const rb = vendorRank[b.vendor] ?? 9;
+    if (ra !== rb) return ra - rb;
+    return a.name.localeCompare(b.name, "zh-Hant");
+  });
+  const vendorBody = vendorRows.length
+    ? vendorRows.map((r) => `<tr><td>${esc(r.vendor)}</td><td>${esc(r.name)}</td><td>${fmt(r.qty)} ${esc(r.unit)}</td></tr>`).join("")
+    : `<tr><td colspan="3">當日沒有地瓜葉、九層塔叫貨。</td></tr>`;
+  return `<div class="plan-break">
+    <section class="plan-break-card">
+      <h3>客戶件數／廠商</h3>
+      ${custHtml}
+    </section>
+    <section class="plan-break-card">
+      <h3>廠商品項合計</h3>
+      <p class="hint">地瓜葉：誌／芳。九層塔：芳／琳／其他。</p>
+      <table>
+        <thead><tr><th>廠商</th><th>品項</th><th>合計</th></tr></thead>
+        <tbody>${vendorBody}</tbody>
+      </table>
+    </section>
+  </div>`;
+}
 function planDayPendingQty(g, day) {
   let n = 0;
   for (const o of state.orders) {
@@ -4449,6 +4537,8 @@ function renderDispatchLists(day) {
 function renderDriverPlan() {
   const pendingBox = document.getElementById("plan-pending");
   if (!pendingBox) return;
+  const breakBox = document.getElementById("plan-break");
+  if (breakBox) breakBox.innerHTML = "";
   const day = planViewDay();
   const planDateEl = document.getElementById("plan-date");
   if (planDateEl && planDateEl.value !== day) planDateEl.value = day;
@@ -4476,9 +4566,11 @@ function renderPlan() {
   );
   const wrap = document.getElementById("plan-card") || shortBox?.parentElement;
   if (wrap) wrap.style.setProperty("--plan-n", String(Math.max(used.length, 1)));
+  const breakBox = document.getElementById("plan-break");
   if (shortBox) {
     if (!used.length) {
       shortBox.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
+      if (breakBox) breakBox.innerHTML = "";
     } else {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
@@ -4497,6 +4589,7 @@ function renderPlan() {
           </article>`;
         })
         .join("")}</div>`;
+      if (breakBox) breakBox.innerHTML = planBreakHtml(day);
     }
   }
   renderDispatchLists(day);
@@ -5610,7 +5703,7 @@ document.querySelectorAll("[data-orders-pane]").forEach((btn) => {
       setStatus("正在輸入訂單，請先確認送出或清掉本單。", true);
       return;
     }
-    ordersPane = btn.dataset.ordersPane === "today" ? "today" : "form";
+    ordersPane = normalizeOrdersPane(btn.dataset.ordersPane);
     applyOrdersPane(true);
   };
 });
@@ -5626,7 +5719,7 @@ if (ordersSwipe) {
         const mid = ordersSwipe.scrollLeft + ordersSwipe.clientWidth / 2;
         const cur = panes.find((p) => p.offsetLeft <= mid && p.offsetLeft + p.offsetWidth > mid);
         if (!cur) return;
-        const next = cur.dataset.ordersPanePage === "today" ? "today" : "form";
+        const next = normalizeOrdersPane(cur.dataset.ordersPanePage);
         if (next === ordersPane) return;
         if (document.body.classList.contains("order-entering") && next === "today") {
           applyOrdersPane(false);
@@ -5952,11 +6045,12 @@ document.querySelectorAll("[data-stock-kind]").forEach((btn) => {
     applyCopy();
   };
 });
-document.getElementById("line-parse-btn")?.addEventListener("click", () => {
+function parseLinePaste() {
   const parseBlocks = globalThis.LineOrderParse?.parseLineOrderBlocks;
   const parseOne = globalThis.LineOrderParse?.parseLineOrderText;
   if (!parseBlocks && !parseOne) return setStatus("解析程式還沒載入。", true);
   const raw = document.getElementById("line-paste")?.value || "";
+  if (!String(raw).trim()) return;
   const names = knownCustomersForParse();
   const blocks = parseBlocks ? parseBlocks(raw, names) : [parseOne(raw, names)];
   let added = 0;
@@ -5980,6 +6074,10 @@ document.getElementById("line-parse-btn")?.addEventListener("click", () => {
     if (ta) ta.value = "";
     setStatus(`已加入 ${added} 筆待確認，目前共 ${linePasteQueue.length + lineDraftsCache.length} 筆。可繼續貼下一位，不必立刻確認。`, false);
   }
+}
+document.getElementById("line-parse-btn")?.addEventListener("click", parseLinePaste);
+document.getElementById("line-paste")?.addEventListener("paste", () => {
+  window.setTimeout(parseLinePaste, 0);
 });
 document.getElementById("line-drafts")?.addEventListener("click", async (e) => {
   const ok = e.target.closest("[data-line-ok]");

@@ -4374,10 +4374,18 @@ function planCustRowsHtml(rows) {
         .sort((a, b) => planLineSpec(a).localeCompare(planLineSpec(b), "zh-Hant") || a.skuId.localeCompare(b.skuId))
         .map((r) => {
           const spec = planLineSpec(r);
-          return `<p>${spec ? `${esc(spec)}　` : ""}${fmt(r.qty)} ${esc(r.unit)}${r.done ? "　已出" : ""}</p>`;
+          const mark = r.done ? `<span class="plan-shipped">已出貨</span>` : "";
+          return `<p class="${r.done ? "is-shipped" : ""}">${spec ? `${esc(spec)}　` : ""}${fmt(r.qty)} ${esc(r.unit)}${mark}</p>`;
         })
         .join("");
-      return `<div class="plan-cust"><h4>${esc(name)}</h4>${lines}</div>`;
+      const allDone = byCust.get(name).every((r) => r.done);
+      const someDone = byCust.get(name).some((r) => r.done);
+      const whoMark = allDone
+        ? `<span class="plan-shipped">已出貨</span>`
+        : someDone
+          ? `<span class="plan-shipped is-part">部分已出貨</span>`
+          : "";
+      return `<div class="plan-cust${allDone ? " is-shipped" : ""}"><h4>${esc(name)}${whoMark}</h4>${lines}</div>`;
     })
     .join("");
 }

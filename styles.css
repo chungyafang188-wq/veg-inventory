@@ -2207,12 +2207,33 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   margin: 0 0 0.12rem;
   font-size: 1.08rem;
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 .plan-cust p {
   margin: 0.08rem 0 0;
   font-size: 1rem;
   color: var(--ink);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
+.plan-shipped {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  background: #dceee0;
+  color: #2d5c40;
+}
+.plan-shipped.is-part { background: #fff1d6; color: #7a5410; }
+.plan-cust.is-shipped { opacity: 0.82; }
+.plan-cust p.is-shipped { color: #2d5c40; }
 .plan-break-card .empty { font-size: 1rem; }
 .short-est small {
   display: block;

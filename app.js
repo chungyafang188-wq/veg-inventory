@@ -4943,7 +4943,11 @@ function planJobHtml(customer, orders, kind) {
     kind === "pending"
       ? `${esc(customer)}${tag ? `<span class="drive-tag">${esc(tag)}</span>` : ""}${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`
       : `${esc(customer)}<span class="drive-nos">${esc(nos)}</span>${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`;
-  const body = orders.map(orderBlockHtml).join("");
+  const body = `${orders.map(orderBlockHtml).join("")}${
+    kind === "pending" && can("ship-books")
+      ? `<div class="drive-ship"><button type="button" class="primary" data-confirm-ship="${esc(customer)}">確認出貨</button></div>`
+      : ""
+  }`;
   const side = assignRowHtml(customer, orders, kind) || driverSideHtml(customer, orders, kind);
   return `<li class="drive-job ${kind === "done" ? "is-done" : ""} ${open ? "is-open" : ""}">
     <div class="drive-head">
@@ -6488,6 +6492,13 @@ if (planMainSwipe) {
   );
 }
 document.getElementById("plan-card").addEventListener("click", (e) => {
+  const confirmShip = e.target.closest("[data-confirm-ship]");
+  if (confirmShip) {
+    e.preventDefault();
+    e.stopPropagation();
+    confirmCustomerShip(confirmShip.getAttribute("data-confirm-ship") || "");
+    return;
+  }
   const take = e.target.closest("[data-drive-take]");
   if (take) {
     e.preventDefault();
@@ -6505,13 +6516,6 @@ document.getElementById("plan-card").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     assignCustomerDriver(assign.dataset.assignWho, assign.dataset.assignDriver);
-    return;
-  }
-  const confirmShip = e.target.closest("[data-confirm-ship]");
-  if (confirmShip) {
-    e.preventDefault();
-    e.stopPropagation();
-    confirmCustomerShip(confirmShip.dataset.confirmShip);
     return;
   }
   const tog = e.target.closest("[data-drive-open]");

@@ -4347,20 +4347,23 @@ function planTotChipsHtml(rows, mode) {
   for (const r of rows) {
     const label = mode === "pack" ? planLineSpec(r) : r.vendor || "其他";
     const key = `${label}\t${r.unit}`;
-    const cur = buckets.get(key);
-    if (cur) cur.qty = round(cur.qty + r.qty);
-    else buckets.set(key, { label, unit: r.unit, qty: r.qty });
+    const cur = buckets.get(key) || { label, unit: r.unit, qty: 0, shipped: 0, open: 0 };
+    cur.qty = round(cur.qty + r.qty);
+    if (r.done) cur.shipped = round(cur.shipped + r.qty);
+    else cur.open = round(cur.open + r.qty);
+    buckets.set(key, cur);
   }
   const rank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3, 籃裝: 0, 箱裝: 1 };
   const list = [...buckets.values()].sort((a, b) => (rank[a.label] ?? 9) - (rank[b.label] ?? 9) || a.label.localeCompare(b.label, "zh-Hant"));
   if (!list.length) return "";
-  const lab = mode === "pack" ? "品項合計" : "廠商合計";
-  return `<div class="plan-item-tots">
-    <p class="plan-item-tot-lab">${lab}</p>
-    <ul>${list.map((t) => `<li><span>${esc(t.label)}</span><strong>${fmt(t.qty)} ${esc(t.unit)}</strong></li>`).join("")}</ul>
-  </div>`;
+  return `<ul class="plan-item-tots">${list
+    .map(
+      (t) =>
+        `<li><span>${esc(t.label)}</span><strong>${fmt(t.qty)} ${esc(t.unit)}</strong><em><b class="is-shipped">已出貨 ${fmt(t.shipped)}</b><b class="is-open">未出貨 ${fmt(t.open)}</b></em></li>`,
+    )
+    .join("")}</ul>`;
 }
-function planCustRowsHtml(rows) {
+function planCustRowsHtml(rows, hideSpec) {
   const byCust = new Map();
   for (const r of rows) {
     if (!byCust.has(r.customer)) byCust.set(r.customer, []);
@@ -4369,33 +4372,35 @@ function planCustRowsHtml(rows) {
   const names = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
   return names
     .map((name) => {
-      const lines = byCust
-        .get(name)
-        .sort((a, b) => planLineSpec(a).localeCompare(planLineSpec(b), "zh-Hant") || a.skuId.localeCompare(b.skuId))
+      const list = byCust.get(name).sort((a, b) => planLineSpec(a).localeCompare(planLineSpec(b), "zh-Hant") || a.skuId.localeCompare(b.skuId));
+      const allDone = list.every((r) => r.done);
+      const someDone = list.some((r) => r.done);
+      const qty = list
         .map((r) => {
-          const spec = planLineSpec(r);
-          const mark = r.done ? `<span class="plan-shipped">已出貨</span>` : "";
-          return `<p class="${r.done ? "is-shipped" : ""}">${spec ? `${esc(spec)}　` : ""}${fmt(r.qty)} ${esc(r.unit)}${mark}</p>`;
+          const spec = hideSpec ? "" : planLineSpec(r);
+          const mark = someDone && !allDone
+            ? r.done
+              ? `<span class="plan-shipped">已出貨</span>`
+              : `<span class="plan-open">未出貨</span>`
+            : "";
+          return `<span class="plan-cust-qty">${spec ? `${esc(spec)} ` : ""}<b>${fmt(r.qty)}</b> ${esc(r.unit)}${mark}</span>`;
         })
         .join("");
-      const allDone = byCust.get(name).every((r) => r.done);
-      const someDone = byCust.get(name).some((r) => r.done);
       const whoMark = allDone
         ? `<span class="plan-shipped">已出貨</span>`
         : someDone
           ? `<span class="plan-shipped is-part">部分已出貨</span>`
-          : "";
-      return `<div class="plan-cust${allDone ? " is-shipped" : ""}"><h4>${esc(name)}${whoMark}</h4>${lines}</div>`;
+          : `<span class="plan-open">未出貨</span>`;
+      return `<div class="plan-cust${allDone ? " is-shipped" : someDone ? " is-part" : " is-open"}"><span class="plan-cust-who">${esc(name)}</span><span class="plan-cust-bits">${qty}</span>${whoMark}</div>`;
     })
     .join("");
 }
 function planItemBlockHtml(sec, allRows) {
   const rows = planMergeDayLines(allRows.filter((r) => sec.skuIds.includes(r.skuId)));
+  if (!rows.length) return "";
   const totHtml = planTotChipsHtml(rows, sec.totMode);
   let body;
-  if (!rows.length) {
-    body = `<p class="empty">當日沒有叫貨。</p>`;
-  } else if (sec.totMode === "vendor") {
+  if (sec.totMode === "vendor") {
     const vendorRank = { 芳: 0, 琳: 1, 其他: 2 };
     const byVend = new Map();
     for (const r of rows) {
@@ -4405,7 +4410,7 @@ function planItemBlockHtml(sec, allRows) {
     }
     body = [...byVend.keys()]
       .sort((a, b) => (vendorRank[a] ?? 9) - (vendorRank[b] ?? 9))
-      .map((v) => `<div class="plan-vend-block"><h4 class="plan-vend-lab">${esc(v)}</h4>${planCustRowsHtml(byVend.get(v))}</div>`)
+      .map((v) => `<div class="plan-vend-block"><h4 class="plan-vend-lab">${esc(v)}</h4>${planCustRowsHtml(byVend.get(v), true)}</div>`)
       .join("");
   } else {
     body = planCustRowsHtml(rows);
@@ -4414,8 +4419,8 @@ function planItemBlockHtml(sec, allRows) {
     <header class="plan-item-head">
       <span class="plan-item-kind">${esc(sec.kind)}</span>
       <h3>${esc(sec.mark)}</h3>
+      ${totHtml}
     </header>
-    ${totHtml}
     ${body}
   </section>`;
 }
@@ -4427,7 +4432,9 @@ function planBreakHtml(day) {
     { kind: "九層塔", mark: "紅骨", tone: "rb", skuIds: ["rb-fang", "rb-lin", "rb-oth"], totMode: "vendor" },
     { kind: "九層塔", mark: "綠骨", tone: "gb", skuIds: ["gb-fang", "gb-lin", "gb-oth"], totMode: "vendor" },
   ];
-  return `<div class="plan-break">${sections.map((s) => planItemBlockHtml(s, rows)).join("")}</div>`;
+  const html = sections.map((s) => planItemBlockHtml(s, rows)).join("");
+  if (!html) return `<p class="empty">當日沒有地瓜葉、九層塔叫貨。</p>`;
+  return `<div class="plan-break">${html}</div>`;
 }
 function planDayPendingQty(g, day) {
   let n = 0;
@@ -4625,6 +4632,16 @@ function assignOrdersToDriver(orders, driver, goingOut) {
     o.assignedAt = Date.now();
     o.runOut = !!goingOut;
   }
+}
+function confirmCustomerShip(customer) {
+  const orders = dayOpenOrdersForCustomer(customer);
+  if (!orders.length) return setStatus("這張單已出貨或找不到。", true);
+  const n = orders.length;
+  const msg =
+    n > 1
+      ? `確認出貨「${customer}」共 ${n} 張？不必先派司機，會直接扣庫。`
+      : `確認出貨「${customer}」？不必先派司機，會直接扣庫。`;
+  shipOpenOrders(orders, { action: "ship-books", confirmMsg: msg });
 }
 function assignOrderDriver(orderId, driver) {
   if (!requireCan("assign-driver", "沒有派單權限。")) return;
@@ -4882,14 +4899,23 @@ function driverLineList(o) {
     .join("")}</ul>`;
 }
 function assignRowHtml(customer, orders, kind) {
-  if (kind !== "pending" || !can("assign-driver")) return "";
+  if (kind !== "pending") return "";
+  const canAssign = can("assign-driver");
+  const canShip = can("ship-books");
+  if (!canAssign && !canShip) return "";
   const now = [...new Set(orders.map((o) => o.assignedDriver).filter(Boolean))];
-  return `<div class="assign-row"><span>派工</span>${driverNames()
-    .map(
-      (name) =>
-        `<button type="button" class="tiny-btn${now.includes(name) ? " on" : ""}" data-assign-driver="${esc(name)}" data-assign-who="${esc(customer)}">${esc(name)}</button>`,
-    )
-    .join("")}</div>`;
+  const shipBtn = canShip
+    ? `<button type="button" class="tiny-btn primary" data-confirm-ship="${esc(customer)}">確認出貨</button>`
+    : "";
+  const drivers = canAssign
+    ? `<span>派工</span>${driverNames()
+        .map(
+          (name) =>
+            `<button type="button" class="tiny-btn${now.includes(name) ? " on" : ""}" data-assign-driver="${esc(name)}" data-assign-who="${esc(customer)}">${esc(name)}</button>`,
+        )
+        .join("")}`
+    : "";
+  return `<div class="assign-row">${shipBtn}${drivers}</div>`;
 }
 function driverSideHtml(customer, orders, kind) {
   if (kind !== "pending" || currentRole() !== "driver") return "";
@@ -6479,6 +6505,13 @@ document.getElementById("plan-card").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     assignCustomerDriver(assign.dataset.assignWho, assign.dataset.assignDriver);
+    return;
+  }
+  const confirmShip = e.target.closest("[data-confirm-ship]");
+  if (confirmShip) {
+    e.preventDefault();
+    e.stopPropagation();
+    confirmCustomerShip(confirmShip.dataset.confirmShip);
     return;
   }
   const tog = e.target.closest("[data-drive-open]");

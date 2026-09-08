@@ -4321,19 +4321,14 @@ function planDayLineRows(day) {
   }
   return rows;
 }
-function planLeafBasilItemLabel(r) {
-  if (r.skuId === "sl-zhi" || r.skuId === "sl-fang") {
-    const pack = r.pack && r.pack !== "籃裝" ? r.pack : "";
-    return pack ? `${r.name}　${pack}` : r.name;
-  }
-  const b = BASIL_REV[r.skuId];
-  if (b) return `${b.qty === "rb" ? "紅骨" : "綠骨"}／${b.val}`;
-  return r.name;
+function planGroupHead(g) {
+  const processed = g.label.startsWith("加工·");
+  const raw = g.label.replace(/^現採·/, "").replace(/^加工·/, "");
+  const i = raw.indexOf("／");
+  if (i < 0) return { kind: processed ? "加工" : "現採", mark: raw };
+  return { kind: raw.slice(0, i), mark: raw.slice(i + 1) };
 }
-function planCustKindHtml(title, rows) {
-  if (!rows.length) {
-    return `<section class="plan-break-card"><h3>${esc(title)}</h3><p class="empty">當日沒有叫貨。</p></section>`;
-  }
+function planMergeDayLines(rows) {
   const merged = new Map();
   for (const r of rows) {
     const key = `${r.customer}\t${r.skuId}\t${r.pack || ""}\t${r.done ? 1 : 0}`;
@@ -4341,65 +4336,90 @@ function planCustKindHtml(title, rows) {
     if (cur) cur.qty = round(cur.qty + r.qty);
     else merged.set(key, { ...r });
   }
+  return [...merged.values()];
+}
+function planLineSpec(r) {
+  if (r.skuId === "sl-zhi" || r.skuId === "sl-fang") return r.pack && r.pack !== "籃裝" ? r.pack : "籃裝";
+  return r.vendor || "";
+}
+function planTotChipsHtml(rows, mode) {
+  const buckets = new Map();
+  for (const r of rows) {
+    const label = mode === "pack" ? planLineSpec(r) : r.vendor || "其他";
+    const key = `${label}\t${r.unit}`;
+    const cur = buckets.get(key);
+    if (cur) cur.qty = round(cur.qty + r.qty);
+    else buckets.set(key, { label, unit: r.unit, qty: r.qty });
+  }
+  const rank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3, 籃裝: 0, 箱裝: 1 };
+  const list = [...buckets.values()].sort((a, b) => (rank[a.label] ?? 9) - (rank[b.label] ?? 9) || a.label.localeCompare(b.label, "zh-Hant"));
+  if (!list.length) return "";
+  const lab = mode === "pack" ? "品項合計" : "廠商合計";
+  return `<div class="plan-item-tots">
+    <p class="plan-item-tot-lab">${lab}</p>
+    <ul>${list.map((t) => `<li><span>${esc(t.label)}</span><strong>${fmt(t.qty)} ${esc(t.unit)}</strong></li>`).join("")}</ul>
+  </div>`;
+}
+function planCustRowsHtml(rows) {
   const byCust = new Map();
-  for (const r of merged.values()) {
+  for (const r of rows) {
     if (!byCust.has(r.customer)) byCust.set(r.customer, []);
     byCust.get(r.customer).push(r);
   }
   const names = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
-  const body = names
+  return names
     .map((name) => {
       const lines = byCust
         .get(name)
-        .sort((a, b) => a.skuId.localeCompare(b.skuId) || String(a.pack).localeCompare(String(b.pack)))
+        .sort((a, b) => planLineSpec(a).localeCompare(planLineSpec(b), "zh-Hant") || a.skuId.localeCompare(b.skuId))
         .map((r) => {
-          const vendor = r.vendor ? `　${esc(r.vendor)}` : "";
-          return `<p>${esc(planLeafBasilItemLabel(r))}　${fmt(r.qty)} ${esc(r.unit)}${vendor}${r.done ? "　已出" : ""}</p>`;
+          const spec = planLineSpec(r);
+          return `<p>${spec ? `${esc(spec)}　` : ""}${fmt(r.qty)} ${esc(r.unit)}${r.done ? "　已出" : ""}</p>`;
         })
         .join("");
       return `<div class="plan-cust"><h4>${esc(name)}</h4>${lines}</div>`;
     })
     .join("");
-  return `<section class="plan-break-card"><h3>${esc(title)}　客戶清單</h3>${body}</section>`;
+}
+function planItemBlockHtml(sec, allRows) {
+  const rows = planMergeDayLines(allRows.filter((r) => sec.skuIds.includes(r.skuId)));
+  const totHtml = planTotChipsHtml(rows, sec.totMode);
+  let body;
+  if (!rows.length) {
+    body = `<p class="empty">當日沒有叫貨。</p>`;
+  } else if (sec.totMode === "vendor") {
+    const vendorRank = { 芳: 0, 琳: 1, 其他: 2 };
+    const byVend = new Map();
+    for (const r of rows) {
+      const v = r.vendor || "其他";
+      if (!byVend.has(v)) byVend.set(v, []);
+      byVend.get(v).push(r);
+    }
+    body = [...byVend.keys()]
+      .sort((a, b) => (vendorRank[a] ?? 9) - (vendorRank[b] ?? 9))
+      .map((v) => `<div class="plan-vend-block"><h4 class="plan-vend-lab">${esc(v)}</h4>${planCustRowsHtml(byVend.get(v))}</div>`)
+      .join("");
+  } else {
+    body = planCustRowsHtml(rows);
+  }
+  return `<section class="plan-break-card tone-${esc(sec.tone)}">
+    <header class="plan-item-head">
+      <span class="plan-item-kind">${esc(sec.kind)}</span>
+      <h3>${esc(sec.mark)}</h3>
+    </header>
+    ${totHtml}
+    ${body}
+  </section>`;
 }
 function planBreakHtml(day) {
   const rows = planDayLineRows(day);
-  const leafIds = FORM_KINDS.leaf.skuIds;
-  const basilIds = FORM_KINDS.basil.skuIds;
-  const leafRows = rows.filter((r) => leafIds.includes(r.skuId));
-  const basilRows = rows.filter((r) => basilIds.includes(r.skuId));
-  const byVendor = new Map();
-  for (const r of [...leafRows, ...basilRows]) {
-    if (!r.vendor) continue;
-    const key = `${r.vendor}\t${r.skuId}`;
-    const cur = byVendor.get(key);
-    if (cur) cur.qty = round(cur.qty + r.qty);
-    else byVendor.set(key, { vendor: r.vendor, name: planLeafBasilItemLabel(r), unit: r.unit, qty: r.qty });
-  }
-  const vendorRank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3 };
-  const vendorRows = [...byVendor.values()].sort((a, b) => {
-    const ra = vendorRank[a.vendor] ?? 9;
-    const rb = vendorRank[b.vendor] ?? 9;
-    if (ra !== rb) return ra - rb;
-    return a.name.localeCompare(b.name, "zh-Hant");
-  });
-  const vendorBody = vendorRows.length
-    ? vendorRows.map((r) => `<tr><td>${esc(r.vendor)}</td><td>${esc(r.name)}</td><td>${fmt(r.qty)} ${esc(r.unit)}</td></tr>`).join("")
-    : `<tr><td colspan="3">當日沒有地瓜葉、九層塔叫貨。</td></tr>`;
-  return `<div class="plan-break">
-    <div class="plan-break-custs">
-      ${planCustKindHtml("地瓜葉", leafRows)}
-      ${planCustKindHtml("九層塔", basilRows)}
-    </div>
-    <section class="plan-break-card">
-      <h3>廠商品項合計</h3>
-      <p class="hint">地瓜葉：誌／芳。九層塔：芳／琳／其他。</p>
-      <table>
-        <thead><tr><th>廠商</th><th>品項</th><th>合計</th></tr></thead>
-        <tbody>${vendorBody}</tbody>
-      </table>
-    </section>
-  </div>`;
+  const sections = [
+    { kind: "地瓜葉", mark: "誌", tone: "leaf-zhi", skuIds: ["sl-zhi"], totMode: "pack" },
+    { kind: "地瓜葉", mark: "芳", tone: "leaf-fang", skuIds: ["sl-fang"], totMode: "pack" },
+    { kind: "九層塔", mark: "紅骨", tone: "rb", skuIds: ["rb-fang", "rb-lin", "rb-oth"], totMode: "vendor" },
+    { kind: "九層塔", mark: "綠骨", tone: "gb", skuIds: ["gb-fang", "gb-lin", "gb-oth"], totMode: "vendor" },
+  ];
+  return `<div class="plan-break">${sections.map((s) => planItemBlockHtml(s, rows)).join("")}</div>`;
 }
 function planDayPendingQty(g, day) {
   let n = 0;
@@ -4977,8 +4997,12 @@ function renderPlan() {
           const stock = groupOnHand(g, day);
           const other = planOtherOpenQty(g, day);
           const over = left < 0;
+          const head = planGroupHead(g);
           return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
-            <h3>${esc(g.label)}</h3>
+            <header class="short-head">
+              <span class="short-kind">${esc(head.kind)}</span>
+              <h3>${esc(head.mark)}</h3>
+            </header>
             <p class="short-est is-need"><span>當日需要（待出）</span><strong>${fmt(need)} ${esc(g.unit)}</strong></p>
             <p class="short-est is-sub is-stock"><span>當日庫存（盤點＋進貨－已出）</span><strong>${fmt(stock)} ${esc(g.unit)}</strong></p>
             <p class="short-est is-left"><span>預估剩餘</span><strong>${fmt(left)} ${esc(g.unit)}</strong></p>

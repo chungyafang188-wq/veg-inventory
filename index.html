@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=151" />
+    <link rel="stylesheet" href="./styles.css?v=154" />
   </head>
   <body>
     <div class="app">
@@ -57,6 +57,34 @@
       <section id="page-home" hidden>
         <p class="hint hub-lead">點區塊進入。</p>
         <div id="home-hub" class="hub"></div>
+      </section>
+      <section id="page-help" hidden>
+        <section class="card help-card" id="help-freight-card">
+          <h2>貨運帳務比對</h2>
+          <p class="hint">左邊選進銷存銷售明細，右邊選貨運請款 Excel。比對圖與「高鳴修正版-比對」相同：綠相同、橘兩邊數字不同（貨運／進銷存）、紅只有貨運、黃只有進銷存。公斤不計件。</p>
+          <div class="help-files">
+            <label class="help-file">進銷存
+              <input type="file" id="help-sales-file" accept=".xlsx,.xls,.csv,.txt,.tsv" />
+              <span id="help-sales-name" class="muted">尚未選擇</span>
+            </label>
+            <label class="help-file">貨運請款
+              <input type="file" id="help-freight-file" accept=".xlsx,.xls,.csv,.txt,.tsv" />
+              <span id="help-freight-name" class="muted">尚未選擇</span>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="primary" id="help-freight-run">開始比對</button>
+          </div>
+          <p id="help-freight-msg" class="muted"></p>
+          <div id="help-freight-stats" class="help-stats"></div>
+          <div class="btn-row help-freight-tools" id="help-freight-tools" hidden>
+            <button type="button" class="ghost" data-help-filter="issues">只看差異</button>
+            <button type="button" class="ghost" data-help-filter="all">全部</button>
+            <button type="button" class="ghost" id="help-freight-xls">下載 Excel</button>
+            <button type="button" class="ghost" id="help-freight-png">下載圖片</button>
+          </div>
+          <div class="help-table-wrap" id="help-freight-table"></div>
+        </section>
       </section>
       <section id="page-soon" hidden>
         <section class="card soon-card">
@@ -331,6 +359,6 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=167"></script>
+    <script src="./app.js?v=172"></script>
   </body>
 </html>

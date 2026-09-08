@@ -5,6 +5,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { parseLineOrderText, parseLineOrderBlocks, worthKeeping } = require("./line-parse.js");
+const freightReconcile = require("./freight-reconcile.js");
 
 const { pathToFileURL } = require("url");
 
@@ -470,6 +471,31 @@ function handleApi(req, res) {
         const msg = String(err?.message || err);
         const code = msg === "too large" ? 413 : 400;
         send(res, code, JSON.stringify({ ok: false, error: msg === "too large" ? "檔案太大" : "匯入失敗" }), TYPES[".json"]);
+      });
+    return true;
+  }
+  if (urlPath === "/api/freight/compare") {
+    if (req.method !== "POST") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    readBody(req, 25e6)
+      .then((raw) => {
+        const body = JSON.parse(raw);
+        const ours = body?.ours || body?.sales;
+        const theirs = body?.theirs || body?.freight;
+        if (!ours?.data || !theirs?.data) throw new Error("need two files");
+        const strip = (s) => String(s || "").replace(/^data:.*,/, "");
+        const result = freightReconcile.compareFromUploads(
+          { name: String(ours.name || "進銷存.xls"), buf: Buffer.from(strip(ours.data), "base64") },
+          { name: String(theirs.name || "貨運.xls"), buf: Buffer.from(strip(theirs.data), "base64") },
+        );
+        send(res, 200, JSON.stringify(result), TYPES[".json"]);
+      })
+      .catch((err) => {
+        const msg = String(err?.message || err);
+        const code = msg === "too large" ? 413 : 400;
+        send(res, code, JSON.stringify({ ok: false, error: msg === "too large" ? "檔案太大" : msg || "比對失敗" }), TYPES[".json"]);
       });
     return true;
   }

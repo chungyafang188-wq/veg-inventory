@@ -544,6 +544,8 @@ if (migrated || seeded || recounted) save();
 let co = "nq";
 let page = "home";
 let hubOpen = "";
+let helpFilter = "issues";
+let helpResult = null;
 let booksPart = "stock";
 let formKind = "leaf";
 let stockKind = "leaf";
@@ -862,6 +864,7 @@ function can(action) {
   const r = currentRole();
   if (!r) return false;
   if (r === "boss") return true;
+  if (action === "page-help") return true;
   if (action === "page-plan" || action === "view-ship") return r === "site" || r === "driver" || r === "acct";
   if (action === "page-orders" || action === "order" || action === "count" || action === "inbound" || action === "ship-books" || action === "edit" || action === "delete" || action === "cancel") {
     return r === "acct";
@@ -1001,6 +1004,7 @@ function hubSvg(name) {
     rack: '<path d="M4 5h16M4 12h16M4 19h16M6 5v14M18 5v14"/>',
     coin: '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4v9.2M9.4 9.2c.7-1 2.4-1.4 3.5-.4s.7 2.4-.6 3c-1.4.6-2.6.4-3.4 1.6-.6.9.1 2.4 2.1 2.6 1.5.2 2.8-.4 3.4-1.2"/>',
     chat: '<path d="M5 6.5h14v9.2H9.2L5 19.2z"/>',
+    spark: '<path d="M12 3v3.2M12 17.8V21M3 12h3.2M17.8 12H21M6.1 6.1l2.3 2.3M15.6 15.6l2.3 2.3M17.9 6.1l-2.3 2.3M8.4 15.6l-2.3 2.3"/><circle cx="12" cy="12" r="2.6"/>',
   };
   return `<span class="hub-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d[name] || d.clip}</svg></span>`;
 }
@@ -1035,9 +1039,9 @@ function renderHomeHub() {
   if (can("page-books")) {
     acctBtns.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
     acctBtns.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
-    acctBtns.push(hubLink('data-go="soon" data-soon="freight"', "truck", "貨運核帳", "soon"));
     acctBtns.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
   }
+  const helpBtns = [hubLink('data-go="help"', "truck", "貨運帳務比對")];
   const card = (id, tone, icon, title, btns) => {
     if (!btns.length) return "";
     return `<button type="button" class="hub-tile hub-${tone}" data-hub="${id}">
@@ -1059,6 +1063,7 @@ function renderHomeHub() {
     { id: "orders", tone: "orders", icon: "clip", title: "訂單區", btns: orderBtns },
     { id: "ware", tone: "ware", icon: "box", title: "倉管", btns: wareBtns },
     { id: "acct", tone: "acct", icon: "coin", title: "帳款業務", btns: acctBtns },
+    { id: "help", tone: "help", icon: "spark", title: "小幫手", btns: helpBtns },
   ].filter((x) => x.btns.length);
   if (hubOpen) {
     const cur = tiles.find((x) => x.id === hubOpen);
@@ -1095,6 +1100,8 @@ function goFromHub(btn) {
       rackLine = "";
       rackSrc = "";
     }
+  } else if (go === "help") {
+    page = "help";
   } else if (go === "soon") {
     page = "soon";
     const copy = soonCopy(btn.dataset.soon);
@@ -1104,6 +1111,358 @@ function goFromHub(btn) {
     if (hint) hint.textContent = copy.hint;
   }
   render();
+}
+function helpStatusLabel(s) {
+  return (
+    {
+      match: "對得上",
+      qty: "數量不同",
+      "ours-only": "只有進銷存",
+      "theirs-only": "只有請款",
+    }[s] || s || ""
+  );
+}
+function helpMarkOf(row) {
+  if (!helpResult) return { kind: "ok", text: "" };
+  if (helpResult.mode === "generic") {
+    if (row.status === "match") return { kind: "ok", text: "已對上" };
+    return { kind: "bad", text: `有問題 · ${helpStatusLabel(row.status)}` };
+  }
+  if (!helpResult.hasFixed || row.statusFix == null) {
+    if (row.statusOrig === "match") return { kind: "ok", text: "已對上" };
+    return { kind: "bad", text: `有問題 · ${helpStatusLabel(row.statusOrig)}` };
+  }
+  if (row.statusFix === "match") {
+    if (row.statusOrig === "match") return { kind: "ok", text: "已對上" };
+    return { kind: "cleared", text: "原表有差，修正已對" };
+  }
+  return { kind: "bad", text: `有問題 · ${helpStatusLabel(row.statusFix)}` };
+}
+function helpShownRows() {
+  return (helpResult?.rows || []).filter((row) => {
+    const mark = helpMarkOf(row);
+    if (helpFilter === "all") return true;
+    return mark.kind !== "ok";
+  });
+}
+function helpRound(n) {
+  return Math.round(Number(n || 0) * 1000) / 1000;
+}
+const HELP_HEAT_PAL = {
+  match: { bg: "#22C55E", fg: "#052E16" },
+  diff: { bg: "#EA580C", fg: "#FFFFFF" },
+  freight: { bg: "#DC2626", fg: "#FFFFFF" },
+  sales: { bg: "#EAB308", fg: "#1C1917" },
+  empty: { bg: "#FFFFFF", fg: "#111111" },
+};
+function helpHeatKind(F, E) {
+  F = helpRound(F);
+  E = helpRound(E);
+  if (!F && !E) return { k: "empty", t: "", F, E };
+  if (F === E) return { k: "match", t: String(F), F, E };
+  if (F && !E) return { k: "freight", t: String(F), F, E };
+  if (E && !F) return { k: "sales", t: String(E), F, E };
+  return { k: "diff", t: `${F}／${E}`, F, E };
+}
+function helpBuildHeat() {
+  if (!helpResult || helpResult.mode !== "freight") return null;
+  const crops = [];
+  const seen = new Set();
+  const map = new Map();
+  for (const r of helpResult.rows || []) {
+    if (!seen.has(r.crop)) {
+      seen.add(r.crop);
+      crops.push(r.crop);
+    }
+    map.set(`${r.day}|${r.crop}`, {
+      F: helpResult.hasFixed ? Number(r.fixed || 0) : Number(r.orig || 0),
+      E: Number(r.sales || 0),
+    });
+  }
+  const days = [...new Set((helpResult.rows || []).map((r) => r.day))].sort((a, b) => a - b);
+  const get = (d, c) => map.get(`${d}|${c}`) || { F: 0, E: 0 };
+  const dayRows = days.map((d) => {
+    const cells = crops.map((c) => helpHeatKind(get(d, c).F, get(d, c).E));
+    return {
+      label: `${d}日`,
+      cells,
+      fSum: helpRound(cells.reduce((s, x) => s + x.F, 0)),
+      eSum: helpRound(cells.reduce((s, x) => s + x.E, 0)),
+    };
+  });
+  const totCells = crops.map((c) =>
+    helpHeatKind(
+      days.reduce((s, d) => s + get(d, c).F, 0),
+      days.reduce((s, d) => s + get(d, c).E, 0),
+    ),
+  );
+  return {
+    crops,
+    dayRows,
+    totCells,
+    totF: helpRound(totCells.reduce((s, x) => s + x.F, 0)),
+    totE: helpRound(totCells.reduce((s, x) => s + x.E, 0)),
+    file: "高鳴貨運進銷存比對",
+  };
+}
+function helpHeatTableHtml(heat) {
+  const head = `<tr><th class="heat-day">日期</th>${heat.crops.map((c) => `<th>${esc(c)}</th>`).join("")}<th>貨運合計</th><th>進銷存合計</th></tr>`;
+  const body = heat.dayRows
+    .map(
+      (row) =>
+        `<tr><td class="heat-day">${esc(row.label)}</td>${row.cells
+          .map((c) => `<td class="heat-${c.k}">${esc(c.t)}</td>`)
+          .join("")}<td class="heat-sum">${row.fSum}</td><td class="heat-sum">${row.eSum}</td></tr>`,
+    )
+    .join("");
+  const tot = `<tr class="heat-total"><td class="heat-day">總量</td>${heat.totCells
+    .map((c) => `<td class="heat-${c.k}">${esc(c.t)}</td>`)
+    .join("")}<td class="heat-sum">${heat.totF}</td><td class="heat-sum">${heat.totE}</td></tr>`;
+  return `<div class="help-heat-wrap"><table class="help-heat"><thead>${head}</thead><tbody>${body}${tot}</tbody></table></div>`;
+}
+function helpTd(val, bad) {
+  return `<td class="${bad ? "cell-bad" : ""}">${val === "" || val == null ? "" : esc(String(val))}</td>`;
+}
+function helpMarkHtml(mark) {
+  return `<td><span class="help-mark ${mark.kind}">${esc(mark.text)}</span></td>`;
+}
+function helpResultHtml(status) {
+  if (!status) return "<td></td>";
+  const ok = status === "match";
+  return `<td><span class="help-result ${ok ? "ok" : "bad"}">${esc(helpStatusLabel(status))}</span></td>`;
+}
+function renderHelpFreight() {
+  const tools = document.getElementById("help-freight-tools");
+  const stats = document.getElementById("help-freight-stats");
+  const table = document.getElementById("help-freight-table");
+  if (!tools || !stats || !table) return;
+  if (!helpResult || !helpResult.ok) {
+    tools.hidden = true;
+    if (!helpResult) {
+      stats.innerHTML = "";
+      table.innerHTML = "";
+    }
+    return;
+  }
+  tools.hidden = false;
+  tools.querySelectorAll("[data-help-filter]").forEach((b) => {
+    b.hidden = helpResult.mode === "freight";
+    b.classList.toggle("on", b.dataset.helpFilter === helpFilter);
+  });
+  const rows = helpShownRows();
+  if (helpResult.mode === "freight") {
+    const heat = helpBuildHeat();
+    const extra = [];
+    if (helpResult.lineCount) extra.push(`進銷存 ${helpResult.lineCount} 筆`);
+    if (helpResult.skippedKg?.length) extra.push(`略過公斤 ${helpResult.skippedKg.length}`);
+    if (helpResult.unmapped?.length) extra.push(`未分類 ${helpResult.unmapped.length}`);
+    stats.innerHTML = `<p>高鳴貨運 × 進銷存 件數比對<br>來源：${esc(helpResult.origName || "")} 對 ${esc(helpResult.salesName || "")}。件／包計入，公斤略過。${extra.length ? esc(extra.join(" · ")) : ""}</p>
+      <div class="help-legend">
+        <span class="heat-match">綠＝件數相同</span>
+        <span class="heat-diff">橘＝兩邊數字不同（格內為 貨運／進銷存）</span>
+        <span class="heat-freight">紅＝只有貨運有</span>
+        <span class="heat-sales">黃＝只有進銷存有</span>
+      </div>`;
+    table.innerHTML = heat ? helpHeatTableHtml(heat) : "<p class=\"muted\">沒有可比對的格子。</p>";
+    return;
+  }
+  const s = helpResult.stats || {};
+  stats.innerHTML = `<p>不是高鳴進銷存／貨運矩陣，改用單號＋件數比。<br>${esc(helpResult.salesName || "")}（${esc(helpResult.oursKey || "")}／${esc(helpResult.oursQty || "")}）<br>${esc(helpResult.origName || "")}（${esc(helpResult.theirsKey || "")}／${esc(helpResult.theirsQty || "")}）</p>
+    <p>對得上 ${s.match || 0} · 數量不同 ${s.qty || 0} · 只有進銷存 ${s.oursOnly || 0} · 只有請款 ${s.theirsOnly || 0}</p>`;
+  const body = rows
+    .map((r) => {
+      const mark = helpMarkOf(r);
+      const bad = r.status !== "match";
+      return `<tr class="st-${mark.kind}">${helpMarkHtml(mark)}<td>${esc(r.key)}</td>${helpTd(r.ours, bad)}${helpTd(r.theirs, bad)}${helpTd(r.diff, bad)}${helpResultHtml(r.status)}</tr>`;
+    })
+    .join("");
+  table.innerHTML = `<table class="help-table"><thead><tr><th>標示</th><th>單號</th><th>進銷存</th><th>請款</th><th>差</th><th>結果</th></tr></thead><tbody>${body || `<tr><td colspan="6">${helpFilter === "issues" ? "沒有標成有問題的列。" : "沒有資料列。"}</td></tr>`}</tbody></table>`;
+}
+async function runHelpFreight() {
+  const sales = document.getElementById("help-sales-file")?.files?.[0];
+  const freight = document.getElementById("help-freight-file")?.files?.[0];
+  const msg = document.getElementById("help-freight-msg");
+  if (!sales || !freight) {
+    if (msg) msg.textContent = "請兩邊都選檔案。";
+    return setStatus("請兩邊都選檔案。", true);
+  }
+  if (msg) msg.textContent = "正在比對…";
+  helpResult = null;
+  renderHelpFreight();
+  try {
+    const r = await fetch("./api/freight/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ours: { name: sales.name, data: bufToB64(await sales.arrayBuffer()) },
+        theirs: { name: freight.name, data: bufToB64(await freight.arrayBuffer()) },
+      }),
+    });
+    const type = r.headers.get("content-type") || "";
+    const j = type.includes("json") ? await r.json().catch(() => ({})) : {};
+    if (!r.ok || !type.includes("json") || j.ok !== true || !Array.isArray(j.rows)) {
+      const err = !type.includes("json")
+        ? "比對服務還沒生效，請關掉再開一次網站程式後再試。"
+        : j.error || "比對失敗";
+      if (msg) msg.textContent = err;
+      return setStatus(err, true);
+    }
+    helpResult = j;
+    const issueCount = (j.rows || []).filter((row) => {
+      const st = j.mode === "generic" ? row.status : j.hasFixed ? row.statusFix : row.statusOrig;
+      return st && st !== "match";
+    }).length;
+    helpFilter = issueCount ? "issues" : "all";
+    if (msg) {
+      msg.textContent =
+        j.mode === "freight"
+          ? issueCount
+            ? `已比對，有 ${issueCount} 筆差異。`
+            : "已比對，件數都對得上。"
+          : issueCount
+            ? `已依單號比對，有 ${issueCount} 筆差異。`
+            : "已依單號比對，數量都對得上。";
+    }
+    renderHelpFreight();
+  } catch (_) {
+    if (msg) msg.textContent = "比對失敗";
+    setStatus("比對失敗", true);
+  }
+}
+function helpExportGrid() {
+  if (!helpResult?.ok) return null;
+  const heat = helpBuildHeat();
+  if (heat) {
+    const headers = ["日期", ...heat.crops, "貨運合計", "進銷存合計"];
+    const toLine = (label, cells, fSum, eSum) => ({
+      cells: [{ v: label, k: "head" }, ...cells.map((c) => ({ v: c.t, k: c.k })), { v: fSum, k: "sum" }, { v: eSum, k: "sum" }],
+    });
+    const lines = [
+      ...heat.dayRows.map((row) => toLine(row.label, row.cells, row.fSum, row.eSum)),
+      toLine("總量", heat.totCells, heat.totF, heat.totE),
+    ];
+    return { headers, lines, file: heat.file, heat: true };
+  }
+  const rows = helpShownRows();
+  const lines = rows.map((r) => {
+    const mark = helpMarkOf(r);
+    const bad = r.status !== "match";
+    return {
+      kind: mark.kind,
+      cells: [
+        { v: mark.text, bad: mark.kind === "bad", kind: mark.kind },
+        { v: r.key },
+        { v: r.ours, bad },
+        { v: r.theirs, bad },
+        { v: r.diff, bad },
+        { v: helpStatusLabel(r.status), bad },
+      ],
+    };
+  });
+  return { headers: ["標示", "單號", "進銷存", "請款", "差", "結果"], lines, file: "數量核對差異" };
+}
+function helpClickDownload(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function helpHeatFill(k) {
+  return HELP_HEAT_PAL[k] || { bg: "#FFFFFF", fg: "#111111" };
+}
+function downloadHelpXls() {
+  const pack = helpExportGrid();
+  if (!pack) return setStatus("還沒有比對結果。", true);
+  const xlsTd = (cell) => {
+    const v = cell.v === "" || cell.v == null ? "" : String(cell.v);
+    if (pack.heat) {
+      if (cell.k === "head") return `<td bgcolor="#F4F1EA" style="font-weight:700">${esc(v)}</td>`;
+      if (cell.k === "sum") return `<td bgcolor="#F3F3F3">${esc(v)}</td>`;
+      const pal = helpHeatFill(cell.k);
+      return `<td bgcolor="${pal.bg}" style="color:${pal.fg};font-weight:700">${esc(v)}</td>`;
+    }
+    if (cell.kind === "bad" || cell.bad) return `<td bgcolor="#B42318" style="color:#FFFFFF;font-weight:700">${esc(v)}</td>`;
+    if (cell.kind === "cleared") return `<td bgcolor="#8A4B12" style="color:#FFFFFF;font-weight:700">${esc(v)}</td>`;
+    if (cell.kind === "ok") return `<td bgcolor="#D7EFE3" style="color:#145A38">${esc(v)}</td>`;
+    return `<td>${esc(v)}</td>`;
+  };
+  const body = pack.lines
+    .map((line) => {
+      if (pack.heat) return `<tr>${line.cells.map(xlsTd).join("")}</tr>`;
+      const bg = line.kind === "bad" ? "#FDECEA" : line.kind === "cleared" ? "#FFF6EA" : "#FFFFFF";
+      return `<tr bgcolor="${bg}">${line.cells.map(xlsTd).join("")}</tr>`;
+    })
+    .join("");
+  const html = `\uFEFF<html><head><meta charset="utf-8"></head><body><p>綠＝件數相同　橘＝兩邊數字不同（貨運／進銷存）　紅＝只有貨運有　黃＝只有進銷存有</p><table border="1"><tr>${pack.headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>${body}</table></body></html>`;
+  helpClickDownload(new Blob([html], { type: "application/vnd.ms-excel" }), `${pack.file}.xls`);
+}
+function downloadHelpPng() {
+  const pack = helpExportGrid();
+  if (!pack || !pack.lines.length) return setStatus("還沒有可比對的列。", true);
+  const pad = 20;
+  const rowH = pack.heat ? 26 : 32;
+  const headH = 34;
+  const legendH = pack.heat ? 28 : 0;
+  const widths = pack.headers.map((h, i) => {
+    const samples = [h, ...pack.lines.map((line) => String(line.cells[i]?.v ?? ""))];
+    const max = Math.max(...samples.map((s) => [...String(s)].length));
+    return pack.heat ? Math.min(88, Math.max(46, max * 11 + 16)) : Math.min(220, Math.max(72, max * 14 + 24));
+  });
+  const w = pad * 2 + widths.reduce((a, b) => a + b, 0);
+  const h = pad * 2 + legendH + headH + pack.lines.length * rowH;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.font = '700 12px "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif';
+  ctx.textBaseline = "middle";
+  if (pack.heat) {
+    ctx.fillStyle = "#1b2a22";
+    ctx.fillText("綠＝相同　橘＝貨運／進銷存不同　紅＝只有貨運　黃＝只有進銷存", pad, pad + 12);
+  }
+  const top = pad + legendH;
+  let x = pad;
+  ctx.fillStyle = "#6a6258";
+  pack.headers.forEach((hdr, i) => {
+    ctx.fillStyle = "#f4f1ea";
+    ctx.fillRect(x, top, widths[i], headH);
+    ctx.fillStyle = "#333";
+    ctx.fillText(hdr, x + 6, top + headH / 2);
+    x += widths[i];
+  });
+  pack.lines.forEach((line, ri) => {
+    const y = top + headH + ri * rowH;
+    let cx = pad;
+    line.cells.forEach((cell, i) => {
+      const text = String(cell.v ?? "");
+      if (pack.heat) {
+        const pal = cell.k === "head" || cell.k === "sum" ? { bg: cell.k === "sum" ? "#F3F3F3" : "#F4F1EA", fg: "#111" } : helpHeatFill(cell.k);
+        ctx.fillStyle = pal.bg;
+        ctx.fillRect(cx, y, widths[i], rowH);
+        ctx.strokeStyle = "#d4d4d4";
+        ctx.strokeRect(cx, y, widths[i], rowH);
+        ctx.fillStyle = pal.fg;
+        ctx.fillText(text, cx + 5, y + rowH / 2);
+      } else {
+        ctx.fillStyle = line.kind === "bad" ? "#fdecea" : "#ffffff";
+        ctx.fillRect(cx, y, widths[i], rowH);
+        if (cell.kind === "bad" || cell.bad) {
+          ctx.fillStyle = "#b42318";
+          ctx.fillRect(cx + 4, y + 5, widths[i] - 8, rowH - 10);
+          ctx.fillStyle = "#fff";
+        } else ctx.fillStyle = "#1b2a22";
+        ctx.fillText(text, cx + 8, y + rowH / 2);
+      }
+      cx += widths[i];
+    });
+  });
+  c.toBlob((blob) => {
+    if (!blob) return setStatus("圖片存不下來。", true);
+    helpClickDownload(blob, `${pack.file}.png`);
+  }, "image/png");
 }
 function openLoginGate() {
   const gate = document.getElementById("login-gate");
@@ -1150,6 +1509,7 @@ function applyRoleUi() {
   if (can("page-orders")) pages.push("orders");
   if (can("page-plan")) pages.push("plan");
   if (can("page-books")) pages.push("books");
+  pages.push("help");
   pages.push("soon");
   document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => {
     b.hidden = true;
@@ -5594,6 +5954,8 @@ function render() {
           ? "鐵架／八格籃"
         : page === "books"
           ? (co === "nq" ? "穠全公司 · 倉管／帳款" : "鴻安公司 · 倉管／帳款")
+          : page === "help"
+            ? "小幫手"
           : page === "soon"
             ? "帳款業務"
             : "產品出貨";
@@ -5609,6 +5971,8 @@ function render() {
   document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
   const pageHome = document.getElementById("page-home");
   if (pageHome) pageHome.hidden = page !== "home";
+  const pageHelp = document.getElementById("page-help");
+  if (pageHelp) pageHelp.hidden = page !== "help";
   const pageSoon = document.getElementById("page-soon");
   if (pageSoon) pageSoon.hidden = page !== "soon";
   document.getElementById("page-orders").hidden = page !== "orders";
@@ -5638,6 +6002,7 @@ function render() {
     }
   };
   run(renderHomeHub);
+  run(renderHelpFreight);
   run(renderStaffChips);
   run(renderLineDrafts);
   run(renderCustSuggest);
@@ -5686,6 +6051,27 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-go]");
   if (!btn) return;
   goFromHub(btn);
+});
+document.getElementById("help-sales-file")?.addEventListener("change", (e) => {
+  const f = e.target.files?.[0];
+  const el = document.getElementById("help-sales-name");
+  if (el) el.textContent = f ? f.name : "尚未選擇";
+  if (f && document.getElementById("help-freight-file")?.files?.[0]) runHelpFreight();
+});
+document.getElementById("help-freight-file")?.addEventListener("change", (e) => {
+  const f = e.target.files?.[0];
+  const el = document.getElementById("help-freight-name");
+  if (el) el.textContent = f ? f.name : "尚未選擇";
+  if (f && document.getElementById("help-sales-file")?.files?.[0]) runHelpFreight();
+});
+document.getElementById("help-freight-run")?.addEventListener("click", () => runHelpFreight());
+document.getElementById("help-freight-xls")?.addEventListener("click", () => downloadHelpXls());
+document.getElementById("help-freight-png")?.addEventListener("click", () => downloadHelpPng());
+document.getElementById("help-freight-tools")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-help-filter]");
+  if (!btn) return;
+  helpFilter = btn.dataset.helpFilter === "all" ? "all" : "issues";
+  renderHelpFreight();
 });
 document.querySelectorAll("#flow-tabs [data-page]").forEach((btn) => {
   btn.onclick = () => {

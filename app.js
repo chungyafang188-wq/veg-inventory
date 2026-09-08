@@ -4528,7 +4528,7 @@ function shipmentBlockers(o) {
     const sku = skuById(skuId);
     if (!sku) continue;
     ensureStockRow(sku.id);
-    if (isSiteSku(sku) || isTradeSku(sku)) continue;
+    if (shipInboundSku(sku) === "auto") continue;
     if (available(sku, o, today()) < qty) return `${sku.name} 可出不足，不能出貨。請先在庫存頁記入進貨或早上盤點。`;
   }
   return "";
@@ -4580,11 +4580,25 @@ function shipOpenOrders(list, { action, confirmMsg } = {}) {
       return false;
     }
   }
-  if (confirmMsg && !confirm(confirmMsg)) return false;
+  const autoNote = [];
+  for (const o of ready) {
+    for (const lot of autoInboundLots(o)) {
+      autoNote.push(`${skuShortName(lot.sku)} ${fmt(lot.qty)} ${lot.sku.unit}`);
+    }
+  }
+  const msg = autoNote.length
+    ? `${confirmMsg || "確定出貨？"}\n將同步記入今日進貨：${autoNote.join("、")}`
+    : confirmMsg;
+  if (msg && !confirm(msg)) return false;
   try {
     for (const o of ready) applyOpenShipment(o);
     save();
-    setStatus(ready.length > 1 ? `已出貨扣庫 ${ready.length} 張。` : `已出貨扣庫「${ready[0].customer}」。`, false);
+    setStatus(
+      ready.length > 1
+        ? `已出貨扣庫 ${ready.length} 張。${autoNote.length ? "已同步進貨。" : ""}`
+        : `已出貨扣庫「${ready[0].customer}」。${autoNote.length ? "已同步進貨。" : ""}`,
+      false,
+    );
     render();
     return true;
   } catch (err) {
@@ -5262,6 +5276,7 @@ function shipInboundSku(sku) {
   if (isSiteSku(sku)) return "auto";
   if (isTradeSku(sku)) return "auto";
   if (FORM_KINDS.herb.skuIds.includes(sku.id)) return "auto";
+  if (sku.id === "rb-fang" || sku.id === "gb-fang") return "auto";
   return "";
 }
 function haStockOverviewHtml() {
@@ -7427,7 +7442,7 @@ function onOrdersListClick(e) {
         const sku = skuById(skuId);
         if (!sku) continue;
         ensureStockRow(sku.id);
-        if (isSiteSku(sku) || isTradeSku(sku)) continue;
+        if (shipInboundSku(sku) === "auto") continue;
         if (available(sku, o, today()) < qty) {
           setStatus(`${sku.name} 可出不足，不能出貨。請先在庫存頁記入進貨或早上盤點。`, true);
           return;
@@ -7886,6 +7901,33 @@ async function pushCloud(force) {
   writeSyncAt(bundle.updatedAt);
   return true;
 }
+function orderStamp(o) {
+  const st = { deleted: 0, cancelled: 1, open: 2, delivered: 3, shipped: 4 }[o?.status] || 0;
+  return st * 1e15 + Number(o?.assignedAt || 0);
+}
+function mergeOrderLists(a, b) {
+  const map = new Map();
+  for (const o of [...(a || []), ...(b || [])]) {
+    if (!o?.id) continue;
+    const cur = map.get(o.id);
+    if (!cur || orderStamp(o) >= orderStamp(cur)) map.set(o.id, o);
+  }
+  return [...map.values()];
+}
+function mergeRestLists(a, b) {
+  const map = new Map();
+  for (const r of [...(a || []), ...(b || [])]) {
+    const k = `${String(r?.customer || "").trim()}\t${r?.date || ""}`;
+    if (!map.has(k)) map.set(k, r);
+  }
+  return [...map.values()];
+}
+function orderSig(list) {
+  return (list || [])
+    .map((o) => `${o.id}:${o.status}:${o.edited ? 1 : 0}:${(o.lines || []).length}`)
+    .sort()
+    .join("|");
+}
 async function healCloudSync() {
   try {
     const remote = await pullCloud();
@@ -7897,13 +7939,36 @@ async function healCloudSync() {
     if (localOk && !remoteOk) {
       await pushCloud(true);
       setSyncNote("已把本機填寫傳到共用。手機重新整理即可看到同一份。");
-    } else if (remoteOk && (!localOk || remoteAt > localAt)) {
+    } else if (remoteOk && !localOk) {
       applyBundle(remote);
       render();
       setSyncNote("已從共用載入資料。");
-    } else if (localOk && remoteOk && localAt > remoteAt) {
-      await pushCloud(true);
-      setSyncNote("已把較新的本機資料補傳到共用。");
+    } else if (localOk && remoteOk) {
+      const remoteOrders = remote.orders?.orders || [];
+      const mergedOrders = mergeOrderLists(state.orders, remoteOrders);
+      const mergedRests = mergeRestLists(state.rests, remote.orders?.rests);
+      const localGap = orderSig(mergedOrders) !== orderSig(state.orders);
+      const remoteGap = orderSig(mergedOrders) !== orderSig(remoteOrders);
+      if (localGap || remoteGap) {
+        const bundle = remoteAt >= localAt ? remote : collectBundle();
+        bundle.orders = bundle.orders || {};
+        bundle.orders.orders = mergedOrders;
+        bundle.orders.rests = mergedRests;
+        bundle.updatedAt = Date.now();
+        applyBundle(bundle);
+        render();
+        await pushCloud(true);
+        setSyncNote("已把各電腦訂單對齊成同一份。");
+      } else if (remoteAt > localAt) {
+        applyBundle(remote);
+        render();
+        setSyncNote("已從共用載入資料。");
+      } else if (localAt > remoteAt) {
+        await pushCloud(true);
+        setSyncNote("已把較新的本機資料補傳到共用。");
+      } else {
+        setSyncNote("電腦與手機共用同一份資料。");
+      }
     } else {
       setSyncNote("電腦與手機共用同一份資料。");
     }

@@ -1793,7 +1793,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .plan-date-row h2 { margin: 0; }
 .plan-date-row .tabs { margin: 0; flex: 1 1 auto; }
 #plan-pane-tabs { margin-top: 0.35rem; }
-#plan-main-swipe { margin-top: 0.55rem; }
+#plan-main-swipe { margin-top: 0.55rem; overflow-y: visible; }
 #plan-card.is-driver [data-plan-main-page="short"] { display: none !important; }
 #plan-card.is-driver #plan-main-swipe { overflow-x: hidden; }
 .daily-sheet-card .hint { margin-bottom: 0.45rem; }
@@ -2035,7 +2035,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   color: #fff;
   font-size: 0.78rem;
 }
-#plan-card { overflow-x: clip; }
+#plan-card { overflow: visible; }
 #plan-short { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 #plan-card .plan-board,
 #plan-card .short-board {
@@ -2094,6 +2094,14 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   margin-top: 1rem;
   display: grid;
   gap: 0.75rem;
+  min-height: 8rem;
+}
+.plan-break-custs {
+  display: grid;
+  gap: 0.75rem;
+}
+@media (min-width: 720px) {
+  .plan-break-custs { grid-template-columns: 1fr 1fr; }
 }
 .plan-break-card {
   padding: 0.7rem 0.75rem 0.8rem;

@@ -3676,6 +3676,8 @@ function applyPlanMain(smooth) {
   document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
     b.classList.toggle("on", b.dataset.planMain === planMain);
   });
+  const breakBox = document.getElementById("plan-break");
+  if (breakBox) breakBox.hidden = currentRole() === "driver" || planMain === "ship";
   const swipe = document.getElementById("plan-main-swipe");
   const pane = document.querySelector(`[data-plan-main-page="${planMain}"]`);
   if (!swipe || !pane || page !== "plan") return;
@@ -4304,6 +4306,7 @@ function planDayLineRows(day) {
         name: skuShortName(sku),
         qty: round(l.qty),
         unit: sku.unit,
+        pack: l.pack || "",
         vendor: planLeafBasilVendor(l.skuId),
         done: o.status !== "open",
       });
@@ -4311,34 +4314,60 @@ function planDayLineRows(day) {
   }
   return rows;
 }
-function planBreakHtml(day) {
-  const rows = planDayLineRows(day);
-  if (!rows.length) return "";
-  const byCust = new Map();
+function planLeafBasilItemLabel(r) {
+  if (r.skuId === "sl-zhi" || r.skuId === "sl-fang") {
+    const pack = r.pack && r.pack !== "籃裝" ? r.pack : "";
+    return pack ? `${r.name}　${pack}` : r.name;
+  }
+  const b = BASIL_REV[r.skuId];
+  if (b) return `${b.qty === "rb" ? "紅骨" : "綠骨"}／${b.val}`;
+  return r.name;
+}
+function planCustKindHtml(title, rows) {
+  if (!rows.length) {
+    return `<section class="plan-break-card"><h3>${esc(title)}</h3><p class="empty">當日沒有叫貨。</p></section>`;
+  }
+  const merged = new Map();
   for (const r of rows) {
+    const key = `${r.customer}\t${r.skuId}\t${r.pack || ""}\t${r.done ? 1 : 0}`;
+    const cur = merged.get(key);
+    if (cur) cur.qty = round(cur.qty + r.qty);
+    else merged.set(key, { ...r });
+  }
+  const byCust = new Map();
+  for (const r of merged.values()) {
     if (!byCust.has(r.customer)) byCust.set(r.customer, []);
     byCust.get(r.customer).push(r);
   }
-  const custNames = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
-  const custHtml = custNames
+  const names = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const body = names
     .map((name) => {
       const lines = byCust
         .get(name)
+        .sort((a, b) => a.skuId.localeCompare(b.skuId) || String(a.pack).localeCompare(String(b.pack)))
         .map((r) => {
           const vendor = r.vendor ? `　${esc(r.vendor)}` : "";
-          return `<p>${esc(r.name)}　${fmt(r.qty)} ${esc(r.unit)}${vendor}${r.done ? "　已出" : ""}</p>`;
+          return `<p>${esc(planLeafBasilItemLabel(r))}　${fmt(r.qty)} ${esc(r.unit)}${vendor}${r.done ? "　已出" : ""}</p>`;
         })
         .join("");
       return `<div class="plan-cust"><h4>${esc(name)}</h4>${lines}</div>`;
     })
     .join("");
+  return `<section class="plan-break-card"><h3>${esc(title)}　客戶清單</h3>${body}</section>`;
+}
+function planBreakHtml(day) {
+  const rows = planDayLineRows(day);
+  const leafIds = FORM_KINDS.leaf.skuIds;
+  const basilIds = FORM_KINDS.basil.skuIds;
+  const leafRows = rows.filter((r) => leafIds.includes(r.skuId));
+  const basilRows = rows.filter((r) => basilIds.includes(r.skuId));
   const byVendor = new Map();
-  for (const r of rows) {
+  for (const r of [...leafRows, ...basilRows]) {
     if (!r.vendor) continue;
     const key = `${r.vendor}\t${r.skuId}`;
     const cur = byVendor.get(key);
     if (cur) cur.qty = round(cur.qty + r.qty);
-    else byVendor.set(key, { vendor: r.vendor, name: r.name, unit: r.unit, qty: r.qty });
+    else byVendor.set(key, { vendor: r.vendor, name: planLeafBasilItemLabel(r), unit: r.unit, qty: r.qty });
   }
   const vendorRank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3 };
   const vendorRows = [...byVendor.values()].sort((a, b) => {
@@ -4351,10 +4380,10 @@ function planBreakHtml(day) {
     ? vendorRows.map((r) => `<tr><td>${esc(r.vendor)}</td><td>${esc(r.name)}</td><td>${fmt(r.qty)} ${esc(r.unit)}</td></tr>`).join("")
     : `<tr><td colspan="3">當日沒有地瓜葉、九層塔叫貨。</td></tr>`;
   return `<div class="plan-break">
-    <section class="plan-break-card">
-      <h3>客戶件數／廠商</h3>
-      ${custHtml}
-    </section>
+    <div class="plan-break-custs">
+      ${planCustKindHtml("地瓜葉", leafRows)}
+      ${planCustKindHtml("九層塔", basilRows)}
+    </div>
     <section class="plan-break-card">
       <h3>廠商品項合計</h3>
       <p class="hint">地瓜葉：誌／芳。九層塔：芳／琳／其他。</p>
@@ -4933,7 +4962,6 @@ function renderPlan() {
   if (shortBox) {
     if (!used.length) {
       shortBox.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
-      if (breakBox) breakBox.innerHTML = "";
     } else {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
@@ -4952,8 +4980,8 @@ function renderPlan() {
           </article>`;
         })
         .join("")}</div>`;
-      if (breakBox) breakBox.innerHTML = planBreakHtml(day);
     }
+    if (breakBox) breakBox.innerHTML = planBreakHtml(day);
   }
   renderDispatchLists(day);
   applyPlanPane();

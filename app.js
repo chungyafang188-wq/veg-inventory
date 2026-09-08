@@ -3671,6 +3671,11 @@ function applyPlanPane() {
   if (pending) pending.hidden = planPane !== "pending";
   if (done) done.hidden = planPane !== "done";
 }
+function syncPlanMainPaneHeights() {
+  document.querySelectorAll("#plan-main-swipe [data-plan-main-page]").forEach((p) => {
+    p.classList.toggle("is-off", p.dataset.planMainPage !== planMain);
+  });
+}
 function applyPlanMain(smooth) {
   if (currentRole() === "driver") planMain = "ship";
   document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
@@ -3683,11 +3688,13 @@ function applyPlanMain(smooth) {
   if (!swipe || !pane || page !== "plan") return;
   const go = () => {
     planMainLock = true;
+    swipe.querySelectorAll("[data-plan-main-page]").forEach((p) => p.classList.remove("is-off"));
     const left = pane.offsetLeft;
     if (smooth) swipe.scrollTo({ left, behavior: "smooth" });
     else swipe.scrollLeft = left;
     window.setTimeout(() => {
       planMainLock = false;
+      syncPlanMainPaneHeights();
     }, smooth ? 420 : 80);
   };
   if (swipe.clientWidth) go();
@@ -6393,6 +6400,11 @@ document.querySelectorAll("[data-plan-pane]").forEach((btn) => {
 });
 const planMainSwipe = document.getElementById("plan-main-swipe");
 if (planMainSwipe) {
+  const wakePlanMainPanes = () => {
+    planMainSwipe.querySelectorAll("[data-plan-main-page]").forEach((p) => p.classList.remove("is-off"));
+  };
+  planMainSwipe.addEventListener("pointerdown", wakePlanMainPanes);
+  planMainSwipe.addEventListener("touchstart", wakePlanMainPanes, { passive: true });
   planMainSwipe.addEventListener(
     "scroll",
     () => {
@@ -6409,6 +6421,9 @@ if (planMainSwipe) {
         document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
           b.classList.toggle("on", b.dataset.planMain === planMain);
         });
+        const breakBox = document.getElementById("plan-break");
+        if (breakBox) breakBox.hidden = currentRole() === "driver" || planMain === "ship";
+        syncPlanMainPaneHeights();
       }, 60);
     },
     { passive: true },

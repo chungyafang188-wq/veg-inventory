@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=165" />
+    <link rel="stylesheet" href="./styles.css?v=166" />
   </head>
   <body>
     <div class="app">
@@ -330,6 +330,39 @@
         <p class="rack-range" id="rack-range">統計區間依已匯入資料為準。</p>
         <div id="rack-box"></div>
       </section>
+      <section id="page-labels" hidden>
+        <section class="card">
+          <h2>隨箱標籤</h2>
+          <p class="hint">熱感紙 70mm × 50mm，一張一筆。點列選取。出貨日用太陽曆（西元）。月／日可空著不印。流水號依本趟列印張數往下編，換趟可歸零。</p>
+          <div class="label-toolbar">
+            <label class="field">出貨日
+              <input id="label-date" type="date" />
+            </label>
+            <label class="field">月（可空）
+              <input id="label-md-m" type="number" min="1" max="12" inputmode="numeric" placeholder="月" />
+            </label>
+            <label class="field">日（可空）
+              <input id="label-md-d" type="number" min="1" max="31" inputmode="numeric" placeholder="日" />
+            </label>
+          </div>
+          <p class="label-seq-line">本趟下一號 <strong id="label-next-seq">001</strong></p>
+          <div class="btn-row">
+            <button type="button" class="ghost" id="label-all">全選</button>
+            <button type="button" class="ghost" id="label-none">全不選</button>
+            <button type="button" class="ghost" id="label-reset-seq">本趟歸零</button>
+            <button type="button" class="primary" id="label-print">列印選取</button>
+          </div>
+          <p id="label-msg" class="muted"></p>
+        </section>
+        <section class="card">
+          <h3>點選要印的品項</h3>
+          <div id="label-list"></div>
+        </section>
+        <section class="card">
+          <h3>標籤預覽（實際列印為 70×50 mm）</h3>
+          <div id="label-preview" class="label-preview"></div>
+        </section>
+      </section>
       <div id="proof-gate" class="login-gate" hidden>
         <div class="login-card proof-card">
           <h2 id="proof-title">確認送貨</h2>
@@ -359,6 +392,6 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=184"></script>
+    <script src="./app.js?v=187"></script>
   </body>
 </html>

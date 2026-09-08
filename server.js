@@ -533,6 +533,17 @@ function handleApi(req, res) {
       .then((raw) => {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("bad");
+        const basedOn = Number(parsed.basedOn) || 0;
+        delete parsed.basedOn;
+        let current = { updatedAt: 0 };
+        try {
+          current = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+        } catch (_) {}
+        const curAt = Number(current.updatedAt) || 0;
+        if (basedOn && curAt && basedOn < curAt) {
+          send(res, 409, JSON.stringify(current), TYPES[".json"]);
+          return;
+        }
         fs.mkdirSync(DATA_DIR, { recursive: true });
         const tmp = `${DATA_FILE}.tmp`;
         fs.writeFile(tmp, JSON.stringify(parsed), (err) => {

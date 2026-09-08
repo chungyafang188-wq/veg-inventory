@@ -94,6 +94,31 @@ h2 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: 0.02em; }
   color: #fff;
   box-shadow: 0 4px 12px rgba(26, 104, 67, 0.28);
 }
+.tab.has-pending:not(.on) {
+  color: #9a3b12;
+  background: #fff4ec;
+}
+.tab-badge {
+  display: inline-block;
+  margin-left: 0.28rem;
+  padding: 0.08rem 0.38rem;
+  border-radius: 999px;
+  background: #b42318;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  vertical-align: 0.08rem;
+}
+.tab.on .tab-badge {
+  background: #fff;
+  color: #b42318;
+}
+.hub-link.has-pending {
+  border-color: #e8b4a4;
+  background: linear-gradient(180deg, #fff8f2 0%, #fdece4 100%);
+}
+.hub-link .tab-badge { margin-left: 0.2rem; }
 .card {
   margin-top: 0.85rem; padding: 0.95rem 0.95rem 1rem; background: var(--card);
   border: 1px solid var(--line); border-radius: 1.05rem;

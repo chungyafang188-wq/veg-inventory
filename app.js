@@ -1008,8 +1008,10 @@ function hubSvg(name) {
   };
   return `<span class="hub-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d[name] || d.clip}</svg></span>`;
 }
-function hubLink(attrs, icon, label, extraClass) {
-  return `<button type="button" class="hub-link${extraClass ? ` ${extraClass}` : ""}" ${attrs}>${hubSvg(icon)}<span class="hub-lab">${esc(label)}</span></button>`;
+function hubLink(attrs, icon, label, extraClass, badge) {
+  const mark = badge ? `<span class="tab-badge">${esc(String(badge))}</span>` : "";
+  const pending = badge ? " has-pending" : "";
+  return `<button type="button" class="hub-link${extraClass ? ` ${extraClass}` : ""}${pending}" ${attrs}>${hubSvg(icon)}<span class="hub-lab">${esc(label)}${mark}</span></button>`;
 }
 function renderHomeHub() {
   const box = document.getElementById("home-hub");
@@ -1023,7 +1025,8 @@ function renderHomeHub() {
   if (can("page-orders")) {
     orderBtns.push(hubLink('data-go="orders" data-orders-pane="form"', "form", "開單"));
     orderBtns.push(hubLink('data-go="orders" data-orders-pane="today"', "list", "今日已填"));
-    orderBtns.push(hubLink('data-go="orders" data-orders-pane="line"', "chat", "LINE判讀"));
+    const lineN = linePendingCount();
+    orderBtns.push(hubLink('data-go="orders" data-orders-pane="line"', "chat", "LINE判讀", "", lineN ? `待核可 ${lineN}` : ""));
   }
   if (can("page-plan")) {
     if (currentRole() !== "driver") orderBtns.push(hubLink('data-go="plan" data-plan-main="short"', "cal", "排程"));
@@ -5826,9 +5829,39 @@ async function dropLineDraft(id) {
     body: JSON.stringify({ action: "drop", id }),
   });
 }
+function linePendingCount() {
+  const seen = new Set();
+  let n = 0;
+  for (const d of [...(typeof linePasteQueue !== "undefined" ? linePasteQueue : []), ...(typeof lineDraftsCache !== "undefined" ? lineDraftsCache : [])]) {
+    const id = d?.id || "";
+    if (id) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    n += 1;
+  }
+  return n;
+}
+function syncLinePendingHint() {
+  const n = linePendingCount();
+  const badge = n ? `<span class="tab-badge">待核可 ${n}</span>` : "";
+  const tab = document.querySelector('#orders-pane-tabs [data-orders-pane="line"]');
+  if (tab) {
+    tab.innerHTML = `LINE判讀${badge}`;
+    tab.classList.toggle("has-pending", n > 0);
+  }
+  document.querySelectorAll('#home-hub [data-go="orders"][data-orders-pane="line"]').forEach((el) => {
+    const lab = el.querySelector(".hub-lab");
+    if (lab) lab.innerHTML = `LINE判讀${badge}`;
+    el.classList.toggle("has-pending", n > 0);
+  });
+}
 function renderLineDrafts(force) {
   const box = document.getElementById("line-drafts");
-  if (!box) return;
+  if (!box) {
+    syncLinePendingHint();
+    return;
+  }
   const focused = document.activeElement;
   if (
     !force &&
@@ -5836,11 +5869,13 @@ function renderLineDrafts(force) {
     box.contains(focused) &&
     focused.matches("input, select, textarea")
   ) {
+    syncLinePendingHint();
     return;
   }
   const list = [...linePasteQueue, ...lineDraftsCache];
   if (!list.length) {
     box.innerHTML = '<p class="empty">可連續貼上多位客人再解析，待確認會一起列在這裡，不必立刻確認。</p>';
+    syncLinePendingHint();
     return;
   }
   box.innerHTML = list
@@ -5890,6 +5925,7 @@ function renderLineDrafts(force) {
       </article>`;
     })
     .join("");
+  syncLinePendingHint();
 }
 async function refreshLineDrafts() {
   const st = document.getElementById("line-api-status");

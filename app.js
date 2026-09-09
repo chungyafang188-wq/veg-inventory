@@ -6412,6 +6412,12 @@ document.querySelectorAll("[data-co]").forEach((btn) => {
   };
 });
 document.getElementById("home-btn")?.addEventListener("click", goHome);
+document.getElementById("sync-reload")?.addEventListener("click", () => {
+  reloadFromCloud();
+});
+document.getElementById("sync-upload")?.addEventListener("click", () => {
+  uploadThisDevice();
+});
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-hub-back]")) {
     hubOpen = "";
@@ -8233,7 +8239,7 @@ async function healCloudSync() {
       const mergedRests = mergeRestLists(state.rests, remote.orders?.rests);
       const localGap = orderSig(mergedOrders) !== orderSig(state.orders);
       const remoteGap = orderSig(mergedOrders) !== orderSig(remoteOrders);
-      if (remoteAt > localAt && !localGap) {
+      if (remoteAt > localAt && !localGap && !remoteGap) {
         applyBundle(remote);
         render();
         setSyncNote("已從手機／共用載入最新資料。");
@@ -8268,6 +8274,38 @@ async function healCloudSync() {
     setSyncNote("同步暫時失敗，會自動再試。");
     console.error(err);
     return false;
+  }
+}
+async function reloadFromCloud() {
+  try {
+    const remote = await pullCloud();
+    if (!bundleHasData(remote)) return setStatus("線上目前沒有可載入的共用資料。", true);
+    applyBundle(remote);
+    render();
+    setSyncNote("已改為線上共用資料。");
+    setStatus("已載入線上共用。若要看 9/8 的單，請把日期改成 9/8。", false);
+  } catch (err) {
+    console.error(err);
+    setStatus("載入共用失敗，請確認開的是線上網址。", true);
+  }
+}
+async function uploadThisDevice() {
+  if (!confirm("用這台目前看到的訂單，覆蓋線上共用？覆蓋後手機與其他電腦都會跟這台一樣。")) return;
+  try {
+    skipCloud = false;
+    const bundle = collectBundle();
+    bundle.basedOn = 0;
+    const body = JSON.stringify(bundle);
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
+    const r = await fetch(CLOUD_URL, { method: "POST", cache: "no-store", headers, body });
+    const type = r.headers.get("content-type") || "";
+    if (!r.ok || !type.includes("json")) throw new Error("no-cloud");
+    writeSyncAt(bundle.updatedAt);
+    setSyncNote("已用這台上傳共用。其他裝置請重整。");
+    setStatus("已上傳這台的資料到線上。", false);
+  } catch (err) {
+    console.error(err);
+    setStatus("上傳失敗，請開線上網址再試。", true);
   }
 }
 async function bootCloudSync() {

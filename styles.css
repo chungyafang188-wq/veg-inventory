@@ -438,6 +438,10 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   background: #fff;
   box-shadow: 0 1px 0 rgba(255,255,255,.8);
 }
+#sync-reload, #sync-upload {
+  padding: 0.32rem 0.65rem;
+  font-size: 0.78rem;
+}
 .who-home {
   display: inline-flex;
   align-items: center;

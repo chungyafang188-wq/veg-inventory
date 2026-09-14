@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=179" />
+    <link rel="stylesheet" href="./styles.css?v=180" />
   </head>
   <body>
     <div class="app">
@@ -338,86 +338,91 @@
           <button type="button" class="tab" data-label-kind="container">貨櫃標籤</button>
           <button type="button" class="tab" data-label-kind="ship">出貨標籤</button>
         </nav>
-        <p class="hint" id="label-kind-hint">熱感紙 70mm × 50mm。</p>
-        <section class="card" id="label-pane-text">
-          <h3>品項文字</h3>
-          <label class="field">自訂文字
-            <input id="label-text-custom" type="text" placeholder="例如 南瓜、紅骨九層塔" />
-          </label>
-          <p class="pick-lab">常用品名</p>
-          <div id="label-text-chips" class="picks"></div>
-          <label class="field">備註
-            <input id="label-text-remark" type="text" placeholder="可空" />
-          </label>
-          <div class="label-text-opts">
-            <label class="label-solar-opt">
-              <input id="label-solar-on" type="checkbox" />
-              太陽日
-            </label>
-            <label class="label-solar-opt">
-              <input id="label-seq-on" type="checkbox" />
-              流水編
-            </label>
+        <p class="hint label-page-hint" id="label-kind-hint">熱感紙 70mm × 50mm。</p>
+        <div class="label-layout">
+          <div class="label-form-col">
+            <section class="card label-pane-card" id="label-pane-text">
+              <h3>品項</h3>
+              <div id="label-text-chips" class="picks"></div>
+              <label class="field">自行輸入
+                <input id="label-text-custom" type="text" placeholder="類別沒有時再打" />
+              </label>
+              <label class="field">備註
+                <input id="label-text-remark" type="text" placeholder="可空" />
+              </label>
+              <div class="label-text-opts">
+                <label class="label-solar-opt">
+                  <input id="label-solar-on" type="checkbox" />
+                  太陽日
+                </label>
+                <label class="label-solar-opt">
+                  <input id="label-seq-on" type="checkbox" />
+                  流水編
+                </label>
+              </div>
+            </section>
+            <section class="card label-pane-card" id="label-pane-container" hidden>
+              <h3>品名</h3>
+              <div id="label-cont-name-chips" class="picks"></div>
+              <label class="field">自行輸入品名
+                <input id="label-cont-name" type="text" placeholder="例如 高麗菜" />
+              </label>
+              <h3>國別</h3>
+              <div id="label-cont-country-chips" class="picks"></div>
+              <label class="field">自行輸入國別
+                <input id="label-cont-country" type="text" placeholder="例如 韓國" />
+              </label>
+              <div class="label-inline-fields">
+                <label class="field">廠商
+                  <input id="label-cont-vendor" type="text" placeholder="自行輸入" />
+                </label>
+                <label class="field">貨櫃編號
+                  <input id="label-cont-no" type="text" placeholder="例如 UHA158" />
+                </label>
+              </div>
+              <div id="label-cont-no-chips" class="picks"></div>
+            </section>
+            <section class="card label-pane-card" id="label-pane-ship" hidden>
+              <h3>出貨</h3>
+              <label class="field">客戶
+                <input id="label-ship-cust" type="text" placeholder="自行輸入" autocomplete="off" />
+              </label>
+              <p class="pick-lab">品項</p>
+              <div id="label-ship-chips" class="picks"></div>
+              <label class="field">自行輸入品項
+                <input id="label-ship-sku" type="text" placeholder="類別沒有時再打" />
+              </label>
+            </section>
           </div>
-        </section>
-        <section class="card" id="label-pane-container" hidden>
-          <h3>品名</h3>
-          <div id="label-cont-name-chips" class="picks"></div>
-          <label class="field">自行輸入品名
-            <input id="label-cont-name" type="text" placeholder="例如 高麗菜" />
-          </label>
-          <h3>國別</h3>
-          <div id="label-cont-country-chips" class="picks"></div>
-          <label class="field">自行輸入國別
-            <input id="label-cont-country" type="text" placeholder="例如 韓國" />
-          </label>
-          <h3>廠商</h3>
-          <label class="field">廠商
-            <input id="label-cont-vendor" type="text" placeholder="自行輸入" />
-          </label>
-          <h3>貨櫃編號</h3>
-          <label class="field">貨櫃編號
-            <input id="label-cont-no" type="text" placeholder="例如 UHA158" />
-          </label>
-          <div id="label-cont-no-chips" class="picks"></div>
-        </section>
-        <section class="card" id="label-pane-ship" hidden>
-          <h3>出貨標籤</h3>
-          <label class="field">客戶
-            <input id="label-ship-cust" type="text" placeholder="自行輸入" autocomplete="off" />
-          </label>
-          <p class="pick-lab">品項（與文字標籤相同類別）</p>
-          <div id="label-ship-chips" class="picks"></div>
-          <label class="field">自行輸入品項
-            <input id="label-ship-sku" type="text" placeholder="類別沒有時再打，例如 特採南瓜" />
-          </label>
-        </section>
-        <section class="card" id="label-preview-card">
-          <h3>預覽</h3>
-          <div id="label-preview" class="label-preview"></div>
-        </section>
-        <section class="card label-print-card" id="label-print-card">
-          <div class="label-toolbar" id="label-shared-bar">
-            <label class="field" id="label-date-wrap">日期
-              <input id="label-date" type="date" />
-            </label>
-            <label class="field" id="label-md-m-wrap">月
-              <input id="label-md-m" type="number" min="1" max="12" inputmode="numeric" placeholder="月" />
-            </label>
-            <label class="field" id="label-md-d-wrap">日
-              <input id="label-md-d" type="number" min="1" max="31" inputmode="numeric" placeholder="日" />
-            </label>
-            <label class="field" id="label-copies-wrap"><span id="label-copies-caption">張數</span>
-              <input id="label-copies" type="number" min="1" max="99" inputmode="numeric" value="1" />
-            </label>
-            <p class="label-seq-line" id="label-seq-line"><span id="label-seq-caption">下一號</span> <strong id="label-next-seq">001</strong></p>
-            <button type="button" class="ghost" id="label-all">全選</button>
-            <button type="button" class="ghost" id="label-none">不選</button>
-            <button type="button" class="ghost" id="label-reset-seq">歸零</button>
-            <button type="button" class="primary" id="label-print">列印</button>
+          <div class="label-side-col">
+            <section class="card label-pane-card" id="label-preview-card">
+              <h3>預覽</h3>
+              <div id="label-preview" class="label-preview"></div>
+            </section>
+            <section class="card label-print-card" id="label-print-card">
+              <div class="label-toolbar" id="label-shared-bar">
+                <label class="field" id="label-date-wrap">日期
+                  <input id="label-date" type="date" />
+                </label>
+                <label class="field" id="label-md-m-wrap" hidden>月
+                  <input id="label-md-m" type="number" min="1" max="12" inputmode="numeric" placeholder="月" />
+                </label>
+                <label class="field" id="label-md-d-wrap" hidden>日
+                  <input id="label-md-d" type="number" min="1" max="31" inputmode="numeric" placeholder="日" />
+                </label>
+                <label class="field" id="label-copies-wrap"><span id="label-copies-caption">張數</span>
+                  <input id="label-copies" type="number" min="1" max="99" inputmode="numeric" value="1" />
+                </label>
+                <p class="label-seq-line" id="label-seq-line"><span id="label-seq-caption">下一號</span> <strong id="label-next-seq">001</strong></p>
+                <button type="button" class="ghost" id="label-reset-seq">歸零</button>
+                <button type="button" class="primary" id="label-print">列印</button>
+              </div>
+              <p id="label-msg" class="muted"></p>
+            </section>
           </div>
-          <p id="label-msg" class="muted"></p>
-        </section>
+        </div>
+        <button type="button" class="ghost" id="label-all" hidden>全選</button>
+        <button type="button" class="ghost" id="label-none" hidden>不選</button>
       </section>
       <div id="label-order-gate" class="login-gate" hidden>
         <div class="login-card">
@@ -458,6 +463,6 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=201"></script>
+    <script src="./app.js?v=202"></script>
   </body>
 </html>

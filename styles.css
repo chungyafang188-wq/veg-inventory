@@ -2842,63 +2842,68 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2.2mm 1.8mm 1.8mm;
-  gap: 1.2mm;
-}
-.label-sticker.is-container .sticker-cont-main {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: 100%;
+  padding: 2mm 1.6mm 1.8mm;
+  gap: 0.7mm;
 }
 .sticker-cont-name {
+  flex: 0 0 auto;
   margin: 0;
-  font-size: 8.6mm;
+  padding: 0.4mm 0 0;
+  font-size: 10mm;
   font-weight: 900;
-  line-height: 1.02;
-  letter-spacing: 0.14em;
+  line-height: 1;
+  letter-spacing: 0.1em;
   word-break: break-word;
 }
 .sticker-cont-name.is-long {
-  font-size: 6.8mm;
+  font-size: 7.6mm;
   letter-spacing: 0.04em;
 }
 .sticker-cont-meta {
-  margin: 0.8mm 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 2.2mm;
-  font-weight: 800;
-  line-height: 1.1;
+  gap: 1.6mm;
+  line-height: 1;
 }
-.sticker-cont-country { font-size: 3.6mm; font-weight: 700; }
-.sticker-cont-vendor { font-size: 4.8mm; font-weight: 900; }
+.sticker-cont-country,
+.sticker-cont-vendor {
+  font-size: 3mm;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .sticker-box {
-  margin: 1.6mm 0 0;
+  margin: 0;
   font-size: 5.6mm;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1.1;
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
+  min-height: 15mm;
   margin: 0;
-  font-size: 8.2mm;
+  padding: 0.4mm 0.2mm 0;
+  font-size: 7.2mm;
   font-weight: 900;
-  letter-spacing: 0.01em;
-  line-height: 0.95;
+  letter-spacing: 0.06em;
+  line-height: 0.98;
   white-space: nowrap;
   overflow: hidden;
 }
 .label-sticker.is-container .sticker-box.is-wide {
-  font-size: 6.4mm;
-  letter-spacing: 0;
+  font-size: 5.9mm;
+  letter-spacing: 0.03em;
+}
+.label-sticker.is-container .sticker-box.is-xwide {
+  font-size: 5.1mm;
+  letter-spacing: 0.01em;
 }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }

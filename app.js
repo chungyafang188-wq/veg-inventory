@@ -1408,52 +1408,66 @@ html, body { margin: 0; padding: 0; background: #fff; }
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2.2mm 1.8mm 1.8mm;
-  gap: 1.2mm;
-}
-.label-sticker.is-container .sticker-cont-main {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: 100%;
+  padding: 2mm 1.6mm 1.8mm;
+  gap: 0.7mm;
 }
 .sticker-cont-name {
+  flex: 0 0 auto;
   margin: 0;
-  font-size: 8.6mm;
+  padding: 0.4mm 0 0;
+  font-size: 10mm;
   font-weight: 900;
-  line-height: 1.02;
-  letter-spacing: 0.14em;
+  line-height: 1;
+  letter-spacing: 0.1em;
   word-break: break-word;
 }
-.sticker-cont-name.is-long { font-size: 6.8mm; letter-spacing: 0.04em; }
+.sticker-cont-name.is-long { font-size: 7.6mm; letter-spacing: 0.04em; }
 .sticker-cont-meta {
-  margin: 0.8mm 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 2.2mm;
-  font-weight: 800;
-  line-height: 1.1;
+  gap: 1.6mm;
+  line-height: 1;
 }
-.sticker-cont-country { font-size: 3.6mm; font-weight: 700; }
-.sticker-cont-vendor { font-size: 4.8mm; font-weight: 900; }
-.sticker-box { margin: 1.6mm 0 0; font-size: 5.6mm; font-weight: 900; line-height: 1.15; word-break: break-all; }
+.sticker-cont-country,
+.sticker-cont-vendor {
+  font-size: 3mm;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.sticker-box {
+  margin: 0;
+  font-size: 5.6mm;
+  font-weight: 900;
+  line-height: 1.1;
+  word-break: break-all;
+}
 .label-sticker.is-container .sticker-box {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
+  min-height: 15mm;
   margin: 0;
-  font-size: 8.2mm;
+  padding: 0.4mm 0.2mm 0;
+  font-size: 7.2mm;
   font-weight: 900;
-  letter-spacing: 0.01em;
-  line-height: 0.95;
+  letter-spacing: 0.06em;
+  line-height: 0.98;
   white-space: nowrap;
   overflow: hidden;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 6.4mm; letter-spacing: 0; }
+.label-sticker.is-container .sticker-box.is-wide {
+  font-size: 5.9mm;
+  letter-spacing: 0.03em;
+}
+.label-sticker.is-container .sticker-box.is-xwide {
+  font-size: 5.1mm;
+  letter-spacing: 0.01em;
+}
 .sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
 .sticker-remark.is-empty { visibility: hidden; }
 .sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
@@ -1488,16 +1502,15 @@ function labelStickerHtml(item, forPrint) {
     const long = name.length > 4 ? " is-long" : "";
     const country = String(item.country || "").trim();
     const vendor = String(item.vendor || "").trim();
-    const meta = [country, vendor].filter(Boolean).length
-      ? `<p class="sticker-cont-meta">${country ? `<span class="sticker-cont-country">${esc(country)}</span>` : ""}${vendor ? `<span class="sticker-cont-vendor">${esc(vendor)}</span>` : ""}</p>`
-      : "";
+    const metaBits = [];
+    if (country) metaBits.push(`<span class="sticker-cont-country">${esc(country)}</span>`);
+    if (vendor) metaBits.push(`<span class="sticker-cont-vendor">${esc(vendor)}</span>`);
+    const meta = metaBits.length ? `<p class="sticker-cont-meta">${metaBits.join("")}</p>` : "";
     const box = String(item.box || "").trim();
-    const boxWide = box.length > 14 ? " is-wide" : "";
+    const boxWide = box.length > 15 ? " is-xwide" : box.length > 12 ? " is-wide" : "";
     return `<article class="${cls}">
-      <div class="sticker-cont-main">
-        <p class="sticker-cont-name${long}">${esc(name)}</p>
-        ${meta}
-      </div>
+      <p class="sticker-cont-name${long}">${esc(name)}</p>
+      ${meta}
       <p class="sticker-box${boxWide}">${esc(box)}</p>
     </article>`;
   }

@@ -2543,17 +2543,65 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   border-radius: 0.5rem;
   background: #fff;
 }
+.label-print-card { padding: 0.55rem 0.75rem 0.6rem; }
 .label-toolbar {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) 5.2rem 5.2rem;
-  gap: 0.55rem;
-  margin: 0.65rem 0 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.45rem 0.75rem;
+  margin: 0;
 }
-@media (max-width: 520px) {
-  .label-toolbar { grid-template-columns: 1fr 1fr; }
-  .label-toolbar .field:first-child { grid-column: 1 / -1; }
+.label-toolbar .field { margin-top: 0; font-size: 0.78rem; gap: 0.15rem; min-width: 0; }
+#label-date-wrap {
+  flex: 1 1 9.5rem;
+  min-width: 0;
 }
-.label-seq-line { margin: 0.2rem 0 0.45rem; font-weight: 700; }
+#label-date-wrap input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+#label-md-m-wrap,
+#label-md-d-wrap,
+#label-copies-wrap {
+  flex: 0 0 3.8rem;
+  width: 3.8rem;
+}
+#label-copies-wrap input,
+#label-md-m-wrap input,
+#label-md-d-wrap input {
+  width: 100%;
+  padding: 0.32rem 0.2rem;
+  text-align: center;
+}
+.label-print-card .ghost,
+.label-print-card .primary {
+  width: auto;
+  margin-top: 0;
+  padding: 0.38rem 0.7rem;
+}
+.label-print-card #label-print {
+  width: 100%;
+  flex: 1 1 100%;
+}
+#label-msg { margin: 0.3rem 0 0; }
+.label-text-opts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.15rem;
+  margin-top: 0.55rem;
+}
+.label-solar-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0;
+  font-weight: 700;
+  white-space: nowrap;
+  width: auto;
+}
+.label-seq-line { margin: 0; font-weight: 700; align-self: center; font-size: 0.88rem; }
 .label-group { margin: 0.7rem 0 0; }
 .label-group h4 { margin: 0 0 0.35rem; font-size: 1.05rem; }
 .label-pick {
@@ -2642,6 +2690,164 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .sticker-solar { font-size: 3.2mm; font-weight: 700; }
 .sticker-md { font-size: 4.2mm; font-weight: 900; }
+.label-sticker.is-text {
+  position: relative;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 1.2mm 1.4mm 5mm;
+}
+.sticker-text-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  font-size: 17mm;
+}
+.sticker-text-main.is-long { font-size: 11.2mm; }
+.sticker-text-main.is-split { font-size: 13.6mm; }
+.sticker-text-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  font-size: 1em;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  word-break: break-word;
+}
+.sticker-text-only.is-long { letter-spacing: 0.02em; }
+.sticker-text-only.is-split {
+  flex-direction: column;
+  gap: 0;
+  letter-spacing: 0.04em;
+  line-height: 0.92;
+}
+.sticker-text-only.is-split span { display: block; }
+.sticker-text-remark {
+  margin: 1.5mm 0 0;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  word-break: break-word;
+}
+.sticker-text-solar,
+.sticker-text-seq {
+  position: absolute;
+  bottom: 1.6mm;
+  margin: 0;
+  font-size: 4.2mm;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.sticker-text-solar { right: 2mm; }
+.sticker-text-seq { left: 2mm; }
+.label-sticker.is-ship {
+  position: relative;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 1.2mm 1.4mm 5mm;
+}
+.sticker-ship-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-size: 16mm;
+}
+.sticker-ship-main.is-long { font-size: 12mm; }
+.sticker-ship-cust {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  word-break: break-word;
+}
+.sticker-ship-sku {
+  margin: 3.2mm 0 0;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: 0.04em;
+  word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.sticker-ship-sku span { display: block; }
+.label-sticker.is-container {
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 2.2mm 1.8mm 1.8mm;
+  gap: 1.2mm;
+}
+.label-sticker.is-container .sticker-cont-main {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+.sticker-cont-name {
+  margin: 0;
+  font-size: 8.6mm;
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: 0.14em;
+  word-break: break-word;
+}
+.sticker-cont-name.is-long {
+  font-size: 6.8mm;
+  letter-spacing: 0.04em;
+}
+.sticker-cont-meta {
+  margin: 0.8mm 0 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2.2mm;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.sticker-cont-country { font-size: 3.6mm; font-weight: 700; }
+.sticker-cont-vendor { font-size: 4.8mm; font-weight: 900; }
+.sticker-box {
+  margin: 1.6mm 0 0;
+  font-size: 5.6mm;
+  font-weight: 900;
+  line-height: 1.15;
+  word-break: break-all;
+}
+.label-sticker.is-container .sticker-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  font-size: 8.2mm;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.label-sticker.is-container .sticker-box.is-wide {
+  font-size: 6.4mm;
+  letter-spacing: 0;
+}
 @media (min-width: 720px) {
   .app { max-width: 72rem; }
   body:has(#page-home:not([hidden])) .app { max-width: 54rem; }
@@ -2661,6 +2867,6 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   }
 }
 @media (min-width: 900px) {
-  body:has(#page-home:not([hidden])) .app { max-width: 68rem; }
-  .hub.hub-pick { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; }
+  body:has(#page-home:not([hidden])) .app { max-width: 78rem; }
+  .hub.hub-pick { grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; }
 }

@@ -549,6 +549,18 @@ let helpResult = null;
 const LABEL_RUN_KEY = "veg-label-run-v1";
 let labelSel = new Set();
 let labelDayLock = "";
+let labelKind = "text";
+let labelText = "南瓜";
+let labelTextRemark = "";
+let labelSolarOn = false;
+let labelSeqOn = false;
+let labelShipCust = "";
+let labelShipSku = "南瓜";
+let labelPendingOrder = null;
+let labelContName = "高麗菜";
+let labelContCountry = "韓國";
+let labelContVendor = "";
+let labelContNo = "";
 let booksPart = "stock";
 let formKind = "leaf";
 let stockKind = "leaf";
@@ -1042,9 +1054,6 @@ function renderHomeHub() {
     wareBtns.push(hubLink('data-go="books" data-books="in"', "inbox", "進貨"));
     wareBtns.push(hubLink('data-go="books" data-books="rack"', "rack", "鐵架／八格籃"));
   }
-  if (can("page-orders") || can("page-plan") || can("page-books")) {
-    wareBtns.push(hubLink('data-go="labels"', "tag", "隨箱標籤"));
-  }
   const acctBtns = [];
   if (can("page-books")) {
     acctBtns.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
@@ -1052,8 +1061,14 @@ function renderHomeHub() {
     acctBtns.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
   }
   const helpBtns = [hubLink('data-go="help"', "truck", "貨運帳務比對")];
-  const card = (id, tone, icon, title, btns) => {
+  const card = (id, tone, icon, title, btns, go) => {
     if (!btns.length) return "";
+    if (go) {
+      return `<button type="button" class="hub-tile hub-${tone}" data-go="${esc(go)}">
+      <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
+      <h2>${esc(title)}</h2>
+    </button>`;
+    }
     return `<button type="button" class="hub-tile hub-${tone}" data-hub="${id}">
       <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
       <h2>${esc(title)}</h2>
@@ -1069,8 +1084,11 @@ function renderHomeHub() {
       <div class="hub-links">${btns.join("")}</div>
     </section>`;
   };
+  const labelBtns =
+    can("page-orders") || can("page-plan") || can("page-books") ? ["x"] : [];
   const tiles = [
     { id: "orders", tone: "orders", icon: "clip", title: "訂單區", btns: orderBtns },
+    { id: "labels", tone: "ware", icon: "tag", title: "標籤貼紙", btns: labelBtns, go: "labels" },
     { id: "ware", tone: "ware", icon: "box", title: "倉管", btns: wareBtns },
     { id: "acct", tone: "acct", icon: "coin", title: "帳款業務", btns: acctBtns },
     { id: "help", tone: "help", icon: "spark", title: "小幫手", btns: helpBtns },
@@ -1080,12 +1098,12 @@ function renderHomeHub() {
     box.classList.remove("hub-pick");
     box.innerHTML = cur
       ? openCard(cur.id, cur.tone, cur.icon, cur.title, cur.btns)
-      : tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns)).join("");
+      : tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns, x.go)).join("");
     if (!cur) box.classList.add("hub-pick");
     return;
   }
   box.classList.add("hub-pick");
-  box.innerHTML = tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns)).join("");
+  box.innerHTML = tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns, x.go)).join("");
 }
 function normalizeOrdersPane(v) {
   if (v === "today" || v === "line") return v;
@@ -1127,10 +1145,16 @@ function goFromHub(btn) {
   }
   render();
 }
-function solarDateText(ymd) {
+function solarDayOfYear(ymd) {
   const [y, m, d] = String(ymd || today()).split("-").map(Number);
-  if (!y || !m || !d) return String(ymd || "");
-  return `${y}年${m}月${d}日`;
+  if (!y || !m || !d) return 0;
+  const start = Date.UTC(y, 0, 1);
+  const cur = Date.UTC(y, m - 1, d);
+  return Math.floor((cur - start) / 86400000) + 1;
+}
+function solarDateText(ymd) {
+  const n = solarDayOfYear(ymd);
+  return n ? String(n) : String(ymd || "");
 }
 function padLabelSeq(n) {
   return String(Math.max(1, Number(n) || 1)).padStart(3, "0");
@@ -1138,11 +1162,32 @@ function padLabelSeq(n) {
 function labelDateValue() {
   return document.getElementById("label-date")?.value || today();
 }
-function labelMdText() {
+function labelCopiesValue() {
+  return Math.max(1, Math.min(99, Number(document.getElementById("label-copies")?.value) || 1));
+}
+function labelTextNameParts(name) {
+  return String(name || "").trim() === "紅骨九層塔" ? ["紅骨", "九層塔"] : null;
+}
+function skuIdFromLabelName(name) {
+  const n = String(name || "").trim();
+  if (!n) return "";
+  const hit = SKUS.find((s) => labelFamilyName(s) === n);
+  return hit ? hit.id : "";
+}
+function shipProductHtml(name) {
+  const n = String(name || "").trim();
+  const parts = labelTextNameParts(n);
+  if (parts) return parts.map((p) => `<span>${esc(p)}</span>`).join("");
+  return esc(n);
+}
+function labelMdText(forceFromDate) {
   const m = Number(document.getElementById("label-md-m")?.value);
   const d = Number(document.getElementById("label-md-d")?.value);
-  if (!m || !d) return "";
-  return `${m}/${d}`;
+  if (m && d) return `${m}/${d}`;
+  if (!forceFromDate) return "";
+  const [y, mm, dd] = String(labelDateValue()).split("-").map(Number);
+  if (!mm || !dd) return "";
+  return `${mm}/${dd}`;
 }
 function loadLabelRun(day) {
   try {
@@ -1156,7 +1201,7 @@ function saveLabelRun(run) {
 }
 function labelProductText(l) {
   const s = skuById(l.skuId);
-  const name = s ? s.name : l.skuId;
+  const name = s ? skuShortName(s) : l.skuId;
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
   const unit = s?.unit || "件";
@@ -1169,6 +1214,53 @@ function labelRemarkText(o, l) {
   if (remark) bits.push(remark);
   if (note && note !== remark) bits.push(note);
   return bits.join("　");
+}
+function labelFamilyName(sku) {
+  return skuShortName(sku)
+    .split("／")[0]
+    .replace(/散賣kg|散賣斤/g, "")
+    .trim();
+}
+function labelTextPresets() {
+  const names = new Set();
+  for (const s of SKUS) {
+    const fam = labelFamilyName(s);
+    if (fam) names.add(fam);
+  }
+  return [...names];
+}
+const LABEL_CONT_NAMES = ["高麗菜", "白菜", "白蘿蔔", "洋蔥", "美生菜", "牛蒡", "南瓜", "青花菜", "辣椒"];
+const LABEL_CONT_COUNTRIES = ["中國", "韓國", "越南", "美國", "紐西蘭", "澳洲"];
+function labelContTitle() {
+  return [labelContName, labelContCountry, labelContVendor].map((s) => String(s || "").trim()).filter(Boolean).join(" ");
+}
+function padContSeq(n) {
+  return String(Math.max(1, Number(n) || 1)).padStart(2, "0");
+}
+function labelContCode(box, ymd, seqN) {
+  const [y, m, d] = String(ymd || today()).split("-").map(Number);
+  const mm = String(m || 0).padStart(2, "0");
+  const dd = String(d || 0).padStart(2, "0");
+  const no = String(box || "").replace(/\s+/g, "");
+  return `${no}${mm}${dd}${padContSeq(seqN)}`;
+}
+function labelContNoPresets() {
+  const names = new Set();
+  for (const l of allContainerLots()) {
+    const box = String(l.container || "").trim();
+    const uha = String(l.uha || "").trim();
+    if (box) names.add(box);
+    if (uha) names.add(uha);
+  }
+  return [...names];
+}
+function labelChipHtml(list, cur, attr) {
+  return list
+    .map((name) => {
+      const on = name === cur ? " on" : "";
+      return `<button type="button" class="pick${on}" ${attr}="${esc(name)}">${esc(name)}</button>`;
+    })
+    .join("");
 }
 function labelRowsForDay(day) {
   const rows = [];
@@ -1202,23 +1294,283 @@ function ensureLabelSel(day, rows) {
   const keys = new Set(rows.map((r) => r.key));
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
+function labelPrintCss() {
+  return `@page { size: 70mm 50mm; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.label-sticker {
+  width: 70mm; height: 50mm; box-sizing: border-box;
+  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
+  page-break-after: always; break-after: page;
+  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
+}
+.label-sticker:last-child { page-break-after: auto; break-after: auto; }
+.label-sticker.is-text {
+  position: relative;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 1.2mm 1.4mm 5mm;
+}
+.sticker-text-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  font-size: 17mm;
+}
+.sticker-text-main.is-long { font-size: 11.2mm; }
+.sticker-text-main.is-split { font-size: 13.6mm; }
+.sticker-text-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  font-size: 1em;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  word-break: break-word;
+}
+.sticker-text-only.is-long { letter-spacing: 0.02em; }
+.sticker-text-only.is-split {
+  flex-direction: column;
+  gap: 0;
+  letter-spacing: 0.04em;
+  line-height: 0.92;
+}
+.sticker-text-only.is-split span { display: block; }
+.sticker-text-remark {
+  margin: 1.5mm 0 0;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  word-break: break-word;
+}
+.sticker-text-solar,
+.sticker-text-seq {
+  position: absolute;
+  bottom: 1.6mm;
+  margin: 0;
+  font-size: 4.2mm;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.sticker-text-solar { right: 2mm; }
+.sticker-text-seq { left: 2mm; }
+.label-sticker.is-ship {
+  position: relative;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 1.2mm 1.4mm 5mm;
+}
+.sticker-ship-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-size: 16mm;
+}
+.sticker-ship-main.is-long { font-size: 12mm; }
+.sticker-ship-cust {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  word-break: break-word;
+}
+.sticker-ship-sku {
+  margin: 3.2mm 0 0;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: 0.04em;
+  word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.sticker-ship-sku span { display: block; }
+.sticker-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2mm; }
+.sticker-cust { margin: 0; font-size: 7.4mm; font-weight: 900; line-height: 1.12; flex: 1; overflow: hidden; }
+.sticker-seq { font-size: 3.1mm; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
+.sticker-sku { margin: 1.2mm 0 0; font-size: 4.6mm; font-weight: 800; line-height: 1.2; }
+.label-sticker.is-container {
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: center;
+  padding: 2.2mm 1.8mm 1.8mm;
+  gap: 1.2mm;
+}
+.label-sticker.is-container .sticker-cont-main {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+.sticker-cont-name {
+  margin: 0;
+  font-size: 8.6mm;
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: 0.14em;
+  word-break: break-word;
+}
+.sticker-cont-name.is-long { font-size: 6.8mm; letter-spacing: 0.04em; }
+.sticker-cont-meta {
+  margin: 0.8mm 0 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2.2mm;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.sticker-cont-country { font-size: 3.6mm; font-weight: 700; }
+.sticker-cont-vendor { font-size: 4.8mm; font-weight: 900; }
+.sticker-box { margin: 1.6mm 0 0; font-size: 5.6mm; font-weight: 900; line-height: 1.15; word-break: break-all; }
+.label-sticker.is-container .sticker-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  font-size: 8.2mm;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.4mm; letter-spacing: 0; }
+.sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
+.sticker-remark.is-empty { visibility: hidden; }
+.sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
+.sticker-solar { font-size: 3.2mm; font-weight: 700; }
+.sticker-md { font-size: 4.2mm; font-weight: 900; }`;
+}
 function labelStickerHtml(item, forPrint) {
-  const md = item.md ? `<span class="sticker-md">${esc(item.md)}</span>` : "";
-  const remark = item.remark
-    ? `<p class="sticker-remark">${esc(item.remark)}</p>`
-    : `<p class="sticker-remark is-empty">　</p>`;
-  return `<article class="label-sticker${forPrint ? " is-print" : ""}">
-    <div class="sticker-top">
-      <p class="sticker-cust">${esc(item.customer || "（未填客戶）")}</p>
-      <span class="sticker-seq">No.${esc(item.seq || "001")}</span>
+  const kind = item.kind || "ship";
+  const cls = `label-sticker${kind === "text" ? " is-text" : kind === "container" ? " is-container" : kind === "ship" ? " is-ship" : ""}${forPrint ? " is-print" : ""}`;
+  if (kind === "text") {
+    const name = String(item.text || "").trim();
+    const parts = labelTextNameParts(name);
+    const split = parts ? " is-split" : "";
+    const long = !parts && name.length > 4 ? " is-long" : "";
+    const nameHtml = parts
+      ? `<p class="sticker-text-only is-split">${parts.map((p) => `<span>${esc(p)}</span>`).join("")}</p>`
+      : `<p class="sticker-text-only${long}">${esc(name)}</p>`;
+    const remark = String(item.remark || "").trim();
+    const remarkHtml = remark ? `<p class="sticker-text-remark">${esc(remark)}</p>` : "";
+    const solar = String(item.solar || "").trim();
+    const solarHtml = solar ? `<p class="sticker-text-solar">${esc(solar)}</p>` : "";
+    const seq = String(item.seq || "").trim();
+    const seqHtml = seq ? `<p class="sticker-text-seq">${esc(seq)}</p>` : "";
+    return `<article class="${cls}">
+      <div class="sticker-text-main${long}${split}">${nameHtml}${remarkHtml}</div>
+      ${seqHtml}
+      ${solarHtml}
+    </article>`;
+  }
+  if (kind === "container") {
+    const name = String(item.name || item.sku || "").trim();
+    const long = name.length > 4 ? " is-long" : "";
+    const country = String(item.country || "").trim();
+    const vendor = String(item.vendor || "").trim();
+    const meta = [country, vendor].filter(Boolean).length
+      ? `<p class="sticker-cont-meta">${country ? `<span class="sticker-cont-country">${esc(country)}</span>` : ""}${vendor ? `<span class="sticker-cont-vendor">${esc(vendor)}</span>` : ""}</p>`
+      : "";
+    const box = String(item.box || "").trim();
+    const boxWide = box.length > 14 ? " is-wide" : "";
+    return `<article class="${cls}">
+      <div class="sticker-cont-main">
+        <p class="sticker-cont-name${long}">${esc(name)}</p>
+        ${meta}
+      </div>
+      <p class="sticker-box${boxWide}">${esc(box)}</p>
+    </article>`;
+  }
+  const cust = String(item.customer || "").trim() || "（未填客戶）";
+  const sku = String(item.sku || item.text || "").trim();
+  const skuSplit = labelTextNameParts(sku) ? " is-split" : "";
+  const custLong = cust.length > 4 ? " is-long" : "";
+  const solar = String(item.solar || "").trim();
+  const seq = String(item.seq || "").trim();
+  return `<article class="${cls}">
+    <div class="sticker-ship-main${custLong}">
+      <p class="sticker-ship-cust">${esc(cust)}</p>
+      ${sku ? `<p class="sticker-ship-sku${skuSplit}">${shipProductHtml(sku)}</p>` : ""}
     </div>
-    <p class="sticker-sku">${esc(item.sku || "")}</p>
-    ${remark}
-    <div class="sticker-foot">
-      <span class="sticker-solar">${esc(item.solar || "")}</span>
-      ${md}
-    </div>
+    ${seq ? `<p class="sticker-text-seq">${esc(seq)}</p>` : ""}
+    ${solar ? `<p class="sticker-text-solar">${esc(solar)}</p>` : ""}
   </article>`;
+}
+function openLabelPrint(cards) {
+  const w = window.open("", "_blank", "noopener,width=420,height=640");
+  if (!w) {
+    setStatus("瀏覽器擋住列印視窗，請允許彈出。", true);
+    return null;
+  }
+  w.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
+<style>${labelPrintCss()}</style></head><body>${cards.join("")}</body></html>`);
+  w.document.close();
+  setTimeout(() => {
+    w.focus();
+    w.print();
+  }, 200);
+  return w;
+}
+function labelFieldBusy(el) {
+  return el && (document.activeElement === el || el.dataset.composing === "1");
+}
+function bindLabelImeInput(el, apply) {
+  if (!el || el.dataset.imeBound === "1") return;
+  el.dataset.imeBound = "1";
+  el.addEventListener("compositionstart", () => {
+    el.dataset.composing = "1";
+  });
+  el.addEventListener("compositionupdate", () => {
+    el.dataset.composing = "1";
+  });
+  el.addEventListener("compositionend", () => {
+    el.dataset.composing = "";
+    apply(String(el.value || ""));
+    renderLabels();
+  });
+  el.addEventListener("input", (e) => {
+    if (e.isComposing || el.dataset.composing === "1") return;
+    apply(String(el.value || ""));
+    renderLabels();
+  });
+}
+function syncLabelInputs() {
+  const textEl = document.getElementById("label-text-custom");
+  if (textEl && !labelFieldBusy(textEl) && textEl.value !== labelText) textEl.value = labelText;
+  const remarkEl = document.getElementById("label-text-remark");
+  if (remarkEl && !labelFieldBusy(remarkEl) && remarkEl.value !== labelTextRemark) remarkEl.value = labelTextRemark;
+  const nameEl = document.getElementById("label-cont-name");
+  if (nameEl && !labelFieldBusy(nameEl) && nameEl.value !== labelContName) nameEl.value = labelContName;
+  const countryEl = document.getElementById("label-cont-country");
+  if (countryEl && !labelFieldBusy(countryEl) && countryEl.value !== labelContCountry) countryEl.value = labelContCountry;
+  const vendorEl = document.getElementById("label-cont-vendor");
+  if (vendorEl && !labelFieldBusy(vendorEl) && vendorEl.value !== labelContVendor) vendorEl.value = labelContVendor;
+  const noEl = document.getElementById("label-cont-no");
+  if (noEl && !labelFieldBusy(noEl) && noEl.value !== labelContNo) noEl.value = labelContNo;
+  const custEl = document.getElementById("label-ship-cust");
+  if (custEl && !labelFieldBusy(custEl) && custEl.value !== labelShipCust) custEl.value = labelShipCust;
+  const shipSkuEl = document.getElementById("label-ship-sku");
+  if (shipSkuEl && !labelFieldBusy(shipSkuEl) && shipSkuEl.value !== labelShipSku) shipSkuEl.value = labelShipSku;
 }
 function renderLabels() {
   const pageEl = document.getElementById("page-labels");
@@ -1230,102 +1582,223 @@ function renderLabels() {
   ensureLabelSel(day, rows);
   const run = loadLabelRun(day);
   const nextEl = document.getElementById("label-next-seq");
-  if (nextEl) nextEl.textContent = padLabelSeq(run.n + 1);
-  const list = document.getElementById("label-list");
-  if (list) {
-    if (!rows.length) {
-      list.innerHTML = `<p class="empty">這天沒有可印的出貨品項。請先在「今日已填」確認訂單。</p>`;
-    } else {
-      const groups = [];
-      for (const r of rows) {
-        const last = groups[groups.length - 1];
-        if (!last || last.customer !== r.customer) groups.push({ customer: r.customer, rows: [r] });
-        else last.rows.push(r);
-      }
-      list.innerHTML = groups
-        .map((g) => {
-          const picks = g.rows
-            .map((r) => {
-              const on = labelSel.has(r.key) ? " on" : "";
-              const rem = r.remark ? `<span class="muted">${esc(r.remark)}</span>` : "";
-              return `<button type="button" class="label-pick${on}" data-label-key="${esc(r.key)}">
-                <span class="label-check" aria-hidden="true"></span>
-                <span class="label-pick-body"><strong>${esc(r.sku)}</strong>${rem}</span>
-              </button>`;
-            })
-            .join("");
-          return `<article class="label-group"><h4>${esc(g.customer || "未填客戶")}</h4>${picks}</article>`;
-        })
-        .join("");
-    }
+  const seqCaption = document.getElementById("label-seq-caption");
+  if (seqCaption) seqCaption.textContent = labelKind === "container" ? "下一組編號" : "本趟下一號";
+  if (nextEl) {
+    nextEl.textContent =
+      labelKind === "container"
+        ? labelContCode(labelContNo || "UHA158", day, run.n + 1)
+        : padLabelSeq(run.n + 1);
   }
-  const n = labelSel.size;
+  const isText = labelKind === "text";
+  const isCont = labelKind === "container";
+  const isShip = labelKind === "ship";
+  document.querySelectorAll("#label-kind-tabs [data-label-kind]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.labelKind === labelKind);
+  });
+  const hint = document.getElementById("label-kind-hint");
+  if (hint) hint.textContent = "熱感紙 70mm × 50mm。";
+  const paneText = document.getElementById("label-pane-text");
+  const paneCont = document.getElementById("label-pane-container");
+  const paneShip = document.getElementById("label-pane-ship");
+  if (paneText) paneText.hidden = !isText;
+  if (paneCont) paneCont.hidden = !isCont;
+  if (paneShip) paneShip.hidden = !isShip;
+  const dateWrap = document.getElementById("label-date-wrap");
+  const mdM = document.getElementById("label-md-m-wrap");
+  const mdD = document.getElementById("label-md-d-wrap");
+  const copiesWrap = document.getElementById("label-copies-wrap");
+  const seqLine = document.getElementById("label-seq-line");
+  const solarEl = document.getElementById("label-solar-on");
+  const seqOnEl = document.getElementById("label-seq-on");
+  if (solarEl) solarEl.checked = labelSolarOn;
+  if (seqOnEl) seqOnEl.checked = labelSeqOn;
+  if (dateWrap) dateWrap.hidden = isText ? !labelSolarOn : false;
+  if (mdM) mdM.hidden = true;
+  if (mdD) mdD.hidden = true;
+  if (copiesWrap) copiesWrap.hidden = false;
+  const copiesCap = document.getElementById("label-copies-caption");
+  if (copiesCap) copiesCap.textContent = isShip ? "出貨數量" : "張數";
+  if (seqLine) seqLine.hidden = isText ? !labelSeqOn : false;
+  const allBtn = document.getElementById("label-all");
+  const noneBtn = document.getElementById("label-none");
+  const resetBtn = document.getElementById("label-reset-seq");
+  if (allBtn) allBtn.hidden = true;
+  if (noneBtn) noneBtn.hidden = true;
+  if (resetBtn) resetBtn.hidden = isText ? !labelSeqOn : false;
+  const textChips = document.getElementById("label-text-chips");
+  if (textChips) textChips.innerHTML = labelChipHtml(labelTextPresets(), labelText, "data-label-text");
+  const shipChips = document.getElementById("label-ship-chips");
+  if (shipChips) shipChips.innerHTML = labelChipHtml(labelTextPresets(), labelShipSku, "data-label-ship-sku");
+  const nameChips = document.getElementById("label-cont-name-chips");
+  if (nameChips) nameChips.innerHTML = labelChipHtml(LABEL_CONT_NAMES, labelContName, "data-label-cont-name");
+  const countryChips = document.getElementById("label-cont-country-chips");
+  if (countryChips) countryChips.innerHTML = labelChipHtml(LABEL_CONT_COUNTRIES, labelContCountry, "data-label-cont-country");
+  const noChips = document.getElementById("label-cont-no-chips");
+  if (noChips) {
+    const nos = labelContNoPresets();
+    noChips.innerHTML = nos.length
+      ? labelChipHtml(nos.slice(0, 24), labelContNo, "data-label-cont-no")
+      : `<p class="muted">沒有匯入的貨櫃清單時，請直接打編號。</p>`;
+  }
+  syncLabelInputs();
   const msg = document.getElementById("label-msg");
-  if (msg) msg.textContent = rows.length ? `已選 ${n} / ${rows.length} 張` : "";
+  if (msg) {
+    if (isText) msg.textContent = labelText
+      ? `將印「${labelText}」${labelSolarOn ? `太陽日 ${solarDateText(day)}　` : ""}${labelSeqOn ? `流水 ${padLabelSeq(run.n + 1)}　` : ""}${labelCopiesValue()} 張`
+      : "請點選或輸入品項文字。";
+    else if (isCont) {
+      const title = labelContTitle();
+      const code = labelContCode(labelContNo || "UHA158", day, run.n + 1);
+      msg.textContent = title && labelContNo
+        ? `將印「${title}」／${code}　${labelCopiesValue()} 張`
+        : "請填品名、國別、廠商與貨櫃編號。";
+    }
+    else msg.textContent = labelShipCust && labelShipSku
+      ? `將印「${labelShipCust}／${labelShipSku}」太陽日 ${solarDateText(day)}　流水 ${padLabelSeq(run.n + 1)}　${labelCopiesValue()} 張`
+      : "請填客戶與品項。";
+  }
   const preview = document.getElementById("label-preview");
   if (preview) {
-    const picked = rows.filter((r) => labelSel.has(r.key));
-    const sample = picked[0] || rows[0] || {
-      customer: "範例客戶",
-      sku: "高麗菜 12件",
-      remark: "籃裝",
-      solar: solarDateText(day),
-    };
-    preview.innerHTML = labelStickerHtml({
-      ...sample,
-      md: labelMdText(),
-      seq: padLabelSeq(run.n + 1),
-    });
+    if (isText) {
+      preview.innerHTML = labelStickerHtml({
+        kind: "text",
+        text: labelText || "南瓜",
+        remark: labelTextRemark,
+        solar: labelSolarOn ? solarDateText(day) : "",
+        seq: labelSeqOn ? padLabelSeq(run.n + 1) : "",
+      });
+    } else if (isCont) {
+      preview.innerHTML = labelStickerHtml({
+        kind: "container",
+        name: labelContName || "高麗菜",
+        country: labelContCountry,
+        vendor: labelContVendor,
+        box: labelContCode(labelContNo || "UHA158", day, run.n + 1),
+      });
+    } else {
+      preview.innerHTML = labelStickerHtml({
+        kind: "ship",
+        customer: labelShipCust || "客戶",
+        sku: labelShipSku || "南瓜",
+        solar: solarDateText(day),
+        seq: padLabelSeq(run.n + 1),
+      });
+    }
   }
 }
 function printSelectedLabels() {
   const day = labelDateValue();
-  const rows = labelRowsForDay(day).filter((r) => labelSel.has(r.key));
-  if (!rows.length) return setStatus("請先點選要印的品項。", true);
+  const copies = labelCopiesValue();
+  if (labelKind === "text") {
+    const text = String(labelText || document.getElementById("label-text-custom")?.value || "").trim();
+    if (!text) return setStatus("請先填要印的文字。", true);
+    labelText = text;
+    labelTextRemark = String(labelTextRemark || document.getElementById("label-text-remark")?.value || "").trim();
+    const solar = labelSolarOn ? solarDateText(day) : "";
+    const run = loadLabelRun(day);
+    const cards = Array.from({ length: copies }, (_, i) =>
+      labelStickerHtml(
+        {
+          kind: "text",
+          text,
+          remark: labelTextRemark,
+          solar,
+          seq: labelSeqOn ? padLabelSeq(run.n + i + 1) : "",
+        },
+        true,
+      ),
+    );
+    if (!openLabelPrint(cards)) return;
+    if (labelSeqOn) {
+      run.n += copies;
+      saveLabelRun(run);
+    }
+    renderLabels();
+    return setStatus(
+      labelSeqOn
+        ? `已送出文字標籤 ${copies} 張，下一號 ${padLabelSeq(run.n + 1)}。`
+        : `已送出文字標籤 ${copies} 張。`,
+    );
+  }
+  if (labelKind === "container") {
+    const sku = String(labelContName || document.getElementById("label-cont-name")?.value || "").trim();
+    const country = String(labelContCountry || document.getElementById("label-cont-country")?.value || "").trim();
+    const vendor = String(labelContVendor || document.getElementById("label-cont-vendor")?.value || "").trim();
+    const box = String(labelContNo || document.getElementById("label-cont-no")?.value || "").trim();
+    if (!sku) return setStatus("請先填品名。", true);
+    if (!country) return setStatus("請先填國別。", true);
+    if (!vendor) return setStatus("請先填廠商。", true);
+    if (!box) return setStatus("請先填貨櫃編號。", true);
+    labelContName = sku;
+    labelContCountry = country;
+    labelContVendor = vendor;
+    labelContNo = box;
+    const run = loadLabelRun(day);
+    const cards = Array.from({ length: copies }, (_, i) =>
+      labelStickerHtml(
+        {
+          kind: "container",
+          name: sku,
+          country,
+          vendor,
+          box: labelContCode(box, day, run.n + i + 1),
+        },
+        true,
+      ),
+    );
+    if (!openLabelPrint(cards)) return;
+    run.n += copies;
+    saveLabelRun(run);
+    renderLabels();
+    return setStatus(`已送出貨櫃標籤 ${copies} 張，下一組 ${labelContCode(box, day, run.n + 1)}。`);
+  }
+  labelShipCust = String(labelShipCust || document.getElementById("label-ship-cust")?.value || "").trim();
+  labelShipSku = String(labelShipSku || document.getElementById("label-ship-sku")?.value || "").trim();
+  if (!labelShipCust) return setStatus("請先填客戶。", true);
+  if (!labelShipSku) return setStatus("請先選或填品項。", true);
   const run = loadLabelRun(day);
-  const md = labelMdText();
-  const cards = rows.map((r, i) =>
+  const solar = solarDateText(day);
+  const cards = Array.from({ length: copies }, (_, i) =>
     labelStickerHtml(
       {
-        ...r,
-        md,
+        kind: "ship",
+        customer: labelShipCust,
+        sku: labelShipSku,
+        solar,
         seq: padLabelSeq(run.n + i + 1),
       },
       true,
     ),
   );
-  const w = window.open("", "_blank", "noopener,width=420,height=640");
-  if (!w) return setStatus("瀏覽器擋住列印視窗，請允許彈出。", true);
-  w.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>隨箱標籤</title>
-<style>
-@page { size: 70mm 50mm; margin: 0; }
-html, body { margin: 0; padding: 0; background: #fff; }
-.label-sticker {
-  width: 70mm; height: 50mm; box-sizing: border-box;
-  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
-  page-break-after: always; break-after: page;
-  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
-}
-.label-sticker:last-child { page-break-after: auto; break-after: auto; }
-.sticker-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2mm; }
-.sticker-cust { margin: 0; font-size: 7.4mm; font-weight: 900; line-height: 1.12; flex: 1; overflow: hidden; }
-.sticker-seq { font-size: 3.1mm; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
-.sticker-sku { margin: 1.2mm 0 0; font-size: 4.1mm; font-weight: 800; line-height: 1.2; }
-.sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
-.sticker-remark.is-empty { visibility: hidden; }
-.sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
-.sticker-solar { font-size: 3.2mm; font-weight: 700; }
-.sticker-md { font-size: 4.2mm; font-weight: 900; }
-</style></head><body>${cards.join("")}</body></html>`);
-  w.document.close();
-  run.n += rows.length;
+  if (!openLabelPrint(cards)) return;
+  run.n += copies;
   saveLabelRun(run);
+  labelPendingOrder = { customer: labelShipCust, sku: labelShipSku, qty: copies, day };
+  const gate = document.getElementById("label-order-gate");
+  const hint = document.getElementById("label-order-hint");
+  if (hint) hint.textContent = `已印 ${copies} 張：「${labelShipCust}／${labelShipSku}」。要記入 ${day} 訂單嗎？`;
+  if (gate) gate.hidden = false;
   renderLabels();
-  setTimeout(() => {
-    w.focus();
-    w.print();
-  }, 200);
-  setStatus(`已送出 ${rows.length} 張，本趟下一號 ${padLabelSeq(run.n + 1)}。`);
+  setStatus(`已送出出貨標籤 ${copies} 張，下一號 ${padLabelSeq(run.n + 1)}。`);
+}
+function closeLabelOrderGate() {
+  const gate = document.getElementById("label-order-gate");
+  if (gate) gate.hidden = true;
+  labelPendingOrder = null;
+}
+function confirmLabelOrder() {
+  const pending = labelPendingOrder;
+  if (!pending) return closeLabelOrderGate();
+  if (!requireStaff()) return;
+  const skuId = skuIdFromLabelName(pending.sku);
+  const line = { skuId: skuId || pending.sku, qty: pending.qty };
+  if (!skuId) line.labelName = pending.sku;
+  addOpenOrderFor(co, pending.customer, pending.day, [line], "");
+  save();
+  closeLabelOrderGate();
+  render();
+  setStatus(`已記入「${pending.customer}／${pending.sku}」${pending.qty}。`);
 }
 function helpStatusLabel(s) {
   return (
@@ -2055,7 +2528,7 @@ function available(sku, current, date) {
 }
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
-  const name = s ? s.name : l.skuId;
+  const name = l.labelName || (s ? s.name : l.skuId);
   const unit = s && withUnit ? ` ${s.unit}` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const size = l.size ? `（${l.size}）` : "";
@@ -2066,7 +2539,7 @@ function lineLabel(l, withUnit) {
 }
 function ticketLineName(l) {
   const s = skuById(l.skuId);
-  const name = s ? s.name : l.skuId;
+  const name = l.labelName || (s ? s.name : l.skuId);
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
   const pallet = l.pallet ? " 疊棧板" : "";
@@ -6328,7 +6801,7 @@ function render() {
           : page === "help"
             ? "小幫手"
           : page === "labels"
-            ? "隨箱標籤"
+            ? "標籤貼紙"
           : page === "soon"
             ? "帳款業務"
             : "產品出貨";
@@ -6440,6 +6913,81 @@ document.getElementById("label-date")?.addEventListener("change", () => {
 });
 document.getElementById("label-md-m")?.addEventListener("input", renderLabels);
 document.getElementById("label-md-d")?.addEventListener("input", renderLabels);
+document.getElementById("label-copies")?.addEventListener("input", renderLabels);
+document.getElementById("label-solar-on")?.addEventListener("change", (e) => {
+  labelSolarOn = Boolean(e.target.checked);
+  renderLabels();
+});
+document.getElementById("label-seq-on")?.addEventListener("change", (e) => {
+  labelSeqOn = Boolean(e.target.checked);
+  renderLabels();
+});
+bindLabelImeInput(document.getElementById("label-text-custom"), (v) => {
+  labelText = v;
+});
+bindLabelImeInput(document.getElementById("label-text-remark"), (v) => {
+  labelTextRemark = v;
+});
+bindLabelImeInput(document.getElementById("label-ship-cust"), (v) => {
+  labelShipCust = v;
+});
+bindLabelImeInput(document.getElementById("label-ship-sku"), (v) => {
+  labelShipSku = v;
+});
+document.getElementById("label-pane-ship")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-label-ship-sku]");
+  if (!btn) return;
+  labelShipSku = btn.dataset.labelShipSku || "";
+  renderLabels();
+});
+document.getElementById("label-order-yes")?.addEventListener("click", confirmLabelOrder);
+document.getElementById("label-order-no")?.addEventListener("click", () => {
+  closeLabelOrderGate();
+  setStatus("已印標籤，未記入訂單。");
+});
+bindLabelImeInput(document.getElementById("label-cont-name"), (v) => {
+  labelContName = v;
+});
+bindLabelImeInput(document.getElementById("label-cont-country"), (v) => {
+  labelContCountry = v;
+});
+bindLabelImeInput(document.getElementById("label-cont-vendor"), (v) => {
+  labelContVendor = v;
+});
+bindLabelImeInput(document.getElementById("label-cont-no"), (v) => {
+  labelContNo = v;
+});
+document.getElementById("label-kind-tabs")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-label-kind]");
+  if (!btn) return;
+  labelKind = btn.dataset.labelKind === "container" ? "container" : btn.dataset.labelKind === "ship" ? "ship" : "text";
+  renderLabels();
+});
+document.getElementById("label-pane-text")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-label-text]");
+  if (!btn) return;
+  labelText = btn.dataset.labelText || "";
+  renderLabels();
+});
+document.getElementById("label-pane-container")?.addEventListener("click", (e) => {
+  const nameBtn = e.target.closest("[data-label-cont-name]");
+  if (nameBtn) {
+    labelContName = nameBtn.dataset.labelContName || "";
+    renderLabels();
+    return;
+  }
+  const countryBtn = e.target.closest("[data-label-cont-country]");
+  if (countryBtn) {
+    labelContCountry = countryBtn.dataset.labelContCountry || "";
+    renderLabels();
+    return;
+  }
+  const noBtn = e.target.closest("[data-label-cont-no]");
+  if (noBtn) {
+    labelContNo = noBtn.dataset.labelContNo || "";
+    renderLabels();
+  }
+});
 document.getElementById("label-all")?.addEventListener("click", () => {
   labelSel = new Set(labelRowsForDay(labelDateValue()).map((r) => r.key));
   renderLabels();

@@ -1405,68 +1405,81 @@ html, body { margin: 0; padding: 0; background: #fff; }
 .sticker-seq { font-size: 3.1mm; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
 .sticker-sku { margin: 1.2mm 0 0; font-size: 4.6mm; font-weight: 800; line-height: 1.2; }
 .label-sticker.is-container {
-  justify-content: flex-start;
+  justify-content: center;
   align-items: stretch;
   text-align: center;
-  padding: 1.2mm 1.6mm 1.6mm;
-  gap: 0.5mm;
+  padding: 2mm 1.8mm 2mm;
 }
+.sticker-cont-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.8mm;
+  width: 100%;
+  min-height: 0;
+  font-size: 11.5mm;
+}
+.sticker-cont-row.is-long { font-size: 9mm; }
 .sticker-cont-name {
-  flex: 0 0 auto;
-  margin: 3.2mm 0 0;
+  flex: 0 1 auto;
+  margin: 0;
   padding: 0;
-  font-size: 12mm;
+  max-width: 48%;
+  font-size: 1em;
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0.08em;
   word-break: break-word;
+  text-align: center;
 }
-.sticker-cont-name.is-long { font-size: 9mm; letter-spacing: 0.03em; }
-.sticker-cont-meta {
-  flex: 0 0 auto;
-  margin: 0.6mm 0 0;
+.sticker-cont-side {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  gap: 1.6mm;
-  line-height: 1;
+  align-items: flex-start;
+  gap: 0.7mm;
+  font-size: 0.72em;
+  text-align: left;
+}
+.sticker-cont-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1.2mm;
+  line-height: 1.05;
+  font-weight: 800;
 }
 .sticker-cont-country,
 .sticker-cont-vendor {
-  font-size: 2.8mm;
-  font-weight: 700;
+  font-size: 1em;
+  font-weight: 800;
   letter-spacing: 0.04em;
 }
 .sticker-box {
   margin: 0;
-  font-size: 5.6mm;
+  font-size: 1em;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 100%;
-  min-height: 14mm;
-  margin: 0.4mm 0 0;
-  padding: 0.2mm 0.2mm 0;
-  font-size: 7mm;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  line-height: 0.98;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: clip;
 }
 .label-sticker.is-container .sticker-box.is-wide {
-  font-size: 5.8mm;
-  letter-spacing: 0.03em;
+  font-size: 0.88em;
+  letter-spacing: 0.02em;
 }
 .label-sticker.is-container .sticker-box.is-xwide {
-  font-size: 5mm;
-  letter-spacing: 0.01em;
+  font-size: 0.78em;
+  letter-spacing: 0;
 }
 .sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
 .sticker-remark.is-empty { visibility: hidden; }
@@ -1509,9 +1522,13 @@ function labelStickerHtml(item, forPrint) {
     const box = String(item.box || "").trim();
     const boxWide = box.length > 15 ? " is-xwide" : box.length > 12 ? " is-wide" : "";
     return `<article class="${cls}">
-      <p class="sticker-cont-name${long}">${esc(name)}</p>
-      ${meta}
-      <p class="sticker-box${boxWide}">${esc(box)}</p>
+      <div class="sticker-cont-row${long}">
+        <p class="sticker-cont-name">${esc(name)}</p>
+        <div class="sticker-cont-side">
+          ${meta}
+          <p class="sticker-box${boxWide}">${esc(box)}</p>
+        </div>
+      </div>
     </article>`;
   }
   const cust = String(item.customer || "").trim() || "（未填客戶）";

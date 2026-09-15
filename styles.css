@@ -2842,25 +2842,29 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   justify-content: center;
   align-items: stretch;
   text-align: center;
-  padding: 2.2mm 2mm 2mm;
-  gap: 1.1mm;
+  padding: 1.6mm 1.6mm 1.8mm;
+  gap: 0.8mm;
 }
 .sticker-cont-name {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 0;
   padding: 0;
   width: 100%;
-  font-size: 11mm;
+  min-height: 16mm;
+  font-size: 14mm;
   font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.14em;
+  line-height: 0.95;
+  letter-spacing: 0.12em;
   white-space: nowrap;
   overflow: hidden;
   word-break: keep-all;
 }
 .sticker-cont-name.is-long {
-  font-size: 8.4mm;
-  letter-spacing: 0.06em;
+  font-size: 10.5mm;
+  letter-spacing: 0.05em;
 }
 .sticker-box {
   margin: 0;
@@ -2874,18 +2878,19 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.2mm;
+  gap: 1.4mm;
   width: 100%;
+  min-height: 10mm;
   margin: 0;
-  font-size: 6.6mm;
+  font-size: 8.2mm;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 5.5mm; letter-spacing: 0.02em; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.7mm; letter-spacing: 0; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.8mm; letter-spacing: 0.03em; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.6mm; letter-spacing: 0.01em; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }
@@ -2893,17 +2898,17 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .sticker-box-seq { letter-spacing: 0.06em; }
 .sticker-cont-meta {
   flex: 0 0 auto;
-  margin: 0.4mm 0 0;
+  margin: 0.2mm 0 0;
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 1.6mm;
-  font-size: 5mm;
+  font-size: 4.6mm;
   font-weight: 400;
   line-height: 1;
   letter-spacing: 0.08em;
 }
-.sticker-cont-name.is-long ~ .sticker-cont-meta { font-size: 4.2mm; }
+.sticker-cont-name.is-long ~ .sticker-cont-meta { font-size: 4mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;

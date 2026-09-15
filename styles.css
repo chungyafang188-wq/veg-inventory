@@ -2842,79 +2842,74 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   justify-content: center;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.8mm 2mm;
+  padding: 2.2mm 2mm 2mm;
+  gap: 1mm;
 }
-.sticker-cont-row {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.8mm;
-  width: 100%;
-  min-height: 0;
-  font-size: 11.5mm;
-}
-.sticker-cont-row.is-long { font-size: 9mm; }
 .sticker-cont-name {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  max-width: 48%;
-  font-size: 1em;
+  width: 100%;
+  font-size: 11mm;
   font-weight: 900;
-  line-height: 0.95;
-  letter-spacing: 0.08em;
-  word-break: break-word;
-  text-align: center;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  overflow: hidden;
+  word-break: keep-all;
 }
-.sticker-cont-side {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 0.7mm;
-  font-size: 0.72em;
-  text-align: left;
+.sticker-cont-name.is-long {
+  font-size: 8.4mm;
+  letter-spacing: 0.06em;
 }
 .sticker-cont-meta {
+  flex: 0 0 auto;
   margin: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: 1.2mm;
-  line-height: 1.05;
+  justify-content: center;
+  gap: 1.8mm;
+  font-size: 7.8mm;
   font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.08em;
 }
+.sticker-cont-name.is-long + .sticker-cont-meta { font-size: 6mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;
   font-weight: 800;
-  letter-spacing: 0.04em;
 }
 .sticker-box {
   margin: 0;
-  font-size: 1em;
+  font-size: 5.6mm;
   font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: 0.04em;
+  line-height: 1.1;
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2mm;
   width: 100%;
+  min-height: 12mm;
+  margin: 0;
+  font-size: 6.4mm;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: clip;
 }
-.label-sticker.is-container .sticker-box.is-wide {
-  font-size: 0.88em;
-  letter-spacing: 0.02em;
-}
-.label-sticker.is-container .sticker-box.is-xwide {
-  font-size: 0.78em;
-  letter-spacing: 0;
-}
+.label-sticker.is-container .sticker-box.is-wide { font-size: 5.4mm; letter-spacing: 0.02em; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.6mm; letter-spacing: 0; }
+.sticker-box-no,
+.sticker-box-md,
+.sticker-box-seq { display: inline-block; }
+.sticker-box-md,
+.sticker-box-seq { letter-spacing: 0.06em; }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }
   body:has(#page-home:not([hidden])) .app { max-width: 54rem; }

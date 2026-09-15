@@ -1237,12 +1237,16 @@ function labelContTitle() {
 function padContSeq(n) {
   return String(Math.max(1, Number(n) || 1)).padStart(2, "0");
 }
-function labelContCode(box, ymd, seqN) {
+function labelContCodeParts(box, ymd, seqN) {
   const [y, m, d] = String(ymd || today()).split("-").map(Number);
   const mm = String(m || 0).padStart(2, "0");
   const dd = String(d || 0).padStart(2, "0");
   const no = String(box || "").replace(/\s+/g, "");
-  return `${no}${mm}${dd}${padContSeq(seqN)}`;
+  const seq = padContSeq(seqN);
+  return { no, md: `${mm}${dd}`, seq, full: `${no}${mm}${dd}${seq}` };
+}
+function labelContCode(box, ymd, seqN) {
+  return labelContCodeParts(box, ymd, seqN).full;
 }
 function labelContNoPresets() {
   const names = new Set();
@@ -1408,79 +1412,74 @@ html, body { margin: 0; padding: 0; background: #fff; }
   justify-content: center;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.8mm 2mm;
+  padding: 2.2mm 2mm 2mm;
+  gap: 1mm;
 }
-.sticker-cont-row {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.8mm;
-  width: 100%;
-  min-height: 0;
-  font-size: 11.5mm;
-}
-.sticker-cont-row.is-long { font-size: 9mm; }
 .sticker-cont-name {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  max-width: 48%;
-  font-size: 1em;
+  width: 100%;
+  font-size: 11mm;
   font-weight: 900;
-  line-height: 0.95;
-  letter-spacing: 0.08em;
-  word-break: break-word;
-  text-align: center;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  overflow: hidden;
+  word-break: keep-all;
 }
-.sticker-cont-side {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 0.7mm;
-  font-size: 0.72em;
-  text-align: left;
+.sticker-cont-name.is-long {
+  font-size: 8.4mm;
+  letter-spacing: 0.06em;
 }
 .sticker-cont-meta {
+  flex: 0 0 auto;
   margin: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: 1.2mm;
-  line-height: 1.05;
+  justify-content: center;
+  gap: 1.8mm;
+  font-size: 7.8mm;
   font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.08em;
 }
+.sticker-cont-name.is-long + .sticker-cont-meta { font-size: 6mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;
   font-weight: 800;
-  letter-spacing: 0.04em;
 }
 .sticker-box {
   margin: 0;
-  font-size: 1em;
+  font-size: 5.6mm;
   font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: 0.04em;
+  line-height: 1.1;
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2mm;
   width: 100%;
+  min-height: 12mm;
+  margin: 0;
+  font-size: 6.4mm;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: clip;
 }
-.label-sticker.is-container .sticker-box.is-wide {
-  font-size: 0.88em;
-  letter-spacing: 0.02em;
-}
-.label-sticker.is-container .sticker-box.is-xwide {
-  font-size: 0.78em;
-  letter-spacing: 0;
-}
+.label-sticker.is-container .sticker-box.is-wide { font-size: 5.4mm; letter-spacing: 0.02em; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.6mm; letter-spacing: 0; }
+.sticker-box-no,
+.sticker-box-md,
+.sticker-box-seq { display: inline-block; }
+.sticker-box-md,
+.sticker-box-seq { letter-spacing: 0.06em; }
 .sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
 .sticker-remark.is-empty { visibility: hidden; }
 .sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
@@ -1519,16 +1518,20 @@ function labelStickerHtml(item, forPrint) {
     if (country) metaBits.push(`<span class="sticker-cont-country">${esc(country)}</span>`);
     if (vendor) metaBits.push(`<span class="sticker-cont-vendor">${esc(vendor)}</span>`);
     const meta = metaBits.length ? `<p class="sticker-cont-meta">${metaBits.join("")}</p>` : "";
-    const box = String(item.box || "").trim();
-    const boxWide = box.length > 15 ? " is-xwide" : box.length > 12 ? " is-wide" : "";
+    const parts = item.boxParts || null;
+    const box = String(item.box || parts?.full || "").trim();
+    const no = String(parts?.no || box).trim();
+    const md = String(parts?.md || "").trim();
+    const seq = String(parts?.seq || "").trim();
+    const codeHtml = parts && (md || seq)
+      ? `<span class="sticker-box-no">${esc(no)}</span>${md ? `<span class="sticker-box-md">${esc(md)}</span>` : ""}${seq ? `<span class="sticker-box-seq">${esc(seq)}</span>` : ""}`
+      : esc(box);
+    const fullLen = (parts?.full || box).length;
+    const boxWide = fullLen > 15 ? " is-xwide" : fullLen > 12 ? " is-wide" : "";
     return `<article class="${cls}">
-      <div class="sticker-cont-row${long}">
-        <p class="sticker-cont-name">${esc(name)}</p>
-        <div class="sticker-cont-side">
-          ${meta}
-          <p class="sticker-box${boxWide}">${esc(box)}</p>
-        </div>
-      </div>
+      <p class="sticker-cont-name${long}">${esc(name)}</p>
+      ${meta}
+      <p class="sticker-box${boxWide}">${codeHtml}</p>
     </article>`;
   }
   const cust = String(item.customer || "").trim() || "（未填客戶）";
@@ -1704,7 +1707,7 @@ function renderLabels() {
         name: labelContName || "高麗菜",
         country: labelContCountry,
         vendor: labelContVendor,
-        box: labelContCode(labelContNo || "UHA158", day, run.n + 1),
+        boxParts: labelContCodeParts(labelContNo || "UHA158", day, run.n + 1),
       });
     } else {
       preview.innerHTML = labelStickerHtml({
@@ -1772,7 +1775,7 @@ function printSelectedLabels() {
           name: sku,
           country,
           vendor,
-          box: labelContCode(box, day, run.n + i + 1),
+          boxParts: labelContCodeParts(box, day, run.n + i + 1),
         },
         true,
       ),

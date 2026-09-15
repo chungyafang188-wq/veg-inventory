@@ -1413,7 +1413,7 @@ html, body { margin: 0; padding: 0; background: #fff; }
   align-items: stretch;
   text-align: center;
   padding: 2.2mm 2mm 2mm;
-  gap: 1mm;
+  gap: 1.1mm;
 }
 .sticker-cont-name {
   flex: 0 0 auto;
@@ -1432,24 +1432,6 @@ html, body { margin: 0; padding: 0; background: #fff; }
   font-size: 8.4mm;
   letter-spacing: 0.06em;
 }
-.sticker-cont-meta {
-  flex: 0 0 auto;
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 1.8mm;
-  font-size: 7.8mm;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.08em;
-}
-.sticker-cont-name.is-long + .sticker-cont-meta { font-size: 6mm; }
-.sticker-cont-country,
-.sticker-cont-vendor {
-  font-size: 1em;
-  font-weight: 800;
-}
 .sticker-box {
   margin: 0;
   font-size: 5.6mm;
@@ -1458,28 +1440,45 @@ html, body { margin: 0; padding: 0; background: #fff; }
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1.2mm;
   width: 100%;
-  min-height: 12mm;
   margin: 0;
-  font-size: 6.4mm;
+  font-size: 6.6mm;
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 5.4mm; letter-spacing: 0.02em; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.6mm; letter-spacing: 0; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 5.5mm; letter-spacing: 0.02em; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.7mm; letter-spacing: 0; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }
 .sticker-box-md,
 .sticker-box-seq { letter-spacing: 0.06em; }
+.sticker-cont-meta {
+  flex: 0 0 auto;
+  margin: 0.4mm 0 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1.6mm;
+  font-size: 5mm;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+.sticker-cont-name.is-long ~ .sticker-cont-meta { font-size: 4.2mm; }
+.sticker-cont-country,
+.sticker-cont-vendor {
+  font-size: 1em;
+  font-weight: 400;
+}
 .sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
 .sticker-remark.is-empty { visibility: hidden; }
 .sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
@@ -1530,8 +1529,8 @@ function labelStickerHtml(item, forPrint) {
     const boxWide = fullLen > 15 ? " is-xwide" : fullLen > 12 ? " is-wide" : "";
     return `<article class="${cls}">
       <p class="sticker-cont-name${long}">${esc(name)}</p>
-      ${meta}
       <p class="sticker-box${boxWide}">${codeHtml}</p>
+      ${meta}
     </article>`;
   }
   const cust = String(item.customer || "").trim() || "（未填客戶）";

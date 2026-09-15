@@ -9438,8 +9438,51 @@ document.querySelectorAll("[data-orders-pane]").forEach((btn) => {
     goOpsStep(normalizeOrdersPane(btn.dataset.ordersPane));
   };
 });
+/** Keep vertical page scroll from fighting horizontal pane swipe containers. */
+function bindSwipeScrollAxis(el) {
+  if (!el || el.dataset.axisBound) return;
+  el.dataset.axisBound = "1";
+  let sx = 0;
+  let sy = 0;
+  let axis = "";
+  let lockLeft = 0;
+  const clear = () => {
+    axis = "";
+    el.classList.remove("is-pan-x", "is-pan-y");
+  };
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      axis = "";
+      lockLeft = el.scrollLeft;
+      el.classList.remove("is-pan-x", "is-pan-y");
+    },
+    { passive: true },
+  );
+  el.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      const dx = Math.abs(e.touches[0].clientX - sx);
+      const dy = Math.abs(e.touches[0].clientY - sy);
+      if (!axis) {
+        if (dx < 10 && dy < 10) return;
+        axis = dy > dx ? "y" : "x";
+        el.classList.add(axis === "y" ? "is-pan-y" : "is-pan-x");
+      }
+      if (axis === "y" && el.scrollLeft !== lockLeft) el.scrollLeft = lockLeft;
+    },
+    { passive: true },
+  );
+  el.addEventListener("touchend", clear, { passive: true });
+  el.addEventListener("touchcancel", clear, { passive: true });
+}
 const ordersSwipe = document.getElementById("orders-swipe");
 if (ordersSwipe) {
+  bindSwipeScrollAxis(ordersSwipe);
   ordersSwipe.addEventListener(
     "scroll",
     () => {
@@ -9632,6 +9675,7 @@ document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((btn) => {
 });
 const inSwipe = document.getElementById("in-swipe");
 if (inSwipe) {
+  bindSwipeScrollAxis(inSwipe);
   inSwipe.addEventListener(
     "scroll",
     () => {
@@ -9674,6 +9718,7 @@ document.querySelectorAll("[data-plan-pane]").forEach((btn) => {
 });
 const planMainSwipe = document.getElementById("plan-main-swipe");
 if (planMainSwipe) {
+  bindSwipeScrollAxis(planMainSwipe);
   const wakePlanMainPanes = () => {
     planMainSwipe.querySelectorAll("[data-plan-main-page]").forEach((p) => p.classList.remove("is-off"));
   };

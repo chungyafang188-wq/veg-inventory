@@ -19,7 +19,10 @@
   --sans: system-ui, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
 }
 * { box-sizing: border-box; }
-html { -webkit-tap-highlight-color: rgba(26, 104, 67, 0.12); }
+html {
+  -webkit-tap-highlight-color: rgba(26, 104, 67, 0.12);
+  overscroll-behavior-y: contain;
+}
 body {
   margin: 0;
   font: 16px/1.5 var(--sans);
@@ -28,6 +31,8 @@ body {
     radial-gradient(1200px 420px at 50% -80px, #dce9df 0%, transparent 70%),
     var(--bg);
   min-height: 100dvh;
+  overscroll-behavior-y: contain;
+  touch-action: manipulation;
 }
 .app {
   max-width: 28rem;
@@ -143,6 +148,8 @@ h2 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: 0.02em; }
   gap: 0.28rem;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
   padding-bottom: 0.1rem;
 }
@@ -190,13 +197,22 @@ h2 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: 0.02em; }
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
   scrollbar-width: none;
-  touch-action: pan-x pan-y;
+  /* Prefer vertical page scroll on touch; tabs still switch panes. */
+  touch-action: pan-y;
   margin-top: 0.15rem;
+}
+.orders-swipe.is-pan-x {
+  touch-action: pan-x;
+}
+.orders-swipe.is-pan-y {
+  overflow-x: hidden;
+  touch-action: pan-y;
 }
 .orders-swipe::-webkit-scrollbar { display: none; }
 .orders-pane {
@@ -204,7 +220,16 @@ h2 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: 0.02em; }
   width: 100%;
   min-width: 0;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-stop: normal;
+}
+@media (hover: hover) and (pointer: fine) {
+  .orders-swipe {
+    scroll-snap-type: x mandatory;
+    touch-action: pan-x pan-y;
+  }
+  .orders-pane {
+    scroll-snap-stop: always;
+  }
 }
 .order-card.just-in {
   outline: 2px solid var(--green);
@@ -1285,7 +1310,7 @@ body.on-home .home-open .hub-mark.has-pic {
   background: transparent;
   color: inherit;
 }
-/* Stroke glyphs only — do NOT size .hub-pic cartoons (was overriding fill-to-well) */
+/* Stroke glyphs only — do not shrink .hub-pic cartoons */
 .hub-mark:not(.has-pic) > svg,
 .hub-mark .hub-ico svg {
   width: 2.15rem;
@@ -1400,7 +1425,13 @@ body.on-home .home-open .hub-mark.has-pic {
   line-height: 1.55;
   margin: 0.4rem 0 0.6rem;
 }
-.help-table-wrap { overflow: auto; margin-top: 0.4rem; }
+.help-table-wrap {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  margin-top: 0.4rem;
+}
 .help-table {
   width: 100%;
   border-collapse: collapse;
@@ -2725,7 +2756,13 @@ body.on-home .home-open .hub-mark.has-pic {
 #plan-card.is-driver [data-plan-main-page="short"] { display: none !important; }
 #plan-card.is-driver #plan-main-swipe { overflow-x: hidden; }
 .daily-sheet-card .hint { margin-bottom: 0.45rem; }
-.sheet-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.35rem; }
+.sheet-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  margin: 0 -0.35rem;
+}
 .daily-grid { min-width: 28rem; border-collapse: collapse; font-size: 0.78rem; }
 .daily-grid.basil-grid { min-width: 38rem; }
 .daily-grid th, .daily-grid td {
@@ -2840,6 +2877,8 @@ body.on-home .home-open .hub-mark.has-pic {
   padding-bottom: 0.35rem;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y;
 }
 .plan-sku {
   flex: 0 0 14.8rem;
@@ -2944,7 +2983,13 @@ body.on-home .home-open .hub-mark.has-pic {
   font-weight: 400;
   color: var(--c-enter);
 }
-#stock-count, #stock-in { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.45rem; }
+#stock-count, #stock-in {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  margin-top: 0.45rem;
+}
 .stock-guides { margin: 0.45rem 0 0; display: grid; gap: 0.4rem; }
 .stock-guides p {
   margin: 0;
@@ -2964,7 +3009,12 @@ body.on-home .home-open .hub-mark.has-pic {
   font-size: 0.78rem;
 }
 #plan-card { overflow: visible; }
-#plan-short { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+#plan-short {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y;
+}
 #plan-card .plan-board,
 #plan-card .short-board {
   display: grid;

@@ -1448,27 +1448,28 @@ html, body { margin: 0; padding: 0; background: #fff; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.8mm;
+  gap: 0.55mm;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  min-height: 8.5mm;
+  min-height: 9.5mm;
   margin: 0;
-  padding: 0 0.4mm;
-  font-size: 6.4mm;
+  padding: 0 0.2mm;
+  font-size: 7.6mm;
   font-weight: 900;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
+  font-variant-numeric: tabular-nums;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 5.2mm; letter-spacing: 0.01em; gap: 0.5mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.4mm; letter-spacing: 0; gap: 0.35mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.4mm; letter-spacing: 0; gap: 0.4mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.4mm; letter-spacing: 0; gap: 0.25mm; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }
 .sticker-box-md,
-.sticker-box-seq { letter-spacing: 0.06em; }
+.sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
   flex: 0 0 auto;
   margin: 0.2mm 0 0;
@@ -1534,7 +1535,8 @@ function labelStickerHtml(item, forPrint) {
       ? `<span class="sticker-box-no">${esc(no)}</span>${md ? `<span class="sticker-box-md">${esc(md)}</span>` : ""}${seq ? `<span class="sticker-box-seq">${esc(seq)}</span>` : ""}`
       : esc(box);
     const fullLen = (parts?.full || box).length;
-    const boxWide = fullLen > 14 ? " is-xwide" : fullLen > 11 ? " is-wide" : "";
+    // Typical max: UHA + 4 digits + MMDD + 2-digit seq = 13
+    const boxWide = fullLen > 14 ? " is-xwide" : fullLen > 13 ? " is-wide" : "";
     return `<article class="${cls}">
       <p class="sticker-cont-name${long}">${esc(name)}</p>
       <p class="sticker-box${boxWide}">${codeHtml}</p>

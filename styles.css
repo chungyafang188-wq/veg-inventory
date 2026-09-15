@@ -2852,24 +2852,22 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .sticker-ship-sku span { display: block; }
 .label-sticker.is-container {
-  justify-content: center;
+  justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 1.6mm 1.6mm 1.8mm;
-  gap: 0.8mm;
+  padding: 2.2mm 1.6mm 1.8mm;
+  gap: 0;
 }
 .sticker-cont-name {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex: 0 0 auto;
+  display: block;
   margin: 0;
   padding: 0;
   width: 100%;
-  min-height: 16mm;
+  min-height: 0;
   font-size: 14mm;
   font-weight: 900;
-  line-height: 0.95;
+  line-height: 0.9;
   letter-spacing: 0.12em;
   white-space: nowrap;
   overflow: hidden;
@@ -2895,8 +2893,8 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  min-height: 9.5mm;
-  margin: 0;
+  min-height: 0;
+  margin: 0.35mm 0 0;
   padding: 0 0.2mm;
   font-size: 7.6mm;
   font-weight: 900;
@@ -2915,7 +2913,9 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
   flex: 0 0 auto;
-  margin: 0.2mm 0 0;
+  margin-top: auto;
+  margin-bottom: 0;
+  padding-top: 0;
   display: flex;
   align-items: baseline;
   justify-content: center;

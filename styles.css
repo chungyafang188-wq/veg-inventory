@@ -2583,6 +2583,19 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 @media (max-width: 420px) {
   .label-inline-fields { grid-template-columns: 1fr; }
 }
+.label-cont-no-date {
+  grid-template-columns: minmax(0, 1.2fr) minmax(8.5rem, 1fr);
+  align-items: end;
+}
+.label-cont-date-slot:empty { display: none; }
+.label-cont-date-slot .field {
+  margin-top: 0;
+  width: 100%;
+}
+.label-cont-date-slot input[type="date"] {
+  width: 100%;
+  min-width: 0;
+}
 .label-print-card { margin-top: 0; padding: 0.55rem 0.7rem 0.6rem; }
 .label-toolbar {
   display: flex;

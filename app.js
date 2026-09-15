@@ -1645,6 +1645,17 @@ function renderLabels() {
   if (paneCont) paneCont.hidden = !isCont;
   if (paneShip) paneShip.hidden = !isShip;
   const dateWrap = document.getElementById("label-date-wrap");
+  const contDateSlot = document.getElementById("label-cont-date-slot");
+  const sharedBar = document.getElementById("label-shared-bar");
+  if (dateWrap && contDateSlot && sharedBar) {
+    if (isCont) {
+      if (dateWrap.parentElement !== contDateSlot) contDateSlot.appendChild(dateWrap);
+      dateWrap.hidden = false;
+    } else {
+      if (dateWrap.parentElement !== sharedBar) sharedBar.insertBefore(dateWrap, sharedBar.firstChild);
+      dateWrap.hidden = isText ? !labelSolarOn : false;
+    }
+  }
   const mdM = document.getElementById("label-md-m-wrap");
   const mdD = document.getElementById("label-md-d-wrap");
   const copiesWrap = document.getElementById("label-copies-wrap");
@@ -1653,7 +1664,6 @@ function renderLabels() {
   const seqOnEl = document.getElementById("label-seq-on");
   if (solarEl) solarEl.checked = labelSolarOn;
   if (seqOnEl) seqOnEl.checked = labelSeqOn;
-  if (dateWrap) dateWrap.hidden = isText ? !labelSolarOn : false;
   if (mdM) mdM.hidden = true;
   if (mdD) mdD.hidden = true;
   if (copiesWrap) copiesWrap.hidden = false;

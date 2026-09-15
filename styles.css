@@ -2663,6 +2663,12 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   font-size: 0.86rem;
   white-space: nowrap;
 }
+.label-print-sum {
+  margin: 0.35rem 0 0.15rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
 .label-preview {
   margin-top: 0.35rem;
   display: flex;
@@ -2814,6 +2820,8 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 }
 .sticker-text-solar { right: 2mm; }
 .sticker-text-seq { left: 2mm; }
+.label-sticker.is-ship .sticker-text-solar { left: 2mm; right: auto; }
+.label-sticker.is-ship .sticker-text-seq { right: 2mm; left: auto; }
 .label-sticker.is-ship {
   position: relative;
   justify-content: flex-start;
@@ -2855,27 +2863,40 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2.2mm 1.6mm 1.8mm;
+  padding: 3.6mm 2.8mm 3.2mm;
   gap: 0;
+}
+.sticker-cont-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4mm;
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 0 0.4mm;
 }
 .sticker-cont-name {
   flex: 0 0 auto;
   display: block;
   margin: 0;
-  padding: 0;
+  padding: 0 0.6mm;
   width: 100%;
+  box-sizing: border-box;
   min-height: 0;
-  font-size: 14mm;
+  font-size: 13mm;
   font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: 0.12em;
+  line-height: 0.92;
+  letter-spacing: 0.06em;
   white-space: nowrap;
   overflow: hidden;
   word-break: keep-all;
 }
 .sticker-cont-name.is-long {
-  font-size: 10.5mm;
-  letter-spacing: 0.05em;
+  font-size: 9.6mm;
+  letter-spacing: 0.03em;
 }
 .sticker-box {
   margin: 0;
@@ -2894,7 +2915,7 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   max-width: 100%;
   box-sizing: border-box;
   min-height: 0;
-  margin: 0.35mm 0 0;
+  margin: 0;
   padding: 0 0.2mm;
   font-size: 7.6mm;
   font-weight: 900;
@@ -2913,19 +2934,18 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
 .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
   flex: 0 0 auto;
-  margin-top: auto;
-  margin-bottom: 0;
-  padding-top: 0;
+  margin: 0;
+  padding-top: 0.6mm;
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 1.6mm;
-  font-size: 4.6mm;
+  font-size: 5.6mm;
   font-weight: 400;
   line-height: 1;
   letter-spacing: 0.08em;
 }
-.sticker-cont-name.is-long ~ .sticker-cont-meta { font-size: 4mm; }
+.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 5mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;

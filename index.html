@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
     <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=195" />
+    <link rel="stylesheet" href="./styles.css?v=202" />
   </head>
   <body>
     <div class="app">
@@ -95,6 +95,22 @@
           </span>
           <h2 id="soon-title">即將開放</h2>
           <p class="hint" id="soon-hint">這項還在整理，先用其他區塊。</p>
+        </section>
+      </section>
+      <section id="page-label-prints" hidden>
+        <section class="card">
+          <div class="head">
+            <h2>標籤列印明細</h2>
+            <label class="date-inline">日期 <input id="label-prints-date" type="date" /></label>
+          </div>
+          <p class="hint" id="label-prints-hint">列印後會留在這裡，方便帳款核對。</p>
+          <nav class="tabs" id="label-prints-kind-tabs" aria-label="列印種類">
+            <button type="button" class="tab on" data-label-prints-kind="all">全部</button>
+            <button type="button" class="tab" data-label-prints-kind="text">文字</button>
+            <button type="button" class="tab" data-label-prints-kind="container">貨櫃</button>
+            <button type="button" class="tab" data-label-prints-kind="ship">出貨</button>
+          </nav>
+          <div id="label-prints-list"></div>
         </section>
       </section>
       <section id="page-orders" hidden>
@@ -467,6 +483,6 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=217"></script>
+    <script src="./app.js?v=226"></script>
   </body>
 </html>

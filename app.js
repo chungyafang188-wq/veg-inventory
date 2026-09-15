@@ -1692,19 +1692,68 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
-  const w = window.open("", "_blank", "noopener,width=420,height=640");
-  if (!w) {
-    setStatus("瀏覽器擋住列印視窗，請允許彈出。", true);
+  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
+<style>${labelPrintCss()}</style></head><body>${cards.join("")}</body></html>`;
+  let w = null;
+  try {
+    // Do not pass noopener here — it makes window.open return null and print never runs.
+    w = window.open("", "_blank", "width=420,height=640");
+  } catch (_) {
+    w = null;
+  }
+  if (w) {
+    try {
+      try {
+        w.opener = null;
+      } catch (_) {}
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      setTimeout(() => {
+        try {
+          w.focus();
+          w.print();
+        } catch (_) {}
+      }, 200);
+      return w;
+    } catch (_) {
+      try {
+        w.close();
+      } catch (_) {}
+    }
+  }
+  // Fallback when popup is blocked (common on phones / in-app browsers).
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) throw new Error("no-frame");
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (_) {
+        setStatus("無法開啟列印，請允許彈出視窗後再試。", true);
+      }
+      setTimeout(() => {
+        try {
+          iframe.remove();
+        } catch (_) {}
+      }, 1500);
+    }, 250);
+    return iframe.contentWindow;
+  } catch (_) {
+    try {
+      iframe.remove();
+    } catch (_) {}
+    setStatus("瀏覽器擋住列印視窗，請允許彈出後再按一次列印。", true);
     return null;
   }
-  w.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
-<style>${labelPrintCss()}</style></head><body>${cards.join("")}</body></html>`);
-  w.document.close();
-  setTimeout(() => {
-    w.focus();
-    w.print();
-  }, 200);
-  return w;
 }
 function labelFieldBusy(el) {
   return el && (document.activeElement === el || el.dataset.composing === "1");

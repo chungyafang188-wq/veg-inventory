@@ -4,23 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6843" />
-    <title>產品出貨紀錄表</title>
-    <link rel="stylesheet" href="./styles.css?v=202" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="鴻安" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>鴻安</title>
+    <link rel="manifest" href="./manifest.webmanifest?v=300" />
+    <link rel="icon" href="./assets/hongan-logo.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/hongan-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=300" />
+    <link rel="stylesheet" href="./ware-stock.css?v=6" />
+    <link rel="stylesheet" href="./unpack-flow.css?v=10" />
+    <link rel="stylesheet" href="./site-work.css?v=3" />
+    <link rel="stylesheet" href="./boss-stats.css?v=2" />
   </head>
   <body>
     <div class="app">
       <header class="app-head">
-        <p class="eyebrow" id="co-name">產品出貨</p>
-        <p class="muted" id="sync-note" hidden></p>
-        <div class="who-wrap">
-          <button type="button" class="who-btn" id="sync-reload">載入共用</button>
-          <button type="button" class="who-btn" id="sync-upload">上傳這台</button>
-          <button type="button" class="who-btn who-home" id="home-btn" hidden>
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
-            首頁
-          </button>
-          <span class="who-now" id="who-now" hidden></span>
-          <button type="button" class="who-btn" id="who-btn">登入</button>
+        <div class="app-head-row">
+          <div class="app-brand">
+            <img class="brand-logo" src="./assets/hongan-logo.png" alt="鴻安" width="44" height="44" />
+            <p class="eyebrow" id="co-name">鴻安</p>
+            <div class="layout-mode" role="group" aria-label="顯示方式">
+              <button type="button" class="layout-btn" data-layout="phone" id="layout-phone-btn">手機</button>
+              <button type="button" class="layout-btn" data-layout="web" id="layout-web-btn">網頁</button>
+            </div>
+          </div>
+          <div class="who-wrap">
+            <button type="button" class="who-btn who-home" id="home-btn" hidden>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
+              首頁
+            </button>
+            <span class="who-now" id="who-now" hidden></span>
+            <button type="button" class="who-btn" id="who-btn">登入</button>
+          </div>
+        </div>
+        <div class="app-head-tools">
+          <p class="muted sync-note" id="sync-note" hidden></p>
+          <button type="button" class="who-btn who-tool" id="sync-reload">載入共用</button>
+          <button type="button" class="who-btn who-tool" id="sync-upload">上傳這台</button>
         </div>
       </header>
       <div id="login-gate" class="login-gate" hidden>
@@ -41,14 +66,12 @@
           </form>
         </div>
       </div>
-      <nav class="tabs" id="flow-tabs" hidden aria-label="流程">
-        <button type="button" class="tab on" data-page="orders">總訂單</button>
-        <button type="button" class="tab" data-page="plan">排程／派貨</button>
-        <button type="button" class="tab" data-page="books">後帳</button>
-      </nav>
-      <nav class="tabs" id="co-tabs" hidden aria-label="公司">
-        <button type="button" class="tab on" data-co="nq">穠全進銷</button>
-        <button type="button" class="tab" data-co="ha">鴻安進銷</button>
+      <nav class="tabs ops-flow" id="flow-tabs" hidden aria-label="作業流程">
+        <button type="button" class="tab on" data-ops="form">下單</button>
+        <button type="button" class="tab" data-ops="today">已填</button>
+        <button type="button" class="tab" data-ops="line">LINE</button>
+        <button type="button" class="tab" data-ops="short">排程</button>
+        <button type="button" class="tab" data-ops="ship">送貨</button>
       </nav>
       <nav class="tabs" id="books-part-tabs" hidden aria-label="後帳項目">
         <button type="button" class="tab on" data-books="stock">庫存盤點</button>
@@ -57,8 +80,10 @@
       </nav>
       <p id="alerts" class="alerts" hidden></p>
       <section id="page-home" hidden>
-        <p class="hint hub-lead">點區塊進入。</p>
-        <div id="home-hub" class="hub"></div>
+        <div class="home-shell">
+          <p class="hint hub-lead" hidden>點步驟進入後，上方可直接切換，不必再回首頁。</p>
+          <div id="home-hub" class="hub"></div>
+        </div>
       </section>
       <section id="page-help" hidden>
         <section class="card help-card" id="help-freight-card">
@@ -114,13 +139,16 @@
         </section>
       </section>
       <section id="page-orders" hidden>
-        <nav class="tabs" id="orders-pane-tabs" aria-label="總訂單切換">
-          <button type="button" class="tab on" data-orders-pane="form">開單</button>
-          <button type="button" class="tab" data-orders-pane="today">今日已填</button>
-          <button type="button" class="tab" data-orders-pane="line">LINE判讀</button>
+        <nav class="tabs" id="orders-pane-tabs" hidden aria-label="下單切換">
+          <button type="button" class="tab on" data-orders-pane="form">下單</button>
+          <button type="button" class="tab" data-orders-pane="today">已填單</button>
         </nav>
         <div class="orders-swipe" id="orders-swipe">
           <div class="orders-pane" data-orders-pane-page="form">
+        <p class="form-line-entry">
+          <button type="button" class="ghost" data-orders-pane="line" id="form-line-entry-btn">LINE文字轉單</button>
+          <span class="muted">貼客人叫貨文字，確認後進已填單</span>
+        </p>
         <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單"></nav>
         <section class="card daily-sheet-card" id="daily-sheet-card" hidden>
           <div class="head">
@@ -140,7 +168,7 @@
         </section>
         <form id="order-form" class="card">
           <div class="head">
-            <h2 id="form-title">總訂單</h2>
+            <h2 id="form-title">下單</h2>
             <details class="ship-more" id="ship-more">
               <summary id="ship-more-sum">當日</summary>
               <p class="ship-more-note">預設今天。改成明天以後會當成預訂單，當天再出貨。</p>
@@ -149,12 +177,19 @@
           </div>
           <p class="hint" id="form-hint" hidden></p>
           <input id="edit-id" type="hidden" />
-          <label class="field order-who-field" for="customer">出貨對象
-            <span class="cust-wrap">
-              <input id="customer" type="text" required placeholder="姓名、注音ㄉ，或拼音 dong" autocomplete="off" spellcheck="false" lang="zh-Hant" />
-              <div id="cust-suggest" class="cust-suggest" hidden></div>
-            </span>
-          </label>
+          <div class="order-who-row">
+            <label class="field order-who-field" for="customer">出貨對象
+              <span class="cust-wrap">
+                <input id="customer" type="text" required placeholder="姓名、注音ㄉ，或拼音 dong" autocomplete="off" spellcheck="false" lang="zh-Hant" />
+                <div id="cust-suggest" class="cust-suggest" hidden></div>
+              </span>
+            </label>
+            <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
+              <span class="urgent-toggle-ico" aria-hidden="true">!</span>
+              <span class="urgent-toggle-lab">急單</span>
+            </button>
+            <input id="order-urgent" type="checkbox" hidden />
+          </div>
           <input id="ship-addr" type="hidden" />
           <div id="sheet"></div>
           <div id="ticket" class="ticket">
@@ -187,10 +222,10 @@
           <div class="orders-pane" data-orders-pane-page="today">
             <section class="card" id="orders-today-card">
               <div class="head">
-                <h2 id="orders-today-title">今日已填</h2>
+                <h2 id="orders-today-title">已填單</h2>
                 <label class="date-inline">日期 <input id="orders-today-date" type="date" /></label>
               </div>
-              <p class="hint">下單後會出現在這裡。派工前請核對，點「改單」可改對象、位置與件數。</p>
+              <p class="hint">下單後依客戶彙整。未送貨在上、已送出在下；急單排最前。未結可改；核對後按「結單」＝會計收單確認（不扣庫）。備貨完成後再送貨才扣庫。</p>
               <div id="orders-today-rest"></div>
               <div id="orders-today"></div>
             </section>
@@ -200,21 +235,22 @@
       <section id="page-plan" hidden>
         <section class="card" id="plan-card">
           <div class="head plan-date-row">
-            <nav class="tabs" id="plan-main-tabs" aria-label="排程派貨切換">
-              <button type="button" class="tab on" data-plan-main="short">排程</button>
-              <button type="button" class="tab" data-plan-main="ship">派貨</button>
+            <nav class="tabs" id="plan-main-tabs" hidden aria-label="現場排程切換">
+              <button type="button" class="tab on" data-plan-main="short">現場排程</button>
+              <button type="button" class="tab" data-plan-main="ship">司機送貨</button>
             </nav>
             <label class="date-inline">日期 <input id="plan-date" type="date" /></label>
           </div>
           <div class="orders-swipe" id="plan-main-swipe">
             <div class="orders-pane" data-plan-main-page="short">
-              <h2 id="plan-short-title">現場須出（現採／加工）</h2>
+              <h2 id="plan-short-title">現場排程・備貨</h2>
+              <p class="hint plan-short-hint">點品項卡看該菜客戶清單；備貨中在上、已送貨在下。</p>
               <div id="plan-short"></div>
             </div>
             <div class="orders-pane" data-plan-main-page="ship">
-              <nav class="tabs" id="plan-pane-tabs" aria-label="派貨切換">
-                <button type="button" class="tab on" data-plan-pane="pending">待處理</button>
-                <button type="button" class="tab" data-plan-pane="done">已出貨</button>
+              <nav class="tabs" id="plan-pane-tabs" aria-label="送貨切換">
+                <button type="button" class="tab on" data-plan-pane="pending">待送貨</button>
+                <button type="button" class="tab" data-plan-pane="done">已送貨完成</button>
               </nav>
               <div id="plan-pending"></div>
               <div id="plan-done" hidden></div>
@@ -226,10 +262,10 @@
       <section id="page-stock" hidden>
         <section class="card" id="stock-head-card">
           <div class="head">
-            <h2 id="stock-title">庫存</h2>
+            <h2 id="stock-title">庫存盤點</h2>
             <label class="date-inline">日期 <input id="stock-date" type="date" /></label>
           </div>
-          <p class="hint" id="guide-stock">上方大數字＝當日庫存（盤點＋進貨－已出）。早上盤點還沒填就以 0 計，不帶入前一天。小字分開顯示盤點、進貨、已出。</p>
+          <p class="hint" id="guide-stock">庫存盤點：對照當日要出的量，整理各倉庫可備數量。請從首頁選倉庫別進入。</p>
           <div id="stock-overview" class="stock-overview"></div>
         </section>
         <nav class="tabs stock-kind-tabs" id="stock-kind-tabs" aria-label="庫存品項">
@@ -264,6 +300,16 @@
           <div id="orders"></div>
           <div id="sales-list" hidden></div>
         </section>
+      </section>
+      <section id="page-unpack" hidden>
+        <div id="up-list" class="up-list"></div>
+        <div id="up-detail" class="up-detail" hidden></div>
+      </section>
+      <section id="page-sitework" hidden>
+        <div id="sw-root" class="sw-root"></div>
+      </section>
+      <section id="page-stats" hidden>
+        <div id="st-root" class="st-root"></div>
       </section>
       <section id="page-in" hidden>
         <div class="in-toolbar">
@@ -447,13 +493,14 @@
       <div id="label-order-gate" class="login-gate" hidden>
         <div class="login-card">
           <h2>記入訂單？</h2>
-          <p class="hint" id="label-order-hint">印完後可把這筆寫進今日已填。</p>
+          <p class="hint" id="label-order-hint">印完後可把這筆寫進已填單。</p>
           <div class="btn-row">
             <button type="button" class="primary" id="label-order-yes">記入訂單</button>
             <button type="button" class="ghost" id="label-order-no">先不入單</button>
           </div>
         </div>
       </div>
+      <div id="ship-labels-gate" class="login-gate" hidden></div>
       <div id="proof-gate" class="login-gate" hidden>
         <div class="login-card proof-card">
           <h2 id="proof-title">確認送貨</h2>
@@ -483,6 +530,10 @@
     <script src="./line-parse.js?v=88"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=227"></script>
+    <script src="./app.js?v=300"></script>
+    <script src="./ware-stock.js?v=7"></script>
+    <script src="./unpack-flow.js?v=13"></script>
+    <script src="./site-work.js?v=3"></script>
+    <script src="./boss-stats.js?v=2"></script>
   </body>
 </html>

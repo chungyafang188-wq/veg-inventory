@@ -1,0 +1,113 @@
+/* 現場工作：調倉單／工作單 */
+.sw-root { padding-bottom: 1.5rem; }
+.sw-head { margin: 0 0 0.75rem; }
+.sw-head h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+.sw-tabs { margin-bottom: 0.85rem; }
+.sw-form {
+  padding: 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d5e4da;
+  background: #f7fbf8;
+  margin-bottom: 1rem;
+}
+.sw-form h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+  color: #1a6843;
+}
+.sw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+.sw-grid label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5a6a62;
+}
+.sw-grid .span2 { grid-column: 1 / -1; }
+.sw-grid input,
+.sw-grid select {
+  min-height: 2.55rem;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid #c5d5cb;
+  background: #fff;
+}
+.sw-form .primary {
+  margin-top: 0.55rem;
+  width: 100%;
+  min-height: 2.7rem;
+}
+.sw-list h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.86rem;
+  color: #5a6a62;
+}
+.sw-cards { display: grid; gap: 0.45rem; margin-bottom: 1rem; }
+.sw-card {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid #d5e4da;
+  background: #fff;
+}
+.sw-card.is-done {
+  opacity: 0.85;
+  background: #f3f6f4;
+}
+.sw-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.sw-card-top em {
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1a6843;
+}
+.sw-card .primary {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+.sw-ok {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a6843;
+}
+.sw-take-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+.sw-card.is-open-take {
+  border-color: #e8c48a;
+  background: #fffaf2;
+}
+.sw-card .ghost {
+  margin-top: 0.35rem;
+  width: 100%;
+}
+.sw-del {
+  margin-top: 0.35rem;
+  width: 100%;
+  color: #a05030;
+  border-color: #efd0ba;
+}
+.sw-card-acts {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+@media (max-width: 420px) {
+  .sw-grid { grid-template-columns: 1fr; }
+  .sw-grid .span2 { grid-column: auto; }
+}

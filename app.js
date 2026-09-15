@@ -50,8 +50,19 @@ const FORM_KINDS = {
 const DAILY_KEY = "nongquan-daily-sheet-preview-v1";
 const HA_CUST_KEY = "hongan-customer-history-v1";
 const STAFF_NOW_KEY = "nongquan-staff-now-v1";
+const LAYOUT_MODE_KEY = "veg-layout-mode-v1";
 const STAFF_LIST_KEY = "nongquan-staff-list-v1";
 const ADDR_KEY = "nongquan-ship-addr-v1";
+const FREIGHT_RUN_KEY = "nongquan-freight-run-v1";
+const SHIP_PRESETS = ["冰庫", "市場", "倉庫"];
+const SHIP_DEST_OPTS = ["冰庫", "市場", "倉庫", "寄貨運", "其他"];
+const FREIGHT_RUN_DEFAULT = [
+  { key: "美女貨運", recv: "03:30", ship: "04:30", note: "" },
+  { key: "小洋貨運", recv: "04:00", ship: "05:00", note: "" },
+  { key: "北部拍賣（金芳／新豐）", recv: "05:00", ship: "06:00", note: "" },
+  { key: "南部拍賣（金芳／新豐）", recv: "05:30", ship: "06:30", note: "" },
+  { key: "台中（新豐）", recv: "06:00", ship: "07:00", note: "" },
+];
 let ticketLines = [];
 const BASIL_SKU = {
   rb: { 芳: "rb-fang", 琳: "rb-lin", 其他: "rb-oth" },
@@ -74,7 +85,7 @@ const OLD_LEAF = {
 const HA_VEG = {
   cab: { label: "高麗菜", opts: [["kr", "韓國"], ["vn", "越南"], ["id", "印尼"]] },
   nap: { label: "大白菜", opts: [["kr", "韓國"], ["vn", "越南"]] },
-  bur: { label: "蘿蔔", opts: [["l", "L"], ["2l", "2L"]] },
+  bur: { label: "牛蒡", opts: [["l", "L"], ["2l", "2L"]] },
   wk: { label: "白K", opts: [["m", "M"], ["l", "L"], ["2l", "2L"], ["cut", "切頭"]] },
   ice: { label: "美生菜", opts: [["vn", "越南"], ["kr", "韓國"]] },
   cel: { label: "西芹", opts: [["vn", "越南"], ["us", "美國"]] },
@@ -127,7 +138,9 @@ const SKUS = [
   { id: "shiso-kg", co: "nq", name: "紫蘇散賣kg", unit: "kg" },
   { id: "basil-kg", co: "nq", name: "九層塔散賣kg", unit: "kg" },
   { id: "shiso-jin", co: "nq", name: "紫蘇散賣斤", unit: "斤" },
+  { id: "custom-nq", co: "nq", name: "自行輸入", unit: "件", trade: true, custom: true },
   ...haVegSkuList(),
+  { id: "custom-ha", co: "ha", name: "自行輸入", unit: "件", trade: true, custom: true },
   { id: "on-nz-20", co: "ha", name: "洋蔥／紐西蘭／20K", unit: "件", onion: true, site: true },
   { id: "on-nz-12", co: "ha", name: "洋蔥／紐西蘭／12K", unit: "件", onion: true, site: true },
   { id: "on-au-20", co: "ha", name: "洋蔥／澳洲／20K", unit: "件", onion: true, site: true },
@@ -339,10 +352,33 @@ function load() {
     if (data && data.stock && data.orders) {
       if (!data.daily) data.daily = {};
       if (!Array.isArray(data.rests)) data.rests = [];
+      if (!data.prep || typeof data.prep !== "object") data.prep = {};
+      if (!data.stockCount || typeof data.stockCount !== "object") data.stockCount = {};
+      if (!data.wareItems || typeof data.wareItems !== "object") data.wareItems = {};
+      if (!Array.isArray(data.unpackJobs)) data.unpackJobs = [];
+      if (!Array.isArray(data.inboundLedger)) data.inboundLedger = [];
+      if (!Array.isArray(data.unpackApprovals)) data.unpackApprovals = [];
+      if (!Array.isArray(data.siteMoves)) data.siteMoves = [];
+      if (!Array.isArray(data.siteWorks)) data.siteWorks = [];
+      if (!Array.isArray(data.auditLog)) data.auditLog = [];
       return data;
     }
   } catch (_) {}
-  return { stock: emptyStock(), orders: [], daily: {}, rests: [] };
+  return {
+    stock: emptyStock(),
+    orders: [],
+    daily: {},
+    rests: [],
+    prep: {},
+    stockCount: {},
+    wareItems: {},
+    unpackJobs: [],
+    inboundLedger: [],
+    unpackApprovals: [],
+    siteMoves: [],
+    siteWorks: [],
+    auditLog: [],
+  };
 }
 function save() {
   try {
@@ -536,6 +572,14 @@ for (const sku of SKUS) {
 }
 if (!state.daily) state.daily = {};
 if (!Array.isArray(state.rests)) state.rests = [];
+if (!state.stockCount || typeof state.stockCount !== "object") state.stockCount = {};
+if (!state.wareItems || typeof state.wareItems !== "object") state.wareItems = {};
+if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
+if (!Array.isArray(state.inboundLedger)) state.inboundLedger = [];
+if (!Array.isArray(state.unpackApprovals)) state.unpackApprovals = [];
+if (!Array.isArray(state.siteMoves)) state.siteMoves = [];
+if (!Array.isArray(state.siteWorks)) state.siteWorks = [];
+if (!Array.isArray(state.auditLog)) state.auditLog = [];
 const seeded = ensureTodayBooks();
 const recounted = recountAllBooks();
 syncAllNqQty();
@@ -559,14 +603,19 @@ let labelSeqOn = false;
 let labelShipCust = "";
 let labelShipSku = "南瓜";
 let labelPendingOrder = null;
+let shipLabelPick = null;
 let labelContName = "高麗菜";
 let labelContCountry = "韓國";
 let labelContVendor = "";
 let labelContNo = "";
 let booksPart = "stock";
+let stockWh = "";
+let stockPhase = "pick";
 let formKind = "leaf";
 let stockKind = "leaf";
 let editing = "";
+let inlineEdit = null;
+let orderMulti = null;
 let ordersPane = "form";
 let ordersPaneLock = false;
 let inPane = "form";
@@ -592,6 +641,7 @@ let planOpenId = "";
 let planPane = "pending";
 let planMain = "short";
 let planMainLock = false;
+let planFocusKey = "";
 function planViewDay() {
   return planDay || today();
 }
@@ -659,21 +709,36 @@ function isTradeSku(sku) {
   return !!(sku && sku.trade);
 }
 
+/** 貨櫃倉碼 → 顯示（盤點／入單只分 A倉／B倉／油） */
 const HA_WAREHOUSES = {
-  A: "穠全",
-  B: "二崙",
-  C: "大庄",
-  D: "油1",
-  E: "油2",
-  F: "油3",
-  G: "周",
+  A: "A倉",
+  B: "B倉",
+  C: "油",
+  D: "油",
+  E: "油",
+  F: "油",
+  G: "油",
+  Y: "油",
+  K: "烘庫",
 };
+/** 庫存盤點倉庫別 */
+const STOCK_WAREHOUSES = [
+  { id: "A", label: "A倉" },
+  { id: "B", label: "B倉" },
+  { id: "Y", label: "油" },
+  { id: "K", label: "烘庫" },
+];
 let formLot = null;
 let lotPickCtx = null;
 
 function warehouseLabel(code) {
   if (!code) return "未對倉";
-  return `${code}倉 ${HA_WAREHOUSES[code] || ""}`.trim();
+  if (HA_WAREHOUSES[code]) return HA_WAREHOUSES[code];
+  return `${code}倉`;
+}
+function stockWarehouseLabel(code) {
+  const hit = STOCK_WAREHOUSES.find((w) => w.id === code);
+  return hit ? hit.label : warehouseLabel(code);
 }
 function skuLotGroup(sku) {
   if (!sku) return "";
@@ -861,9 +926,21 @@ const STAFF_ROSTER = [
   { name: "湯", role: "acct" },
   { name: "小胖", role: "driver" },
   { name: "善存", role: "driver" },
+  { name: "阿宏", role: "unpacker" },
+  { name: "靜宜", role: "unpacker" },
   { name: "雅芳", role: "boss" },
 ];
-const ROLE_LABEL = { site: "現場", acct: "會計", driver: "司機", boss: "主管" };
+const ROLE_LABEL = {
+  site: "現場",
+  acct: "會計",
+  driver: "司機",
+  unpacker: "拆櫃人員",
+  boss: "主管",
+};
+const UNPACK_STAFF = STAFF_ROSTER.filter((p) => p.role === "unpacker").map((p) => p.name);
+function isUnpackerRole(role) {
+  return (role || currentRole()) === "unpacker";
+}
 function staffByName(name) {
   return STAFF_ROSTER.find((p) => p.name === String(name || "").trim());
 }
@@ -882,12 +959,27 @@ function can(action) {
   const r = currentRole();
   if (!r) return false;
   if (r === "boss") return true;
+  // TEMP: 拆櫃/庫存/現場 未完成，暫僅雅芳 — 恢復時刪除此段，並還原下方 page-unpack / page-sitework / books-stock 規則
+  if (action === "page-unpack" || action === "page-sitework" || action === "books-stock") {
+    return false;
+  }
+  if (r === "unpacker") {
+    return action === "page-unpack";
+  }
+  if (action === "page-stats") return false;
   if (action === "page-help") return true;
   if (action === "page-plan" || action === "view-ship") return r === "site" || r === "driver" || r === "acct";
   if (action === "page-orders" || action === "order" || action === "count" || action === "inbound" || action === "ship-books" || action === "edit" || action === "delete" || action === "cancel") {
     return r === "acct";
   }
-  if (action === "page-books" || action === "books-stock" || action === "books-in" || action === "books-sales") return r === "acct";
+  if (action === "page-books" || action === "books-in" || action === "books-sales") return r === "acct";
+  // TEMP off: if (action === "page-unpack") return r === "site" || r === "acct" || r === "driver";
+  if (action === "unpack-assign") return r === "site" || r === "acct";
+  // TEMP off: if (action === "page-sitework") return r === "site" || r === "acct" || r === "driver";
+  // TEMP off: if (action === "books-stock") return r === "acct";
+  if (action === "sitework-create") return r === "site" || r === "acct";
+  if (action === "sitework-take") return r === "driver" || r === "site" || r === "acct";
+  if (action === "unpack-confirm") return r === "acct";
   if (action === "ship-plan" || action === "take-run" || action === "deliver") return r === "driver";
   if (action === "assign-driver") return r === "acct";
   if (action === "split-run") return r === "acct" || r === "driver";
@@ -1002,16 +1094,16 @@ function goHome() {
 function soonCopy(kind) {
   if (kind === "cust") return { title: "客戶", hint: "之後會放客戶資料、常用出貨對象與對帳。現在開單時直接填出貨對象即可。" };
   if (kind === "vendor") return { title: "廠商", hint: "之後會放進貨廠商與對帳。現在請到倉管的進貨記入。" };
-  if (kind === "freight") return { title: "貨運核帳", hint: "之後會放貨運費用、對帳與核銷。目前先用派貨與出貨帳單核對。" };
+  if (kind === "freight") return { title: "貨運核帳", hint: "之後會放貨運費用、對帳與核銷。目前先用司機送貨與出貨帳單核對。" };
   return { title: "即將開放", hint: "這項還在整理。" };
 }
 function hubSvg(name) {
   const d = {
-    clip: '<rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/><path d="M10 4h4v2h-4z"/>',
+    clip: '<rect x="6.5" y="3.5" width="11" height="17" rx="2.5"/><path d="M9.5 3.5h5v2.4h-5z"/><path d="M9.2 10h5.6M9.2 13.5h5.6M9.2 17h3.8"/>',
     house: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/>',
     form: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/>',
     list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M5 6.2 6.2 7.5 8 5.2M5 12.2 6.2 13.5 8 11.2M5 18.2 6.2 19.5 8 17.2"/>',
-    cal: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3.5v3M16 3.5v3M3.5 10h17"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3.2v3.4M16 3.2v3.4M3.5 10.2h17"/><path d="M8 14h2.2M12 14h2.2M16 14h1.5M8 17.2h2.2M12 17.2h2.2"/>',
     truck: '<path d="M3 16h1.2a2.4 2.4 0 0 0 4.6 0h5.2a2.4 2.4 0 0 0 4.6 0H21v-4.2L18 8h-5v8"/><path d="M3 16V9h10"/><circle cx="7.5" cy="16.2" r="1.5"/><circle cx="17.3" cy="16.2" r="1.5"/>',
     box: '<path d="M3.5 8.2 12 4.2l8.5 4-8.5 4z"/><path d="M3.5 8.2v7.6L12 20l8.5-4.2V8.2M12 12.2V20"/>',
     inbox: '<path d="M12 4v10"/><path d="M8 10.5 12 15l4-4.5"/><path d="M4.5 20h15"/><path d="M5 16.5 4.5 20h15L19 16.5"/>',
@@ -1022,116 +1114,661 @@ function hubSvg(name) {
     rack: '<path d="M4 5h16M4 12h16M4 19h16M6 5v14M18 5v14"/>',
     coin: '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4v9.2M9.4 9.2c.7-1 2.4-1.4 3.5-.4s.7 2.4-.6 3c-1.4.6-2.6.4-3.4 1.6-.6.9.1 2.4 2.1 2.6 1.5.2 2.8-.4 3.4-1.2"/>',
     chat: '<path d="M5 6.5h14v9.2H9.2L5 19.2z"/>',
-    spark: '<path d="M12 3v3.2M12 17.8V21M3 12h3.2M17.8 12H21M6.1 6.1l2.3 2.3M15.6 15.6l2.3 2.3M17.9 6.1l-2.3 2.3M8.4 15.6l-2.3 2.3"/><circle cx="12" cy="12" r="2.6"/>',
-    tag: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5v3.5h6V3.5M8 11h8M8 14.5h6"/>',
+    spark: '<path d="M12 3.2v2.8M12 18V20.8M3.2 12h2.8M18 12h2.8M6.2 6.2l2 2M15.8 15.8l2 2M17.8 6.2l-2 2M8.2 15.8l-2 2"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1.15"/>',
+    tag: '<path d="M4.8 11.2 11.2 4.8a2.2 2.2 0 0 1 1.6-.6H19a1.5 1.5 0 0 1 1.5 1.5v6.2a2.2 2.2 0 0 1-.6 1.6l-6.4 6.4a2 2 0 0 1-2.8 0L4.8 14a2 2 0 0 1 0-2.8z"/><circle cx="16.2" cy="7.8" r="1.35"/>',
   };
-  return `<span class="hub-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d[name] || d.clip}</svg></span>`;
+  const key = d[name] ? name : "clip";
+  return `<span class="hub-ico hub-ico-${key}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${d[key]}</svg></span>`;
 }
-function hubLink(attrs, icon, label, extraClass, badge) {
+/** Soft colorful sticker cartoons for 首頁（訂貨／標籤／倉庫…） */
+function hubPic(name) {
+  const pics = {
+    /* 訂貨區：娃娃蔬菜買菜（菜菜＋菜籃） */
+    clip: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e6f6ea"/>
+      <ellipse cx="24" cy="40.2" rx="11" ry="2.2" fill="#1a6843" opacity=".1"/>
+      <path d="M19.2 12.2c1.1-3.8 4.6-5.8 7.8-4.6-1.2 2.8-.4 5.4 1.6 7.2-3.4.2-6.6-.6-9.4-2.6z" fill="#2f8a58"/>
+      <path d="M26.8 8.2c2.2-1.4 5.2-.6 6.4 1.8-2 .6-3.6 2-4.4 4-1.8-1.6-2.4-3.6-2-5.8z" fill="#6bc48a"/>
+      <circle cx="22.5" cy="24.5" r="9.2" fill="#f06a4a"/>
+      <ellipse cx="19.2" cy="20.8" rx="2.4" ry="1.5" fill="#fff" opacity=".55"/>
+      <circle cx="19.4" cy="23.2" r="1.55" fill="#163528"/>
+      <circle cx="25.8" cy="23.2" r="1.55" fill="#163528"/>
+      <circle cx="19.9" cy="22.7" r=".45" fill="#fff"/>
+      <circle cx="26.3" cy="22.7" r=".45" fill="#fff"/>
+      <path d="M20.2 27.2c1.4 1.5 3.4 1.5 4.8 0" stroke="#163528" stroke-width="1.25" stroke-linecap="round"/>
+      <ellipse cx="16.6" cy="26.4" rx="1.7" ry="1.1" fill="#e84f35" opacity=".55"/>
+      <ellipse cx="28.4" cy="26.4" rx="1.7" ry="1.1" fill="#e84f35" opacity=".55"/>
+      <path d="M30.5 28.5c.4-2.2 2.4-3.4 4.6-2.8l.6 8.4c-2.4.8-4.6-.2-5.2-2.6z" fill="#c48a3a"/>
+      <path d="M31.2 27.2h8.6l1.4 2.2h-1.2l-1.1 6.2c-.2 1.1-1.1 1.9-2.2 1.9H33c-1.1 0-2-.8-2.2-1.9l-1.1-6.2h-1z" fill="#f2c14b"/>
+      <path d="M32.4 31.2h6.2M32.2 33.6h5.6" stroke="#d4a03a" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="34.2" cy="29.6" r="1.15" fill="#6bc48a"/>
+      <circle cx="37.2" cy="30.2" r="1" fill="#f06a4a"/>
+    </svg>`,
+    /* 標籤印製：Q 版貼紙標籤 */
+    tag: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e4f3f2"/>
+      <path d="M11.5 23.5 22 13a3.2 3.2 0 0 1 2.3-1H34a2.4 2.4 0 0 1 2.4 2.4v9.7a3.2 3.2 0 0 1-1 2.3L25.1 36.8a2.8 2.8 0 0 1-4 0L11.5 27.2a2.8 2.8 0 0 1 0-3.7z" fill="#fff"/>
+      <path d="M11.5 23.5 22 13a3.2 3.2 0 0 1 2.3-1H34a2.4 2.4 0 0 1 2.4 2.4v9.7a3.2 3.2 0 0 1-1 2.3L25.1 36.8a2.8 2.8 0 0 1-4 0L11.5 27.2a2.8 2.8 0 0 1 0-3.7z" stroke="#2a6f78" stroke-width="1.45"/>
+      <circle cx="31.2" cy="18.2" r="2.5" fill="#5eb3b8"/>
+      <circle cx="31.2" cy="18.2" r="1" fill="#fff" opacity=".7"/>
+      <circle cx="20.2" cy="24" r="1.35" fill="#163528"/>
+      <circle cx="25.6" cy="24" r="1.35" fill="#163528"/>
+      <circle cx="20.6" cy="23.55" r=".4" fill="#fff"/>
+      <circle cx="26" cy="23.55" r=".4" fill="#fff"/>
+      <path d="M20.8 27.4c1.5 1.4 3.5 1.4 5 0" stroke="#163528" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M18.2 21.2c.7-.7 1.6-.7 2.2 0M25.2 21.2c.7-.7 1.6-.7 2.2 0" stroke="#2a6f78" stroke-width="1.1" stroke-linecap="round"/>
+      <ellipse cx="17.6" cy="26.2" rx="1.5" ry=".9" fill="#f2a27a" opacity=".7"/>
+      <ellipse cx="28.4" cy="26.2" rx="1.5" ry=".9" fill="#f2a27a" opacity=".7"/>
+      <path d="M14.5 29.5c2.2 2.8 5.8 3.4 8.6 1.2" stroke="#6bc48a" stroke-width="1.55" stroke-linecap="round"/>
+    </svg>`,
+    /* 拆櫃回報：貨櫃車（不是紙箱） */
+    box: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e7f2f0"/>
+      <ellipse cx="24" cy="39.5" rx="14" ry="2" fill="#1a6843" opacity=".1"/>
+      <rect x="7.5" y="16.5" width="22" height="14.5" rx="1.6" fill="#3d9a64"/>
+      <rect x="7.5" y="16.5" width="22" height="3.2" fill="#2f8a58"/>
+      <path d="M10.2 19.7v9.5M14.2 19.7v9.5M18.2 19.7v9.5M22.2 19.7v9.5M26.2 19.7v9.5" stroke="#8fd4a4" stroke-width="1.15" opacity=".85"/>
+      <path d="M7.5 23.8h22M7.5 27.5h22" stroke="#2f8a58" stroke-width="1" opacity=".65"/>
+      <path d="M29.5 22.5h6.8l3.7 5.2V31H29.5V22.5z" fill="#f2c14b"/>
+      <path d="M29.5 22.5h5.2v5.4H29.5z" fill="#ffe9a8"/>
+      <rect x="31.2" y="23.6" width="3.4" height="3.2" rx=".7" fill="#7ec8e0"/>
+      <rect x="7.5" y="30.2" width="32.5" height="2.4" rx=".6" fill="#5a6170"/>
+      <circle cx="14" cy="34.2" r="3.15" fill="#2a3430"/>
+      <circle cx="14" cy="34.2" r="1.25" fill="#c5d0cb"/>
+      <circle cx="33.2" cy="34.2" r="3.15" fill="#2a3430"/>
+      <circle cx="33.2" cy="34.2" r="1.25" fill="#c5d0cb"/>
+      <circle cx="36.5" cy="14.5" r="3.6" fill="#f2a27a"/>
+      <path d="M35.2 14.3h2.6M36.5 13v2.6" stroke="#fff" stroke-width="1.35" stroke-linecap="round"/>
+      <path d="M11 14.2c1.2-1.6 3.4-1.8 4.6-.2.9 1.2.4 2.6-1 3.1" stroke="#6bc48a" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>`,
+    /* 倉庫管理：倉庫＋菜箱 */
+    crate: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e8f4f5"/>
+      <path d="M9.5 22 24 11.5 38.5 22v14.5a2.5 2.5 0 0 1-2.5 2.5h-24a2.5 2.5 0 0 1-2.5-2.5V22z" fill="#fff"/>
+      <path d="M9.5 22 24 11.5 38.5 22" stroke="#2a6f78" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M11 22.5h26v13.5a1.8 1.8 0 0 1-1.8 1.8H12.8a1.8 1.8 0 0 1-1.8-1.8V22.5z" fill="#d7ebea" stroke="#2a6f78" stroke-width="1.35"/>
+      <rect x="20.2" y="27.5" width="7.6" height="10.3" rx="1.2" fill="#fff8e8" stroke="#c48a3a" stroke-width="1.2"/>
+      <path d="M20.2 31.2h7.6" stroke="#c48a3a" stroke-width="1.1"/>
+      <rect x="13.2" y="29.5" width="6.2" height="5.2" rx="1" fill="#f2a27a"/>
+      <rect x="28.6" y="29.5" width="6.2" height="5.2" rx="1" fill="#6bc48a"/>
+      <circle cx="16.3" cy="31.6" r=".7" fill="#fff" opacity=".7"/>
+      <circle cx="31.7" cy="31.6" r=".7" fill="#fff" opacity=".7"/>
+      <circle cx="24" cy="18.5" r="3.4" fill="#8fd4a4"/>
+      <circle cx="22.7" cy="17.8" r=".7" fill="#163528"/>
+      <circle cx="25.3" cy="17.8" r=".7" fill="#163528"/>
+      <path d="M22.8 19.8c.7.7 1.7.7 2.4 0" stroke="#163528" stroke-width="1" stroke-linecap="round"/>
+      <path d="M24 14.2v-1.6M22.2 14.8l-1.2-1.2M25.8 14.8l1.2-1.2" stroke="#2f8a58" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`,
+    /* 現場工作：工作單＋安全帽 */
+    cal: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#f6f0e4"/>
+      <rect x="12" y="14.5" width="20" height="24" rx="3.2" fill="#fff" stroke="#c48a3a" stroke-width="1.45"/>
+      <rect x="16.5" y="12" width="11" height="5" rx="2" fill="#e8b86d"/>
+      <path d="M17.5 22.5h9M17.5 27h9M17.5 31.5h6" stroke="#c48a3a" stroke-width="1.45" stroke-linecap="round"/>
+      <circle cx="33.5" cy="18.5" r="7" fill="#f2c14b"/>
+      <path d="M28.2 19.2c.4-4.2 2.8-6.8 5.3-7.2 2.6.3 5 2.8 5.4 7.2-3.4.6-7 .6-10.7 0z" fill="#e8b86d"/>
+      <circle cx="31.4" cy="20.2" r="1.15" fill="#163528"/>
+      <circle cx="35.6" cy="20.2" r="1.15" fill="#163528"/>
+      <circle cx="31.75" cy="19.75" r=".35" fill="#fff"/>
+      <circle cx="35.95" cy="19.75" r=".35" fill="#fff"/>
+      <path d="M32 22.8c.9.9 2.1.9 3 0" stroke="#163528" stroke-width="1.05" stroke-linecap="round"/>
+      <path d="M15.8 22.2l1.5 1.5 2.6-2.8" stroke="#6bc48a" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="14.5" cy="35.5" r="2.4" fill="#6bc48a"/>
+      <path d="M14.5 34.2v2.6M13.2 35.5h2.6" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`,
+    /* 帳款業務：笑臉金幣 */
+    coin: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#f7efe4"/>
+      <ellipse cx="18" cy="31.5" rx="8.5" ry="8" fill="#e8b86d"/>
+      <ellipse cx="18" cy="30.2" rx="8.5" ry="8" fill="#f2c14b"/>
+      <circle cx="15.6" cy="28.6" r="1.1" fill="#8d5a3a"/>
+      <circle cx="20.4" cy="28.6" r="1.1" fill="#8d5a3a"/>
+      <path d="M15.8 32.2c1.2 1.3 3.2 1.3 4.4 0" stroke="#8d5a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="29.5" cy="20.5" r="11" fill="#e8b86d"/>
+      <circle cx="29.5" cy="19.2" r="11" fill="#f7d48a"/>
+      <circle cx="29.5" cy="19.2" r="7.8" fill="#fff7e4" stroke="#c48a3a" stroke-width="1.2"/>
+      <path d="M29.5 14.2v10" stroke="#8d5a3a" stroke-width="1.55" stroke-linecap="round"/>
+      <path d="M26.4 16.4c.7-1 2.4-1.4 3.5-.3 1.1 1.1.7 2.5-.6 3.1-1.4.6-2.6.4-3.3 1.6-.5.9.2 2.3 2.1 2.6 1.5.2 2.8-.4 3.4-1.2" stroke="#8d5a3a" stroke-width="1.35" stroke-linecap="round"/>
+      <ellipse cx="25.2" cy="15.5" rx="2.2" ry="1.3" fill="#fff" opacity=".55"/>
+      <path d="M12.5 16.5c1.4-2 4-2.4 5.6-.4" stroke="#6bc48a" stroke-width="1.45" stroke-linecap="round"/>
+    </svg>`,
+    /* 營運統計：微笑長條圖 */
+    chart: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#f3efe6"/>
+      <rect x="11" y="28" width="6.2" height="9.5" rx="1.6" fill="#8fd4a4"/>
+      <rect x="20.4" y="21" width="6.2" height="16.5" rx="1.6" fill="#6bc48a"/>
+      <rect x="29.8" y="15" width="6.2" height="22.5" rx="1.6" fill="#f2a27a"/>
+      <circle cx="14.1" cy="25.2" r="2.3" fill="#fff"/>
+      <circle cx="13.5" cy="24.7" r=".55" fill="#163528"/>
+      <circle cx="14.9" cy="24.7" r=".55" fill="#163528"/>
+      <path d="M13.3 26.3c.5.5 1.2.5 1.7 0" stroke="#163528" stroke-width=".9" stroke-linecap="round"/>
+      <circle cx="23.5" cy="18.2" r="2.3" fill="#fff"/>
+      <circle cx="22.9" cy="17.7" r=".55" fill="#163528"/>
+      <circle cx="24.3" cy="17.7" r=".55" fill="#163528"/>
+      <path d="M22.7 19.3c.5.5 1.2.5 1.7 0" stroke="#163528" stroke-width=".9" stroke-linecap="round"/>
+      <circle cx="32.9" cy="12.2" r="2.4" fill="#fff"/>
+      <circle cx="32.3" cy="11.7" r=".55" fill="#163528"/>
+      <circle cx="33.7" cy="11.7" r=".55" fill="#163528"/>
+      <path d="M32.1 13.4c.55.55 1.3.55 1.85 0" stroke="#163528" stroke-width=".9" stroke-linecap="round"/>
+      <path d="M10.5 37.5h27" stroke="#c4b8a4" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M36.8 18.5c1.6-1.2 3.6-.4 4 1.4" stroke="#c48a3a" stroke-width="1.35" stroke-linecap="round"/>
+    </svg>`,
+    /* 小幫手：芽芽助手 */
+    spark: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#eef3ee"/>
+      <ellipse cx="24" cy="39.8" rx="10" ry="2" fill="#1a6843" opacity=".1"/>
+      <path d="M24 12.5c-1.8 3.4-5.2 5.2-8.4 4.6 1.4-3.6 4.2-5.8 8.4-4.6z" fill="#2f8a58"/>
+      <path d="M24 12.5c1.8 3.4 5.2 5.2 8.4 4.6-1.4-3.6-4.2-5.8-8.4-4.6z" fill="#6bc48a"/>
+      <circle cx="24" cy="26" r="10.2" fill="#fff"/>
+      <circle cx="24" cy="26" r="10.2" stroke="#5a7264" stroke-width="1.35"/>
+      <circle cx="20.2" cy="24.2" r="1.55" fill="#163528"/>
+      <circle cx="27.8" cy="24.2" r="1.55" fill="#163528"/>
+      <circle cx="20.7" cy="23.7" r=".45" fill="#fff"/>
+      <circle cx="28.3" cy="23.7" r=".45" fill="#fff"/>
+      <path d="M20.6 28.6c1.9 2 5 2 6.8 0" stroke="#163528" stroke-width="1.25" stroke-linecap="round"/>
+      <ellipse cx="17.4" cy="27.2" rx="1.8" ry="1.1" fill="#f2a27a" opacity=".75"/>
+      <ellipse cx="30.6" cy="27.2" rx="1.8" ry="1.1" fill="#f2a27a" opacity=".75"/>
+      <path d="M18.5 20.8c.8-.9 1.8-.9 2.5 0M27 20.8c.8-.9 1.8-.9 2.5 0" stroke="#5a7264" stroke-width="1.15" stroke-linecap="round"/>
+      <circle cx="37.2" cy="14.5" r="3.3" fill="#f2a27a"/>
+      <path d="M37.2 12.8v3.4M35.5 14.5h3.4" stroke="#fff" stroke-width="1.35" stroke-linecap="round"/>
+      <path d="M11.5 16.5l1.3 2.2 2.4.2-1.8 1.6.6 2.4-2.1-1.2-2.1 1.2.6-2.4-1.8-1.6 2.4-.2z" fill="#f2c14b"/>
+    </svg>`,
+  };
+  const key = pics[name] ? name : "clip";
+  const svg = String(pics[key]).replace(
+    "<svg ",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" ',
+  );
+  return `<span class="hub-pic hub-pic-${key}" aria-hidden="true">${svg}</span>`;
+}
+/** Colorful mini illustrations for 下單／填單／排程／送貨 */
+function flowPic(name) {
+  const pics = {
+    form: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e7f5ec"/>
+      <rect x="14" y="10" width="20" height="28" rx="4" fill="#fff" stroke="#1a6843" stroke-width="1.55"/>
+      <rect x="18" y="7.5" width="12" height="6" rx="2" fill="#6bc48a"/>
+      <path d="M18.5 20h11M18.5 25h11M18.5 30h7" stroke="#1a6843" stroke-width="1.65" stroke-linecap="round"/>
+      <circle cx="34" cy="33.5" r="7.2" fill="#f2a27a"/>
+      <path d="M31.4 33.7h5.2M34 31.1v5.2" stroke="#fff" stroke-width="1.85" stroke-linecap="round"/>
+    </svg>`,
+    list: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#eef4fb"/>
+      <rect x="12" y="11" width="24" height="26" rx="4.5" fill="#fff" stroke="#3d6ea5" stroke-width="1.55"/>
+      <circle cx="17.5" cy="19" r="2.35" fill="#6bc48a"/>
+      <path d="M16.2 19.15l1 .95 2.1-2.1" stroke="#fff" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M22 19h9" stroke="#3d6ea5" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="17.5" cy="26" r="2.35" fill="#6bc48a"/>
+      <path d="M16.2 26.15l1 .95 2.1-2.1" stroke="#fff" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M22 26h9" stroke="#3d6ea5" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="17.5" cy="33" r="2.35" fill="#d9e4f0"/>
+      <path d="M22 33h7" stroke="#9bb0c8" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`,
+    cal: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#f5f0e6"/>
+      <rect x="11" y="13" width="26" height="23" rx="4.5" fill="#fff" stroke="#c48a3a" stroke-width="1.55"/>
+      <rect x="11" y="13" width="26" height="7.5" rx="4.5" fill="#e8b86d"/>
+      <path d="M18 10.5v5.5M30 10.5v5.5" stroke="#c48a3a" stroke-width="2" stroke-linecap="round"/>
+      <rect x="15.5" y="24.5" width="5.5" height="5" rx="1.3" fill="#6bc48a"/>
+      <rect x="22.5" y="24.5" width="5.5" height="5" rx="1.3" fill="#8fd4a4"/>
+      <rect x="29.5" y="24.5" width="4" height="5" rx="1.3" fill="#f2a27a"/>
+      <rect x="15.5" y="31.5" width="5.5" height="5" rx="1.3" fill="#d4e9da"/>
+      <rect x="22.5" y="31.5" width="5.5" height="5" rx="1.3" fill="#6bc48a"/>
+    </svg>`,
+    truck: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e7f3ef"/>
+      <path d="M10 28V18.5c0-1.4 1.1-2.5 2.5-2.5H24v12H10z" fill="#1a6843"/>
+      <path d="M24 20h7.2L36 26.5V30H24V20z" fill="#3d9a64"/>
+      <rect x="12" y="18" width="9" height="6" rx="1.4" fill="#8fd4a4" opacity=".95"/>
+      <circle cx="15.5" cy="32.5" r="3.3" fill="#2a3430"/>
+      <circle cx="15.5" cy="32.5" r="1.35" fill="#c5d0cb"/>
+      <circle cx="31.5" cy="32.5" r="3.3" fill="#2a3430"/>
+      <circle cx="31.5" cy="32.5" r="1.35" fill="#c5d0cb"/>
+      <circle cx="27" cy="15.8" r="3.4" fill="#f2a27a"/>
+      <path d="M27 13.5c1.45 0 2.5 1.55 2.5 2.9-1.25.2-2.3-.1-2.5-1.15-.3 1-.95 1.35-2.3 1.15.1-1.45 1.05-2.9 2.3-2.9z" fill="#6bc48a"/>
+    </svg>`,
+    chat: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e9f8ef"/>
+      <path d="M13.5 15h21a4.2 4.2 0 0 1 4.2 4.2v9a4.2 4.2 0 0 1-4.2 4.2H22l-6.8 5.2V32.4H13.5a4.2 4.2 0 0 1-4.2-4.2v-9A4.2 4.2 0 0 1 13.5 15z" fill="#06c755"/>
+      <circle cx="20" cy="24.2" r="1.85" fill="#fff"/>
+      <circle cx="24" cy="24.2" r="1.85" fill="#fff"/>
+      <circle cx="28" cy="24.2" r="1.85" fill="#fff"/>
+    </svg>`,
+  };
+  const raw = pics[name] || pics.form;
+  const svg = String(raw).replace(
+    "<svg ",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" ',
+  );
+  return `<span class="flow-pic" aria-hidden="true">${svg}</span>`;
+}
+function hubLink(attrs, icon, label, extraClass, badge, note) {
   const mark = badge ? `<span class="tab-badge">${esc(String(badge))}</span>` : "";
   const pending = badge ? " has-pending" : "";
-  return `<button type="button" class="hub-link${extraClass ? ` ${extraClass}` : ""}${pending}" ${attrs}>${hubSvg(icon)}<span class="hub-lab">${esc(label)}${mark}</span></button>`;
+  const noteHtml = note ? `<span class="hub-note">${esc(note)}</span>` : "";
+  return `<button type="button" class="hub-link${extraClass ? ` ${extraClass}` : ""}${pending}" ${attrs}>${hubSvg(icon)}<span class="hub-lab">${esc(label)}${mark}</span>${noteHtml}</button>`;
+}
+function homeHelloWord() {
+  const h = new Date().getHours();
+  if (h < 11) return "早安";
+  if (h < 17) return "午安";
+  return "晚安";
+}
+function homeDayLabel() {
+  try {
+    return new Intl.DateTimeFormat("zh-Hant", {
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    }).format(new Date());
+  } catch (_) {
+    return today();
+  }
+}
+function homeMascotSvg() {
+  return `<span class="home-mascot" aria-hidden="true">
+    <svg viewBox="0 0 120 120" fill="none">
+      <ellipse cx="60" cy="102" rx="34" ry="8" fill="#1a6843" opacity=".12"/>
+      <path d="M38 78c8 14 36 14 44 0 4-8 2-22-6-30-10 10-22 14-32 12-8 6-10 14-6 18z" fill="#3d9a64"/>
+      <path d="M48 52c-2-18 10-34 28-36-4 16-2 30 8 40-18 2-32-2-36-4z" fill="#6bc48a"/>
+      <path d="M34 58c-10-14-8-32 4-42 2 18 10 28 22 34-10 4-20 6-26 8z" fill="#2f8a58"/>
+      <circle cx="52" cy="70" r="3.2" fill="#163528"/>
+      <circle cx="68" cy="70" r="3.2" fill="#163528"/>
+      <circle cx="53.2" cy="69" r="1" fill="#fff"/>
+      <circle cx="69.2" cy="69" r="1" fill="#fff"/>
+      <path d="M54 78c4 4 10 4 14 0" stroke="#163528" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="44" cy="74" r="3.5" fill="#f2a27a" opacity=".85"/>
+      <circle cx="76" cy="74" r="3.5" fill="#f2a27a" opacity=".85"/>
+      <path d="M72 44c10-2 20 4 22 14-8 2-16 0-22-4z" fill="#8fd4a4"/>
+    </svg>
+  </span>`;
+}
+function hubFlowStep(n, attrs, icon, label, note, badge) {
+  const mark = badge ? `<span class="tab-badge">${esc(String(badge))}</span>` : "";
+  const pending = badge ? " has-pending" : "";
+  return `<button type="button" class="home-step${pending}" ${attrs}>
+    <span class="home-step-n" aria-hidden="true">${esc(String(n))}</span>
+    <span class="home-step-ico" aria-hidden="true">${flowPic(icon)}</span>
+    <span class="home-step-lab">${esc(label)}${mark}</span>
+    ${note ? `<span class="home-step-note">${esc(note)}</span>` : ""}
+  </button>`;
+}
+function opsFlowTabHtml(pic, label, badgeHtml) {
+  return `${flowPic(pic)}<span class="tab-lab">${esc(label)}${badgeHtml || ""}</span>`;
+}
+function paintOpsFlowTabIcons() {
+  const map = {
+    form: ["form", "下單"],
+    today: ["list", "已填"],
+    line: ["chat", "LINE"],
+    short: ["cal", "排程"],
+    ship: ["truck", "送貨"],
+  };
+  document.querySelectorAll("#flow-tabs [data-ops]").forEach((b) => {
+    const m = map[b.dataset.ops];
+    if (!m) return;
+    const badge = b.querySelector(".tab-badge");
+    const badgeHtml = badge ? badge.outerHTML : "";
+    b.innerHTML = opsFlowTabHtml(m[0], m[1], badgeHtml);
+  });
 }
 function renderHomeHub() {
   const box = document.getElementById("home-hub");
+  const lead = document.querySelector("#page-home .hub-lead");
   if (!box) return;
   if (!currentStaff()) {
     box.innerHTML = "";
-    box.classList.remove("hub-pick");
+    box.classList.remove("hub-pick", "home-app");
+    if (lead) lead.textContent = "登入後開始今天的出貨。";
     return;
   }
-  const orderBtns = [];
+  const role = currentRole();
+  const who = currentStaff();
+  if (lead) lead.hidden = true;
+  const flow = [];
   if (can("page-orders")) {
-    orderBtns.push(hubLink('data-go="orders" data-orders-pane="form"', "form", "開單"));
-    orderBtns.push(hubLink('data-go="orders" data-orders-pane="today"', "list", "今日已填"));
+    flow.push(hubFlowStep(1, 'data-go="orders" data-orders-pane="form"', "form", "下單", "建立訂單"));
+    flow.push(hubFlowStep(2, 'data-go="orders" data-orders-pane="today"', "list", "已填單", "可改／結單"));
     const lineN = linePendingCount();
-    orderBtns.push(hubLink('data-go="orders" data-orders-pane="line"', "chat", "LINE判讀", "", lineN ? `待核可 ${lineN}` : ""));
+    flow.push(
+      hubFlowStep(
+        "‧",
+        'data-go="orders" data-orders-pane="line"',
+        "chat",
+        "LINE",
+        "轉成已填單",
+        lineN ? `${lineN}` : "",
+      ),
+    );
   }
   if (can("page-plan")) {
-    if (currentRole() !== "driver") orderBtns.push(hubLink('data-go="plan" data-plan-main="short"', "cal", "排程"));
-    orderBtns.push(hubLink('data-go="plan" data-plan-main="ship"', "truck", "派貨"));
-  }
-  const wareBtns = [];
-  if (can("page-books")) {
-    wareBtns.push(hubLink('data-go="books" data-books="stock"', "crate", "資材／庫存"));
-    wareBtns.push(hubLink('data-go="books" data-books="in"', "inbox", "進貨"));
-    wareBtns.push(hubLink('data-go="books" data-books="rack"', "rack", "鐵架／八格籃"));
-  }
-  const acctBtns = [];
-  if (can("page-books")) {
-    acctBtns.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
-    acctBtns.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
-    acctBtns.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
-    acctBtns.push(hubLink('data-go="label-prints"', "tag", "標籤列印明細"));
-  }
-  const helpBtns = [hubLink('data-go="help"', "truck", "貨運帳務比對")];
-  const card = (id, tone, icon, title, btns, go) => {
-    if (!btns.length) return "";
-    if (go) {
-      return `<button type="button" class="hub-tile hub-${tone}" data-go="${esc(go)}">
-      <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
-      <h2>${esc(title)}</h2>
-    </button>`;
+    if (role !== "driver") {
+      flow.push(hubFlowStep(3, 'data-go="plan" data-plan-main="short"', "cal", "現場排程", "備貨清單"));
     }
-    return `<button type="button" class="hub-tile hub-${tone}" data-hub="${id}">
-      <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
-      <h2>${esc(title)}</h2>
-    </button>`;
-  };
-  const openCard = (id, tone, icon, title, btns) => {
-    return `<section class="hub-card hub-${tone} is-open">
+    flow.push(
+      hubFlowStep(
+        role === "driver" ? 1 : 4,
+        'data-go="plan" data-plan-main="ship"',
+        "truck",
+        role === "driver" ? "擇單送貨" : "司機送貨",
+        "確認出貨",
+      ),
+    );
+  }
+  const prep = [];
+  // TEMP: 庫存盤點暫僅雅芳（books-stock）；進貨／資財仍依 page-books
+  if (can("books-stock")) {
+    prep.push(
+      hubLink('data-go="books" data-books="stock" data-stock-phase="pick"', "crate", "庫存盤點"),
+    );
+  }
+  if (can("page-books")) {
+    prep.push(hubLink('data-go="books" data-books="in"', "inbox", "進貨", "is-soft"));
+    prep.push(hubLink('data-go="books" data-books="rack"', "rack", "資財管理", "", "", "鐵架／八格籃"));
+  }
+  const unpackBtns = [];
+  if (can("page-unpack")) {
+    unpackBtns.push(hubLink('data-go="unpack"', "box", "拆櫃回報", "is-primary"));
+  }
+  const labelBtns = [];
+  if (can("page-orders") || can("page-plan") || can("page-books")) {
+    labelBtns.push(hubLink('data-go="labels"', "tag", "標籤印製"));
+  }
+  if (can("page-books")) {
+    labelBtns.push(hubLink('data-go="label-prints"', "tag", "列印明細"));
+  }
+  const acct = [];
+  if (can("page-books")) {
+    acct.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
+    acct.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
+    acct.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
+  }
+  const help = [hubLink('data-go="help"', "truck", "貨運帳務比對")];
+  const openCard = (id, tone, icon, title, bodyHtml) =>
+    `<section class="hub-card hub-${tone} is-open home-open">
       <div class="hub-head">
-        <span class="hub-mark" aria-hidden="true">${hubSvg(icon)}</span>
+        <span class="hub-mark has-pic" aria-hidden="true">${hubPic(icon)}</span>
         <h2>${esc(title)}</h2>
         <button type="button" class="ghost hub-back" data-hub-back>返回</button>
       </div>
-      <div class="hub-links">${btns.join("")}</div>
+      ${bodyHtml}
     </section>`;
-  };
-  const labelBtns =
-    can("page-orders") || can("page-plan") || can("page-books") ? ["x"] : [];
-  const tiles = [
-    { id: "orders", tone: "orders", icon: "clip", title: "訂單區", btns: orderBtns },
-    { id: "labels", tone: "ware", icon: "tag", title: "標籤貼紙", btns: labelBtns, go: "labels" },
-    { id: "ware", tone: "ware", icon: "box", title: "倉管", btns: wareBtns },
-    { id: "acct", tone: "acct", icon: "coin", title: "帳款業務", btns: acctBtns },
-    { id: "help", tone: "help", icon: "spark", title: "小幫手", btns: helpBtns },
-  ].filter((x) => x.btns.length);
-  if (hubOpen) {
-    const cur = tiles.find((x) => x.id === hubOpen);
+  const folders = [
+    {
+      id: "flow",
+      tone: "orders",
+      icon: "clip",
+      title: "訂貨區",
+      blurb: "下單・已填・排程・送貨",
+      open: flow.length
+        ? openCard(
+            "flow",
+            "orders",
+            "clip",
+            "訂貨區",
+            `<p class="home-open-hint">進入後可用上方分頁切換。</p><div class="home-flow">${flow.join("")}</div>`,
+          )
+        : "",
+      show: flow.length > 0,
+    },
+    {
+      id: "labels",
+      tone: "ware",
+      icon: "tag",
+      title: "標籤印製",
+      blurb: "貼紙・列印明細",
+      open: labelBtns.length
+        ? openCard("labels", "ware", "tag", "標籤印製", `<div class="hub-links">${labelBtns.join("")}</div>`)
+        : "",
+      show: labelBtns.length > 0,
+    },
+    {
+      id: "unpack",
+      tone: "ware",
+      icon: "box",
+      title: "拆櫃回報",
+      blurb: "標籤彙整・回填數量",
+      open: "",
+      show: unpackBtns.length > 0,
+      direct: "unpack",
+    },
+    {
+      id: "sitework",
+      tone: "ware",
+      icon: "cal",
+      title: "現場工作",
+      blurb: "調倉・接單・工作單",
+      open: "",
+      show: can("page-sitework"),
+      direct: "sitework",
+    },
+    {
+      id: "stats",
+      tone: "acct",
+      icon: "chart",
+      title: "營運統計",
+      blurb: "圖表・刪除紀錄",
+      open: "",
+      show: can("page-stats"),
+      direct: "stats",
+    },
+    {
+      id: "prep",
+      tone: "ware",
+      icon: "crate",
+      title: "倉庫管理",
+      blurb: "盤點・進貨・資財",
+      open: prep.length ? openCard("prep", "ware", "crate", "倉庫管理", `<div class="hub-links">${prep.join("")}</div>`) : "",
+      show: prep.length > 0,
+    },
+    {
+      id: "acct",
+      tone: "acct",
+      icon: "coin",
+      title: "帳款業務",
+      blurb: "帳單・客戶",
+      open: acct.length ? openCard("acct", "acct", "coin", "帳款業務", `<div class="hub-links">${acct.join("")}</div>`) : "",
+      show: acct.length > 0,
+    },
+    {
+      id: "help",
+      tone: "help",
+      icon: "spark",
+      title: "小幫手",
+      blurb: "貨運核對",
+      open: help.length ? openCard("help", "help", "spark", "小幫手", `<div class="hub-links">${help.join("")}</div>`) : "",
+      show: help.length > 0,
+    },
+  ].filter((x) => x.show);
+  if (isUnpackerRole()) {
+    box.classList.add("home-app");
     box.classList.remove("hub-pick");
-    box.innerHTML = cur
-      ? openCard(cur.id, cur.tone, cur.icon, cur.title, cur.btns)
-      : tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns, x.go)).join("");
-    if (!cur) box.classList.add("hub-pick");
+    // TEMP: 拆櫃未完成，暫僅雅芳 — 拆櫃人員先顯示提示
+    if (!can("page-unpack")) {
+      box.innerHTML = `<header class="home-top">
+      <p class="home-meta">${esc(homeDayLabel())}</p>
+      <h1 class="home-title">${esc(who)}<span>拆櫃作業</span></h1>
+    </header>
+    <p class="home-open-hint">拆櫃回報建置中，暫僅主管可進入。</p>`;
+      return;
+    }
+    const n = typeof window.unpackPendingCountForMe === "function" ? window.unpackPendingCountForMe() : 0;
+    box.innerHTML = `<header class="home-top">
+      <p class="home-meta">${esc(homeDayLabel())}</p>
+      <h1 class="home-title">${esc(who)}<span>拆櫃作業</span></h1>
+    </header>
+    <div class="home-menu">
+      <button type="button" class="home-mod is-primary hub-ware" data-hub="unpack">
+        <span class="home-mod-ico hub-mark has-pic" aria-hidden="true">${hubPic("box")}</span>
+        <span class="home-mod-copy">
+          <strong>我的拆櫃回報</strong>
+          <em>${n ? `待回報 ${n} 櫃` : "點進去回報指派給你的貨櫃"}</em>
+        </span>
+        <span class="home-mod-go" aria-hidden="true">›</span>
+      </button>
+    </div>`;
     return;
   }
-  box.classList.add("hub-pick");
-  box.innerHTML = tiles.map((x) => card(x.id, x.tone, x.icon, x.title, x.btns, x.go)).join("");
+  if (hubOpen) {
+    const cur = folders.find((x) => x.id === hubOpen);
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app");
+    if (cur?.open) {
+      box.innerHTML = cur.open;
+      return;
+    }
+    hubOpen = "";
+  }
+  box.classList.add("hub-pick", "home-app");
+  const roleHint =
+    role === "driver"
+      ? "司機作業"
+      : role === "site"
+        ? "現場作業"
+        : role === "unpacker"
+          ? "拆櫃作業"
+          : "會計作業";
+  const primary = folders.find((x) => x.id === "flow");
+  const rest = folders.filter((x) => x.id !== "flow");
+  const tile = (x, cls = "") =>
+    `<button type="button" class="home-mod${cls ? ` ${cls}` : ""} hub-${x.tone}" data-hub="${esc(x.id)}">
+      <span class="home-mod-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
+      <span class="home-mod-copy">
+        <strong>${esc(x.title)}</strong>
+        <em>${esc(x.blurb || "")}</em>
+      </span>
+      <span class="home-mod-go" aria-hidden="true">›</span>
+    </button>`;
+  box.innerHTML = `<header class="home-top">
+      <p class="home-meta">${esc(homeDayLabel())}</p>
+      <h1 class="home-title">${esc(who)}<span>${esc(roleHint)}</span></h1>
+    </header>
+    <div class="home-menu">
+      ${primary ? tile(primary, "is-primary") : ""}
+      ${rest.length ? `<div class="home-menu-grid">${rest.map((x) => tile(x)).join("")}</div>` : ""}
+    </div>`;
 }
 function normalizeOrdersPane(v) {
   if (v === "today" || v === "line") return v;
   return "form";
 }
+function currentOpsStep() {
+  if (page === "plan") return planMain === "ship" ? "ship" : "short";
+  if (page === "orders") return normalizeOrdersPane(ordersPane);
+  return "";
+}
+function syncOpsFlowTabs() {
+  const flow = document.getElementById("flow-tabs");
+  if (!flow) return;
+  if (!flow.dataset.flowPics) {
+    paintOpsFlowTabIcons();
+    flow.dataset.flowPics = "1";
+  }
+  const onOps = page === "orders" || page === "plan";
+  const logged = !!currentStaff();
+  flow.hidden = !logged || !onOps;
+  const step = currentOpsStep();
+  const role = currentRole();
+  flow.querySelectorAll("[data-ops]").forEach((b) => {
+    const ops = b.dataset.ops;
+    let show = false;
+    if (ops === "form" || ops === "today" || ops === "line") show = can("page-orders");
+    else if (ops === "short") show = can("page-plan") && role !== "driver";
+    else if (ops === "ship") show = can("page-plan");
+    b.hidden = !show;
+    b.classList.toggle("on", show && ops === step);
+  });
+  const ordersTabs = document.getElementById("orders-pane-tabs");
+  if (ordersTabs) ordersTabs.hidden = true;
+  const planTabs = document.getElementById("plan-main-tabs");
+  if (planTabs) planTabs.hidden = true;
+}
+function goOpsStep(step, { skipEnteringGuard } = {}) {
+  const next = String(step || "");
+  if (next === "form" || next === "today" || next === "line") {
+    if (!can("page-orders")) return setStatus("沒有下單權限。", true);
+    if (!skipEnteringGuard && document.body.classList.contains("order-entering") && next !== "form") {
+      setStatus("正在輸入訂單，請先確認送出或清掉本單。", true);
+      return false;
+    }
+    const samePage = page === "orders";
+    page = "orders";
+    ordersPane = next;
+    hubOpen = "";
+    if (samePage) {
+      syncOpsFlowTabs();
+      applyOrdersPane(false);
+      applyCopy();
+      return true;
+    }
+    render();
+    return true;
+  }
+  if (next === "short" || next === "ship") {
+    if (!can("page-plan")) return setStatus("沒有現場排程權限。", true);
+    if (!skipEnteringGuard && document.body.classList.contains("order-entering")) {
+      setStatus("正在輸入訂單，請先確認送出或清掉本單。", true);
+      return false;
+    }
+    const want = currentRole() === "driver" ? "ship" : next === "ship" ? "ship" : "short";
+    const samePage = page === "plan";
+    page = "plan";
+    planMain = want;
+    hubOpen = "";
+    if (samePage) {
+      syncOpsFlowTabs();
+      applyPlanMain(false);
+      applyPlanPane();
+      return true;
+    }
+    render();
+    return true;
+  }
+  return false;
+}
 function goFromHub(btn) {
   const go = btn.dataset.go;
   if (go === "orders") {
-    if (!can("page-orders")) return setStatus("沒有訂單權限。", true);
-    page = "orders";
-    ordersPane = normalizeOrdersPane(btn.dataset.ordersPane);
+    return goOpsStep(normalizeOrdersPane(btn.dataset.ordersPane));
   } else if (go === "plan") {
-    if (!can("page-plan")) return setStatus("沒有排程權限。", true);
-    page = "plan";
-    planMain = btn.dataset.planMain === "ship" ? "ship" : "short";
+    return goOpsStep(btn.dataset.planMain === "ship" ? "ship" : "short");
   } else if (go === "books") {
-    if (!can("page-books")) return setStatus("沒有倉管／帳款權限。", true);
+    const part = btn.dataset.books || "stock";
+    if (part === "stock") {
+      // TEMP: 庫存未完成，暫僅雅芳
+      if (!can("books-stock")) return setStatus("庫存盤點建置中，暫僅主管可進入。", true);
+    } else if (!can("page-books")) {
+      return setStatus("沒有倉管／帳款權限。", true);
+    }
     page = "books";
-    booksPart = btn.dataset.books || "stock";
+    booksPart = part;
+    if (booksPart === "stock") {
+      stockWh = String(btn.dataset.stockWh || "").trim();
+      stockPhase = btn.dataset.stockPhase || (stockWh ? "count" : "pick");
+      if (!stockWh) stockPhase = "pick";
+    } else {
+      stockWh = "";
+      stockPhase = "pick";
+    }
     if (booksPart === "rack") {
       rackPick = "";
       rackLine = "";
       rackSrc = "";
     }
+  } else if (go === "unpack") {
+    // TEMP: 拆櫃未完成，暫僅雅芳（勿再用 page-books 放行）
+    if (!can("page-unpack")) return setStatus("拆櫃回報建置中，暫僅主管可進入。", true);
+    page = "unpack";
+    hubOpen = "";
+  } else if (go === "sitework") {
+    // TEMP: 現場未完成，暫僅雅芳（勿再用 page-books 放行）
+    if (!can("page-sitework")) return setStatus("現場工作建置中，暫僅主管可進入。", true);
+    page = "sitework";
+    hubOpen = "";
+  } else if (go === "stats") {
+    if (!can("page-stats")) return setStatus("僅主管可看統計。", true);
+    page = "stats";
+    hubOpen = "";
   } else if (go === "help") {
     page = "help";
   } else if (go === "labels") {
@@ -1318,7 +1955,7 @@ function renderLabelPrints() {
 }
 function labelProductText(l) {
   const s = skuById(l.skuId);
-  const name = s ? skuShortName(s) : l.skuId;
+  const name = l.labelName || (s ? skuShortName(s) : l.skuId);
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
   const unit = s?.unit || "件";
@@ -1341,8 +1978,9 @@ function labelFamilyName(sku) {
 function labelTextPresets() {
   const names = new Set();
   for (const s of SKUS) {
+    if (s.custom) continue;
     const fam = labelFamilyName(s);
-    if (fam) names.add(fam);
+    if (fam && fam !== "自行輸入") names.add(fam);
   }
   return [...names];
 }
@@ -2053,6 +2691,170 @@ function printSelectedLabels() {
   renderLabels();
   setStatus(`已送出出貨標籤 ${copies} 張，下一號 ${padLabelSeq(run.n + 1)}。`);
 }
+function shipLabelSkuText(l) {
+  if (l?.labelName) return String(l.labelName).trim();
+  const s = skuById(l?.skuId);
+  if (!s) return String(l?.skuId || "").trim();
+  const bits = [skuShortName(s)];
+  if (l.pack) bits.push(l.pack);
+  if (l.size) bits.push(l.size);
+  return bits.filter(Boolean).join(" ");
+}
+function shipLabelDefaultCopies(l) {
+  const s = skuById(l?.skuId);
+  const unit = s?.unit || "";
+  if (unit === "kg" || unit === "斤") return 0;
+  const q = Number(l?.qty);
+  if (!Number.isFinite(q) || q <= 0) return 0;
+  return Math.max(0, Math.round(q));
+}
+function collectShipLabelRows(customer, day) {
+  const who = customerKey({ customer });
+  const map = new Map();
+  for (const o of state.orders || []) {
+    if (o.status === "cancelled" || o.status === "deleted") continue;
+    if (customerKey(o) !== who) continue;
+    if ((o.shipDate || today()) !== day) continue;
+    for (const l of o.lines || []) {
+      if (!(l.qty > 0)) continue;
+      const skuText = shipLabelSkuText(l);
+      const key = `${l.skuId || ""}\t${l.pack || ""}\t${l.size || ""}\t${skuText}`;
+      const cur = map.get(key);
+      if (cur) cur.qty = round(cur.qty + l.qty);
+      else {
+        map.set(key, {
+          key,
+          skuId: l.skuId,
+          skuText,
+          qty: l.qty,
+          unit: skuById(l.skuId)?.unit || "",
+        });
+      }
+    }
+  }
+  return [...map.values()].map((r) => {
+    const copies = shipLabelDefaultCopies({ skuId: r.skuId, qty: r.qty });
+    return {
+      key: r.key,
+      label: `${r.skuText}　${fmt(r.qty)}${r.unit ? ` ${r.unit}` : ""}`,
+      skuText: r.skuText,
+      copies,
+      on: copies > 0,
+    };
+  });
+}
+function closeShipLabelsPicker() {
+  shipLabelPick = null;
+  const gate = document.getElementById("ship-labels-gate");
+  if (gate) gate.hidden = true;
+}
+function openShipLabelsPicker(customer, day = ordersViewDay()) {
+  const who = String(customer || "").trim();
+  if (!who) return;
+  const rows = collectShipLabelRows(who, day);
+  if (!rows.length) return setStatus(`「${who}」${day} 沒有可印品項。`, true);
+  shipLabelPick = { customer: who, day, rows };
+  renderShipLabelsPicker();
+}
+function renderShipLabelsPicker() {
+  const gate = document.getElementById("ship-labels-gate");
+  if (!gate) return;
+  if (!shipLabelPick) {
+    gate.hidden = true;
+    return;
+  }
+  const { customer, day, rows } = shipLabelPick;
+  const total = rows.reduce((a, r) => a + (r.on ? Math.max(0, Math.round(Number(r.copies) || 0)) : 0), 0);
+  gate.hidden = false;
+  gate.innerHTML = `<div class="login-card ship-labels-card" role="dialog" aria-labelledby="ship-labels-title">
+    <h2 id="ship-labels-title">列印出貨標籤</h2>
+    <p class="hint">${esc(customer)}　出貨日 ${esc(day)}</p>
+    <p class="hint">勾選要印的品項，籃／箱預設＝件數；kg／斤預設不印。</p>
+    <div class="btn-row ship-labels-tools">
+      <button type="button" class="ghost" data-ship-labels-all="1">全選</button>
+      <button type="button" class="ghost" data-ship-labels-all="0">全不選</button>
+    </div>
+    <ul class="ship-labels-list">${rows
+      .map(
+        (r, i) => `<li class="ship-labels-row">
+        <label class="ship-labels-check">
+          <input type="checkbox" data-ship-labels-on="${i}" ${r.on ? "checked" : ""} />
+          <span>${esc(r.label)}</span>
+        </label>
+        <label class="ship-labels-copies">張數
+          <input type="number" min="0" step="1" inputmode="numeric" data-ship-labels-copies="${i}" value="${esc(String(r.copies))}" ${r.on ? "" : "disabled"} />
+        </label>
+      </li>`,
+      )
+      .join("")}</ul>
+    <p class="ship-labels-sum">將印 <b>${total}</b> 張</p>
+    <div class="btn-row">
+      <button type="button" class="primary" data-ship-labels-print ${total > 0 ? "" : "disabled"}>預覽並列印</button>
+      <button type="button" class="ghost" data-ship-labels-close>取消</button>
+    </div>
+  </div>`;
+}
+function syncShipLabelPickFromDom() {
+  if (!shipLabelPick) return;
+  const gate = document.getElementById("ship-labels-gate");
+  if (!gate) return;
+  for (const r of shipLabelPick.rows) {
+    const i = shipLabelPick.rows.indexOf(r);
+    const onEl = gate.querySelector(`[data-ship-labels-on="${i}"]`);
+    const copiesEl = gate.querySelector(`[data-ship-labels-copies="${i}"]`);
+    if (onEl) r.on = !!onEl.checked;
+    if (copiesEl) r.copies = Math.max(0, Math.round(Number(copiesEl.value) || 0));
+  }
+}
+function printShipLabelsPicker() {
+  syncShipLabelPickFromDom();
+  if (!shipLabelPick) return;
+  const picks = shipLabelPick.rows.filter((r) => r.on && Math.round(Number(r.copies) || 0) > 0);
+  if (!picks.length) return setStatus("請先勾選要印的品項並填張數。", true);
+  const { customer, day } = shipLabelPick;
+  const run = loadLabelRun(day);
+  const solar = solarDateText(day);
+  const cards = [];
+  let n = run.n;
+  const bits = [];
+  for (const r of picks) {
+    const copies = Math.max(0, Math.round(Number(r.copies) || 0));
+    for (let i = 0; i < copies; i++) {
+      n += 1;
+      cards.push(
+        labelStickerHtml(
+          {
+            kind: "ship",
+            customer,
+            sku: r.skuText,
+            solar,
+            seq: padLabelSeq(n),
+          },
+          true,
+        ),
+      );
+    }
+    bits.push(`${r.skuText}×${copies}`);
+  }
+  if (!cards.length) return setStatus("沒有可印張數。", true);
+  if (!openLabelPrint(cards)) return setStatus("無法開啟列印預覽，請允許彈出視窗後再試。", true);
+  const seqFrom = padLabelSeq(run.n + 1);
+  const seqTo = padLabelSeq(n);
+  run.n = n;
+  saveLabelRun(run);
+  recordLabelPrint({
+    day,
+    kind: "ship",
+    copies: cards.length,
+    customer,
+    sku: bits.join("、"),
+    solar,
+    seqFrom,
+    seqTo,
+  });
+  closeShipLabelsPicker();
+  setStatus(`已送出出貨標籤 ${cards.length} 張給「${customer}」，下一號 ${padLabelSeq(run.n + 1)}。`);
+}
 function closeLabelOrderGate() {
   const gate = document.getElementById("label-order-gate");
   if (gate) gate.hidden = true;
@@ -2063,7 +2865,10 @@ function confirmLabelOrder() {
   if (!pending) return closeLabelOrderGate();
   if (!requireStaff()) return;
   const skuId = skuIdFromLabelName(pending.sku);
-  const line = { skuId: skuId || pending.sku, qty: pending.qty };
+  const line = {
+    skuId: skuId || (co === "ha" ? "custom-ha" : "custom-nq"),
+    qty: pending.qty,
+  };
   if (!skuId) line.labelName = pending.sku;
   addOpenOrderFor(co, pending.customer, pending.day, [line], "");
   save();
@@ -2440,6 +3245,7 @@ function renderLoginPeople() {
     { role: "site", names: STAFF_ROSTER.filter((p) => p.role === "site") },
     { role: "acct", names: STAFF_ROSTER.filter((p) => p.role === "acct") },
     { role: "driver", names: STAFF_ROSTER.filter((p) => p.role === "driver") },
+    { role: "unpacker", names: STAFF_ROSTER.filter((p) => p.role === "unpacker") },
     { role: "boss", names: STAFF_ROSTER.filter((p) => p.role === "boss") },
   ];
   box.innerHTML = groups
@@ -2450,6 +3256,28 @@ function renderLoginPeople() {
           .join("")}</div>`,
     )
     .join("");
+}
+function preferredLayoutMode() {
+  try {
+    const v = String(localStorage.getItem(LAYOUT_MODE_KEY) || "").trim();
+    if (v === "web" || v === "phone") return v;
+  } catch (_) {}
+  try {
+    if (window.matchMedia("(min-width: 900px)").matches) return "web";
+  } catch (_) {}
+  return "phone";
+}
+function applyLayoutMode(mode) {
+  const next = mode === "web" ? "web" : "phone";
+  document.body.classList.toggle("layout-web", next === "web");
+  document.body.classList.toggle("layout-phone", next === "phone");
+  try {
+    localStorage.setItem(LAYOUT_MODE_KEY, next);
+  } catch (_) {}
+  document.querySelectorAll(".layout-btn[data-layout]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.layout === next);
+    b.setAttribute("aria-pressed", b.dataset.layout === next ? "true" : "false");
+  });
 }
 function applyRoleUi() {
   const logged = !!currentStaff();
@@ -2468,30 +3296,200 @@ function applyRoleUi() {
   if (can("page-orders")) pages.push("orders");
   if (can("page-plan")) pages.push("plan");
   if (can("page-books")) pages.push("books");
-  pages.push("help");
-  pages.push("soon");
+  if (can("page-unpack")) pages.push("unpack");
+  if (can("page-sitework")) pages.push("sitework");
+  if (can("page-stats")) pages.push("stats");
+  if (can("page-help")) pages.push("help");
+  if (!isUnpackerRole()) pages.push("soon");
   if (can("page-orders") || can("page-plan") || can("page-books")) pages.push("labels");
   if (can("page-books")) pages.push("label-prints");
-  document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => {
+  document.querySelectorAll("#flow-tabs [data-ops]").forEach((b) => {
     b.hidden = true;
   });
   const flow = document.getElementById("flow-tabs");
   if (flow) flow.hidden = true;
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !logged || page === "home";
-  if (logged && page && !pages.includes(page)) page = homePage();
+  if (logged && page && !pages.includes(page)) {
+    page = isUnpackerRole() && can("page-unpack") ? "unpack" : homePage();
+  }
   if (!can("page-books") && page === "books") page = homePage();
+  // TEMP: 庫存暫僅雅芳 — 非主管若停在庫存盤點則改到進貨或首頁
+  if (page === "books" && booksPart === "stock" && !can("books-stock")) {
+    if (can("page-books")) booksPart = "in";
+    else page = homePage();
+  }
+  if (isUnpackerRole() && can("page-unpack") && page !== "home" && page !== "unpack") page = "unpack";
+  if (isUnpackerRole() && !can("page-unpack") && page === "unpack") page = homePage();
+  syncOpsFlowTabs();
 }
 function markOrderEdited(o) {
   o.edited = true;
   o.editedBy = currentStaff();
   o.editedAt = Date.now();
+  if (!Array.isArray(o.editLog)) o.editLog = [];
+  o.editLog.push({ by: o.editedBy, at: o.editedAt });
+}
+function startInlineEdit(orderId) {
+  if (!requireStaff()) return;
+  const o = state.orders.find((x) => x.id === orderId);
+  if (!o) return;
+  if (o.status === "shipped" && !can("edit-shipped")) return setStatus("已送出後請由會計或主管改件數。", true);
+  if (
+    o.status === "shipped" &&
+    !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「已改單」，並依新件數重算庫存。`)
+  )
+    return;
+  inlineEdit = {
+    id: o.id,
+    lines: (o.lines || [])
+      .filter((l) => l.qty > 0)
+      .map((l) => ({ ...l })),
+    addSkuId: "",
+    addQty: 1,
+    addPack: "籃裝",
+  };
+  editing = "";
+  const editId = document.getElementById("edit-id");
+  if (editId) editId.value = "";
+  const cancelEdit = document.getElementById("cancel-edit");
+  if (cancelEdit) cancelEdit.hidden = true;
+  ticketLines = [];
+  page = "orders";
+  ordersPane = "today";
+  render();
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-inline-box="${CSS.escape(o.id)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+}
+function cancelInlineEdit() {
+  inlineEdit = null;
+  renderOrders();
+}
+function inlineEditSkuNeedsPack(skuId) {
+  return !!skuById(skuId)?.packRemark;
+}
+function inlineEditAddLine() {
+  if (!inlineEdit) return;
+  const skuId = String(inlineEdit.addSkuId || "").trim();
+  if (!skuId) return setStatus("請先選要加的品項。", true);
+  const sku = skuById(skuId);
+  if (!sku) return setStatus("找不到這個品項。", true);
+  const o = state.orders.find((x) => x.id === inlineEdit.id);
+  if (o && sku.co !== o.co) return setStatus(`這張是${coLabel(o.co)}單，只能加同帳本品項。`, true);
+  const qty = round(Number(inlineEdit.addQty) || 0);
+  if (!(qty > 0)) return setStatus("加品項數量須大於 0。", true);
+  const line = { skuId, qty };
+  if (inlineEditSkuNeedsPack(skuId)) line.pack = inlineEdit.addPack || "籃裝";
+  const dest = (inlineEdit.lines.find((l) => String(l.dest || "").trim()) || {}).dest;
+  if (dest) {
+    line.dest = dest;
+    if (inlineEdit.lines.some((l) => l.destFreight)) line.destFreight = true;
+  }
+  inlineEdit.lines.push(line);
+  inlineEdit.addSkuId = "";
+  inlineEdit.addQty = 1;
+  inlineEdit.addPack = "籃裝";
+  renderOrders();
+}
+function commitInlineEdit() {
+  if (!inlineEdit) return;
+  if (!requireStaff()) return;
+  const o = state.orders.find((x) => x.id === inlineEdit.id);
+  if (!o) {
+    inlineEdit = null;
+    return renderOrders();
+  }
+  const lines = inlineEdit.lines
+    .map((l) => {
+      const copy = { ...l, qty: round(Number(l.qty) || 0) };
+      if (inlineEditSkuNeedsPack(copy.skuId) && !copy.pack) copy.pack = "籃裝";
+      return cleanLine(copy);
+    })
+    .filter((l) => l.qty > 0 && l.skuId);
+  if (!lines.length) return setStatus("至少留一個品項。", true);
+  for (const l of lines) {
+    const sku = skuById(l.skuId);
+    if (sku && sku.co !== o.co) return setStatus(`這張是${coLabel(o.co)}單，不能加其他帳本品項。`, true);
+    if (inlineEditSkuNeedsPack(l.skuId) && !l.pack) return setStatus("地瓜葉請選裝箱樣式。", true);
+  }
+  const wasShipped = o.status === "shipped" || o.status === "delivered";
+  const shipMeta = snapshotShipMeta(o);
+  if (o.status === "shipped") unwindShipment(o);
+  o.lines = lines;
+  markOrderEdited(o);
+  if (wasShipped) {
+    applyOpenShipment(o);
+    restoreShipMeta(o, shipMeta);
+  } else if (o.status !== "delivered") o.status = "open";
+  inlineEdit = null;
+  save();
+  setStatus(
+    wasShipped
+      ? `已改件數並重算扣庫。修改人員：${currentStaff()}。`
+      : `已改單，修改人員：${currentStaff()}。`,
+    false,
+  );
+  render();
+}
+function inlineEditPanelHtml(o) {
+  if (!inlineEdit || inlineEdit.id !== o.id) return "";
+  const skus = SKUS.filter((s) => s.co === o.co && !s.custom);
+  const rows = inlineEdit.lines
+    .map((l, i) => {
+      const sku = skuById(l.skuId);
+      const step = sku ? skuStep(sku) : 1;
+      const unit = sku?.unit || "";
+      const pack =
+        inlineEditSkuNeedsPack(l.skuId)
+          ? `<select class="inline-pack" data-inline-pack="${i}" aria-label="裝箱">
+              ${PACK_OPTS.map((p) => `<option value="${esc(p)}"${(l.pack || "籃裝") === p ? " selected" : ""}>${esc(p)}</option>`).join("")}
+            </select>`
+          : l.pack
+            ? `<span class="muted">${esc(l.pack)}</span>`
+            : "";
+      return `<div class="inline-edit-row">
+        <span class="inline-edit-name">${esc(ticketLineName(l))}</span>
+        ${pack}
+        ${qtyStepperHtml({ key: "inline-qty", id: String(i), value: l.qty, step, aria: "數量" })}
+        <span class="unit">${esc(unit)}</span>
+        <button type="button" class="tiny-btn ghost" data-inline-del="${i}">刪</button>
+      </div>`;
+    })
+    .join("");
+  const needPack = inlineEditSkuNeedsPack(inlineEdit.addSkuId);
+  const addOpts = skus
+    .map((s) => `<option value="${esc(s.id)}"${inlineEdit.addSkuId === s.id ? " selected" : ""}>${esc(skuShortName(s))}</option>`)
+    .join("");
+  return `<div class="inline-edit" data-inline-box="${esc(o.id)}">
+    <p class="inline-edit-lab">改單 #${esc(o.no)}</p>
+    <div class="inline-edit-rows">${rows || `<p class="empty">尚無品項，請下方加入。</p>`}</div>
+    <div class="inline-edit-add">
+      <select data-inline-add-sku aria-label="加品項">
+        <option value="">＋加品項…</option>
+        ${addOpts}
+      </select>
+      ${
+        needPack
+          ? `<select data-inline-add-pack aria-label="裝箱">
+              ${PACK_OPTS.map((p) => `<option value="${esc(p)}"${inlineEdit.addPack === p ? " selected" : ""}>${esc(p)}</option>`).join("")}
+            </select>`
+          : ""
+      }
+      ${qtyStepperHtml({ key: "inline-add-qty", id: "new", value: inlineEdit.addQty, step: skuById(inlineEdit.addSkuId) ? skuStep(skuById(inlineEdit.addSkuId)) : 1, aria: "加品項數量" })}
+      <button type="button" class="tiny-btn primary" data-inline-add>加入</button>
+    </div>
+    <div class="inline-edit-acts">
+      <button type="button" class="primary" data-inline-save>確認改單</button>
+      <button type="button" class="ghost" data-inline-cancel>取消</button>
+    </div>
+  </div>`;
 }
 function staffNote(o) {
   const bits = [];
   if (o.enteredBy) bits.push(`入單 ${o.enteredBy}`);
   else bits.push("入單未填會計");
-  if (o.edited) bits.push(`已改單 ${o.editedBy || "未填會計"}`);
+  if (o.settled) bits.push(`結單 ${o.settledBy || "未填會計"}`);
   if (o.assignedDriver) bits.push(`${o.status === "open" && o.runOut ? "接單處理中" : o.status === "open" ? "派單" : "司機"} ${o.assignedDriver}`);
   if (o.deliveredBy) bits.push(`送達 ${o.deliveredBy}`);
   if (o.shippedBy) bits.push(`出貨 ${o.shippedBy}`);
@@ -2503,7 +3501,11 @@ function staffNoteHtml(o) {
   const bits = [];
   if (o.enteredBy) bits.push(`<span class="n-enter">入單 ${esc(o.enteredBy)}</span>`);
   else bits.push(`<span class="n-enter">入單未填會計</span>`);
-  if (o.edited) bits.push(`<span class="order-edit-who">已改單 ${esc(o.editedBy || "未填會計")}</span>`);
+  if (o.edited) {
+    const n = Array.isArray(o.editLog) && o.editLog.length > 1 ? `×${o.editLog.length}` : "";
+    bits.push(`<span class="order-edit-who">已改單${n} ${esc(o.editedBy || "未填會計")}</span>`);
+  }
+  if (o.settled) bits.push(`<span class="n-ship">結單 ${esc(o.settledBy || "未填會計")}</span>`);
   if (o.assignedDriver) bits.push(`<span class="n-ship">${esc(o.status === "open" && o.runOut ? "接單處理中" : o.status === "open" ? "派單" : "司機")} ${esc(o.assignedDriver)}</span>`);
   if (o.deliveredBy) bits.push(`<span class="n-ship">送達 ${esc(o.deliveredBy)}</span>`);
   if (o.shippedBy) bits.push(`<span class="n-ship">出貨 ${esc(o.shippedBy)}</span>`);
@@ -2593,7 +3595,75 @@ function lastShipAddr(customer) {
   }
   return "";
 }
-const SHIP_PRESETS = ["冰庫", "市場"];
+function loadFreightRuns() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FREIGHT_RUN_KEY) || "null");
+    if (Array.isArray(raw) && raw.length) {
+      return raw
+        .map((r) => ({
+          key: String(r.key || "").trim(),
+          recv: String(r.recv || "").trim(),
+          ship: String(r.ship || "").trim(),
+          note: String(r.note || "").trim(),
+        }))
+        .filter((r) => r.key);
+    }
+  } catch (_) {}
+  return FREIGHT_RUN_DEFAULT.map((r) => ({ ...r }));
+}
+function freightCarrierDefault(customer) {
+  const who = String(customer || document.getElementById("customer")?.value || "").trim();
+  if (!who) return "";
+  const last = destFromRemembered(lastShipAddr(who));
+  if (last && !SHIP_PRESETS.includes(last) && last !== "寄貨運") return last;
+  const mapped = String(window.RackLib?.carrierOf?.(who) || "").trim();
+  if (mapped && mapped !== who) return mapped;
+  return "";
+}
+function freightRunMeta(name) {
+  const n = String(name || "").trim();
+  const runs = loadFreightRuns();
+  if (!n) return { key: "", recv: "99:99", ship: "99:99", note: "", ord: 950 };
+  let i = runs.findIndex((r) => r.key === n);
+  if (i < 0) i = runs.findIndex((r) => n.includes(r.key) || r.key.includes(n));
+  if (i >= 0) return { ...runs[i], ord: i };
+  return { key: n, recv: "89:99", ship: "89:99", note: "", ord: 800 };
+}
+function orderShipFreightName(o) {
+  for (const l of o.lines || []) {
+    if (l.destFreight) {
+      const d = String(l.dest || "").trim();
+      if (d && d !== "寄貨運") return d;
+      return freightCarrierDefault(o.customer);
+    }
+    const d = String(l.dest || "").trim();
+    if (d === "寄貨運") return freightCarrierDefault(o.customer);
+  }
+  const parts = String(o.shipAddr || "")
+    .split(/[／/]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const addr of parts) {
+    if (SHIP_PRESETS.includes(addr) || addr === "寄貨運") continue;
+    const meta = freightRunMeta(addr);
+    if (meta.ord < 800) return meta.key;
+  }
+  for (const l of o.lines || []) {
+    const d = String(l.dest || "").trim();
+    if (!d || SHIP_PRESETS.includes(d) || d === "寄貨運") continue;
+    const meta = freightRunMeta(d);
+    if (meta.ord < 800) return meta.key;
+  }
+  return "";
+}
+function customerFreightSortMeta(orders) {
+  const open = (orders || []).filter(isOrderUnshipped);
+  const names = [...new Set(open.map(orderShipFreightName).filter(Boolean))];
+  if (!names.length) return { key: "", recv: "99:99", ship: "99:99", note: "", ord: 900 };
+  return names
+    .map(freightRunMeta)
+    .sort((a, b) => a.ord - b.ord || a.recv.localeCompare(b.recv) || a.ship.localeCompare(b.ship))[0];
+}
 function shipAddrModeOf(v) {
   const a = String(v || "").trim();
   if (SHIP_PRESETS.includes(a)) return a;
@@ -2620,6 +3690,12 @@ function lastTicketDest() {
   }
   return "";
 }
+function lastTicketDestFreight() {
+  for (let i = ticketLines.length - 1; i >= 0; i--) {
+    if (ticketLines[i]?.destFreight) return true;
+  }
+  return false;
+}
 function rememberedDest() {
   const last = lastTicketDest();
   if (last) return last;
@@ -2628,21 +3704,41 @@ function rememberedDest() {
 function lineDestMode(l) {
   const d = String(l?.dest || "").trim();
   if (SHIP_PRESETS.includes(d)) return d;
+  if (l?.destFreight || d === "寄貨運") return "寄貨運";
   if (d || l?.destOther) return "其他";
   return "";
 }
 function destPicksHtml(mode, attrs) {
-  return ["冰庫", "市場", "其他"]
-    .map(
-      (v) =>
-        `<button type="button" class="pick dest-chip${mode === v ? " on" : ""}" ${attrs(v)}>${v}</button>`,
-    )
-    .join("");
+  return SHIP_DEST_OPTS.map(
+    (v) => `<button type="button" class="pick dest-chip${mode === v ? " on" : ""}" ${attrs(v)}>${v}</button>`,
+  ).join("");
+}
+function applyFreightToLine(line, carrier) {
+  if (!line) return line;
+  line.destFreight = true;
+  delete line.destOther;
+  const name = String(carrier || "").trim();
+  line.dest = name || freightCarrierDefault() || "";
+  return line;
 }
 function applyDestToLine(line) {
   if (!line || String(line.dest || "").trim()) return line;
+  if (lastTicketDestFreight()) {
+    applyFreightToLine(line, lastTicketDest());
+    return line;
+  }
   const dest = rememberedDest();
-  if (dest) line.dest = dest;
+  if (dest) {
+    if (!SHIP_PRESETS.includes(dest)) {
+      const who = document.getElementById("customer")?.value;
+      const freight = freightCarrierDefault(who);
+      if (freight && (dest === freight || dest.includes(freight) || freight.includes(dest))) {
+        applyFreightToLine(line, dest);
+        return line;
+      }
+    }
+    line.dest = dest;
+  }
   return line;
 }
 function syncHiddenShipAddr() {
@@ -2682,6 +3778,36 @@ function orderNoteValue() {
 function setOrderNote(v) {
   const el = document.getElementById("order-note");
   if (el) el.value = String(v || "");
+}
+function orderUrgentValue() {
+  return !!document.getElementById("order-urgent")?.checked;
+}
+function syncUrgentToggleUi(on) {
+  const btn = document.getElementById("order-urgent-btn");
+  if (!btn) return;
+  const pressed = !!on;
+  btn.classList.toggle("on", pressed);
+  btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+}
+function setOrderUrgent(on) {
+  const el = document.getElementById("order-urgent");
+  if (el) el.checked = !!on;
+  syncUrgentToggleUi(!!on);
+}
+function toggleOrderUrgent() {
+  setOrderUrgent(!orderUrgentValue());
+}
+function isOrderUrgent(o) {
+  return !!(o && o.urgent);
+}
+function isOrderUnshipped(o) {
+  return !!(o && o.status === "open");
+}
+function customerGroupFillRank(orders) {
+  const open = (orders || []).filter(isOrderUnshipped);
+  if (!open.length) return 2;
+  if (open.some(isOrderUrgent)) return 0;
+  return 1;
 }
 function fillAddrForCustomer(name) {
   const dest = destFromRemembered(lastShipAddr(name));
@@ -2745,7 +3871,12 @@ function openQueue() {
   return state.orders
     .filter((o) => o.status === "open")
     .slice()
-    .sort((a, b) => orderRank(a) - orderRank(b) || a.no - b.no);
+    .sort(
+      (a, b) =>
+        (isOrderUrgent(a) ? 0 : 1) - (isOrderUrgent(b) ? 0 : 1) ||
+        orderRank(a) - orderRank(b) ||
+        a.no - b.no,
+    );
 }
 function nextPrio() {
   let m = 0;
@@ -2800,14 +3931,14 @@ function available(sku, current, date) {
 }
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
-  const name = l.labelName || (s ? s.name : l.skuId);
+  const shown = l.labelName || (s ? s.name : l.skuId);
   const unit = s && withUnit ? ` ${s.unit}` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const size = l.size ? `（${l.size}）` : "";
   const dest = l.dest ? `（${l.dest}）` : "";
   const note = l.note ? `（${l.note}）` : "";
   const pallet = l.pallet ? "（疊棧板）" : "";
-  return `${name} ${fmt(l.qty)}${unit}${pack}${size}${dest}${note}${pallet}`;
+  return `${shown} ${fmt(l.qty)}${unit}${pack}${size}${dest}${note}${pallet}`;
 }
 function ticketLineName(l) {
   const s = skuById(l.skuId);
@@ -2858,10 +3989,11 @@ function syncShipMore() {
 function ticketDestHtml(l, i) {
   const mode = lineDestMode(l);
   const dest = String(l.dest || "").trim();
-  const otherVal = mode === "其他" ? dest : "";
+  const extraVal = mode === "其他" || mode === "寄貨運" ? dest : "";
+  const ph = mode === "寄貨運" ? "貨運名稱，可改" : "其他位置";
   return `<div class="ticket-dest">
-      <div class="picks dest-picks">${destPicksHtml(mode, (v) => `data-ticket-dest="${i}" data-dest="${v}"`)}</div>
-      <input class="dest-other" data-ticket-dest-other="${i}" type="text" placeholder="其他位置" value="${esc(otherVal)}" ${mode === "其他" ? "" : "hidden"} autocomplete="off" />
+      <div class="ticket-dest-picks">${destPicksHtml(mode, (v) => `data-ticket-dest="${i}" data-dest="${v}"`)}</div>
+      <input class="dest-other ticket-dest-other" data-ticket-dest-other="${i}" type="text" placeholder="${esc(ph)}" value="${esc(extraVal)}" ${mode === "其他" || mode === "寄貨運" ? "" : "hidden"} autocomplete="off" />
     </div>`;
 }
 function renderTicket() {
@@ -2877,15 +4009,29 @@ function renderTicket() {
   }
   box.classList.remove("is-empty");
   const drops = uniqueTicketDrops();
-  box.innerHTML = `<p class="ticket-head">待確認 <span>${esc(who)}</span><span class="ticket-kind">${esc(kind)}</span></p>
+  const sharedMode = (() => {
+    const modes = ticketLines.map((l) => lineDestMode(l)).filter(Boolean);
+    if (!modes.length) return "";
+    const first = modes[0];
+    return modes.every((m) => m === first) ? first : "";
+  })();
+  const sharedExtra =
+    sharedMode === "寄貨運" || sharedMode === "其他" ? String(ticketLines[0]?.dest || "").trim() : "";
+  const sharedPh = sharedMode === "寄貨運" ? "貨運名稱，可改" : "其他位置";
+  box.innerHTML = `<p class="ticket-head">${editing ? "改單品項" : "待確認"} <span>${esc(who)}</span><span class="ticket-kind">${esc(kind)}</span></p>
     ${drops.length ? `<p class="ticket-addr">${esc(drops.join("／"))}</p>` : ""}
+    <div class="ticket-dest-all">
+      <p class="pick-lab">出貨位置</p>
+      <div class="ticket-dest-picks">${destPicksHtml(sharedMode, (v) => `data-ticket-dest-all="${v}"`)}</div>
+      <input class="dest-other ticket-dest-other" data-ticket-dest-all-other type="text" placeholder="${esc(sharedPh)}" value="${esc(sharedExtra)}" ${sharedMode === "寄貨運" || sharedMode === "其他" ? "" : "hidden"} autocomplete="off" />
+    </div>
     <ul class="ticket-list">${ticketLines
       .map((l, i) => {
         const sku = skuById(l.skuId);
         const step = sku ? skuStep(sku) : 1;
         return `<li>
           <span class="ticket-name">${esc(ticketLineName(l))}</span>
-          <input class="qty" data-ticket-qty data-i="${i}" type="number" min="0" step="${step}" inputmode="decimal" value="${esc(l.qty)}" aria-label="數量" />
+          ${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: l.qty, step, aria: "數量" })}
           <span class="unit">${esc(sku?.unit || "")}</span>
           <button type="button" class="pick ticket-pallet${l.pallet ? " on" : ""}" data-ticket-pallet="${i}" aria-pressed="${l.pallet ? "true" : "false"}">疊棧板</button>
           ${
@@ -2894,7 +4040,6 @@ function renderTicket() {
               : ""
           }
           <button type="button" class="tiny-btn ghost" data-ticket-del="${i}">刪</button>
-          ${ticketDestHtml(l, i)}
         </li>`;
       })
       .join("")}</ul>`;
@@ -2911,6 +4056,21 @@ function selectPickerBig(big) {
   syncLineMeta(row);
 }
 function pushPickerToTicket(nextBig) {
+  const row = document.querySelector("#ha-lines .item-line");
+  const big = row ? pickVal(row, "big") : "";
+  if (isCustomFam(big)) {
+    const name = String(row.querySelector("[data-custom-name]")?.value || "").trim();
+    const qty = Number(row.querySelector("[data-line-qty]")?.value);
+    if (!name) {
+      setStatus("請先填自行輸入的品名", true);
+      row.querySelector("[data-custom-name]")?.focus();
+      return false;
+    }
+    if (!(qty > 0) && !nextBig) {
+      setStatus("請先選品項並填數量", true);
+      return false;
+    }
+  }
   const extra = unifiedLinesFromForm();
   if (!extra.length && !nextBig) {
     setStatus("請先選品項並填數量", true);
@@ -2927,7 +4087,8 @@ function pushPickerToTicket(nextBig) {
   if (nextBig) selectPickerBig(nextBig);
   renderTicket();
   renderCheck();
-  document.querySelector("#sheet [data-line-qty]")?.focus();
+  if (nextBig) document.querySelector("#sheet [data-line-qty]")?.focus();
+  else focusItemLineStart();
   return extra.length > 0;
 }
 function clearTicket() {
@@ -2959,9 +4120,16 @@ function syncOrderEntering() {
 function cleanLine(l) {
   const out = { ...l };
   delete out.destOther;
+  if (!out.destFreight) delete out.destFreight;
+  else out.destFreight = true;
   if (!String(out.dest || "").trim()) delete out.dest;
   if (!String(out.note || "").trim()) delete out.note;
+  if (!String(out.labelName || "").trim()) delete out.labelName;
+  else out.labelName = String(out.labelName).trim();
   return out;
+}
+function isCustomFam(fam) {
+  return fam === "custom-nq" || fam === "custom-ha";
 }
 function workingLines() {
   const extra = unifiedLinesFromForm().map((l) => applyDestToLine({ ...l }));
@@ -3132,11 +4300,13 @@ function nqUnitOfCat(cat, pack) {
   if (cat === "sl-zhi" || cat === "sl-fang" || cat === "leaf") return pack === "箱裝" ? "箱" : "籃";
   if (cat === "rb" || cat === "gb" || cat === "basil") return "箱";
   if (cat === "shiso-jin") return "斤";
+  if (isCustomFam(cat)) return "件";
   if (isHaFam(cat)) return haUnitOf(cat);
   if (isHaVegFam(cat)) return "件";
   return "kg";
 }
 function lineBigOf(rec = {}) {
+  if (rec.skuId === "custom-nq" || rec.skuId === "custom-ha") return rec.skuId;
   const fam = lineFamOf(rec);
   if (fam === "sl-zhi" || fam === "sl-fang") return "leaf";
   if (fam === "rb" || fam === "gb") return "basil";
@@ -3146,18 +4316,121 @@ function pickHtml(key, items, selected) {
   return items
     .map(
       ([v, lab]) =>
-        `<button type="button" class="pick${selected === v ? " on" : ""}" data-k="${esc(key)}" data-v="${esc(v)}">${esc(lab)}</button>`,
+        `<button type="button" class="pick${selected === v ? " on" : ""}" data-k="${esc(key)}" data-v="${esc(v)}" tabindex="0">${esc(lab)}</button>`,
     )
     .join("");
 }
 function pickVal(row, key) {
   return row?.querySelector(`.pick[data-k="${CSS.escape(key)}"].on`)?.dataset.v || "";
 }
+function itemLineSubKeys(big) {
+  if (big === "leaf") return ["leaf", "pack"];
+  if (big === "basil") return ["basil", "vendor"];
+  if (isHaVegFam(big)) return ["veg"];
+  if (big === "on" || big === "on-p") return ["origin", "spec", "size"];
+  if (big === "pk") return ["var", "pkspec"];
+  if (isCustomFam(big)) return ["custom"];
+  return [];
+}
+function focusPickGroup(row, key, preferOn = true) {
+  if (!row || !key) return false;
+  const picks = [...row.querySelectorAll(`.pick[data-k="${CSS.escape(key)}"]`)];
+  if (!picks.length) return false;
+  const on = picks.find((b) => b.classList.contains("on"));
+  const hit = preferOn && on ? on : picks[0];
+  hit.focus();
+  return true;
+}
+function focusItemLineStart(row = document.querySelector("#ha-lines .item-line")) {
+  if (!row) return;
+  if (focusPickGroup(row, "big", false)) return;
+  row.querySelector("[data-line-qty]")?.focus();
+}
+function applyItemLinePick(row, pick) {
+  if (!row || !pick) return;
+  const key = pick.dataset.k;
+  row.querySelectorAll(`.pick[data-k="${CSS.escape(key)}"]`).forEach((b) => b.classList.toggle("on", b === pick));
+  if (key === "big") {
+    const sub = row.querySelector("[data-sub]");
+    if (sub) sub.innerHTML = lineSubHtml(pick.dataset.v, {});
+  }
+  formLot = null;
+  syncLineMeta(row);
+  renderCheck();
+}
+function advanceItemLineAfterPick(row, key) {
+  if (!row) return;
+  const big = pickVal(row, "big");
+  if (isCustomFam(big) && (key === "big" || key === "custom")) {
+    const name = row.querySelector("[data-custom-name]");
+    if (name && key === "big") {
+      name.focus();
+      return;
+    }
+  }
+  const keys = ["big", ...itemLineSubKeys(big).filter((k) => k !== "custom")];
+  const idx = keys.indexOf(key);
+  for (let i = Math.max(0, idx + 1); i < keys.length; i++) {
+    if (focusPickGroup(row, keys[i], true)) return;
+  }
+  const qty = row.querySelector("[data-line-qty]");
+  if (qty) {
+    qty.focus();
+    if (typeof qty.select === "function") qty.select();
+    return;
+  }
+  row.querySelector("[data-ticket-add]")?.focus();
+}
+function handleItemLineEnter(e) {
+  const form = document.getElementById("order-form");
+  if (!form || form.hidden || page !== "orders") return false;
+  const row = document.querySelector("#ha-lines .item-line");
+  if (!row) return false;
+  const t = e.target;
+  if (t.closest("#customer") || t.id === "customer") {
+    e.preventDefault();
+    focusItemLineStart(row);
+    return true;
+  }
+  const pick = t.closest?.(".item-line .pick");
+  if (pick) {
+    e.preventDefault();
+    applyItemLinePick(row, pick);
+    advanceItemLineAfterPick(row, pick.dataset.k);
+    return true;
+  }
+  if (t.closest?.("[data-line-qty]")) {
+    e.preventDefault();
+    const ok = pushPickerToTicket();
+    if (ok) requestAnimationFrame(() => focusItemLineStart());
+    return true;
+  }
+  if (t.closest?.("[data-custom-name]")) {
+    e.preventDefault();
+    const qty = row.querySelector("[data-line-qty]");
+    if (qty) {
+      qty.focus();
+      if (typeof qty.select === "function") qty.select();
+    }
+    return true;
+  }
+  if (t.closest?.("[data-ticket-add]")) {
+    e.preventDefault();
+    const ok = pushPickerToTicket();
+    if (ok) requestAnimationFrame(() => focusItemLineStart());
+    return true;
+  }
+  if (t.closest?.("[data-ticket-qty]") || t.closest?.("#order-note") || t.closest?.("#order-urgent-btn")) {
+    return false;
+  }
+  return false;
+}
 function lineBigButtons(selected) {
   const nq = [
     ["leaf", "地瓜葉"],
     ["basil", "九層塔"],
     ["basil-kg", "九層塔散賣"],
+    ["custom-nq", "自行輸入"],
   ];
   const ha = [
     ["on", "洋蔥"],
@@ -3166,11 +4439,12 @@ function lineBigButtons(selected) {
     ["pk", "南瓜"],
     ["pk-b", "南瓜B"],
     ...Object.entries(HA_VEG).map(([id, def]) => [id, def.label]),
+    ["custom-ha", "自行輸入"],
   ];
   return `<p class="pick-lab">穠全</p>
-    <div class="picks">${pickHtml("big", nq, selected)}</div>
+    <div class="sku-picks">${pickHtml("big", nq, selected)}</div>
     <p class="pick-lab">鴻安</p>
-    <div class="picks">${pickHtml("big", ha, selected)}</div>`;
+    <div class="sku-picks sku-picks-ha">${pickHtml("big", ha, selected)}</div>`;
 }
 function lineSubHtml(big, rec = {}) {
   if (!big) return "";
@@ -3178,28 +4452,33 @@ function lineSubHtml(big, rec = {}) {
   if (big === "leaf") {
     const leaf = rec.skuId === "sl-fang" ? "sl-fang" : "sl-zhi";
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
-    bits.push(`<p class="pick-lab">廠商</p><div class="picks">${pickHtml("leaf", [["sl-zhi", "誌"], ["sl-fang", "芳"]], leaf)}</div>`);
-    bits.push(`<p class="pick-lab">裝箱</p><div class="picks">${pickHtml("pack", PACK_OPTS.map((p) => [p, p]), pack)}</div>`);
+    bits.push(`<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml("leaf", [["sl-zhi", "誌"], ["sl-fang", "芳"]], leaf)}</div>`);
+    bits.push(`<p class="pick-lab">裝箱</p><div class="sku-subs">${pickHtml("pack", PACK_OPTS.map((p) => [p, p]), pack)}</div>`);
   } else if (big === "basil") {
     const parsed = BASIL_REV[rec.skuId] || { qty: "rb", val: "芳" };
     const kind = parsed.qty === "gb" ? "gb" : "rb";
     const vendor = VENDOR_OPTS.includes(parsed.val) ? parsed.val : "芳";
-    bits.push(`<p class="pick-lab">種類</p><div class="picks">${pickHtml("basil", [["rb", "紅骨"], ["gb", "綠骨"]], kind)}</div>`);
-    bits.push(`<p class="pick-lab">廠商</p><div class="picks">${pickHtml("vendor", VENDOR_OPTS.map((p) => [p, p]), vendor)}</div>`);
+    bits.push(`<p class="pick-lab">種類</p><div class="sku-subs">${pickHtml("basil", [["rb", "紅骨"], ["gb", "綠骨"]], kind)}</div>`);
+    bits.push(`<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml("vendor", VENDOR_OPTS.map((p) => [p, p]), vendor)}</div>`);
   } else if (isHaVegFam(big)) {
     const def = HA_VEG[big];
     const cur = rec.skuId ? skuById(rec.skuId)?.vegOpt : rec.vegOpt;
     const opt = def.opts.some((x) => x[0] === cur) ? cur : def.opts[0][0];
-    bits.push(`<p class="pick-lab">國別／規格</p><div class="picks">${pickHtml("veg", def.opts, opt)}</div>`);
+    bits.push(`<p class="pick-lab">國別／規格</p><div class="sku-subs">${pickHtml("veg", def.opts, opt)}</div>`);
   } else if (big === "on" || big === "on-p") {
     const parsed = rec.skuId ? haParseSku(rec.skuId) : { origin: "紐西蘭", spec: "20K" };
-    bits.push(`<p class="pick-lab">國別</p><div class="picks">${pickHtml("origin", HA_ONION_ORIGINS.map((p) => [p, p]), parsed.origin || "紐西蘭")}</div>`);
-    bits.push(`<p class="pick-lab">規格</p><div class="picks">${pickHtml("spec", HA_ONION_SPECS.map((p) => [p, p]), parsed.spec || "20K")}</div>`);
-    bits.push(`<p class="pick-lab">尺寸</p><div class="picks">${pickHtml("size", HA_ONION_SIZES.map((p) => [p, p]), haOnionSizeOf({ size: rec.size }))}</div>`);
+    bits.push(`<p class="pick-lab">國別</p><div class="sku-subs">${pickHtml("origin", HA_ONION_ORIGINS.map((p) => [p, p]), parsed.origin || "紐西蘭")}</div>`);
+    bits.push(`<p class="pick-lab">規格</p><div class="sku-subs">${pickHtml("spec", HA_ONION_SPECS.map((p) => [p, p]), parsed.spec || "20K")}</div>`);
+    bits.push(`<p class="pick-lab">尺寸</p><div class="sku-subs">${pickHtml("size", HA_ONION_SIZES.map((p) => [p, p]), haOnionSizeOf({ size: rec.size }))}</div>`);
   } else if (big === "pk") {
     const parsed = rec.skuId ? haParseSku(rec.skuId) : { variety: "密本", spec: "18K" };
-    bits.push(`<p class="pick-lab">廠商</p><div class="picks">${pickHtml("var", HA_PK_VARS.map((p) => [p, p]), parsed.variety || "密本")}</div>`);
-    bits.push(`<p class="pick-lab">規格</p><div class="picks">${pickHtml("pkspec", HA_PK_SPECS.map((p) => [p, p]), parsed.spec || "18K")}</div>`);
+    bits.push(`<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml("var", HA_PK_VARS.map((p) => [p, p]), parsed.variety || "密本")}</div>`);
+    bits.push(`<p class="pick-lab">規格</p><div class="sku-subs">${pickHtml("pkspec", HA_PK_SPECS.map((p) => [p, p]), parsed.spec || "18K")}</div>`);
+  } else if (isCustomFam(big)) {
+    const name = String(rec.labelName || "").trim();
+    bits.push(
+      `<p class="pick-lab">品名</p><input class="custom-sku-name" data-custom-name type="text" placeholder="沒有類別時自行輸入" value="${esc(name)}" autocomplete="off" />`,
+    );
   }
   return bits.join("");
 }
@@ -3216,6 +4495,7 @@ function syncLineMeta(row) {
 }
 function lineFamOf(rec = {}) {
   const id = rec.skuId;
+  if (id === "custom-nq" || id === "custom-ha") return id;
   if (id) {
     const sku = skuById(id);
     if (sku?.vegFam) return sku.vegFam;
@@ -3250,7 +4530,7 @@ function unifiedLineHtml(rec = {}) {
       <div data-sub>${lineSubHtml(big, rec)}</div>
     </div>
     <div class="line-qty-row">
-      <input class="qty" data-line-qty type="number" min="0" step="${step}" inputmode="decimal" value="${esc(qty)}" placeholder="數量" aria-label="數量" />
+      ${qtyStepperHtml({ key: "line-qty", id: "form", value: qty, step, placeholder: "數量", aria: "數量" })}
       <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
       <button type="button" class="tiny-btn ghost" data-ha-del>清掉</button>
     </div>
@@ -3258,11 +4538,9 @@ function unifiedLineHtml(rec = {}) {
       <button type="button" class="ghost lot-pick-btn" data-lot-pick-form>${esc(lotBtnLabel(formLot))}</button>
       <p class="hint lot-hint">8–9 月進櫃櫃號。改品項或數量會清掉已選編號。</p>
     </div>
-    <div class="pallet-row">
-      <button type="button" class="pallet-toggle${rec.pallet ? " on" : ""}" data-pallet-toggle aria-pressed="${rec.pallet ? "true" : "false"}">疊棧板</button>
-    </div>
     <div class="item-add-bar">
       <button type="button" class="primary" data-ticket-add>加入本單</button>
+      <span class="muted item-add-hint">選好數量可直接按送出，也會自動加入。</span>
     </div>
   </div>`;
 }
@@ -3368,9 +4646,7 @@ function chooseLot(uha) {
   if (ctx.addAfter) pushPickerToTicket();
 }
 function withPallet(row, line) {
-  if (row.querySelector("[data-pallet-toggle]")?.classList.contains("on") || row.querySelector("[data-ha-pallet]")?.checked) {
-    line.pallet = true;
-  }
+  if (row?.querySelector("[data-ha-pallet]")?.checked) line.pallet = true;
   return line;
 }
 function unifiedLinesFromForm() {
@@ -3398,6 +4674,12 @@ function unifiedLinesFromForm() {
       let opt = pickVal(row, "veg");
       if (!allowed.includes(opt)) opt = allowed[0];
       out.push(withPallet(row, { skuId: haVegSkuId(big, opt), qty: round(qty) }));
+      return;
+    }
+    if (isCustomFam(big)) {
+      const name = String(row.querySelector("[data-custom-name]")?.value || "").trim();
+      if (!name) return;
+      out.push(withPallet(row, { skuId: big, qty: round(qty), labelName: name }));
       return;
     }
     if (big === "leaf") {
@@ -3540,13 +4822,14 @@ function goTodayAfterSave(ids, day) {
   window.clearTimeout(highlightTimer);
   highlightTimer = window.setTimeout(() => {
     highlightOrderIds = [];
-    document.querySelectorAll(".order-card.just-in").forEach((el) => el.classList.remove("just-in"));
+    document.querySelectorAll(".order-card.just-in, .settle-card.just-in, .settle-order.just-in").forEach((el) => el.classList.remove("just-in"));
   }, 8000);
 }
 function applyOrdersPane(smooth) {
   document.querySelectorAll("#orders-pane-tabs [data-orders-pane]").forEach((b) => {
     b.classList.toggle("on", b.dataset.ordersPane === ordersPane);
   });
+  syncOpsFlowTabs();
   const swipe = document.getElementById("orders-swipe");
   const pane = document.querySelector(`[data-orders-pane-page="${ordersPane}"]`);
   if (!swipe || !pane || page !== "orders") return;
@@ -3557,8 +4840,8 @@ function applyOrdersPane(smooth) {
     else swipe.scrollLeft = left;
     window.setTimeout(() => {
       ordersPaneLock = false;
-    }, smooth ? 420 : 80);
-    const hit = document.querySelector("#orders-today .order-card.just-in");
+    }, smooth ? 280 : 40);
+    const hit = document.querySelector("#orders-today .settle-card.just-in, #orders-today .order-card.just-in");
     if (hit && ordersPane === "today") hit.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
   if (swipe.clientWidth) go();
@@ -3566,7 +4849,7 @@ function applyOrdersPane(smooth) {
 }
 function applyInPane(smooth) {
   const formBtn = document.querySelector('#in-pane-tabs [data-in-pane="form"]');
-  if (formBtn) formBtn.textContent = co === "ha" ? "Excel 匯入" : "進貨輸入";
+  if (formBtn) formBtn.textContent = "進貨輸入";
   document.querySelectorAll("#in-pane-tabs [data-in-pane]").forEach((b) => {
     b.classList.toggle("on", b.dataset.inPane === inPane);
   });
@@ -3580,7 +4863,7 @@ function applyInPane(smooth) {
     else swipe.scrollLeft = left;
     window.setTimeout(() => {
       inPaneLock = false;
-    }, smooth ? 420 : 80);
+    }, smooth ? 280 : 40);
   };
   if (swipe.clientWidth) go();
   else requestAnimationFrame(go);
@@ -4639,6 +5922,7 @@ function applyPlanMain(smooth) {
   document.querySelectorAll("#plan-main-tabs [data-plan-main]").forEach((b) => {
     b.classList.toggle("on", b.dataset.planMain === planMain);
   });
+  syncOpsFlowTabs();
   const breakBox = document.getElementById("plan-break");
   if (breakBox) breakBox.hidden = currentRole() === "driver" || planMain === "ship";
   const swipe = document.getElementById("plan-main-swipe");
@@ -4653,7 +5937,7 @@ function applyPlanMain(smooth) {
     window.setTimeout(() => {
       planMainLock = false;
       syncPlanMainPaneHeights();
-    }, smooth ? 420 : 80);
+    }, smooth ? 280 : 40);
   };
   if (swipe.clientWidth) go();
   else requestAnimationFrame(go);
@@ -4834,6 +6118,7 @@ function addOpenOrderFor(company, customer, shipDate, lines, shipAddr) {
     lines,
     status: "open",
     prio: nextPrio(),
+    urgent: orderUrgentValue(),
     edited: false,
     enteredBy: currentStaff() || "",
   });
@@ -4948,6 +6233,7 @@ function confirmNqSchedule() {
     o.shipAddr = shipAddrValue();
     o.shipDate = date;
     o.lines = entries[0].lines;
+    o.urgent = orderUrgentValue();
     markOrderEdited(o);
     if (wasShipped) {
       applyOpenShipment(o);
@@ -5137,6 +6423,7 @@ function ordersListHtml(opts = {}) {
         .filter(Boolean)
         .join(" ");
       const tag = o.edited ? '<span class="tag tag-edit">已改單</span>' : "";
+      const urgentTag = isOrderUrgent(o) ? '<span class="tag tag-urgent">急單</span>' : "";
       const preTag = isPreorderDay(o.shipDate) || o.preorder ? '<span class="tag tag-pre">預開</span>' : "";
       const bookTag = `<span class="tag">${esc(coLabel(o.co))}</span>`;
       const st = orderStatusLabel(o);
@@ -5146,11 +6433,12 @@ function ordersListHtml(opts = {}) {
         .join("");
       const bits = [];
       if (o.status === "open") {
-        if (!compact && can("ship-books")) bits.push(`<button type="button" class="ghost" data-act="ship" data-id="${o.id}">出貨扣庫</button>`);
+        if (!compact && can("ship-books") && !o.settled)
+          bits.push(`<button type="button" class="ghost" data-act="ship" data-id="${o.id}">結單</button>`);
         if (can("edit")) bits.push(`<button type="button" data-act="edit" data-id="${o.id}">改單</button>`);
         if (can("cancel")) bits.push(`<button type="button" data-act="cancel" data-id="${o.id}">取消</button>`);
       }
-      if (o.status === "shipped" && can("edit-shipped")) {
+      if ((o.status === "shipped" || o.status === "delivered") && can("edit-shipped")) {
         bits.push(`<button type="button" data-act="edit" data-id="${o.id}">改單</button>`);
       }
       if (o.status !== "cancelled" && o.status !== "deleted" && can("delete")) {
@@ -5166,11 +6454,11 @@ function ordersListHtml(opts = {}) {
               <button type="button" class="tiny-btn" data-act="down" data-id="${o.id}" ${n >= openN ? "disabled" : ""} aria-label="往後">↓</button>
             </div>`
           : `<div class="order-prio muted">${st}</div>`;
-      return `<article class="${cls}">
+      return `<article class="${cls}${isOrderUrgent(o) ? " is-urgent" : ""}">
         ${prio}
         <div class="order-body">
           <div class="order-card-head">
-            <strong class="order-who">${tag}${preTag}${bookTag}${esc(o.customer)}</strong>
+            <strong class="order-who">${urgentTag}${tag}${preTag}${bookTag}${esc(o.customer)}</strong>
             <span class="order-st st-${esc(o.status)}">${esc(st)}</span>
           </div>
           <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}${o.shipAddr ? `　送貨 ${esc(o.shipAddr)}` : ""}</p>
@@ -5183,15 +6471,229 @@ function ordersListHtml(opts = {}) {
     })
     .join("")}</div>`;
 }
+function pushAudit(kind, action, summary, payload) {
+  if (!state.auditLog || !Array.isArray(state.auditLog)) state.auditLog = [];
+  state.auditLog.unshift({
+    id: `au-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    kind: String(kind || ""),
+    action: String(action || "delete"),
+    summary: String(summary || ""),
+    payload: payload && typeof payload === "object" ? payload : null,
+    by: currentStaff() || "",
+    at: Date.now(),
+  });
+  if (state.auditLog.length > 800) state.auditLog.length = 800;
+}
+window.pushAudit = pushAudit;
+function canOrderMulti() {
+  return currentRole() === "boss";
+}
+function orderMultiOn() {
+  return !!(orderMulti && canOrderMulti());
+}
+function clearOrderMulti() {
+  orderMulti = null;
+}
+function startOrderMulti(id) {
+  if (!canOrderMulti()) return;
+  orderMulti = { ids: new Set() };
+  if (id) orderMulti.ids.add(id);
+  renderOrders();
+}
+function toggleOrderMultiId(id) {
+  if (!orderMultiOn() || !id) return;
+  if (orderMulti.ids.has(id)) orderMulti.ids.delete(id);
+  else orderMulti.ids.add(id);
+  if (!orderMulti.ids.size) {
+    clearOrderMulti();
+  }
+  renderOrders();
+}
+function selectedMultiOrders() {
+  if (!orderMultiOn()) return [];
+  return state.orders.filter((o) => orderMulti.ids.has(o.id));
+}
+function orderMultiBarHtml() {
+  if (!orderMultiOn()) return "";
+  const n = orderMulti.ids.size;
+  const list = selectedMultiOrders();
+  const shipN = list.filter((o) => o.status === "open" || o.status === "delivered").length;
+  const delN = list.filter((o) => o.status !== "cancelled" && o.status !== "deleted").length;
+  return `<div class="order-multi-bar" role="toolbar" aria-label="多選操作">
+    <span class="order-multi-count">已選 <b>${n}</b></span>
+    <button type="button" class="primary" data-order-multi-ship ${shipN ? "" : "disabled"}>確認出貨${shipN ? `（${shipN}）` : ""}</button>
+    <button type="button" class="ghost danger" data-order-multi-del ${delN ? "" : "disabled"}>刪除${delN ? `（${delN}）` : ""}</button>
+    <button type="button" class="ghost" data-order-multi-clear>取消選取</button>
+  </div>`;
+}
+function batchShipSelectedOrders() {
+  if (!requireCan("ship-books", "沒有出貨權限。")) return;
+  const list = selectedMultiOrders().filter((o) => o.status === "open" || o.status === "delivered");
+  if (!list.length) return setStatus("請先選未送出的訂單。", true);
+  const ok = shipOpenOrders(list, {
+    confirmMsg: `確定將這 ${list.length} 張確認出貨並扣庫？\n會標成已送出。`,
+  });
+  if (ok) clearOrderMulti();
+}
+function batchDeleteSelectedOrders() {
+  if (!requireCan("delete", "沒有刪除權限。")) return;
+  const list = selectedMultiOrders().filter((o) => o.status !== "cancelled" && o.status !== "deleted");
+  if (!list.length) return setStatus("請先選要刪的訂單。", true);
+  if (!confirm(`確定刪除這 ${list.length} 張？\n刪除後仍會留在已填紀錄，標「已刪除」。`)) return;
+  for (const o of list) {
+    unwindShipment(o);
+    o.status = "deleted";
+    o.deletedBy = currentStaff();
+    pushAudit("order", "delete", `訂單 #${o.no || ""} ${o.customer || ""}`, {
+      id: o.id,
+      no: o.no,
+      customer: o.customer,
+      shipDate: o.shipDate,
+      lines: o.lines,
+    });
+    if (inlineEdit?.id === o.id) inlineEdit = null;
+    if (editing === o.id) {
+      editing = "";
+      const editEl = document.getElementById("edit-id");
+      if (editEl) editEl.value = "";
+      const cancelEdit = document.getElementById("cancel-edit");
+      if (cancelEdit) cancelEdit.hidden = true;
+    }
+  }
+  clearOrderMulti();
+  save();
+  setStatus(`已刪除 ${list.length} 張並留存紀錄。刪除人員：${currentStaff()}`, false);
+  render();
+}
+function ordersTodayCustomerHtml() {
+  const day = ordersViewDay();
+  const list = state.orders.filter(
+    (o) => (o.shipDate || today()) === day && o.status !== "cancelled" && o.status !== "deleted",
+  );
+  if (!list.length) return `<p class="empty">${day} 尚無已填紀錄。</p>`;
+  const multi = orderMultiOn();
+  const canMulti = canOrderMulti();
+  const groups = groupOrdersByCustomer(list);
+  const cards = groups
+    .map(([customer, orders]) => {
+      const unsettle = orders.filter((o) => o.status === "open" && !o.settled);
+      const settledOpen = orders.filter((o) => o.status === "open" && o.settled);
+      const done = orders.filter((o) => o.status === "shipped" || o.status === "delivered");
+      const allSent = unsettle.length + settledOpen.length === 0 && done.length > 0;
+      const allSettled = unsettle.length === 0 && (settledOpen.length > 0 || done.length > 0);
+      const someSettled = unsettle.length > 0 && (settledOpen.length > 0 || done.length > 0);
+      const st = allSent
+        ? "已送出"
+        : allSettled
+          ? "已結單"
+          : someSettled
+            ? "部分結單"
+            : orderStatusLabel(unsettle[0] || orders[0]);
+      const stClass = allSent ? "shipped" : allSettled || someSettled ? "part" : "pending";
+      const addr = groupShipAddr(orders);
+      const edited = orders.some((o) => o.edited);
+      const urgent = orders.some((o) => isOrderUrgent(o) && isOrderUnshipped(o));
+      const blocks = orders
+        .slice()
+        .sort((a, b) => {
+          const ra = { open: 0, delivered: 1, shipped: 2 }[a.status] ?? 9;
+          const rb = { open: 0, delivered: 1, shipped: 2 }[b.status] ?? 9;
+          if (ra !== rb) return ra - rb;
+          const ua = isOrderUrgent(a) && a.status === "open" ? 0 : 1;
+          const ub = isOrderUrgent(b) && b.status === "open" ? 0 : 1;
+          if (ua !== ub) return ua - ub;
+          const sa = a.settled ? 1 : 0;
+          const sb = b.settled ? 1 : 0;
+          return sa - sb || a.no - b.no;
+        })
+        .map((o) => {
+          const editingHere = inlineEdit && inlineEdit.id === o.id;
+          const selected = multi && orderMulti.ids.has(o.id);
+          const lines = (o.lines || [])
+            .filter((l) => l.qty)
+            .map((l) => `<span class="order-chip">${esc(lineLabel(l, true))}</span>`)
+            .join("");
+          const acts = [];
+          if (!editingHere && !multi) {
+            if (o.status === "open" || o.status === "delivered") {
+              if (can("edit")) acts.push(`<button type="button" data-act="edit" data-id="${o.id}">改單</button>`);
+              if (can("cancel")) acts.push(`<button type="button" class="ghost" data-act="cancel" data-id="${o.id}">取消</button>`);
+            } else if ((o.status === "shipped" || o.status === "delivered") && can("edit-shipped")) {
+              acts.push(`<button type="button" data-act="edit" data-id="${o.id}">改單</button>`);
+            }
+            if (can("delete")) acts.push(`<button type="button" class="ghost" data-act="delete" data-id="${o.id}">刪除</button>`);
+          }
+          return `<div class="settle-order${o.edited ? " was-edited" : ""}${isOrderUrgent(o) ? " is-urgent" : ""}${o.settled && o.status === "open" ? " is-settled" : ""}${editingHere ? " is-editing" : ""}${highlightOrderIds.includes(o.id) ? " just-in" : ""}${canMulti ? " is-pickable" : ""}${selected ? " is-picked" : ""}" data-order-pick="${esc(o.id)}" aria-pressed="${selected ? "true" : "false"}">
+            <div class="settle-order-head">
+              ${canMulti ? `<span class="order-pick-mark" aria-hidden="true">${selected ? "✓" : ""}</span>` : ""}
+              <span class="tag">${esc(coLabel(o.co))}</span>
+              ${isOrderUrgent(o) ? '<span class="tag tag-urgent">急單</span>' : ""}
+              <span class="settle-no">#${esc(o.no)}</span>
+              <span class="order-st st-${esc(o.settled && o.status === "open" ? "delivered" : o.status)}">${esc(orderStatusLabel(o))}</span>
+              ${o.edited ? '<span class="tag tag-edit">已改單</span>' : ""}
+            </div>
+            ${editingHere ? "" : o.remark ? `<p class="order-remark">${esc(o.remark)}</p>` : ""}
+            ${editingHere ? "" : `<p class="order-staff">${staffNoteHtml(o)}</p>`}
+            ${editingHere ? inlineEditPanelHtml(o) : `<div class="order-chips">${lines || '<span class="muted">無品項</span>'}</div>`}
+            ${!editingHere && acts.length ? `<div class="order-actions">${acts.join("")}</div>` : ""}
+          </div>`;
+        })
+        .join("");
+      const settleBtn =
+        !multi && unsettle.length && can("ship-books")
+          ? `<button type="button" class="primary" data-settle-who="${esc(customer)}">結單${unsettle.length > 1 ? `（${unsettle.length}張）` : ""}</button>`
+          : "";
+      const labelBtn = !multi
+        ? `<button type="button" class="ghost" data-ship-labels-who="${esc(customer)}" data-ship-labels-day="${esc(day)}">列印出貨標籤</button>`
+        : "";
+      if (allSent && !multi) {
+        const lineBits = [...new Set(
+          orders.flatMap((o) =>
+            (o.lines || [])
+              .filter((l) => l.qty > 0)
+              .map((l) => lineLabel(l, true)),
+          ),
+        )];
+        const shown = lineBits.slice(0, 3).join("　");
+        const more = lineBits.length > 3 ? `　+${lineBits.length - 3}` : "";
+        const nos = orders.map((o) => `#${o.no}`).join(" ");
+        const firstId = orders[0]?.id || "";
+        return `<article class="settle-card is-shipped is-compact${edited ? " was-edited" : ""}${orders.some((o) => highlightOrderIds.includes(o.id)) ? " just-in" : ""}${canMulti ? " is-pickable" : ""}" ${canMulti && firstId ? `data-order-pick="${esc(firstId)}" data-order-pick-all="${esc(orders.map((o) => o.id).join(","))}"` : ""}>
+          <div class="settle-compact">
+            <div class="settle-compact-top">
+              <strong class="settle-who">${esc(customer)}</strong>
+              <span class="order-st st-shipped">已送出</span>
+            </div>
+            <p class="settle-compact-meta">${esc(nos)}${addr ? `　${esc(addr)}` : ""}　${orders.length} 張</p>
+            <p class="settle-compact-lines">${esc(shown)}${esc(more)}</p>
+          </div>
+        </article>`;
+      }
+      return `<article class="settle-card is-${stClass}${urgent ? " is-urgent" : ""}${edited ? " was-edited" : ""}${orders.some((o) => highlightOrderIds.includes(o.id)) ? " just-in" : ""}${multi ? " is-multi" : ""}">
+        <div class="settle-head">
+          <div>
+            <strong class="settle-who">${urgent ? '<span class="tag tag-urgent">急單</span>' : ""}${esc(customer)}</strong>
+            <p class="order-meta">出貨日 ${esc(day)}${addr ? `　送貨 ${esc(addr)}` : ""}　${orders.length} 張</p>
+          </div>
+          <span class="order-st st-${esc(allSettled || someSettled ? "delivered" : "open")}">${esc(st)}</span>
+        </div>
+        <div class="settle-orders">${blocks}</div>
+        ${labelBtn || settleBtn ? `<div class="settle-actions">${labelBtn}${settleBtn}</div>` : ""}
+      </article>`;
+    })
+    .join("");
+  const hint = canMulti && !multi ? `<p class="hint order-multi-hint">主管可長按訂單進入多選，一次確認出貨或刪除。</p>` : "";
+  return `${orderMultiBarHtml()}${hint}<div class="settle-cards${multi ? " is-multi" : ""}">${cards}</div>`;
+}
 function renderOrders() {
   const htmlBooks = ordersListHtml({ compact: false });
-  const htmlToday = ordersListHtml({ compact: true });
+  const htmlToday = ordersTodayCustomerHtml();
   const books = document.getElementById("orders");
   const todayBox = document.getElementById("orders-today");
   if (books) books.innerHTML = htmlBooks;
   if (todayBox) todayBox.innerHTML = htmlToday;
   const title = document.getElementById("orders-today-title");
-  if (title) title.textContent = `今日已填　${ordersViewDay()}`;
+  if (title) title.textContent = `已填單　${ordersViewDay()}`;
 }
 
 function renderRestList() {
@@ -5268,7 +6770,7 @@ function planDayLineRows(day) {
       rows.push({
         customer: o.customer || "未填",
         skuId: l.skuId,
-        name: skuShortName(sku),
+        name: l.labelName || skuShortName(sku),
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
@@ -5279,12 +6781,136 @@ function planDayLineRows(day) {
   }
   return rows;
 }
+function ensurePrepStore() {
+  if (!state.prep || typeof state.prep !== "object") state.prep = {};
+}
+function prepLineKey(r) {
+  return `${String(r.customer || "").trim()}\t${r.skuId}\t${r.pack || ""}`;
+}
+function isLinePrepped(day, r) {
+  if (r.done) return true;
+  ensurePrepStore();
+  return !!(state.prep[day] && state.prep[day][prepLineKey(r)]);
+}
+function setLinePrepped(day, r, on) {
+  ensurePrepStore();
+  if (!state.prep[day]) state.prep[day] = {};
+  const key = prepLineKey(r);
+  if (on) {
+    state.prep[day][key] = { by: currentStaff() || "", at: Date.now() };
+  } else {
+    delete state.prep[day][key];
+    if (!Object.keys(state.prep[day]).length) delete state.prep[day];
+  }
+}
+function prepStatsForRows(day, rows) {
+  const open = rows.filter((r) => !r.done);
+  const done = open.filter((r) => isLinePrepped(day, r)).length;
+  return { total: open.length, done, left: Math.max(0, open.length - done) };
+}
+function canConfirmPrep() {
+  const r = currentRole();
+  return r === "site" || r === "acct" || r === "boss";
+}
+function togglePrepLine(day, key, want) {
+  if (!canConfirmPrep()) return setStatus("現場或會計才能做理貨確認。", true);
+  if (!requireStaff()) return;
+  const rows = planMergeDayLines(planDayLineRows(day));
+  const hit = rows.find((r) => prepLineKey(r) === key && !r.done);
+  if (!hit) return setStatus("找不到這筆待理貨項目。", true);
+  setLinePrepped(day, hit, want);
+  save();
+  setStatus(want ? `已理貨確認「${hit.customer}」${hit.name}。` : `已取消理貨「${hit.customer}」${hit.name}。`, false);
+  renderPlan();
+}
 function planGroupHead(g) {
   const processed = g.label.startsWith("加工·");
   const raw = g.label.replace(/^現採·/, "").replace(/^加工·/, "");
   const i = raw.indexOf("／");
   if (i < 0) return { kind: processed ? "加工" : "現採", mark: raw };
   return { kind: raw.slice(0, i), mark: raw.slice(i + 1) };
+}
+function planMarkShort(mark) {
+  return String(mark || "")
+    .replace(/紅骨/g, "紅骨R")
+    .replace(/綠骨/g, "綠骨G")
+    .replace(/紐西蘭/g, "紐西蘭 NZ")
+    .replace(/澳洲/g, "澳洲 AUX")
+    .replace(/韓國/g, "韓國 KR")
+    .replace(/越南/g, "越南 VN")
+    .replace(/印尼/g, "印尼 ID")
+    .replace(/美國/g, "美國 US");
+}
+function planCropName(name) {
+  return String(name || "")
+    .replace(/紫洋蔥/g, "紫洋")
+    .replace(/散賣kg$|散賣斤$|散賣$/g, "");
+}
+const PLAN_CARD_I18N = {
+  "sl-zhi": { th: "ผักบุ้ง จื่อ", vi: "Rau muống Chí" },
+  "sl-fang": { th: "ผักบุ้ง ฟาง", vi: "Rau muống Phương" },
+  rb: { th: "โหระพาแดง R", vi: "Húng quế đỏ R" },
+  gb: { th: "โหระพาเขียว G", vi: "Húng quế xanh G" },
+  "mint-kg": { th: "สะระแหน่", vi: "Bạc hà" },
+  "shiso-kg": { th: "ใบชิโซะ", vi: "Tía tô" },
+  "basil-kg": { th: "โหระพา", vi: "Húng quế" },
+  onion: { th: "หอมหัวใหญ่", vi: "Hành tây" },
+  "onion-p": { th: "หอมม่วง", vi: "Hành tây tím" },
+  "onion-b": { th: "หอม B", vi: "Hành B" },
+  "pk-mi": { th: "ฟักทอง Mit", vi: "Bí đỏ Mit" },
+  "pk-ch": { th: "ฟักทอง Acheng", vi: "Bí đỏ Acheng" },
+  "pk-b": { th: "ฟักทอง B", vi: "Bí đỏ B" },
+  cab: { th: "กะหล่ำปลี", vi: "Bắp cải" },
+  nap: { th: "ผักกาดขาว", vi: "Cải thảo" },
+  bur: { th: "โกโบ", vi: "Ngưu bàng" },
+  wk: { th: "กะหล่ำปลีขาว", vi: "Bắp cải trắng" },
+  ice: { th: "ผักกาดหอม", vi: "Xà lách" },
+  cel: { th: "ขึ้นฉ่ายฝรั่ง", vi: "Cần tây" },
+  bro: { th: "บร็อกโคลี", vi: "Súp lơ xanh" },
+};
+function planHaTone(sku) {
+  const id = String(sku?.id || "");
+  if (id.startsWith("onp-")) return "onion-p";
+  if (id === "on-b-kg") return "onion-b";
+  if (id.startsWith("on-")) return "onion";
+  if (id.startsWith("pk-mi")) return "pk-mi";
+  if (id.startsWith("pk-ch")) return "pk-ch";
+  if (id === "pk-b-kg") return "pk-b";
+  if (sku?.vegFam) return `veg-${sku.vegFam}`;
+  return "ha-misc";
+}
+function planCardI18n(g) {
+  if (PLAN_CARD_I18N[g.key]) return PLAN_CARD_I18N[g.key];
+  const tone = g.tone || "";
+  if (PLAN_CARD_I18N[tone]) return PLAN_CARD_I18N[tone];
+  if (tone.startsWith("veg-")) {
+    const fam = tone.slice(4);
+    return PLAN_CARD_I18N[fam] || { th: "", vi: "" };
+  }
+  if (tone === "onion" || tone === "onion-p" || tone === "onion-b") return PLAN_CARD_I18N[tone] || { th: "", vi: "" };
+  if (tone.startsWith("pk-")) return PLAN_CARD_I18N[tone] || { th: "", vi: "" };
+  return { th: "", vi: "" };
+}
+function planCardView(g) {
+  const head = planGroupHead(g);
+  const i18n = planCardI18n(g);
+  const processed = String(g.label || "").startsWith("加工·");
+  let crop;
+  let mark;
+  if (head.kind === "現採" || head.kind === "加工") {
+    crop = planCropName(head.mark);
+    mark = processed ? "加工" : "現採";
+  } else {
+    crop = planCropName(head.kind);
+    mark = planMarkShort(head.mark);
+  }
+  return {
+    crop,
+    mark,
+    th: i18n.th || "",
+    vi: i18n.vi || "",
+    tone: g.tone,
+  };
 }
 function planMergeDayLines(rows) {
   const merged = new Map();
@@ -5321,42 +6947,71 @@ function planTotChipsHtml(rows, mode) {
     )
     .join("")}</ul>`;
 }
-function planCustRowsHtml(rows, hideSpec) {
+function planCustRowsHtml(day, rows, hideSpec) {
   const byCust = new Map();
   for (const r of rows) {
     if (!byCust.has(r.customer)) byCust.set(r.customer, []);
     byCust.get(r.customer).push(r);
   }
   const names = [...byCust.keys()].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const canPrep = canConfirmPrep();
   return names
     .map((name) => {
       const list = byCust.get(name).sort((a, b) => planLineSpec(a).localeCompare(planLineSpec(b), "zh-Hant") || a.skuId.localeCompare(b.skuId));
       const allDone = list.every((r) => r.done);
       const someDone = list.some((r) => r.done);
+      const openLines = list.filter((r) => !r.done);
+      const allPrep = openLines.length > 0 && openLines.every((r) => isLinePrepped(day, r));
+      const somePrep = openLines.some((r) => isLinePrepped(day, r));
       const qty = list
         .map((r) => {
           const spec = hideSpec ? "" : planLineSpec(r);
-          const mark = someDone && !allDone
-            ? r.done
-              ? `<span class="plan-shipped">已出貨</span>`
-              : `<span class="plan-open">未出貨</span>`
-            : "";
-          return `<span class="plan-cust-qty">${spec ? `${esc(spec)} ` : ""}<b>${fmt(r.qty)}</b> ${esc(r.unit)}${mark}</span>`;
+          const prepped = isLinePrepped(day, r);
+          const mark = r.done
+            ? `<span class="plan-shipped">已出貨</span>`
+            : prepped
+              ? `<span class="plan-prepped">已理貨</span>`
+              : someDone || somePrep
+                ? `<span class="plan-open">待理貨</span>`
+                : "";
+          const box =
+            !r.done && canPrep
+              ? `<label class="prep-check"><input type="checkbox" data-prep-key="${esc(prepLineKey(r))}" data-prep-day="${esc(day)}" ${prepped ? "checked" : ""} /><span class="prep-box" aria-hidden="true"></span></label>`
+              : !r.done
+                ? `<span class="prep-check is-locked" title="已理貨狀態" aria-hidden="true"><span class="prep-box${prepped ? " on" : ""}"></span></span>`
+                : `<span class="prep-check is-done" aria-hidden="true"><span class="prep-box on"></span></span>`;
+          return `<span class="plan-cust-qty">${box}${spec ? `${esc(spec)} ` : ""}<b>${fmt(r.qty)}</b> ${esc(r.unit)}${mark}</span>`;
         })
         .join("");
       const whoMark = allDone
         ? `<span class="plan-shipped">已出貨</span>`
-        : someDone
-          ? `<span class="plan-shipped is-part">部分已出貨</span>`
-          : `<span class="plan-open">未出貨</span>`;
-      return `<div class="plan-cust${allDone ? " is-shipped" : someDone ? " is-part" : " is-open"}"><span class="plan-cust-who">${esc(name)}</span><span class="plan-cust-bits">${qty}</span>${whoMark}</div>`;
+        : allPrep
+          ? `<span class="plan-prepped">已理貨</span>`
+          : somePrep
+            ? `<span class="plan-prepped is-part">理貨中</span>`
+            : someDone
+              ? `<span class="plan-shipped is-part">部分已出貨</span>`
+              : `<span class="plan-open">待理貨</span>`;
+      const cls = allDone
+        ? "is-shipped"
+        : allPrep
+          ? "is-prepped"
+          : somePrep || someDone
+            ? "is-part"
+            : "is-open";
+      return `<div class="plan-cust ${cls}"><span class="plan-cust-who">${esc(name)}</span><span class="plan-cust-bits">${qty}</span>${whoMark}</div>`;
     })
     .join("");
 }
-function planItemBlockHtml(sec, allRows) {
+function planItemBlockHtml(day, sec, allRows) {
   const rows = planMergeDayLines(allRows.filter((r) => sec.skuIds.includes(r.skuId)));
   if (!rows.length) return "";
   const totHtml = planTotChipsHtml(rows, sec.totMode);
+  const prep = prepStatsForRows(day, rows);
+  const prepHtml =
+    prep.total > 0
+      ? `<p class="prep-stat">理貨確認 <strong>${prep.done}/${prep.total}</strong>${prep.left ? `　尚餘 ${prep.left}` : "　已齊"}</p>`
+      : "";
   let body;
   if (sec.totMode === "vendor") {
     const vendorRank = { 芳: 0, 琳: 1, 其他: 2 };
@@ -5368,16 +7023,17 @@ function planItemBlockHtml(sec, allRows) {
     }
     body = [...byVend.keys()]
       .sort((a, b) => (vendorRank[a] ?? 9) - (vendorRank[b] ?? 9))
-      .map((v) => `<div class="plan-vend-block"><h4 class="plan-vend-lab">${esc(v)}</h4>${planCustRowsHtml(byVend.get(v), true)}</div>`)
+      .map((v) => `<div class="plan-vend-block"><h4 class="plan-vend-lab">${esc(v)}</h4>${planCustRowsHtml(day, byVend.get(v), true)}</div>`)
       .join("");
   } else {
-    body = planCustRowsHtml(rows);
+    body = planCustRowsHtml(day, rows);
   }
-  return `<section class="plan-break-card tone-${esc(sec.tone)}">
+  return `<section class="plan-break-card tone-${esc(sec.tone)}${prep.total && prep.done >= prep.total ? " is-prep-done" : ""}">
     <header class="plan-item-head">
       <span class="plan-item-kind">${esc(sec.kind)}</span>
       <h3>${esc(sec.mark)}</h3>
       ${totHtml}
+      ${prepHtml}
     </header>
     ${body}
   </section>`;
@@ -5390,9 +7046,15 @@ function planBreakHtml(day) {
     { kind: "九層塔", mark: "紅骨", tone: "rb", skuIds: ["rb-fang", "rb-lin", "rb-oth"], totMode: "vendor" },
     { kind: "九層塔", mark: "綠骨", tone: "gb", skuIds: ["gb-fang", "gb-lin", "gb-oth"], totMode: "vendor" },
   ];
-  const html = sections.map((s) => planItemBlockHtml(s, rows)).join("");
+  const html = sections.map((s) => planItemBlockHtml(day, s, rows)).join("");
   if (!html) return `<p class="empty">當日沒有地瓜葉、九層塔叫貨。</p>`;
-  return `<div class="plan-break">${html}</div>`;
+  const all = planMergeDayLines(rows.filter((r) => sections.some((s) => s.skuIds.includes(r.skuId))));
+  const prep = prepStatsForRows(day, all);
+  const head =
+    prep.total > 0
+      ? `<div class="prep-banner"><strong>理貨確認</strong><span>已備 ${prep.done}／${prep.total}</span><em>${canConfirmPrep() ? "勾選已備妥的客戶品項" : "僅供查看"}</em></div>`
+      : `<div class="prep-banner"><strong>理貨確認</strong><span>今日待出已結清或尚無待理貨</span></div>`;
+  return `${head}<div class="plan-break">${html}</div>`;
 }
 function planDayPendingQty(g, day) {
   let n = 0;
@@ -5402,6 +7064,200 @@ function planDayPendingQty(g, day) {
     n += lineQtyForSkus(o, g.skuIds);
   }
   return round(n);
+}
+function planDayShippedQty(g, day) {
+  let n = 0;
+  for (const o of state.orders) {
+    if (o.status !== "shipped" && o.status !== "delivered") continue;
+    if ((o.shipDate || today()) !== day) continue;
+    n += lineQtyForSkus(o, g.skuIds);
+  }
+  return round(n);
+}
+function planDayDemandQty(g, day) {
+  return round(planDayPendingQty(g, day) + planDayShippedQty(g, day));
+}
+function openLinesForCustomerDay(customer, day) {
+  const rows = [];
+  for (const o of state.orders) {
+    if (o.status !== "open") continue;
+    if (orderShipDay(o) !== day) continue;
+    if (customerKey(o) !== customer) continue;
+    for (const l of o.lines || []) {
+      if (!(l.qty > 0) || !l.skuId) continue;
+      const sku = skuById(l.skuId);
+      if (!sku) continue;
+      rows.push({
+        customer,
+        skuId: l.skuId,
+        name: l.labelName || skuShortName(sku),
+        qty: round(l.qty),
+        unit: sku.unit,
+        pack: l.pack || "",
+        done: false,
+      });
+    }
+  }
+  return planMergeDayLines(rows);
+}
+function customerPlanFlowStatus(day, orders) {
+  const list = orders || [];
+  if (!list.length) return { code: "none", label: "無單", drivers: [] };
+  const drivers = groupDrivers(list);
+  if (list.every((o) => o.status === "shipped" || o.status === "delivered")) {
+    return { code: "sent", label: "已送貨", drivers };
+  }
+  const openLines = openLinesForCustomerDay(customerKey(list[0]), day);
+  if (openLines.length && openLines.every((r) => isLinePrepped(day, r))) {
+    return { code: "ready", label: "備貨完成", drivers };
+  }
+  return { code: "prep", label: "備貨中", drivers };
+}
+function planCropCustomerEntries(day, g) {
+  const map = new Map();
+  for (const o of state.orders) {
+    if (o.status === "cancelled" || o.status === "deleted") continue;
+    if (orderShipDay(o) !== day) continue;
+    const qty = lineQtyForSkus(o, g.skuIds);
+    if (!(qty > 0)) continue;
+    const who = customerKey(o);
+    if (!map.has(who)) map.set(who, { who, orders: [], qty: 0 });
+    const row = map.get(who);
+    row.orders.push(o);
+    row.qty = round(row.qty + qty);
+  }
+  const out = [...map.values()].map((row) => {
+    const open = row.orders.filter((o) => o.status === "open");
+    const sent = row.orders.filter((o) => o.status === "shipped" || o.status === "delivered");
+    let code = "prep";
+    let label = "備貨中";
+    if (!open.length && sent.length) {
+      code = "sent";
+      label = "已送貨";
+    } else {
+      const lines = [];
+      for (const o of open) {
+        for (const l of o.lines || []) {
+          if (!(l.qty > 0) || !g.skuIds.includes(l.skuId)) continue;
+          const sku = skuById(l.skuId);
+          if (!sku) continue;
+          lines.push({
+            customer: row.who,
+            skuId: l.skuId,
+            name: l.labelName || skuShortName(sku),
+            qty: round(l.qty),
+            unit: sku.unit,
+            pack: l.pack || "",
+            done: false,
+          });
+        }
+      }
+      const merged = planMergeDayLines(lines);
+      if (merged.length && merged.every((r) => isLinePrepped(day, r))) {
+        code = "ready";
+        label = "備貨完成";
+      }
+    }
+    const note = planLineNote(row.orders[0], g.skuIds);
+    const urgent = open.some((o) => isOrderUrgent(o));
+    const rank = code === "sent" ? 2 : code === "ready" ? 1 : 0;
+    return { ...row, code, label, note, urgent, rank };
+  });
+  return out.sort(
+    (a, b) =>
+      a.rank - b.rank ||
+      (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) ||
+      a.who.localeCompare(b.who, "zh-Hant"),
+  );
+}
+function planCropListHtml(day, g) {
+  if (!g) return `<p class="empty">請點上方品項卡查看客戶訂單。</p>`;
+  const rows = planCropCustomerEntries(day, g);
+  const view = planCardView(g);
+  if (!rows.length) return `<p class="empty">「${esc(view.crop)}」今日沒有出貨客戶。</p>`;
+  const canPrep = canConfirmPrep();
+  const counts = { prep: 0, ready: 0, sent: 0 };
+  for (const r of rows) if (counts[r.code] != null) counts[r.code] += 1;
+  const need = planDayPendingQty(g, day);
+  const shipped = planDayShippedQty(g, day);
+  const demand = planDayDemandQty(g, day);
+  const list = rows
+    .map((r) => {
+      const action =
+        r.code === "prep" && canPrep
+          ? `<button type="button" class="tiny-btn primary" data-prep-customer="${esc(r.who)}" data-prep-day="${esc(day)}" data-prep-on="1" data-prep-skus="${esc(g.skuIds.join(","))}">備貨完成</button>`
+          : r.code === "ready" && canPrep
+            ? `<button type="button" class="tiny-btn" data-prep-customer="${esc(r.who)}" data-prep-day="${esc(day)}" data-prep-on="0" data-prep-skus="${esc(g.skuIds.join(","))}">改回備貨中</button>`
+            : "";
+      return `<li class="plan-crop-row is-${esc(r.code)}${r.urgent ? " is-urgent" : ""}">
+        <div class="plan-crop-main">
+          <strong>${r.urgent ? '<span class="tag tag-urgent">急</span>' : ""}${esc(r.who)}</strong>
+          <span class="plan-crop-qty">${fmt(r.qty)} ${esc(g.unit)}${r.note ? `　${esc(r.note)}` : ""}</span>
+        </div>
+        <span class="plan-crop-badge">${esc(r.label)}</span>
+        ${action}
+      </li>`;
+    })
+    .join("");
+  return `<section class="plan-crop-sec tone-${esc(g.tone)}">
+    <div class="plan-crop-head">
+      <div class="plan-crop-title">
+        <h3><span class="plan-crop-name">${esc(view.crop)}</span>${view.mark && view.mark !== "現採" && view.mark !== "加工" ? ` ${esc(view.mark)}` : ""}　客戶訂單</h3>
+        ${(view.th || view.vi) ? `<p class="plan-crop-i18n">${view.th ? `<span lang="th">${esc(view.th)}</span>` : ""}${view.vi ? `<span lang="vi">${esc(view.vi)}</span>` : ""}</p>` : ""}
+        <p class="plan-crop-totals"><span>今日總數 <b>${fmt(demand)}</b> ${esc(g.unit)}</span><span>待出 <b>${fmt(need)}</b></span><span>已出 <b>${fmt(shipped)}</b></span></p>
+      </div>
+      <p><span>備貨中 ${counts.prep}</span><span>備貨完成 ${counts.ready}</span><span>已送貨 ${counts.sent}</span></p>
+    </div>
+    <ul class="plan-crop-list">${list}</ul>
+  </section>`;
+}
+function setCustomerPrepped(day, customer, on, skuIds) {
+  if (!canConfirmPrep()) return setStatus("現場或會計才能做理貨確認。", true);
+  if (!requireStaff()) return;
+  let lines = openLinesForCustomerDay(customer, day);
+  if (Array.isArray(skuIds) && skuIds.length) {
+    const set = new Set(skuIds);
+    lines = lines.filter((r) => set.has(r.skuId));
+  }
+  if (!lines.length) return setStatus(`「${customer}」沒有待備貨品項。`, true);
+  for (const r of lines) setLinePrepped(day, r, on);
+  save();
+  setStatus(on ? `「${customer}」備貨完成。` : `「${customer}」改回備貨中。`, false);
+  renderPlan();
+}
+function planOrderStatusHtml(day) {
+  const list = state.orders.filter(
+    (o) => o.status !== "cancelled" && o.status !== "deleted" && orderShipDay(o) === day,
+  );
+  const groups = groupOrdersByCustomer(list);
+  if (!groups.length) return "";
+  const counts = { prep: 0, ready: 0, sent: 0 };
+  const rows = groups
+    .map(([who, orders]) => {
+      const st = customerPlanFlowStatus(day, orders);
+      if (counts[st.code] != null) counts[st.code] += 1;
+      const urgent = (orders || []).some((o) => isOrderUrgent(o) && isOrderUnshipped(o));
+      return { who, st, urgent, orders };
+    })
+    .sort((a, b) => {
+      const ra = a.st.code === "sent" ? 2 : a.st.code === "ready" ? 1 : 0;
+      const rb = b.st.code === "sent" ? 2 : b.st.code === "ready" ? 1 : 0;
+      return ra - rb || (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || a.who.localeCompare(b.who, "zh-Hant");
+    })
+    .map(({ who, st, urgent }) => {
+      return `<li class="plan-st-mini is-${esc(st.code)}${urgent ? " is-urgent" : ""}">
+        <strong>${urgent ? '<span class="tag tag-urgent">急</span>' : ""}${esc(who)}</strong>
+        <span class="plan-st-badge">${esc(st.label)}</span>
+      </li>`;
+    })
+    .join("");
+  return `<section class="plan-status-sec is-compact">
+    <div class="plan-status-head">
+      <h3>全部訂單</h3>
+      <p><span>備貨中 ${counts.prep}</span><span>完成 ${counts.ready}</span><span>已送 ${counts.sent}</span></p>
+    </div>
+    <ul class="plan-status-mini">${rows}</ul>
+  </section>`;
 }
 function planOtherOpenQty(g, day) {
   let n = 0;
@@ -5434,12 +7290,12 @@ function planGroups() {
     { key: "shiso-kg", label: "現採·紫蘇", unit: "kg", skuIds: ["shiso-kg", "shiso-jin"], tone: "shiso" },
     { key: "basil-kg", label: "現採·九層塔散賣", unit: "kg", skuIds: ["basil-kg"], tone: "herb" },
   ];
-  const ha = SKUS.filter((s) => s.co === "ha" && isSiteSku(s)).map((sku, i) => ({
+  const ha = SKUS.filter((s) => s.co === "ha" && isSiteSku(s)).map((sku) => ({
     key: sku.id,
     label: `加工·${skuShortName(sku)}`,
     unit: sku.unit,
     skuIds: [sku.id],
-    tone: `t${i % 6}`,
+    tone: planHaTone(sku),
   }));
   return [...nq, ...ha];
 }
@@ -5459,18 +7315,87 @@ function orderShipDay(o) {
   return o.shipDate || today();
 }
 function orderStatusLabel(o) {
-  if (o.status === "shipped") return "已出貨";
+  if (o.status === "shipped") return "已送出";
   if (o.status === "delivered") return "已送達";
   if (o.status === "cancelled") return "已取消";
   if (o.status === "deleted") return "已刪除";
+  if (o.settled) {
+    if (o.assignedDriver) return o.runOut ? "已結單・送貨中" : "已結單・已派單";
+    return "已結單";
+  }
   if (o.assignedDriver) return o.runOut ? "接單處理中" : "已派單";
-  return "待出貨";
+  return "未結單";
+}
+function isOrderSettled(o) {
+  return !!(o && o.settled);
+}
+function settleBlockers(o) {
+  for (const line of o.lines || []) {
+    if (!(line.qty > 0) || !line.skuId) continue;
+    if (skuNeedsShipLot(line.skuId) && !line.lotUha) {
+      return `請先選出貨編號：${ticketLineName(line)}（單號 #${o.no}）`;
+    }
+  }
+  if (!(o.lines || []).some((l) => l.qty > 0 && l.skuId)) return `單號 #${o.no} 沒有品項，不能結單。`;
+  return "";
+}
+function markOrderSettled(o) {
+  o.settled = true;
+  o.settledBy = currentStaff();
+  o.settledAt = Date.now();
+}
+function settleOrders(list, { confirmMsg } = {}) {
+  if (!list.length) return false;
+  if (!requireCan("ship-books", "沒有結單權限。")) return false;
+  const ready = list.filter((o) => o.status === "open" && !o.settled);
+  if (!ready.length) {
+    setStatus("這些單已結單或已送出。", true);
+    return false;
+  }
+  for (const o of ready) {
+    const block = settleBlockers(o);
+    if (block) {
+      setStatus(block, true);
+      return false;
+    }
+  }
+  const msg =
+    confirmMsg ||
+    (ready.length > 1
+      ? `確定收單確認這 ${ready.length} 張？\n結單後進入備貨，不會立刻扣庫，也不會標成已送出。`
+      : `確定收單確認「${ready[0].customer}」？\n結單後進入備貨，不會立刻扣庫，也不會標成已送出。`);
+  if (!confirm(msg)) return false;
+  for (const o of ready) markOrderSettled(o);
+  save();
+  setStatus(
+    ready.length > 1 ? `已結單（收單確認）${ready.length} 張，可開始備貨。` : `已結單「${ready[0].customer}」，可開始備貨。`,
+    false,
+  );
+  render();
+  return true;
+}
+function settleCustomerDay(customer, day = ordersViewDay()) {
+  const who = String(customer || "").trim() || "未填對象";
+  const orders = state.orders.filter(
+    (o) => o.status === "open" && !o.settled && orderShipDay(o) === day && customerKey(o) === who,
+  );
+  if (!orders.length) return setStatus(`「${who}」已結單或找不到未結單。`, true);
+  const cos = [...new Set(orders.map((o) => coLabel(o.co)))].join("／");
+  const lineN = orders.reduce((n, o) => n + (o.lines || []).filter((l) => l.qty > 0).length, 0);
+  const msg =
+    orders.length > 1
+      ? `確定結單「${who}」？\n共 ${orders.length} 張（${cos}）、${lineN} 品項。\n＝會計收單確認，進入備貨；不會扣庫、不會標已送出。`
+      : `確定結單「${who}」？\n＝會計收單確認，進入備貨；不會扣庫、不會標已送出。`;
+  settleOrders(orders, { confirmMsg: msg });
 }
 function isPlanPendingOn(o, day) {
   return o.status === "open" && orderShipDay(o) === day;
 }
 function isPlanShippedOn(o, day) {
-  return o.status === "shipped" && orderShipDay(o) === day;
+  return (o.status === "shipped" || o.status === "delivered") && orderShipDay(o) === day;
+}
+function isPlanActiveOn(o, day) {
+  return isPlanPendingOn(o, day) || isPlanShippedOn(o, day);
 }
 function shipNeedMap(o) {
   const need = {};
@@ -5481,6 +7406,12 @@ function shipNeedMap(o) {
   return need;
 }
 function shipmentBlockers(o) {
+  for (const line of o.lines || []) {
+    if (!(line.qty > 0) || !line.skuId) continue;
+    if (skuNeedsShipLot(line.skuId) && !line.lotUha) {
+      return `請先選出貨編號：${ticketLineName(line)}（單號 #${o.no}）`;
+    }
+  }
   const need = shipNeedMap(o);
   for (const [skuId, qty] of Object.entries(need)) {
     const sku = skuById(skuId);
@@ -5561,8 +7492,8 @@ function shipOpenOrders(list, { action, confirmMsg, skipConfirm, light } = {}) {
     save();
     setStatus(
       ready.length > 1
-        ? `已出貨扣庫 ${ready.length} 張。${autoNote.length ? "已同步進貨。" : ""}`
-        : `已出貨扣庫「${ready[0].customer}」。${autoNote.length ? "已同步進貨。" : ""}`,
+        ? `已送出並扣庫 ${ready.length} 張。${autoNote.length ? "已同步進貨。" : ""}`
+        : `已送出「${ready[0].customer}」。${autoNote.length ? "已同步進貨。" : ""}`,
       false,
     );
     if (light && page === "plan") refreshPlanDispatch();
@@ -5582,8 +7513,18 @@ function groupOrdersByCustomer(list) {
     map.get(k).push(o);
   }
   return [...map.entries()].sort((a, b) => {
-    const pa = Math.min(...a[1].map((o) => orderRank(o) || 0));
-    const pb = Math.min(...b[1].map((o) => orderRank(o) || 0));
+    const ra = customerGroupFillRank(a[1]);
+    const rb = customerGroupFillRank(b[1]);
+    if (ra !== rb) return ra - rb;
+    const fa = customerFreightSortMeta(a[1]);
+    const fb = customerFreightSortMeta(b[1]);
+    if (fa.ord !== fb.ord) return fa.ord - fb.ord;
+    if (fa.recv !== fb.recv) return fa.recv.localeCompare(fb.recv);
+    if (fa.ship !== fb.ship) return fa.ship.localeCompare(fb.ship);
+    const openA = a[1].filter(isOrderUnshipped);
+    const openB = b[1].filter(isOrderUnshipped);
+    const pa = openA.length ? Math.min(...openA.map((o) => orderRank(o) || 0)) : Math.min(...a[1].map((o) => orderRank(o) || 0));
+    const pb = openB.length ? Math.min(...openB.map((o) => orderRank(o) || 0)) : Math.min(...b[1].map((o) => orderRank(o) || 0));
     return pa - pb || a[0].localeCompare(b[0], "zh-Hant");
   });
 }
@@ -5657,8 +7598,55 @@ function takeCustomerRun(customer) {
   if (other) return setStatus(`這張已派給${other.assignedDriver}。`, true);
   assignOrdersToDriver(orders, me, true);
   save();
-  setStatus(`「${customer}」已接單，狀態：接單處理中。送到後請簽名或拍照。`, false);
+  planOpenId = `pending:${customer}`;
+  planPane = "pending";
+  setStatus(`「${customer}」已接單。送到後按「確認出貨」。`, false);
   render();
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-drive-open="pending:${CSS.escape(customer)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+}
+function nextDriveCustomer(afterWho) {
+  const day = planViewDay();
+  const me = currentStaff();
+  const pending = groupOrdersByCustomer(
+    state.orders.filter((o) => o.status === "open" && orderShipDay(o) === day),
+  ).filter(([who]) => who !== afterWho);
+  const mineReady = pending.find(([, orders]) =>
+    orders.every((o) => o.assignedDriver === me && o.runOut),
+  );
+  if (mineReady) return mineReady[0];
+  const mineTake = pending.find(([, orders]) =>
+    orders.every((o) => !o.assignedDriver || o.assignedDriver === me),
+  );
+  if (mineTake) return mineTake[0];
+  return "";
+}
+function advanceDriveAfterDone(doneWho) {
+  const next = nextDriveCustomer(doneWho);
+  planPane = "pending";
+  if (!next) {
+    planOpenId = "";
+    setStatus(`「${doneWho}」已送出。待處理已清完。`, false);
+    return;
+  }
+  planOpenId = `pending:${next}`;
+  const orders = dayOpenOrdersForCustomer(next);
+  const me = currentStaff();
+  const taken = orders.length && orders.every((o) => o.assignedDriver === me && o.runOut);
+  setStatus(
+    taken
+      ? `「${doneWho}」已送出。下一筆「${next}」可直接簽收。`
+      : `「${doneWho}」已送出。下一筆「${next}」請接單。`,
+    false,
+  );
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-drive-open="pending:${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const btn = taken
+      ? document.querySelector(`[data-drive-proof="${CSS.escape(next)}"]`)
+      : document.querySelector(`[data-drive-take="${CSS.escape(next)}"]`);
+    btn?.focus?.();
+  });
 }
 function takeOrderRun(orderId) {
   if (!requireCan("take-run", "沒有接單權限。")) return;
@@ -5864,7 +7852,8 @@ function orderBlockHtml(o) {
   const bits = [`#${o.no}`, coLabel(o.co)];
   if (o.edited) bits.push("已改單");
   if (o.preorder) bits.push("預開");
-  if (o.assignedDriver) bits.push(o.status === "open" ? orderStatusLabel(o) : `司機 ${o.assignedDriver}`);
+  if (o.assignedDriver && o.status === "open") bits.push(o.runOut ? "送貨中" : "已派單");
+  else if (o.assignedDriver) bits.push(`司機 ${o.assignedDriver}`);
   const addr = String(o.shipAddr || "").trim();
   return `<div class="drive-order"><p class="drive-co">${esc(bits.join(" · "))}</p>${addr ? `<p class="drive-addr">${esc(addr)}</p>` : ""}${driverLineList(o)}${proofHtml(o)}</div>`;
 }
@@ -5915,23 +7904,40 @@ function driverSideHtml(customer, orders, kind) {
     : "";
   return `<div class="assign-row drive-side">${who}${take}${deliver}</div>`;
 }
+function groupDrivers(orders) {
+  return [...new Set(orders.map((o) => o.assignedDriver || o.deliveredBy || "").filter(Boolean))];
+}
 function planJobHtml(customer, orders, kind) {
   const key = `${kind}:${customer}`;
   const open = planOpenId === key;
   const nos = orders.map((o) => `#${o.no}`).join("　");
   const addr = groupShipAddr(orders);
-  const tag = kind === "pending" ? orderStatusLabel(orders[0]) : "";
+  const drivers = groupDrivers(orders);
+  const driverLabel = drivers.length ? drivers.join("、") : "";
+  const flow = kind === "pending" ? customerPlanFlowStatus(planViewDay(), orders) : null;
+  const tag = flow && flow.code !== "sent" ? flow.label : "";
+  const urgent = kind === "pending" && orders.some((o) => isOrderUrgent(o) && isOrderUnshipped(o));
+  const freight = kind === "pending" ? customerFreightSortMeta(orders) : null;
+  const freightTag =
+    freight?.key
+      ? `<span class="drive-tag is-freight">${esc(freight.key)}${freight.recv && freight.recv !== "89:99" && freight.recv !== "99:99" ? ` · 收${esc(freight.recv)}` : ""}${freight.ship && freight.ship !== "89:99" && freight.ship !== "99:99" ? ` · 出${esc(freight.ship)}` : ""}</span>`
+      : "";
   const head =
     kind === "pending"
-      ? `${esc(customer)}${tag ? `<span class="drive-tag">${esc(tag)}</span>` : ""}${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`
-      : `${esc(customer)}<span class="drive-nos">${esc(nos)}</span>${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`;
+      ? `${urgent ? '<span class="tag tag-urgent">急單</span>' : ""}${esc(customer)}${freightTag}${tag ? `<span class="drive-tag is-${esc(flow.code)}">${esc(tag)}</span>` : ""}${driverLabel ? `<span class="drive-tag is-driver">司機 ${esc(driverLabel)}</span>` : ""}${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`
+      : `${esc(customer)}${driverLabel ? `<span class="drive-tag is-driver">司機 ${esc(driverLabel)}</span>` : `<span class="drive-tag is-muted">未指定司機</span>`}<span class="drive-nos">${esc(nos)}</span>${addr ? `<span class="drive-addr">${esc(addr)}</span>` : ""}`;
   const body = `${orders.map(orderBlockHtml).join("")}${
     kind === "pending" && can("ship-books")
       ? `<div class="drive-ship"><button type="button" class="primary" data-confirm-ship="${esc(customer)}">確認出貨</button></div>`
       : ""
   }`;
-  const side = assignRowHtml(customer, orders, kind) || driverSideHtml(customer, orders, kind);
-  return `<li class="drive-job ${kind === "done" ? "is-done" : ""} ${open ? "is-open" : ""}">
+  const side =
+    kind === "done"
+      ? driverLabel
+        ? `<div class="assign-row drive-side"><span class="drive-driver">${esc(driverLabel)}</span></div>`
+        : ""
+      : assignRowHtml(customer, orders, kind) || driverSideHtml(customer, orders, kind);
+  return `<li class="drive-job ${kind === "done" ? "is-done" : ""}${urgent ? " is-urgent" : ""} ${open ? "is-open" : ""}">
     <div class="drive-head">
       <button type="button" class="drive-who" data-drive-open="${esc(key)}" aria-expanded="${open ? "true" : "false"}">${head}</button>
       ${side}
@@ -5947,7 +7953,7 @@ function syncPlanChrome(driver) {
   if (card) card.classList.toggle("is-driver", driver);
   if (shortTitle) shortTitle.hidden = driver;
   if (shortBox) shortBox.hidden = driver;
-  if (mainTabs) mainTabs.hidden = driver;
+  if (mainTabs) mainTabs.hidden = true;
   if (driver) planMain = "ship";
 }
 function renderDispatchLists(day) {
@@ -5966,12 +7972,12 @@ function renderDispatchLists(day) {
           : `<p class="drive-empty">${esc(empty)}</p>`
       }
     </section>`;
-  pendingBox.innerHTML = `<div class="drive-plan">${sec("待處理訂單", pending, "目前沒有待出貨訂單。", "pending")}</div>`;
-  doneBox.innerHTML = `<div class="drive-plan">${sec("已出貨", done, "目前沒有已出貨訂單。", "done")}</div>`;
+  pendingBox.innerHTML = `<div class="drive-plan">${sec("待送貨", pending, "目前沒有待送貨訂單。", "pending")}</div>`;
+  doneBox.innerHTML = `<div class="drive-plan">${sec("已送貨完成", done, "目前沒有已送貨完成訂單。", "done")}</div>`;
   const pendTab = document.querySelector('#plan-pane-tabs [data-plan-pane="pending"]');
   const doneTab = document.querySelector('#plan-pane-tabs [data-plan-pane="done"]');
-  if (pendTab) pendTab.textContent = `待處理 ${pending.length}`;
-  if (doneTab) doneTab.textContent = `已出貨 ${done.length}`;
+  if (pendTab) pendTab.textContent = `待送貨 ${pending.length}`;
+  if (doneTab) doneTab.textContent = `已送貨完成 ${done.length}`;
 }
 function renderDriverPlan() {
   const pendingBox = document.getElementById("plan-pending");
@@ -6001,38 +8007,51 @@ function renderPlan() {
   const orders = state.orders.filter((o) => o.status !== "cancelled" && o.status !== "deleted");
   const groups = planGroups();
   const used = groups.filter((g) =>
-    orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && (isPlanPendingOn(o, day) || isPlanShippedOn(o, day))),
+    orders.some((o) => lineQtyForSkus(o, g.skuIds) > 0 && isPlanActiveOn(o, day)),
   );
   const wrap = document.getElementById("plan-card") || shortBox?.parentElement;
   if (wrap) wrap.style.setProperty("--plan-n", String(Math.max(used.length, 1)));
   const breakBox = document.getElementById("plan-break");
   if (shortBox) {
+    if (used.length && (!planFocusKey || !used.some((g) => g.key === planFocusKey))) {
+      planFocusKey = used[0].key;
+    }
+    if (!used.length) planFocusKey = "";
+    const focusG = used.find((g) => g.key === planFocusKey) || null;
+    const cropHtml = planCropListHtml(day, focusG);
+    const statusHtml = planOrderStatusHtml(day);
     if (!used.length) {
-      shortBox.innerHTML = '<p class="empty">還沒有出貨排程。</p>';
+      const dayOrders = orders.filter((o) => isPlanActiveOn(o, day));
+      shortBox.innerHTML = dayOrders.length
+        ? `<p class="hint">今日訂單不在現採／加工備貨看板品項內，下方仍可看全部訂單。</p>${statusHtml}`
+        : `<p class="empty">還沒有現場排程。請先到「已填單」確認訂單。</p>${statusHtml}`;
     } else {
       shortBox.innerHTML = `<div class="plan-board short-board">${used
         .map((g) => {
-          const left = groupLeftover(g, day);
           const need = planDayPendingQty(g, day);
+          const shipped = planDayShippedQty(g, day);
+          const demand = planDayDemandQty(g, day);
           const stock = groupOnHand(g, day);
-          const other = planOtherOpenQty(g, day);
+          const left = round(stock - need);
           const over = left < 0;
-          const head = planGroupHead(g);
-          return `<article class="short-card tone-${esc(g.tone)} ${over ? "no" : "ok"}">
+          const view = planCardView(g);
+          const doneAll = demand > 0 && need <= 0;
+          const on = g.key === planFocusKey;
+          return `<button type="button" class="short-card tone-${esc(view.tone)} ${doneAll ? "is-done" : over ? "no" : "ok"}${on ? " is-on" : ""}" data-plan-focus="${esc(g.key)}" aria-pressed="${on ? "true" : "false"}">
             <header class="short-head">
-              <span class="short-kind">${esc(head.kind)}</span>
-              <h3>${esc(head.mark)}</h3>
+              <h3>${esc(view.crop)}</h3>
+              ${view.mark && view.mark !== "現採" && view.mark !== "加工" ? `<p class="short-mark">${esc(view.mark)}</p>` : ""}
             </header>
-            <p class="short-est is-need"><span>當日需要（待出）</span><strong>${fmt(need)} ${esc(g.unit)}</strong></p>
-            <p class="short-est is-sub is-stock"><span>當日庫存（盤點＋進貨－已出）</span><strong>${fmt(stock)} ${esc(g.unit)}</strong></p>
-            <p class="short-est is-left"><span>預估剩餘</span><strong>${fmt(left)} ${esc(g.unit)}</strong></p>
-            ${other ? `<p class="short-other">另有他日未出 ${fmt(other)} ${esc(g.unit)}，未計入今日需要</p>` : ""}
-            <p class="short-can">${over ? "已超接，不宜再接單" : "尚可接單"}</p>
-          </article>`;
+            <p class="short-line"><b>${fmt(demand)}</b><span>待出 ${fmt(need)}</span><span>已出 ${fmt(shipped)}</span></p>
+            <p class="short-line is-sub"><span>庫存 ${fmt(stock)}</span><span class="is-left">剩 ${fmt(left)}</span></p>
+          </button>`;
         })
-        .join("")}</div>`;
+        .join("")}</div>
+        <p class="plan-crop-tip">點上方品項卡，看該菜要出的客戶（備貨中在上、已送貨在下）</p>
+        ${cropHtml}
+        ${statusHtml}`;
     }
-    if (breakBox) breakBox.innerHTML = planBreakHtml(day);
+    if (breakBox) breakBox.innerHTML = "";
   }
   renderDispatchLists(day);
   applyPlanPane();
@@ -6043,6 +8062,7 @@ function nqMorningQty(b) {
   return countQtyOf(b);
 }
 function stockOverviewHtml(date = stockViewDay()) {
+  const wh = stockWh ? stockWarehouseLabel(stockWh) : "";
   const groups = NQ_STOCK_GROUPS.map((g) => {
     const items = NQ_INBOUND.filter((row) => g.ids.includes(row.id))
       .map((row) => {
@@ -6059,7 +8079,8 @@ function stockOverviewHtml(date = stockViewDay()) {
         </div>`;
       })
       .join("");
-    return `<section class="stock-ov-group"><h3>${esc(g.label)}</h3><div class="stock-ov-grid">${items}</div></section>`;
+    const title = wh ? `${g.label} · ${wh}` : g.label;
+    return `<section class="stock-ov-group"><h3>${esc(title)}</h3><div class="stock-ov-grid">${items}</div></section>`;
   }).join("");
   return groups;
 }
@@ -6248,7 +8269,9 @@ function shipInboundSku(sku) {
   return "";
 }
 function haStockOverviewHtml() {
-  return `<section class="stock-ov-group"><h3>鴻安加工庫</h3><div class="stock-ov-grid">${SKUS.filter((s) => s.co === "ha" && isSiteSku(s))
+  const wh = stockWh ? stockWarehouseLabel(stockWh) : "";
+  const head = wh ? `鴻安加工庫 · ${wh}` : "鴻安加工庫";
+  return `<section class="stock-ov-group"><h3>${esc(head)}</h3><div class="stock-ov-grid">${SKUS.filter((s) => s.co === "ha" && isSiteSku(s))
     .map((sku) => {
       const st = ensureStockRow(sku.id);
       const can = ready(sku);
@@ -6261,6 +8284,10 @@ function haStockOverviewHtml() {
     .join("")}</div></section>`;
 }
 function renderStock() {
+  // 庫存盤點走倉庫 UI；進貨／舊帳仍用下方邏輯（不再靠上方公司分頁切換）
+  if (booksPart === "stock" && typeof window.renderWareStock === "function") {
+    return window.renderWareStock();
+  }
   const date = stockViewDay();
   ensureBooks(date);
   const stockDateEl = document.getElementById("stock-date");
@@ -6270,7 +8297,8 @@ function renderStock() {
   const salesDateEl = document.getElementById("sales-date");
   if (salesDateEl && salesDateEl.value !== date) salesDateEl.value = date;
   const lookingBack = date !== today();
-  if (co === "ha") {
+  // 進貨頁不再切公司；一律用穠全進貨表單（鴻安 Excel 匯入仍保留區塊、預設隱藏）
+  if (co === "ha" && booksPart !== "in") {
     const countCard = document.getElementById("count-card");
     if (countCard) countCard.hidden = true;
     const fillBtn = document.getElementById("fill-count");
@@ -6299,12 +8327,18 @@ function renderStock() {
     document.getElementById("receive").hidden = true;
     const haExcel = document.getElementById("ha-excel");
     if (haExcel) haExcel.hidden = booksPart !== "in";
-    document.getElementById("stock-title").textContent = lookingBack ? `鴻安庫存（${date}）` : "鴻安庫存／加工";
+    document.getElementById("stock-title").textContent = lookingBack
+      ? `${stockWh ? stockWarehouseLabel(stockWh) + "・" : ""}鴻安庫存盤點（${date}）`
+      : `${stockWh ? stockWarehouseLabel(stockWh) + "・" : ""}鴻安庫存盤點／加工`;
     const inTitle = document.getElementById("in-title");
-    if (inTitle) inTitle.textContent = lookingBack ? `鴻安進貨（${date}）` : "鴻安進貨";
+    if (inTitle) inTitle.textContent = lookingBack ? `鴻安進貨（${date}）` : "鴻安進貨（待修正）";
     const gs = document.getElementById("guide-stock");
     const gi = document.getElementById("guide-in");
-    if (gs) gs.textContent = "大數字＝已加工可出。原料從進貨入庫增加，加工後轉成可出。出貨才扣可出。";
+    if (gs) {
+      gs.textContent = stockWh
+        ? `倉庫：${stockWarehouseLabel(stockWh)}。大數字＝已加工可出。各倉盤點之後再細分。`
+        : "庫存盤點：大數字＝已加工可出。請從首頁選倉庫別進入。";
+    }
     if (gi) {
       gi.hidden = true;
       gi.textContent = "";
@@ -6316,25 +8350,31 @@ function renderStock() {
   if (haExcelOff) haExcelOff.hidden = true;
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
-  document.getElementById("stock-title").textContent = lookingBack ? `庫存（${date}）` : "庫存";
+  document.getElementById("stock-title").textContent = lookingBack
+    ? `${stockWh ? stockWarehouseLabel(stockWh) + "・" : ""}庫存盤點（${date}）`
+    : `${stockWh ? stockWarehouseLabel(stockWh) + "・" : ""}庫存盤點`;
   const inTitle = document.getElementById("in-title");
-  if (inTitle) inTitle.textContent = lookingBack ? `進貨（${date}）` : "進貨";
+  if (inTitle) inTitle.textContent = lookingBack ? `進貨（${date}）` : "進貨（待修正）";
   refreshStockOverview();
   const countCard = document.getElementById("count-card");
   if (countCard) countCard.hidden = false;
   const gs = document.getElementById("guide-stock");
   const gi = document.getElementById("guide-in");
   const gc = document.getElementById("guide-count");
-  if (gs) gs.textContent = "上方大數字＝當日庫存（盤點＋進貨－已出）。早上盤點還沒填就以 0 計，不帶入前一天。小字分開顯示盤點、進貨、已出。";
+  if (gs) {
+    gs.textContent = stockWh
+      ? `倉庫：${stockWarehouseLabel(stockWh)}。上方數字＝盤點＋進貨－已出（各倉分開記帳之後再細分）。`
+      : "庫存盤點：上方數字＝盤點＋進貨－已出。請從首頁選倉庫別進入。";
+  }
   if (gi) {
     gi.hidden = false;
     gi.textContent = lookingBack
-      ? `查 ${date}。＋／－調本批後記入；打錯到總覽改總數。`
-      : "＋／－調本批後按記入。打錯請滑到總覽改總數。";
+      ? `查 ${date}。進貨流程待修正，暫用現有記入。`
+      : "進貨流程待修正。暫用：＋／－調本批後記入；打錯到總覽改總數。";
   }
   if (gc) gc.textContent = lookingBack
-    ? `查 ${date} 的早上盤點與結算。`
-    : "請填現場早上數量後按確認。還沒填的品項盤點以 0 計算，不會帶入前一天。確認後不會自動加進貨。";
+    ? `查 ${date} 的盤點數量與結算${stockWh ? `（${stockWarehouseLabel(stockWh)}）` : ""}。`
+    : `填早上可備數量後按確認${stockWh ? `（${stockWarehouseLabel(stockWh)}）` : ""}。還沒填以 0 計。確認後不會自動加進貨。`;
   document.getElementById("process").hidden = true;
   document.getElementById("receive").hidden = true;
   const fillRows = nqStockFillRows();
@@ -6930,9 +8970,17 @@ function syncLinePendingHint() {
     tab.innerHTML = `LINE判讀${badge}`;
     tab.classList.toggle("has-pending", n > 0);
   }
+  const opsLine = document.querySelector('#flow-tabs [data-ops="line"]');
+  if (opsLine) {
+    opsLine.innerHTML = opsFlowTabHtml("chat", "LINE", badge);
+    opsLine.classList.toggle("has-pending", n > 0);
+  }
   document.querySelectorAll('#home-hub [data-go="orders"][data-orders-pane="line"]').forEach((el) => {
-    const lab = el.querySelector(".hub-lab");
-    if (lab) lab.innerHTML = `LINE判讀${badge}`;
+    const lab = el.querySelector(".home-step-lab, .hub-lab");
+    if (lab) {
+      const base = lab.classList.contains("home-step-lab") ? "LINE" : "LINE判讀";
+      lab.innerHTML = `${base}${badge}`;
+    }
     el.classList.toggle("has-pending", n > 0);
   });
 }
@@ -7039,8 +9087,11 @@ function applyCopy() {
   if (tabs) tabs.hidden = true;
   document.querySelectorAll("[data-form]").forEach((b) => b.classList.toggle("on", b.dataset.form === formKind));
   document.querySelectorAll("[data-stock-kind]").forEach((b) => b.classList.toggle("on", b.dataset.stockKind === stockKind));
-  if (formTitle) formTitle.textContent = editing ? "修改數量" : "總訂單";
-  if (formHint) formHint.hidden = true;
+  if (formTitle) formTitle.textContent = editing ? "修改已填單" : "下單";
+  if (formHint) {
+    formHint.hidden = true;
+    formHint.textContent = "";
+  }
   const submit = document.getElementById("order-submit");
   if (submit) {
     submit.textContent = editing ? "確認改單" : isPreorderDay() ? "確認預訂單" : "確認送出";
@@ -7048,6 +9099,13 @@ function applyCopy() {
   if (cust) {
     cust.placeholder = "輸入姓名";
     cust.readOnly = false;
+  }
+  const form = document.getElementById("order-form");
+  const sheet = document.getElementById("sheet");
+  const ticket = document.getElementById("ticket");
+  if (form && sheet && ticket) {
+    if (editing) form.insertBefore(ticket, sheet);
+    else if (ticket.previousElementSibling !== sheet) form.insertBefore(sheet, ticket);
   }
 }
 
@@ -7061,15 +9119,32 @@ function render() {
     console.error(err);
   }
   applyRoleUi();
+  document.body.classList.toggle("on-home", page === "home");
   document.getElementById("co-name").textContent =
     page === "home"
-      ? "鴻安農業科技"
+      ? "鴻安"
+      : page === "unpack"
+        ? "拆櫃回報"
+      : page === "sitework"
+        ? "現場工作"
+      : page === "stats"
+        ? "營運統計"
       : currentRole() === "driver"
-        ? "派貨"
+        ? "司機送貨"
+        : page === "plan"
+          ? "現場排程"
+          : page === "orders"
+            ? "下單／已填"
         : page === "books" && booksPart === "rack"
-          ? "鐵架／八格籃"
+          ? "資財管理"
+        : page === "books" && booksPart === "stock"
+          ? (stockWh ? `庫存盤點 · ${stockWarehouseLabel(stockWh)}` : "庫存盤點")
+        : page === "books" && booksPart === "in"
+          ? "進貨"
+        : page === "books" && booksPart === "sales"
+          ? "出貨帳單"
         : page === "books"
-          ? (co === "nq" ? "穠全公司 · 倉管／帳款" : "鴻安公司 · 倉管／帳款")
+          ? "倉管／帳款"
           : page === "help"
             ? "小幫手"
           : page === "labels"
@@ -7079,16 +9154,15 @@ function render() {
           : page === "soon"
             ? "帳款業務"
             : "產品出貨";
-  document.querySelectorAll("[data-co]").forEach((b) => b.classList.toggle("on", b.dataset.co === co));
   const onBooks = page === "books";
   const onRack = onBooks && booksPart === "rack";
   document.body.classList.toggle("on-rack", onRack);
   const coTabs = document.getElementById("co-tabs");
   const booksTabs = document.getElementById("books-part-tabs");
-  if (coTabs) coTabs.hidden = !onBooks || onRack;
+  if (coTabs) coTabs.hidden = true;
   if (booksTabs) booksTabs.hidden = true;
   document.querySelectorAll("#books-part-tabs [data-books]").forEach((b) => b.classList.toggle("on", b.dataset.books === booksPart));
-  document.querySelectorAll("#flow-tabs [data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
+  syncOpsFlowTabs();
   const pageHome = document.getElementById("page-home");
   if (pageHome) pageHome.hidden = page !== "home";
   const pageHelp = document.getElementById("page-help");
@@ -7099,6 +9173,12 @@ function render() {
   if (pageLabels) pageLabels.hidden = page !== "labels";
   const pageLabelPrints = document.getElementById("page-label-prints");
   if (pageLabelPrints) pageLabelPrints.hidden = page !== "label-prints";
+  const pageUnpack = document.getElementById("page-unpack");
+  if (pageUnpack) pageUnpack.hidden = page !== "unpack";
+  const pageSitework = document.getElementById("page-sitework");
+  if (pageSitework) pageSitework.hidden = page !== "sitework";
+  const pageStats = document.getElementById("page-stats");
+  if (pageStats) pageStats.hidden = page !== "stats";
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = !(onBooks && booksPart === "stock");
@@ -7109,15 +9189,8 @@ function render() {
   const pageRack = document.getElementById("page-rack");
   if (pageRack) pageRack.hidden = !onRack;
   const kindTabs = document.getElementById("stock-kind-tabs");
-  if (kindTabs) kindTabs.hidden = co === "ha";
+  if (kindTabs) kindTabs.hidden = true;
   applyCopy();
-  syncShipMore();
-  syncShipAddrUi();
-  document.getElementById("order-form").hidden = page !== "orders";
-  const restBtn = document.getElementById("nq-rest-btn");
-  if (restBtn) restBtn.hidden = page !== "orders";
-  const nqCancel = document.getElementById("nq-cancel-edit");
-  if (nqCancel) nqCancel.hidden = true;
   const run = (fn) => {
     try {
       fn();
@@ -7125,48 +9198,64 @@ function render() {
       console.error(err);
     }
   };
-  run(renderHomeHub);
-  run(renderHelpFreight);
-  run(renderLabels);
-  run(renderLabelPrints);
   run(renderStaffChips);
-  run(renderLineDrafts);
-  run(renderCustSuggest);
-  run(renderDailyGrid);
-  run(renderSheet);
-  run(renderCheck);
-  run(renderOrders);
-  run(renderRestList);
-  run(renderPlan);
-  run(renderStock);
-  run(renderRack);
-  run(renderSalesBooks);
   run(renderAlerts);
-  run(() => applyOrdersPane(false));
-  run(() => applyInPane(false));
-  run(() => applyPlanPane());
-  run(() => applyPlanMain(false));
-  run(syncOrderEntering);
-}
-
-document.querySelectorAll("[data-co]").forEach((btn) => {
-  btn.onclick = () => {
-    co = btn.dataset.co;
-    editing = "";
-    ticketLines = [];
-    document.getElementById("edit-id").value = "";
-    document.getElementById("cancel-edit").hidden = true;
+  run(syncLinePendingHint);
+  if (page === "home") run(renderHomeHub);
+  if (page === "help") run(renderHelpFreight);
+  if (page === "labels") run(renderLabels);
+  if (page === "label-prints") run(renderLabelPrints);
+  if (page === "unpack" && typeof renderUnpackPage === "function") run(renderUnpackPage);
+  if (page === "sitework" && typeof renderSiteWork === "function") run(renderSiteWork);
+  if (page === "stats" && typeof renderBossStats === "function") run(renderBossStats);
+  if (page === "orders") {
+    run(syncShipMore);
+    run(syncShipAddrUi);
+    document.getElementById("order-form").hidden = false;
+    const restBtn = document.getElementById("nq-rest-btn");
+    if (restBtn) restBtn.hidden = false;
     const nqCancel = document.getElementById("nq-cancel-edit");
     if (nqCancel) nqCancel.hidden = true;
-    render();
-  };
-});
+    run(renderLineDrafts);
+    run(renderCustSuggest);
+    run(renderDailyGrid);
+    run(renderSheet);
+    run(renderCheck);
+    run(renderOrders);
+    run(renderRestList);
+    run(() => applyOrdersPane(false));
+    run(syncOrderEntering);
+  } else {
+    const orderForm = document.getElementById("order-form");
+    if (orderForm) orderForm.hidden = true;
+    const restBtn = document.getElementById("nq-rest-btn");
+    if (restBtn) restBtn.hidden = true;
+  }
+  if (page === "plan") {
+    run(renderPlan);
+    run(() => applyPlanPane());
+    run(() => applyPlanMain(false));
+  }
+  if (onBooks && booksPart === "stock") run(renderStock);
+  if (onBooks && booksPart === "in") {
+    run(renderStock);
+    run(() => applyInPane(false));
+  }
+  if (onBooks && booksPart === "sales") run(renderSalesBooks);
+  if (onRack) run(renderRack);
+}
+
 document.getElementById("home-btn")?.addEventListener("click", goHome);
 document.getElementById("sync-reload")?.addEventListener("click", () => {
   reloadFromCloud();
 });
 document.getElementById("sync-upload")?.addEventListener("click", () => {
   uploadThisDevice();
+});
+document.querySelector(".layout-mode")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-layout]");
+  if (!btn) return;
+  applyLayoutMode(btn.dataset.layout);
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-hub-back]")) {
@@ -7176,7 +9265,31 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   }
   const tile = e.target.closest("[data-hub]");
   if (tile) {
-    hubOpen = tile.dataset.hub || "";
+    const hubId = tile.dataset.hub || "";
+    if (hubId === "unpack") {
+      // TEMP: 拆櫃未完成，暫僅雅芳
+      if (!can("page-unpack")) return setStatus("拆櫃回報建置中，暫僅主管可進入。", true);
+      page = "unpack";
+      hubOpen = "";
+      render();
+      return;
+    }
+    if (hubId === "sitework") {
+      // TEMP: 現場未完成，暫僅雅芳
+      if (!can("page-sitework")) return setStatus("現場工作建置中，暫僅主管可進入。", true);
+      page = "sitework";
+      hubOpen = "";
+      render();
+      return;
+    }
+    if (hubId === "stats") {
+      if (!can("page-stats")) return setStatus("僅主管可看統計。", true);
+      page = "stats";
+      hubOpen = "";
+      render();
+      return;
+    }
+    hubOpen = hubId;
     renderHomeHub();
     return;
   }
@@ -7315,24 +9428,14 @@ document.getElementById("help-freight-tools")?.addEventListener("click", (e) => 
   helpFilter = btn.dataset.helpFilter === "all" ? "all" : "issues";
   renderHelpFreight();
 });
-document.querySelectorAll("#flow-tabs [data-page]").forEach((btn) => {
+document.querySelectorAll("#flow-tabs [data-ops]").forEach((btn) => {
   btn.onclick = () => {
-    const next = btn.dataset.page;
-    if (next === "plan" && !can("page-plan")) return setStatus("沒有排程權限。", true);
-    if (next === "orders" && !can("page-orders")) return setStatus("沒有總訂單權限。", true);
-    if (next === "books" && !can("page-books")) return setStatus("沒有後帳權限。", true);
-    page = next;
-    render();
+    goOpsStep(btn.dataset.ops || "");
   };
 });
 document.querySelectorAll("[data-orders-pane]").forEach((btn) => {
   btn.onclick = () => {
-    if (document.body.classList.contains("order-entering") && btn.dataset.ordersPane === "today") {
-      setStatus("正在輸入訂單，請先確認送出或清掉本單。", true);
-      return;
-    }
-    ordersPane = normalizeOrdersPane(btn.dataset.ordersPane);
-    applyOrdersPane(true);
+    goOpsStep(normalizeOrdersPane(btn.dataset.ordersPane));
   };
 });
 const ordersSwipe = document.getElementById("orders-swipe");
@@ -7357,6 +9460,7 @@ if (ordersSwipe) {
         document.querySelectorAll("#orders-pane-tabs [data-orders-pane]").forEach((b) => {
           b.classList.toggle("on", b.dataset.ordersPane === ordersPane);
         });
+        syncOpsFlowTabs();
       }, 60);
     },
     { passive: true },
@@ -7559,8 +9663,7 @@ document.querySelectorAll("#books-part-tabs [data-books]").forEach((btn) => {
 document.querySelectorAll("[data-plan-main]").forEach((btn) => {
   btn.onclick = () => {
     if (currentRole() === "driver") return;
-    planMain = btn.dataset.planMain === "ship" ? "ship" : "short";
-    applyPlanMain(true);
+    goOpsStep(btn.dataset.planMain === "ship" ? "ship" : "short");
   };
 });
 document.querySelectorAll("[data-plan-pane]").forEach((btn) => {
@@ -7595,12 +9698,40 @@ if (planMainSwipe) {
         const breakBox = document.getElementById("plan-break");
         if (breakBox) breakBox.hidden = currentRole() === "driver" || planMain === "ship";
         syncPlanMainPaneHeights();
+        syncOpsFlowTabs();
       }, 60);
     },
     { passive: true },
   );
 }
+document.getElementById("plan-card").addEventListener("change", (e) => {
+  const prep = e.target.closest("[data-prep-key]");
+  if (!prep) return;
+  togglePrepLine(prep.getAttribute("data-prep-day") || planViewDay(), prep.getAttribute("data-prep-key") || "", prep.checked);
+});
 document.getElementById("plan-card").addEventListener("click", (e) => {
+  const focus = e.target.closest("[data-plan-focus]");
+  if (focus) {
+    e.preventDefault();
+    planFocusKey = focus.getAttribute("data-plan-focus") || "";
+    renderPlan();
+    return;
+  }
+  const prepCust = e.target.closest("[data-prep-customer]");
+  if (prepCust) {
+    e.preventDefault();
+    e.stopPropagation();
+    setCustomerPrepped(
+      prepCust.getAttribute("data-prep-day") || planViewDay(),
+      prepCust.getAttribute("data-prep-customer") || "",
+      prepCust.getAttribute("data-prep-on") === "1",
+      (prepCust.getAttribute("data-prep-skus") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    return;
+  }
   const confirmShip = e.target.closest("[data-confirm-ship]");
   if (confirmShip) {
     e.preventDefault();
@@ -7890,6 +10021,18 @@ document.getElementById("sheet").addEventListener("change", (e) => {
   renderCheck();
 });
 document.getElementById("sheet").addEventListener("click", (e) => {
+  const bump = e.target.closest("[data-qty-step]");
+  if (bump) {
+    e.preventDefault();
+    const input = bump.closest(".stepper")?.querySelector("input");
+    if (!input || input.readOnly || input.disabled) return;
+    const step = Number(input.step) || 1;
+    const delta = Number(bump.dataset.qtyStep) * step;
+    const cur = input.value === "" ? 0 : Number(input.value);
+    input.value = String(round(Math.max(0, (Number.isFinite(cur) ? cur : 0) + delta)));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
   if (e.target.closest("[data-ticket-add]")) {
     pushPickerToTicket();
     return;
@@ -7899,12 +10042,6 @@ document.getElementById("sheet").addEventListener("click", (e) => {
     if (!draft?.skuId) return setStatus("請先選品項並填數量，再選出貨編號。", true);
     const qty = Number(draft.qty) || Number(document.querySelector("[data-line-qty]")?.value);
     openLotModal({ skuId: draft.skuId, qty, selectedUha: formLot?.uha });
-    return;
-  }
-  const palletBtn = e.target.closest("[data-pallet-toggle]");
-  if (palletBtn) {
-    palletBtn.classList.toggle("on");
-    palletBtn.setAttribute("aria-pressed", palletBtn.classList.contains("on") ? "true" : "false");
     return;
   }
   const pick = e.target.closest(".item-line .pick");
@@ -7936,6 +10073,39 @@ document.getElementById("sheet").addEventListener("click", (e) => {
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("click", (e) => {
+  const bump = e.target.closest("[data-qty-step]");
+  if (bump) {
+    e.preventDefault();
+    const input = bump.closest(".stepper")?.querySelector("input");
+    if (!input || input.readOnly || input.disabled) return;
+    const step = Number(input.step) || 1;
+    const delta = Number(bump.dataset.qtyStep) * step;
+    const cur = input.value === "" ? 0 : Number(input.value);
+    input.value = String(round(Math.max(0, (Number.isFinite(cur) ? cur : 0) + delta)));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+  const destAll = e.target.closest("[data-ticket-dest-all]");
+  if (destAll) {
+    const v = destAll.dataset.ticketDestAll;
+    for (const line of ticketLines) {
+      if (v === "其他") {
+        if (SHIP_PRESETS.includes(String(line.dest || "").trim()) || line.destFreight || String(line.dest || "").trim() === "寄貨運")
+          line.dest = "";
+        line.destOther = true;
+        delete line.destFreight;
+      } else if (v === "寄貨運") {
+        applyFreightToLine(line, freightCarrierDefault());
+      } else {
+        line.dest = v;
+        delete line.destOther;
+        delete line.destFreight;
+      }
+    }
+    syncHiddenShipAddr();
+    renderTicket();
+    return;
+  }
   const destBtn = e.target.closest("[data-ticket-dest]");
   if (destBtn) {
     const i = Number(destBtn.dataset.ticketDest);
@@ -7943,11 +10113,15 @@ document.getElementById("ticket")?.addEventListener("click", (e) => {
     if (!ticketLines[i]) return;
     if (v === "其他") {
       const cur = String(ticketLines[i].dest || "").trim();
-      if (SHIP_PRESETS.includes(cur)) ticketLines[i].dest = "";
+      if (SHIP_PRESETS.includes(cur) || ticketLines[i].destFreight || cur === "寄貨運") ticketLines[i].dest = "";
       ticketLines[i].destOther = true;
+      delete ticketLines[i].destFreight;
+    } else if (v === "寄貨運") {
+      applyFreightToLine(ticketLines[i], freightCarrierDefault());
     } else {
       ticketLines[i].dest = v;
       delete ticketLines[i].destOther;
+      delete ticketLines[i].destFreight;
     }
     syncHiddenShipAddr();
     renderTicket();
@@ -7981,12 +10155,39 @@ document.getElementById("ticket")?.addEventListener("click", (e) => {
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("input", (e) => {
+  const destAllOther = e.target.closest("[data-ticket-dest-all-other]");
+  if (destAllOther) {
+    const v = destAllOther.value.trim();
+    const freight = ticketLines.some((l) => l.destFreight) || lineDestMode(ticketLines[0]) === "寄貨運";
+    for (const line of ticketLines) {
+      line.dest = v;
+      if (freight) {
+        line.destFreight = true;
+        delete line.destOther;
+      } else {
+        line.destOther = true;
+        delete line.destFreight;
+      }
+    }
+    syncHiddenShipAddr();
+    const addr = document.querySelector("#ticket .ticket-addr");
+    const drops = uniqueTicketDrops();
+    if (addr) addr.textContent = drops.join("／");
+    else if (drops.length) renderTicket();
+    return;
+  }
   const destOther = e.target.closest("[data-ticket-dest-other]");
   if (destOther) {
     const i = Number(destOther.dataset.ticketDestOther);
     if (!ticketLines[i]) return;
     ticketLines[i].dest = destOther.value.trim();
-    ticketLines[i].destOther = true;
+    if (ticketLines[i].destFreight || lineDestMode(ticketLines[i]) === "寄貨運") {
+      ticketLines[i].destFreight = true;
+      delete ticketLines[i].destOther;
+    } else {
+      ticketLines[i].destOther = true;
+      delete ticketLines[i].destFreight;
+    }
     syncHiddenShipAddr();
     const addr = document.querySelector("#ticket .ticket-addr");
     const drops = uniqueTicketDrops();
@@ -7995,7 +10196,7 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
   }
   const inp = e.target.closest("[data-ticket-qty]");
   if (!inp) return;
-  const i = Number(inp.dataset.i);
+  const i = Number(inp.dataset.i ?? inp.dataset.ticketQty);
   if (!ticketLines[i]) return;
   const n = Number(inp.value);
   if (!(n > 0)) {
@@ -8012,13 +10213,32 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
   }
   renderCheck();
 });
+document.getElementById("sheet").addEventListener("focusout", (e) => {
+  if (!e.target.closest("[data-line-qty]")) return;
+  const leftover = unifiedLinesFromForm();
+  if (leftover.length) pushPickerToTicket();
+});
 document.getElementById("order-form")?.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  if (e.target.closest("[data-line-qty]")) {
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    const pick = e.target.closest?.(".item-line .pick");
+    if (!pick) return;
     e.preventDefault();
-    pushPickerToTicket();
+    const key = pick.dataset.k;
+    const row = pick.closest(".item-line");
+    const picks = [...row.querySelectorAll(`.pick[data-k="${CSS.escape(key)}"]`)];
+    const i = picks.indexOf(pick);
+    if (i < 0) return;
+    const next =
+      e.key === "ArrowRight" ? picks[(i + 1) % picks.length] : picks[(i - 1 + picks.length) % picks.length];
+    next?.focus();
+    return;
   }
-  if (e.target.closest("[data-ticket-qty]")) e.preventDefault();
+  if (e.key !== "Enter") return;
+  if (e.target.closest("[data-ticket-qty]")) {
+    e.preventDefault();
+    return;
+  }
+  handleItemLineEnter(e);
 });
 document.getElementById("ship-addr-picks")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-ship-pick]");
@@ -8344,6 +10564,10 @@ function bindCustomerSuggest() {
 }
 bindCustomerSuggest();
 document.getElementById("order-note")?.addEventListener("input", syncOrderEntering);
+document.getElementById("order-urgent-btn")?.addEventListener("click", () => {
+  toggleOrderUrgent();
+  syncOrderEntering();
+});
 document.getElementById("lot-cancel")?.addEventListener("click", closeLotModal);
 document.getElementById("lot-gate")?.addEventListener("click", (e) => {
   if (e.target.id === "lot-gate") closeLotModal();
@@ -8357,7 +10581,9 @@ document.getElementById("lot-list")?.addEventListener("click", (e) => {
 document.getElementById("order-form").onsubmit = (e) => {
   e.preventDefault();
   const leftover = unifiedLinesFromForm();
-  if (leftover.length) return setStatus("請先按「加入本單」。品項都加入後，再到最下方確認送出。", true);
+  if (leftover.length) {
+    if (!pushPickerToTicket()) return;
+  }
   const lines = ticketLines.map(cleanLine).filter((l) => Number(l.qty) > 0);
   if (!lines.length) return setStatus("請先加入至少一項到本單，齊了再確認送出。", true);
   if (missingPack(lines)) return setStatus("地瓜葉有數量時請選擇裝箱樣式（籃裝或箱裝）", true);
@@ -8390,6 +10616,7 @@ document.getElementById("order-form").onsubmit = (e) => {
     o.remark = orderNoteValue();
     o.shipDate = day;
     o.preorder = isPreorderDay(day);
+    o.urgent = orderUrgentValue();
     o.lines = mine;
     markOrderEdited(o);
     savedIds.push(o.id);
@@ -8418,6 +10645,7 @@ document.getElementById("order-form").onsubmit = (e) => {
   document.getElementById("customer").value = "";
   setShipAddr("");
   setOrderNote("");
+  setOrderUrgent(false);
   goTodayAfterSave(savedIds, day);
   if (editNote) setStatus(editNote, false);
   else {
@@ -8436,6 +10664,7 @@ document.getElementById("cancel-edit").onclick = () => {
   document.getElementById("ship-date").value = today();
   setShipAddr("");
   setOrderNote("");
+  setOrderUrgent(false);
   syncShipMore();
   render();
 };
@@ -8455,7 +10684,227 @@ document.getElementById("rest-list").addEventListener("click", onUnrestClick);
 document.getElementById("orders-today-rest")?.addEventListener("click", onUnrestClick);
 document.getElementById("orders").onclick = onOrdersListClick;
 document.getElementById("orders-today")?.addEventListener("click", onOrdersListClick);
+(() => {
+  const box = document.getElementById("orders-today");
+  if (!box) return;
+  let timer = 0;
+  let startX = 0;
+  let startY = 0;
+  let armed = null;
+  const clear = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = 0;
+    }
+    armed = null;
+  };
+  const onDown = (e) => {
+    if (!canOrderMulti()) return;
+    if (e.target.closest("button, a, input, select, textarea, label, .inline-edit")) return;
+    const pick = e.target.closest("[data-order-pick]");
+    if (!pick) return;
+    const pt = e.touches?.[0] || e;
+    startX = pt.clientX;
+    startY = pt.clientY;
+    armed = pick;
+    timer = window.setTimeout(() => {
+      timer = 0;
+      if (!armed) return;
+      const id = armed.getAttribute("data-order-pick") || "";
+      const all = String(armed.getAttribute("data-order-pick-all") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (orderMultiOn()) {
+        if (all.length > 1) {
+          for (const x of all) orderMulti.ids.add(x);
+          renderOrders();
+        } else toggleOrderMultiId(id);
+      } else if (all.length > 1) {
+        orderMulti = { ids: new Set(all) };
+        renderOrders();
+      } else {
+        startOrderMulti(id);
+      }
+      armed = null;
+      try {
+        if (navigator.vibrate) navigator.vibrate(12);
+      } catch (_) {}
+    }, 480);
+  };
+  const onMove = (e) => {
+    if (!armed || !timer) return;
+    const pt = e.touches?.[0] || e;
+    if (Math.abs(pt.clientX - startX) > 12 || Math.abs(pt.clientY - startY) > 12) clear();
+  };
+  box.addEventListener("pointerdown", onDown);
+  box.addEventListener("pointermove", onMove);
+  box.addEventListener("pointerup", clear);
+  box.addEventListener("pointercancel", clear);
+  box.addEventListener("touchstart", onDown, { passive: true });
+  box.addEventListener("touchmove", onMove, { passive: true });
+  box.addEventListener("touchend", clear);
+  box.addEventListener("touchcancel", clear);
+})();
+document.getElementById("ship-labels-gate")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget || e.target.closest("[data-ship-labels-close]")) {
+    closeShipLabelsPicker();
+    return;
+  }
+  const all = e.target.closest("[data-ship-labels-all]");
+  if (all && shipLabelPick) {
+    const on = all.getAttribute("data-ship-labels-all") === "1";
+    for (const r of shipLabelPick.rows) {
+      r.on = on;
+      if (on && !(Number(r.copies) > 0)) r.copies = 1;
+    }
+    renderShipLabelsPicker();
+    return;
+  }
+  if (e.target.closest("[data-ship-labels-print]")) {
+    printShipLabelsPicker();
+  }
+});
+document.getElementById("ship-labels-gate")?.addEventListener("change", (e) => {
+  if (!shipLabelPick) return;
+  const onEl = e.target.closest("[data-ship-labels-on]");
+  if (onEl) {
+    const i = Number(onEl.dataset.shipLabelsOn);
+    const row = shipLabelPick.rows[i];
+    if (!row) return;
+    row.on = !!onEl.checked;
+    if (row.on && !(Number(row.copies) > 0)) row.copies = 1;
+    renderShipLabelsPicker();
+    return;
+  }
+  const copiesEl = e.target.closest("[data-ship-labels-copies]");
+  if (copiesEl) {
+    const i = Number(copiesEl.dataset.shipLabelsCopies);
+    const row = shipLabelPick.rows[i];
+    if (!row) return;
+    row.copies = Math.max(0, Math.round(Number(copiesEl.value) || 0));
+    if (row.copies > 0) row.on = true;
+    renderShipLabelsPicker();
+  }
+});
+document.getElementById("orders-today")?.addEventListener("input", (e) => {
+  if (!inlineEdit) return;
+  const qty = e.target.closest("[data-inline-qty]");
+  if (qty) {
+    const i = Number(qty.dataset.inlineQty);
+    if (inlineEdit.lines[i]) inlineEdit.lines[i].qty = Math.max(0, Number(qty.value) || 0);
+    return;
+  }
+  const addQty = e.target.closest("[data-inline-add-qty]");
+  if (addQty) {
+    inlineEdit.addQty = Math.max(0, Number(addQty.value) || 0);
+  }
+});
+document.getElementById("orders-today")?.addEventListener("change", (e) => {
+  if (!inlineEdit) return;
+  const pack = e.target.closest("[data-inline-pack]");
+  if (pack) {
+    const i = Number(pack.dataset.inlinePack);
+    if (inlineEdit.lines[i]) inlineEdit.lines[i].pack = pack.value;
+    renderOrders();
+    return;
+  }
+  const addSku = e.target.closest("[data-inline-add-sku]");
+  if (addSku) {
+    inlineEdit.addSkuId = addSku.value;
+    inlineEdit.addPack = "籃裝";
+    const sku = skuById(inlineEdit.addSkuId);
+    if (sku && !(Number(inlineEdit.addQty) > 0)) inlineEdit.addQty = skuStep(sku) >= 1 ? 1 : 0.1;
+    renderOrders();
+    return;
+  }
+  const addPack = e.target.closest("[data-inline-add-pack]");
+  if (addPack) {
+    inlineEdit.addPack = addPack.value;
+  }
+});
 function onOrdersListClick(e) {
+  if (e.target.closest("[data-order-multi-clear]")) {
+    clearOrderMulti();
+    renderOrders();
+    return;
+  }
+  if (e.target.closest("[data-order-multi-ship]")) {
+    batchShipSelectedOrders();
+    return;
+  }
+  if (e.target.closest("[data-order-multi-del]")) {
+    batchDeleteSelectedOrders();
+    return;
+  }
+  if (orderMultiOn() && !e.target.closest("button, a, input, select, textarea, label, .inline-edit")) {
+    const pick = e.target.closest("[data-order-pick]");
+    if (pick) {
+      e.preventDefault();
+      const all = String(pick.getAttribute("data-order-pick-all") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (all.length > 1) {
+        const allOn = all.every((id) => orderMulti.ids.has(id));
+        for (const id of all) {
+          if (allOn) orderMulti.ids.delete(id);
+          else orderMulti.ids.add(id);
+        }
+        if (!orderMulti.ids.size) clearOrderMulti();
+        renderOrders();
+      } else {
+        toggleOrderMultiId(pick.getAttribute("data-order-pick") || "");
+      }
+      return;
+    }
+  }
+  const bump = e.target.closest("[data-qty-step]");
+  if (bump && e.target.closest(".inline-edit")) {
+    e.preventDefault();
+    const input = bump.closest(".stepper")?.querySelector("input");
+    if (!input || input.readOnly || input.disabled) return;
+    const step = Number(input.step) || 1;
+    const delta = Number(bump.dataset.qtyStep) * step;
+    const cur = input.value === "" ? 0 : Number(input.value);
+    input.value = String(round(Math.max(0, (Number.isFinite(cur) ? cur : 0) + delta)));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+  if (e.target.closest("[data-inline-save]")) {
+    commitInlineEdit();
+    return;
+  }
+  if (e.target.closest("[data-inline-cancel]")) {
+    cancelInlineEdit();
+    return;
+  }
+  if (e.target.closest("[data-inline-add]")) {
+    inlineEditAddLine();
+    return;
+  }
+  const delLine = e.target.closest("[data-inline-del]");
+  if (delLine && inlineEdit) {
+    const i = Number(delLine.dataset.inlineDel);
+    if (Number.isInteger(i)) {
+      inlineEdit.lines.splice(i, 1);
+      renderOrders();
+    }
+    return;
+  }
+  const settle = e.target.closest("[data-settle-who]");
+  if (settle) {
+    settleCustomerDay(settle.getAttribute("data-settle-who") || "");
+    return;
+  }
+  const shipLabels = e.target.closest("[data-ship-labels-who]");
+  if (shipLabels) {
+    openShipLabelsPicker(
+      shipLabels.getAttribute("data-ship-labels-who") || "",
+      shipLabels.getAttribute("data-ship-labels-day") || ordersViewDay(),
+    );
+    return;
+  }
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const o = state.orders.find((x) => x.id === btn.dataset.id);
@@ -8472,6 +10921,7 @@ function onOrdersListClick(e) {
     if (!requireStaff()) return;
     o.status = "cancelled";
     o.cancelledBy = currentStaff();
+    if (inlineEdit?.id === o.id) inlineEdit = null;
     save();
     setStatus(`已取消（紅線保留）。取消人員：${currentStaff()}`, false);
     render();
@@ -8483,6 +10933,14 @@ function onOrdersListClick(e) {
     unwindShipment(o);
     o.status = "deleted";
     o.deletedBy = currentStaff();
+    pushAudit("order", "delete", `訂單 #${o.no || ""} ${o.customer || ""}`, {
+      id: o.id,
+      no: o.no,
+      customer: o.customer,
+      shipDate: o.shipDate,
+      lines: o.lines,
+    });
+    if (inlineEdit?.id === o.id) inlineEdit = null;
     if (editing === o.id) {
       editing = "";
       document.getElementById("edit-id").value = "";
@@ -8494,13 +10952,18 @@ function onOrdersListClick(e) {
     return;
   }
   if (btn.dataset.act === "edit") {
+    if (e.target.closest("#orders-today")) {
+      startInlineEdit(o.id);
+      return;
+    }
     if (!requireStaff()) return;
-    if (o.status === "shipped" && !can("edit-shipped")) return setStatus("已出貨後請由會計或主管改件數。", true);
+    if (o.status === "shipped" && !can("edit-shipped")) return setStatus("已送出後請由會計或主管改件數。", true);
     if (
       o.status === "shipped" &&
-      !confirm(`「${o.customer}」已出貨扣庫。送出修改會標「已改單」，並依新件數重算庫存，不必再按出貨扣庫。`)
+      !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「已改單」，並依新件數重算庫存。`)
     )
       return;
+    inlineEdit = null;
     editing = o.id;
     document.getElementById("edit-id").value = o.id;
     page = "orders";
@@ -8508,6 +10971,7 @@ function onOrdersListClick(e) {
     document.getElementById("customer").value = o.customer;
     setShipAddr(o.shipAddr || lastShipAddr(o.customer));
     setOrderNote(o.remark || "");
+    setOrderUrgent(!!o.urgent);
     syncOrderDates(o.shipDate || today());
     const more = document.getElementById("ship-more");
     if (more && (o.shipDate || today()) !== today()) more.open = true;
@@ -8526,64 +10990,7 @@ function onOrdersListClick(e) {
   }
   if (btn.dataset.act === "ship") {
     if (!requireStaff()) return;
-    try {
-      const need = {};
-      for (const line of o.lines) {
-        if (!(line.qty > 0) || !line.skuId) continue;
-        need[line.skuId] = (need[line.skuId] || 0) + line.qty;
-      }
-      for (const [skuId, qty] of Object.entries(need)) {
-        const sku = skuById(skuId);
-        if (!sku) continue;
-        ensureStockRow(sku.id);
-        if (shipInboundSku(sku) === "auto") continue;
-        if (available(sku, o, today()) < qty) {
-          setStatus(`${sku.name} 可出不足，不能出貨。請先在庫存頁記入進貨或早上盤點。`, true);
-          return;
-        }
-      }
-      const autoIn = [];
-      for (const [skuId, qty] of Object.entries(need)) {
-        const sku = skuById(skuId);
-        if (!sku) continue;
-        if (shipInboundSku(sku) === "auto") autoIn.push({ skuId, qty, sku });
-      }
-      if (autoIn.length) {
-        const bits = autoIn.map((x) => `${x.sku.name.replace("洋蔥／", "").replace("散賣kg", "").replace("散賣斤", "")} ${fmt(x.qty)} ${x.sku.unit}`).join("、");
-        if (!confirm(`確定出貨「${o.customer}」？\n將扣可出，並把出貨數量累計入今日進貨：${bits}`)) return;
-      }
-      const shipInbounds = [];
-      for (const [skuId, qty] of Object.entries(need)) {
-        const sku = skuById(skuId);
-        if (!sku) continue;
-        if (isSiteSku(sku)) {
-          const st = ensureStockRow(sku.id);
-          st.processed = round(Math.max(0, (st.processed || 0) - qty));
-        }
-      }
-      o.status = "shipped";
-      o.shippedOn = today();
-      o.shippedBy = currentStaff();
-      const inLots = autoIn;
-      for (const lot of inLots) {
-        addInboundLot(lot.skuId, lot.qty, o.shippedOn, true);
-        shipInbounds.push({ skuId: lot.skuId, qty: lot.qty });
-      }
-      o.shipInbounds = shipInbounds;
-      for (const skuId of Object.keys(need)) {
-        const sku = skuById(skuId);
-        if (sku && !isSiteSku(sku)) syncNqQty(sku);
-      }
-      save();
-      const inNote = shipInbounds.length
-        ? `並已累計入今日進貨 ${shipInbounds.map((x) => `${fmt(x.qty)}`).join("、")}。`
-        : "";
-      setStatus(`已出貨並扣可出庫存。${inNote}`, false);
-      render();
-    } catch (err) {
-      console.error(err);
-      setStatus("出貨扣庫失敗，請再按一次。", true);
-    }
+    settleOrders([o]);
   }
 };
 
@@ -9153,6 +11560,7 @@ async function pollCloud() {
 
 ensureHaHistory();
 bindWorkDates();
+applyLayoutMode(preferredLayoutMode());
 render();
 bootCloudSync();
 refreshLineDrafts();

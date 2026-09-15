@@ -1,0 +1,90 @@
+/* 雅芳統計頁 — 文字統計表 */
+.st-root { padding-bottom: 1.5rem; }
+.st-head { margin: 0 0 0.75rem; }
+.st-head h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+.st-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+.st-tabs { margin-bottom: 0.85rem; }
+.st-body h3 {
+  margin: 0.85rem 0 0.4rem;
+  font-size: 0.88rem;
+  color: #5a6a62;
+}
+.st-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+}
+@media (min-width: 560px) {
+  .st-kpis { grid-template-columns: repeat(4, 1fr); }
+}
+.st-kpi {
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #d5e4da;
+  background: #f7fbf8;
+}
+.st-kpi strong {
+  display: block;
+  font-size: 1.35rem;
+  color: #1a6843;
+}
+.st-kpi span {
+  font-size: 0.75rem;
+  color: #6a7a72;
+  font-weight: 600;
+}
+.st-kpi.warn {
+  background: #fff6f0;
+  border-color: #efd0ba;
+}
+.st-kpi.warn strong { color: #b85a2a; }
+.st-table-wrap {
+  overflow-x: auto;
+  border-radius: 0.55rem;
+  border: 1px solid #d5e4da;
+  background: #fff;
+}
+.st-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.st-table th,
+.st-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e8efe9;
+}
+.st-table th {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5a6a62;
+  background: #f3f8f5;
+}
+.st-table tbody tr:last-child td { border-bottom: none; }
+.st-table .st-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #163528;
+  white-space: nowrap;
+}
+.st-table-audit td:nth-child(2),
+.st-table-audit td:nth-child(3) {
+  white-space: nowrap;
+  color: #6a7a72;
+  font-size: 0.82rem;
+}
+.st-empty {
+  margin: 0.5rem 0;
+  padding: 0.85rem;
+  text-align: center;
+  color: #6a7a72;
+  background: #f3f6f4;
+  border-radius: 0.65rem;
+}

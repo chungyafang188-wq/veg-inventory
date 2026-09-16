@@ -170,12 +170,23 @@
     if (isLeafFang(t)) {
       return { skuId: "sl-fang", qty, pack: leafPack(raw + t), pallet };
     }
+    if (/地瓜葉|地瓜/.test(t)) {
+      return { skuId: "sl-pend", qty, pack: leafPack(raw + t), pallet };
+    }
     const greenBasil = /綠骨|綠九層塔|綠九層|綠塔/;
     const redBasil = /紅骨|紅九層塔|紅九層|紅塔/;
-    if ((greenBasil.test(t) || /綠芳|綠琳/.test(t)) && /琳/.test(t)) return { skuId: "gb-lin", qty, pallet };
-    if (greenBasil.test(t) || /綠芳/.test(t)) return { skuId: "gb-fang", qty, pallet };
-    if ((redBasil.test(t) || /紅芳|紅琳/.test(t)) && /琳/.test(t)) return { skuId: "rb-lin", qty, pallet };
-    if (redBasil.test(t) || /紅芳/.test(t)) return { skuId: "rb-fang", qty, pallet };
+    if (greenBasil.test(t) || /綠芳|綠琳|綠其他/.test(t)) {
+      if (/琳/.test(t)) return { skuId: "gb-lin", qty, pallet };
+      if (/其他/.test(t)) return { skuId: "gb-oth", qty, pallet };
+      if (/芳/.test(t)) return { skuId: "gb-fang", qty, pallet };
+      return { skuId: "gb-pend", qty, pallet };
+    }
+    if (redBasil.test(t) || /紅芳|紅琳|紅其他/.test(t)) {
+      if (/琳/.test(t)) return { skuId: "rb-lin", qty, pallet };
+      if (/其他/.test(t)) return { skuId: "rb-oth", qty, pallet };
+      if (/芳/.test(t)) return { skuId: "rb-fang", qty, pallet };
+      return { skuId: "rb-pend", qty, pallet };
+    }
     if (/洋蔥?\s*B|蔥B|洋B/.test(t)) return { skuId: "on-b-kg", qty, pallet };
     if (/南瓜?\s*B|瓜B/.test(t)) return { skuId: "pk-b-kg", qty, pallet };
     if (t.includes("阿成")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-ch-20" : "pk-ch-18", qty, pallet };

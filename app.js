@@ -7,6 +7,8 @@ const BAN_QUICK = [1, 2, 3];
 const BAN_SELECT_MAX = 10;
 const BAN_CN = { 1: "一版", 2: "兩版", 3: "三版" };
 const VENDOR_OPTS = ["芳", "琳", "其他"];
+const LEAF_VENDOR_OPTS = ["誌", "芳"];
+const VENDOR_PENDING = "待定";
 /** 版數（較貨先叫幾版）；legacy `ban: "一版"|"兩版"` 一併讀取 */
 function lineBanQty(l) {
   if (!l) return 0;
@@ -107,9 +109,9 @@ const FORM_KINDS = {
     label: "地瓜葉",
     title: "穠全 地瓜葉出貨",
     formTitle: "填寫地瓜葉出貨數量",
-    hint: "手打或點出貨對象，下拉選誌／芳，裝箱選籃裝或箱裝，可＋加下一項。無叫貨按「今日無叫貨」。",
-    formHint: "地瓜葉：下拉選誌或芳，裝箱樣式每筆可不同。用＋加一筆、刪拿掉。",
-    skuIds: ["sl-zhi", "sl-fang"],
+    hint: "手打或點出貨對象，廠商可先待定（理貨再選誌／芳），裝箱選籃裝或箱裝。無叫貨按「今日無叫貨」。",
+    formHint: "地瓜葉：數量＋裝箱；廠商可待定，理貨時選誌／芳會自動回寫訂單。",
+    skuIds: ["sl-pend", "sl-zhi", "sl-fang"],
     cols: [
       { key: "slZhi", label: "地瓜葉／誌", kind: "qty" },
       { key: "slFang", label: "地瓜葉／芳", kind: "qty" },
@@ -120,9 +122,9 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "手打或點出貨對象，下拉選紅骨／綠骨與廠商，可＋加下一項。同一客人紅骨、綠骨可不同廠商。無叫貨按「今日無叫貨」。",
-    formHint: "九層塔：下拉選紅骨或綠骨，再選廠商（芳／琳／其他）。用＋加一筆、刪拿掉。",
-    skuIds: ["rb-fang", "rb-lin", "rb-oth", "gb-fang", "gb-lin", "gb-oth"],
+    hint: "手打或點出貨對象，選紅骨／綠骨；廠商可先待定，理貨再選芳／琳／其他會自動回寫。無叫貨按「今日無叫貨」。",
+    formHint: "九層塔：紅骨／綠骨＋數量；廠商可待定，理貨選廠商後自動回寫訂單。",
+    skuIds: ["rb-pend", "rb-fang", "rb-lin", "rb-oth", "gb-pend", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
       { key: "rb", label: "紅骨", kind: "qty" },
       { key: "rbVendor", label: "紅骨廠商", kind: "rbVendor" },
@@ -173,7 +175,35 @@ const BASIL_REV = {
   "rb-fang": { qty: "rb", val: "芳" },
   "rb-lin": { qty: "rb", val: "琳" },
   "rb-oth": { qty: "rb", val: "其他" },
+  "rb-pend": { qty: "rb", val: VENDOR_PENDING },
+  "gb-pend": { qty: "gb", val: VENDOR_PENDING },
 };
+function isVendorPendingSku(skuId) {
+  return skuId === "sl-pend" || skuId === "rb-pend" || skuId === "gb-pend" || !!skuById(skuId)?.vendorPending;
+}
+function leafVendorSku(vendor) {
+  if (vendor === "誌") return "sl-zhi";
+  if (vendor === "芳") return "sl-fang";
+  return "sl-pend";
+}
+function basilVendorSku(kind, vendor) {
+  const k = kind === "gb" ? "gb" : "rb";
+  if (VENDOR_OPTS.includes(vendor)) return BASIL_SKU[k][vendor];
+  return `${k}-pend`;
+}
+function resolveVendorSku(fromSkuId, vendor) {
+  if (fromSkuId === "sl-pend" || fromSkuId === "sl-zhi" || fromSkuId === "sl-fang") return leafVendorSku(vendor);
+  const b = BASIL_REV[fromSkuId];
+  if (b) return basilVendorSku(b.qty, vendor);
+  if (fromSkuId === "rb-pend") return basilVendorSku("rb", vendor);
+  if (fromSkuId === "gb-pend") return basilVendorSku("gb", vendor);
+  return fromSkuId;
+}
+function vendorOptsForSku(skuId) {
+  if (skuId === "sl-pend" || skuId === "sl-zhi" || skuId === "sl-fang") return LEAF_VENDOR_OPTS;
+  if (skuId === "rb-pend" || skuId === "gb-pend" || BASIL_REV[skuId]) return VENDOR_OPTS;
+  return [];
+}
 const OLD_LEAF = {
   "sl-b-zhi": { id: "sl-zhi", pack: "籃裝" },
   "sl-x-zhi": { id: "sl-zhi", pack: "箱裝" },
@@ -224,11 +254,14 @@ function haVegExtrasHtml(fam, rec = {}) {
   return `<select data-veg-opt aria-label="${esc(def.label)}規格">${opts}</select>`;
 }
 const SKUS = [
+  { id: "sl-pend", co: "nq", name: "本產蔬菜－地瓜葉／待定", unit: "籃", packRemark: true, vendorPending: true, trade: true },
   { id: "sl-zhi", co: "nq", name: "本產蔬菜－地瓜葉／誌", unit: "籃", packRemark: true },
   { id: "sl-fang", co: "nq", name: "本產蔬菜－地瓜葉／芳", unit: "籃", packRemark: true },
+  { id: "rb-pend", co: "nq", name: "紅骨九層塔／待定", unit: "箱", vendorPending: true, trade: true },
   { id: "rb-fang", co: "nq", name: "紅骨九層塔／芳", unit: "箱" },
   { id: "rb-lin", co: "nq", name: "紅骨九層塔／琳", unit: "箱" },
   { id: "rb-oth", co: "nq", name: "紅骨九層塔／其他", unit: "箱" },
+  { id: "gb-pend", co: "nq", name: "綠骨九層塔／待定", unit: "箱", vendorPending: true, trade: true },
   { id: "gb-fang", co: "nq", name: "綠骨九層塔／芳", unit: "箱" },
   { id: "gb-lin", co: "nq", name: "綠骨九層塔／琳", unit: "箱" },
   { id: "gb-oth", co: "nq", name: "綠骨九層塔／其他", unit: "箱" },
@@ -4450,18 +4483,20 @@ function isHaFam(fam) {
   return fam === "on" || fam === "on-p" || fam === "pk" || fam === "on-b" || fam === "pk-b";
 }
 function nqExtrasHtml(cat, rec = {}) {
-  if (cat === "sl-zhi" || cat === "sl-fang") {
+  if (cat === "sl-zhi" || cat === "sl-fang" || cat === "sl-pend" || cat === "leaf") {
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
     return `<select data-nq-pack aria-label="裝箱">${optsHtml(PACK_OPTS, pack)}</select>`;
   }
   if (cat === "rb" || cat === "gb") {
-    const vendor = rec.skuId && BASIL_REV[rec.skuId] && VENDOR_OPTS.includes(BASIL_REV[rec.skuId].val) ? BASIL_REV[rec.skuId].val : "芳";
-    return `<select data-nq-vendor aria-label="廠商">${optsHtml(VENDOR_OPTS, vendor)}</select>`;
+    const parsed = BASIL_REV[rec.skuId];
+    const vendor = parsed && VENDOR_OPTS.includes(parsed.val) ? parsed.val : VENDOR_PENDING;
+    const opts = [VENDOR_PENDING, ...VENDOR_OPTS];
+    return `<select data-nq-vendor aria-label="廠商">${optsHtml(opts, vendor)}</select>`;
   }
   return "";
 }
 function nqUnitOfCat(cat, pack) {
-  if (cat === "sl-zhi" || cat === "sl-fang" || cat === "leaf") return pack === "箱裝" ? "箱" : "籃";
+  if (cat === "sl-zhi" || cat === "sl-fang" || cat === "sl-pend" || cat === "leaf") return pack === "箱裝" ? "箱" : "籃";
   if (cat === "rb" || cat === "gb" || cat === "basil") return "箱";
   if (cat === "shiso-jin") return "斤";
   if (isCustomFam(cat)) return "件";
@@ -4472,7 +4507,7 @@ function nqUnitOfCat(cat, pack) {
 function lineBigOf(rec = {}) {
   if (rec.skuId === "custom-nq" || rec.skuId === "custom-ha") return rec.skuId;
   const fam = lineFamOf(rec);
-  if (fam === "sl-zhi" || fam === "sl-fang") return "leaf";
+  if (fam === "sl-zhi" || fam === "sl-fang" || fam === "sl-pend") return "leaf";
   if (fam === "rb" || fam === "gb") return "basil";
   return fam || "";
 }
@@ -4647,16 +4682,33 @@ function lineSubHtml(big, rec = {}) {
   if (!big) return "";
   const bits = [];
   if (big === "leaf") {
-    const leaf = rec.skuId === "sl-fang" ? "sl-fang" : "sl-zhi";
+    const leaf =
+      rec.skuId === "sl-fang" ? "sl-fang" : rec.skuId === "sl-zhi" ? "sl-zhi" : "sl-pend";
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
-    bits.push(`<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml("leaf", [["sl-zhi", "誌"], ["sl-fang", "芳"]], leaf)}</div>`);
+    bits.push(
+      `<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml(
+        "leaf",
+        [
+          ["sl-pend", VENDOR_PENDING],
+          ["sl-zhi", "誌"],
+          ["sl-fang", "芳"],
+        ],
+        leaf,
+      )}</div>`,
+    );
     bits.push(`<p class="pick-lab">裝箱</p><div class="sku-subs">${pickHtml("pack", PACK_OPTS.map((p) => [p, p]), pack)}</div>`);
   } else if (big === "basil") {
-    const parsed = BASIL_REV[rec.skuId] || { qty: "rb", val: "芳" };
+    const parsed = BASIL_REV[rec.skuId] || { qty: "rb", val: VENDOR_PENDING };
     const kind = parsed.qty === "gb" ? "gb" : "rb";
-    const vendor = VENDOR_OPTS.includes(parsed.val) ? parsed.val : "芳";
+    const vendor = VENDOR_OPTS.includes(parsed.val) ? parsed.val : "pend";
     bits.push(`<p class="pick-lab">種類</p><div class="sku-subs">${pickHtml("basil", [["rb", "紅骨"], ["gb", "綠骨"]], kind)}</div>`);
-    bits.push(`<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml("vendor", VENDOR_OPTS.map((p) => [p, p]), vendor)}</div>`);
+    bits.push(
+      `<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml(
+        "vendor",
+        [["pend", VENDOR_PENDING], ...VENDOR_OPTS.map((p) => [p, p])],
+        vendor,
+      )}</div>`,
+    );
   } else if (isHaVegFam(big)) {
     const def = HA_VEG[big];
     const cur = rec.skuId ? skuById(rec.skuId)?.vegOpt : rec.vegOpt;
@@ -4683,7 +4735,7 @@ function syncLineMeta(row) {
   if (!row) return;
   const big = pickVal(row, "big");
   const pack = pickVal(row, "pack") || "籃裝";
-  const unitFam = big === "leaf" ? pickVal(row, "leaf") || "sl-zhi" : big;
+  const unitFam = big === "leaf" ? pickVal(row, "leaf") || "sl-pend" : big;
   const unit = row.querySelector("[data-line-unit]");
   if (unit) unit.textContent = nqUnitOfCat(unitFam, pack);
   const qty = row.querySelector("[data-line-qty]");
@@ -4697,11 +4749,13 @@ function lineFamOf(rec = {}) {
     const sku = skuById(id);
     if (sku?.vegFam) return sku.vegFam;
     if (sku?.co === "ha") return haParseSku(id).kind;
-    if (id === "sl-fang" || id === "sl-zhi") return id;
+    if (id === "sl-fang" || id === "sl-zhi" || id === "sl-pend") return id;
+    if (id === "rb-pend") return "rb";
+    if (id === "gb-pend") return "gb";
     if (BASIL_REV[id]) return BASIL_REV[id].qty;
     if (id === "mint-kg" || id === "shiso-kg" || id === "shiso-jin" || id === "basil-kg") return id;
   }
-  return rec.fam || "sl-zhi";
+  return rec.fam || "sl-pend";
 }
 function famExtrasHtml(fam, rec = {}) {
   if (isHaVegFam(fam)) {
@@ -4746,7 +4800,14 @@ function unifiedLineHtml(rec = {}) {
   const banQty = lineBanQty(rec) > 0 ? lineBanQty(rec) : "";
   const step = big === "on-b" || big === "pk-b" || big === "basil-kg" ? "0.1" : "1";
   const pack = rec.pack || "籃裝";
-  const unitFam = big === "leaf" ? (rec.skuId === "sl-fang" ? "sl-fang" : "sl-zhi") : big;
+  const unitFam =
+    big === "leaf"
+      ? rec.skuId === "sl-fang"
+        ? "sl-fang"
+        : rec.skuId === "sl-zhi"
+          ? "sl-zhi"
+          : "sl-pend"
+      : big;
   const quick = banQuickHtml(banQty);
   return `<div class="ha-line item-line">
     <div class="pick-block">
@@ -4932,13 +4993,14 @@ function unifiedLinesFromForm() {
       return;
     }
     if (big === "leaf") {
-      out.push(finish({ skuId: pickVal(row, "leaf") || "sl-zhi", qty, pack: pickVal(row, "pack") || "籃裝" }));
+      out.push(finish({ skuId: pickVal(row, "leaf") || "sl-pend", qty, pack: pickVal(row, "pack") || "籃裝" }));
       return;
     }
     if (big === "basil") {
       const kind = pickVal(row, "basil") || "rb";
-      const vendor = pickVal(row, "vendor") || "芳";
-      out.push(finish({ skuId: BASIL_SKU[kind][vendor] || BASIL_SKU[kind]["芳"], qty }));
+      const vendor = pickVal(row, "vendor") || "pend";
+      const skuId = vendor === "pend" || vendor === VENDOR_PENDING ? `${kind}-pend` : BASIL_SKU[kind][vendor] || `${kind}-pend`;
+      out.push(finish({ skuId, qty }));
       return;
     }
     out.push(finish({ skuId: big, qty }));
@@ -6218,8 +6280,10 @@ function rowVendor(row) {
 function basilVendorOf(row, which) {
   const key = which === "gb" ? "gbVendor" : "rbVendor";
   const v = String(row?.[key] || "").trim();
+  if (v === VENDOR_PENDING || v === "") return VENDOR_PENDING;
   if (VENDOR_OPTS.includes(v)) return v;
-  return rowVendor(row);
+  const fallback = rowVendor(row);
+  return fallback === "芳" && !row?.[key] ? VENDOR_PENDING : fallback;
 }
 function migrateBasilDailyRow(row) {
   if (!row) return row;
@@ -6235,9 +6299,11 @@ function migrateBasilDailyRow(row) {
     if (!row.vendor) row.vendor = rowVendor(row);
     row._basil3 = true;
   }
-  const fallback = rowVendor(row);
-  if (!VENDOR_OPTS.includes(String(row.rbVendor || "").trim())) row.rbVendor = fallback;
-  if (!VENDOR_OPTS.includes(String(row.gbVendor || "").trim())) row.gbVendor = fallback;
+  const fallback = String(row.vendor || "").trim();
+  if (!row.rbVendor) row.rbVendor = VENDOR_OPTS.includes(fallback) ? fallback : VENDOR_PENDING;
+  if (!row.gbVendor) row.gbVendor = VENDOR_OPTS.includes(fallback) ? fallback : VENDOR_PENDING;
+  if (!VENDOR_OPTS.includes(String(row.rbVendor || "").trim()) && row.rbVendor !== VENDOR_PENDING) row.rbVendor = VENDOR_PENDING;
+  if (!VENDOR_OPTS.includes(String(row.gbVendor || "").trim()) && row.gbVendor !== VENDOR_PENDING) row.gbVendor = VENDOR_PENDING;
   return row;
 }
 function linesFromDailyRow(row, meta) {
@@ -6246,21 +6312,25 @@ function linesFromDailyRow(row, meta) {
   if (formKind === "leaf") {
     const z = qtyN(row.slZhi);
     const f = qtyN(row.slFang);
+    const p = qtyN(row.slPend);
     const pack = row.pack || "籃裝";
     if (z) lines.push({ skuId: "sl-zhi", qty: z, pack });
     if (f) lines.push({ skuId: "sl-fang", qty: f, pack });
+    if (p) lines.push({ skuId: "sl-pend", qty: p, pack });
   } else if (formKind === "basil") {
     migrateBasilDailyRow(row);
     const r = qtyN(row.rb);
     const g = qtyN(row.gb);
     const note = String(row.note || "").trim();
     if (r) {
-      const line = { skuId: BASIL_SKU.rb[basilVendorOf(row, "rb")], qty: r };
+      const v = basilVendorOf(row, "rb");
+      const line = { skuId: v === VENDOR_PENDING ? "rb-pend" : BASIL_SKU.rb[v] || "rb-pend", qty: r };
       if (note) line.note = note;
       lines.push(line);
     }
     if (g) {
-      const line = { skuId: BASIL_SKU.gb[basilVendorOf(row, "gb")], qty: g };
+      const v = basilVendorOf(row, "gb");
+      const line = { skuId: v === VENDOR_PENDING ? "gb-pend" : BASIL_SKU.gb[v] || "gb-pend", qty: g };
       if (note) line.note = note;
       lines.push(line);
     }
@@ -6285,7 +6355,10 @@ function linesToDailyRow(lines) {
     } else if (l.skuId === "sl-fang") {
       row.slFang = l.qty;
       if (l.pack) row.pack = l.pack;
-    }     else if (l.skuId === "mint-kg") row.mint = l.qty;
+    } else if (l.skuId === "sl-pend") {
+      row.slPend = l.qty;
+      if (l.pack) row.pack = l.pack;
+    } else if (l.skuId === "mint-kg") row.mint = l.qty;
     else if (l.skuId === "shiso-kg") row.shisoKg = l.qty;
     else if (l.skuId === "shiso-jin") row.shisoJin = l.qty;
     else if (l.skuId === "basil-kg") row.basilKg = l.qty;
@@ -7001,6 +7074,7 @@ function lineQtyForSkus(o, ids) {
   return round(n);
 }
 function planLeafBasilVendor(skuId) {
+  if (skuId === "sl-pend" || skuId === "rb-pend" || skuId === "gb-pend") return VENDOR_PENDING;
   if (skuId === "sl-zhi") return "誌";
   if (skuId === "sl-fang") return "芳";
   const b = BASIL_REV[skuId];
@@ -7025,6 +7099,7 @@ function planDayLineRows(day) {
         pack: l.pack || "",
         vendor: planLeafBasilVendor(l.skuId),
         done: o.status !== "open",
+        pendingVendor: isVendorPendingSku(l.skuId),
       });
     }
   }
@@ -7067,10 +7142,80 @@ function togglePrepLine(day, key, want) {
   const rows = planMergeDayLines(planDayLineRows(day));
   const hit = rows.find((r) => prepLineKey(r) === key && !r.done);
   if (!hit) return setStatus("找不到這筆待理貨項目。", true);
+  if (want && isVendorPendingSku(hit.skuId)) {
+    return setStatus(`「${hit.customer}」${hit.name} 尚未選廠商，請先選廠商（會自動回寫訂單）。`, true);
+  }
   setLinePrepped(day, hit, want);
   save();
   setStatus(want ? `已理貨確認「${hit.customer}」${hit.name}。` : `已取消理貨「${hit.customer}」${hit.name}。`, false);
   renderPlan();
+}
+function migratePrepKey(day, fromRow, toRow) {
+  ensurePrepStore();
+  if (!state.prep[day]) return;
+  const from = prepLineKey(fromRow);
+  const to = prepLineKey(toRow);
+  if (from === to) return;
+  if (state.prep[day][from]) {
+    state.prep[day][to] = state.prep[day][from];
+    delete state.prep[day][from];
+  }
+}
+function packMatchLine(line, pack) {
+  const want = pack || "";
+  const got = line.pack || "";
+  if (!want && !got) return true;
+  if ((want || "籃裝") === (got || "籃裝")) return true;
+  return want === got;
+}
+function writeBackOrderVendor(day, customer, fromSkuId, pack, vendor) {
+  if (!canConfirmPrep()) return setStatus("現場或會計才能指定廠商。", true);
+  if (!requireStaff()) return false;
+  const nextSku = resolveVendorSku(fromSkuId, vendor);
+  if (!nextSku || isVendorPendingSku(nextSku)) return setStatus("請選擇廠商。", true);
+  if (nextSku === fromSkuId) return false;
+  const who = String(customer || "").trim() || "未填";
+  let n = 0;
+  const fromRow = { customer: who, skuId: fromSkuId, pack: pack || "" };
+  const toRow = { customer: who, skuId: nextSku, pack: pack || "" };
+  const wasPrepped = isLinePrepped(day, fromRow);
+  for (const o of state.orders) {
+    if (o.status !== "open") continue;
+    if (orderShipDay(o) !== day) continue;
+    if (customerKey(o) !== who) continue;
+    let touched = false;
+    for (const l of o.lines || []) {
+      if (l.skuId !== fromSkuId) continue;
+      if (fromSkuId === "sl-pend" || fromSkuId === "sl-zhi" || fromSkuId === "sl-fang") {
+        if (!packMatchLine(l, pack)) continue;
+      }
+      l.skuId = nextSku;
+      if (l.labelName && /待定/.test(String(l.labelName))) delete l.labelName;
+      touched = true;
+      n += 1;
+    }
+    if (touched && o.settled) markOrderEdited(o);
+  }
+  if (!n) return setStatus(`找不到「${who}」可回寫的訂單明細。`, true);
+  if (wasPrepped) migratePrepKey(day, fromRow, toRow);
+  else {
+    ensurePrepStore();
+    if (state.prep[day]?.[prepLineKey(fromRow)]) migratePrepKey(day, fromRow, toRow);
+  }
+  save();
+  const lab = skuShortName(skuById(nextSku)) || nextSku;
+  setStatus(`已指定廠商並回寫訂單：「${who}」→ ${lab}`, false);
+  renderPlan();
+  renderOrders();
+  return true;
+}
+function planVendorPickHtml(day, r) {
+  if (!r || r.done || !isVendorPendingSku(r.skuId)) return "";
+  const opts = vendorOptsForSku(r.skuId);
+  if (!opts.length) return "";
+  if (!canConfirmPrep()) return `<span class="plan-vend-need">${esc(VENDOR_PENDING)}</span>`;
+  const choices = [`<option value="">選廠商</option>`, ...opts.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`)].join("");
+  return `<select class="plan-vend-pick" data-vend-write="1" data-vend-day="${esc(day)}" data-vend-cust="${esc(r.customer)}" data-vend-sku="${esc(r.skuId)}" data-vend-pack="${esc(r.pack || "")}" aria-label="指定廠商">${choices}</select>`;
 }
 function planGroupHead(g) {
   const processed = g.label.startsWith("加工·");
@@ -7096,6 +7241,8 @@ function planCropName(name) {
     .replace(/散賣kg$|散賣斤$|散賣$/g, "");
 }
 const PLAN_CARD_I18N = {
+  "sl-pend": { th: "ผักบุ้ง", vi: "Rau muống" },
+  leaf: { th: "ผักบุ้ง", vi: "Rau muống" },
   "sl-zhi": { th: "ผักบุ้ง จื่อ", vi: "Rau muống Chí" },
   "sl-fang": { th: "ผักบุ้ง ฟาง", vi: "Rau muống Phương" },
   rb: { th: "โหระพาแดง R", vi: "Húng quế đỏ R" },
@@ -7172,7 +7319,11 @@ function planMergeDayLines(rows) {
   return [...merged.values()];
 }
 function planLineSpec(r) {
-  if (r.skuId === "sl-zhi" || r.skuId === "sl-fang") return r.pack && r.pack !== "籃裝" ? r.pack : "籃裝";
+  if (r.skuId === "sl-pend" || r.skuId === "sl-zhi" || r.skuId === "sl-fang") {
+    const pack = r.pack && r.pack !== "籃裝" ? r.pack : "籃裝";
+    const vend = r.vendor || planLeafBasilVendor(r.skuId);
+    return vend === VENDOR_PENDING ? `${VENDOR_PENDING}・${pack}` : vend === "誌" || vend === "芳" ? `${vend}・${pack}` : pack;
+  }
   return r.vendor || "";
 }
 function planTotChipsHtml(rows, mode) {
@@ -7186,7 +7337,7 @@ function planTotChipsHtml(rows, mode) {
     else cur.open = round(cur.open + r.qty);
     buckets.set(key, cur);
   }
-  const rank = { 誌: 0, 芳: 1, 琳: 2, 其他: 3, 籃裝: 0, 箱裝: 1 };
+  const rank = { 待定: -1, 誌: 0, 芳: 1, 琳: 2, 其他: 3, 籃裝: 0, 箱裝: 1 };
   const list = [...buckets.values()].sort((a, b) => (rank[a.label] ?? 9) - (rank[b.label] ?? 9) || a.label.localeCompare(b.label, "zh-Hant"));
   if (!list.length) return "";
   return `<ul class="plan-item-tots">${list
@@ -7223,13 +7374,16 @@ function planCustRowsHtml(day, rows, hideSpec) {
               : someDone || somePrep
                 ? `<span class="plan-open">待理貨</span>`
                 : "";
+          const vendPick = planVendorPickHtml(day, r);
           const box =
-            !r.done && canPrep
+            !r.done && canPrep && !isVendorPendingSku(r.skuId)
               ? `<label class="prep-check"><input type="checkbox" data-prep-key="${esc(prepLineKey(r))}" data-prep-day="${esc(day)}" ${prepped ? "checked" : ""} /><span class="prep-box" aria-hidden="true"></span></label>`
-              : !r.done
-                ? `<span class="prep-check is-locked" title="已理貨狀態" aria-hidden="true"><span class="prep-box${prepped ? " on" : ""}"></span></span>`
-                : `<span class="prep-check is-done" aria-hidden="true"><span class="prep-box on"></span></span>`;
-          return `<span class="plan-cust-qty">${box}${spec ? `${esc(spec)} ` : ""}<b>${fmt(r.qty)}</b> ${esc(r.unit)}${mark}</span>`;
+              : !r.done && isVendorPendingSku(r.skuId)
+                ? `<span class="prep-check is-locked" title="先選廠商" aria-hidden="true"><span class="prep-box"></span></span>`
+                : !r.done
+                  ? `<span class="prep-check is-locked" title="已理貨狀態" aria-hidden="true"><span class="prep-box${prepped ? " on" : ""}"></span></span>`
+                  : `<span class="prep-check is-done" aria-hidden="true"><span class="prep-box on"></span></span>`;
+          return `<span class="plan-cust-qty">${box}${vendPick}${spec && !vendPick ? `${esc(spec)} ` : ""}${!vendPick && hideSpec && r.vendor && r.vendor !== VENDOR_PENDING ? `<span class="plan-vend-inline">${esc(r.vendor)}</span> ` : ""}<b>${fmt(r.qty)}</b> ${esc(r.unit)}${mark}</span>`;
         })
         .join("");
       const whoMark = allDone
@@ -7263,10 +7417,10 @@ function planItemBlockHtml(day, sec, allRows) {
       : "";
   let body;
   if (sec.totMode === "vendor") {
-    const vendorRank = { 芳: 0, 琳: 1, 其他: 2 };
+    const vendorRank = { 待定: -1, 芳: 0, 琳: 1, 其他: 2 };
     const byVend = new Map();
     for (const r of rows) {
-      const v = r.vendor || "其他";
+      const v = r.vendor || VENDOR_PENDING;
       if (!byVend.has(v)) byVend.set(v, []);
       byVend.get(v).push(r);
     }
@@ -7290,18 +7444,18 @@ function planItemBlockHtml(day, sec, allRows) {
 function planBreakHtml(day) {
   const rows = planDayLineRows(day);
   const sections = [
-    { kind: "地瓜葉", mark: "誌", tone: "leaf-zhi", skuIds: ["sl-zhi"], totMode: "pack" },
-    { kind: "地瓜葉", mark: "芳", tone: "leaf-fang", skuIds: ["sl-fang"], totMode: "pack" },
-    { kind: "九層塔", mark: "紅骨", tone: "rb", skuIds: ["rb-fang", "rb-lin", "rb-oth"], totMode: "vendor" },
-    { kind: "九層塔", mark: "綠骨", tone: "gb", skuIds: ["gb-fang", "gb-lin", "gb-oth"], totMode: "vendor" },
+    { kind: "地瓜葉", mark: "出貨", tone: "leaf", skuIds: ["sl-pend", "sl-zhi", "sl-fang"], totMode: "pack" },
+    { kind: "九層塔", mark: "紅骨", tone: "rb", skuIds: ["rb-pend", "rb-fang", "rb-lin", "rb-oth"], totMode: "vendor" },
+    { kind: "九層塔", mark: "綠骨", tone: "gb", skuIds: ["gb-pend", "gb-fang", "gb-lin", "gb-oth"], totMode: "vendor" },
   ];
   const html = sections.map((s) => planItemBlockHtml(day, s, rows)).join("");
   if (!html) return `<p class="empty">當日沒有地瓜葉、九層塔叫貨。</p>`;
   const all = planMergeDayLines(rows.filter((r) => sections.some((s) => s.skuIds.includes(r.skuId))));
   const prep = prepStatsForRows(day, all);
+  const pendN = all.filter((r) => !r.done && isVendorPendingSku(r.skuId)).length;
   const head =
     prep.total > 0
-      ? `<div class="prep-banner"><strong>理貨確認</strong><span>已備 ${prep.done}／${prep.total}</span><em>${canConfirmPrep() ? "勾選已備妥的客戶品項" : "僅供查看"}</em></div>`
+      ? `<div class="prep-banner"><strong>理貨確認</strong><span>已備 ${prep.done}／${prep.total}</span><em>${canConfirmPrep() ? (pendN ? `待定廠商 ${pendN}：選廠商後自動回寫訂單` : "勾選已備妥的客戶品項") : "僅供查看"}</em></div>`
       : `<div class="prep-banner"><strong>理貨確認</strong><span>今日待出已結清或尚無待理貨</span></div>`;
   return `${head}<div class="plan-break">${html}</div>`;
 }
@@ -7419,6 +7573,32 @@ function planCropCustomerEntries(day, g) {
       a.who.localeCompare(b.who, "zh-Hant"),
   );
 }
+function planCropPendingLines(day, g, customer) {
+  const lines = [];
+  for (const o of state.orders) {
+    if (o.status !== "open") continue;
+    if (orderShipDay(o) !== day) continue;
+    if (customerKey(o) !== customer) continue;
+    for (const l of o.lines || []) {
+      if (!(l.qty > 0) || !l.skuId || !g.skuIds.includes(l.skuId)) continue;
+      if (!isVendorPendingSku(l.skuId)) continue;
+      const sku = skuById(l.skuId);
+      if (!sku) continue;
+      lines.push({
+        customer,
+        skuId: l.skuId,
+        name: l.labelName || skuShortName(sku),
+        qty: round(l.qty),
+        unit: sku.unit,
+        pack: l.pack || "",
+        vendor: planLeafBasilVendor(l.skuId),
+        done: false,
+        pendingVendor: true,
+      });
+    }
+  }
+  return planMergeDayLines(lines);
+}
 function planCropListHtml(day, g) {
   if (!g) return `<p class="empty">請點上方品項卡查看客戶訂單。</p>`;
   const rows = planCropCustomerEntries(day, g);
@@ -7432,18 +7612,29 @@ function planCropListHtml(day, g) {
   const demand = planDayDemandQty(g, day);
   const list = rows
     .map((r) => {
+      const pendLines = planCropPendingLines(day, g, r.who);
+      const vendHtml = pendLines.length
+        ? `<div class="plan-crop-vend">${pendLines
+            .map((l) => {
+              const pick = planVendorPickHtml(day, l);
+              const pack = l.pack ? ` ${esc(l.pack)}` : "";
+              return `<span class="plan-crop-vend-row">${esc(l.name)}${pack} <b>${fmt(l.qty)}</b> ${esc(l.unit)} ${pick || `<span class="plan-vend-need">${esc(VENDOR_PENDING)}</span>`}</span>`;
+            })
+            .join("")}</div>`
+        : "";
       const action =
         r.code === "prep" && canPrep
           ? `<button type="button" class="tiny-btn primary" data-prep-customer="${esc(r.who)}" data-prep-day="${esc(day)}" data-prep-on="1" data-prep-skus="${esc(g.skuIds.join(","))}">備貨完成</button>`
           : r.code === "ready" && canPrep
             ? `<button type="button" class="tiny-btn" data-prep-customer="${esc(r.who)}" data-prep-day="${esc(day)}" data-prep-on="0" data-prep-skus="${esc(g.skuIds.join(","))}">改回備貨中</button>`
             : "";
-      return `<li class="plan-crop-row is-${esc(r.code)}${r.urgent ? " is-urgent" : ""}">
+      return `<li class="plan-crop-row is-${esc(r.code)}${r.urgent ? " is-urgent" : ""}${pendLines.length ? " needs-vendor" : ""}">
         <div class="plan-crop-main">
           <strong>${r.urgent ? '<span class="tag tag-urgent">急</span>' : ""}${esc(r.who)}</strong>
           <span class="plan-crop-qty">${fmt(r.qty)} ${esc(g.unit)}${r.note ? `　${esc(r.note)}` : ""}</span>
+          ${vendHtml}
         </div>
-        <span class="plan-crop-badge">${esc(r.label)}</span>
+        <span class="plan-crop-badge">${pendLines.length ? "待定廠商" : esc(r.label)}</span>
         ${action}
       </li>`;
     })
@@ -7469,6 +7660,12 @@ function setCustomerPrepped(day, customer, on, skuIds) {
     lines = lines.filter((r) => set.has(r.skuId));
   }
   if (!lines.length) return setStatus(`「${customer}」沒有待備貨品項。`, true);
+  if (on) {
+    const pend = lines.filter((r) => isVendorPendingSku(r.skuId));
+    if (pend.length) {
+      return setStatus(`「${customer}」尚有待定廠商，請先選廠商（會自動回寫訂單）再備貨完成。`, true);
+    }
+  }
   for (const r of lines) setLinePrepped(day, r, on);
   save();
   setStatus(on ? `「${customer}」備貨完成。` : `「${customer}」改回備貨中。`, false);
@@ -7520,6 +7717,7 @@ function planOtherOpenQty(g, day) {
 function groupOnHand(g, date) {
   let n = 0;
   for (const id of g.skuIds) {
+    if (isVendorPendingSku(id)) continue;
     const sku = skuById(id);
     if (!sku) continue;
     n = round(n + onHand(sku, date));
@@ -7531,10 +7729,9 @@ function groupLeftover(g, date = planViewDay()) {
 }
 function planGroups() {
   const nq = [
-    { key: "sl-zhi", label: "現採·地瓜葉／誌", unit: "籃", skuIds: ["sl-zhi"], tone: "leaf-zhi" },
-    { key: "sl-fang", label: "現採·地瓜葉／芳", unit: "籃", skuIds: ["sl-fang"], tone: "leaf-fang" },
-    { key: "rb", label: "現採·九層塔／紅骨", unit: "箱", skuIds: ["rb-fang", "rb-lin", "rb-oth"], tone: "rb" },
-    { key: "gb", label: "現採·九層塔／綠骨", unit: "箱", skuIds: ["gb-fang", "gb-lin", "gb-oth"], tone: "gb" },
+    { key: "leaf", label: "現採·地瓜葉", unit: "籃", skuIds: ["sl-pend", "sl-zhi", "sl-fang"], tone: "leaf" },
+    { key: "rb", label: "現採·九層塔／紅骨", unit: "箱", skuIds: ["rb-pend", "rb-fang", "rb-lin", "rb-oth"], tone: "rb" },
+    { key: "gb", label: "現採·九層塔／綠骨", unit: "箱", skuIds: ["gb-pend", "gb-fang", "gb-lin", "gb-oth"], tone: "gb" },
     { key: "mint-kg", label: "現採·薄荷", unit: "kg", skuIds: ["mint-kg"], tone: "mint" },
     { key: "shiso-kg", label: "現採·紫蘇", unit: "kg", skuIds: ["shiso-kg", "shiso-jin"], tone: "shiso" },
     { key: "basil-kg", label: "現採·九層塔散賣", unit: "kg", skuIds: ["basil-kg"], tone: "herb" },
@@ -7552,8 +7749,11 @@ function planLineNote(o, skuIds) {
   const bits = [];
   for (const l of o.lines || []) {
     if (!skuIds.includes(l.skuId)) continue;
+    if (isVendorPendingSku(l.skuId)) bits.push(VENDOR_PENDING);
     const b = BASIL_REV[l.skuId];
-    if (b) bits.push(b.val);
+    if (b && b.val !== VENDOR_PENDING) bits.push(b.val);
+    if (l.skuId === "sl-zhi") bits.push("誌");
+    if (l.skuId === "sl-fang") bits.push("芳");
     if (l.pack) bits.push(l.pack);
     if (l.size) bits.push(l.size);
     if (l.note) bits.push(l.note);
@@ -7608,6 +7808,15 @@ function settleOrders(list, { confirmMsg } = {}) {
       return false;
     }
   }
+  const pendVend = ready.some((o) => (o.lines || []).some((l) => lineHasItem(l) && isVendorPendingSku(l.skuId)));
+  if (pendVend) {
+    if (
+      !confirm(
+        "尚有地瓜葉／九層塔「待定廠商」。可先結單進入備貨，理貨選廠商時會自動回寫訂單。\n確定仍要結單？",
+      )
+    )
+      return false;
+  }
   const msg =
     confirmMsg ||
     (ready.length > 1
@@ -7657,6 +7866,9 @@ function shipNeedMap(o) {
 function shipmentBlockers(o) {
   for (const line of o.lines || []) {
     if (!(line.qty > 0) || !line.skuId) continue;
+    if (isVendorPendingSku(line.skuId)) {
+      return `請先在理貨指定廠商：${ticketLineName(line)}（單號 #${o.no}）`;
+    }
     if (skuNeedsShipLot(line.skuId) && !line.lotUha) {
       return `請先選出貨編號：${ticketLineName(line)}（單號 #${o.no}）`;
     }
@@ -8296,11 +8508,11 @@ function renderPlan() {
           </button>`;
         })
         .join("")}</div>
-        <p class="plan-crop-tip">點上方品項卡，看該菜要出的客戶（備貨中在上、已送貨在下）</p>
+        <p class="plan-crop-tip">點上方品項卡，看該菜要出的客戶（備貨中在上、已送貨在下）。待定廠商請在下方選廠商，會自動回寫訂單。</p>
         ${cropHtml}
         ${statusHtml}`;
     }
-    if (breakBox) breakBox.innerHTML = "";
+    if (breakBox) breakBox.innerHTML = planMain === "ship" ? "" : planBreakHtml(day);
   }
   renderDispatchLists(day);
   applyPlanPane();
@@ -8859,7 +9071,7 @@ function renderDailyGrid() {
       if (col.kind === "vendor" || col.kind === "rbVendor" || col.kind === "gbVendor") {
         const which = col.kind === "gbVendor" ? "gb" : col.kind === "rbVendor" ? "rb" : "";
         const vendor = which ? basilVendorOf(row, which) : rowVendor(row);
-        const opts = VENDOR_OPTS.map(
+        const opts = [VENDOR_PENDING, ...VENDOR_OPTS].map(
           (p) => `<option value="${esc(p)}"${vendor === p ? " selected" : ""}>${p}</option>`,
         );
         return `<td><select class="cell-pack" ${pos}>${opts.join("")}</select></td>`;
@@ -9999,6 +10211,19 @@ if (planMainSwipe) {
   );
 }
 document.getElementById("plan-card").addEventListener("change", (e) => {
+  const vend = e.target.closest("[data-vend-write]");
+  if (vend) {
+    const vendor = vend.value;
+    if (!vendor) return;
+    writeBackOrderVendor(
+      vend.getAttribute("data-vend-day") || planViewDay(),
+      vend.getAttribute("data-vend-cust") || "",
+      vend.getAttribute("data-vend-sku") || "",
+      vend.getAttribute("data-vend-pack") || "",
+      vendor,
+    );
+    return;
+  }
   const prep = e.target.closest("[data-prep-key]");
   if (!prep) return;
   togglePrepLine(prep.getAttribute("data-prep-day") || planViewDay(), prep.getAttribute("data-prep-key") || "", prep.checked);

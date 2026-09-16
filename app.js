@@ -3,7 +3,105 @@ const NQ_CUST_KEY = "nongquan-customer-lists-v2";
 const NQ_CUST_KEY_OLD = "nongquan-customer-list-v1";
 const KEY = "nongquan-hongan-orders-v1";
 const PACK_OPTS = ["籃裝", "箱裝"];
+const BAN_QUICK = [1, 2, 3];
+const BAN_SELECT_MAX = 10;
+const BAN_CN = { 1: "一版", 2: "兩版", 3: "三版" };
 const VENDOR_OPTS = ["芳", "琳", "其他"];
+/** 版數（較貨先叫幾版）；legacy `ban: "一版"|"兩版"` 一併讀取 */
+function lineBanQty(l) {
+  if (!l) return 0;
+  const n = Number(l.banQty);
+  if (Number.isFinite(n) && n > 0) return round(n);
+  const legacy = String(l.ban || "").trim();
+  if (legacy === "一版") return 1;
+  if (legacy === "兩版") return 2;
+  const m = legacy.match(/^(\d+(?:\.\d+)?)\s*版?$/);
+  if (m) {
+    const v = Number(m[1]);
+    if (Number.isFinite(v) && v > 0) return round(v);
+  }
+  return 0;
+}
+function lineBanText(l) {
+  const n = lineBanQty(l);
+  return n > 0 ? `${fmt(n)}版` : "";
+}
+/** 有品項：已填件數，或先下版數（件數後填） */
+function lineHasItem(l) {
+  return !!(l && l.skuId && (Number(l.qty) > 0 || lineBanQty(l) > 0));
+}
+/** 件數顯示：有填就顯示數字；僅在件數空且有版數時才「後填」 */
+function lineQtyText(l) {
+  const q = Number(l?.qty);
+  if (Number.isFinite(q) && q > 0) return fmt(q);
+  return lineBanQty(l) > 0 ? "後填" : fmt(0);
+}
+function applyBanQty(line, banQty) {
+  const n = Number(banQty);
+  if (Number.isFinite(n) && n > 0) line.banQty = round(n);
+  else delete line.banQty;
+  delete line.ban;
+  return line;
+}
+function readFormBanQty(row) {
+  const n = Number(row?.querySelector("[data-line-ban]")?.value);
+  return Number.isFinite(n) && n > 0 ? round(n) : 0;
+}
+function focusLineBanOrQty(row) {
+  if (!row) return;
+  const ban = row.querySelector("[data-line-ban]");
+  if (ban) {
+    ban.focus();
+    if (ban.tagName !== "SELECT" && typeof ban.select === "function") ban.select();
+    return;
+  }
+  const qty = row.querySelector("[data-line-qty]");
+  if (qty) {
+    qty.focus();
+    if (typeof qty.select === "function") qty.select();
+  }
+}
+function banQuickLabel(n) {
+  return BAN_CN[n] || `${n}版`;
+}
+function qtyFieldValue(qty) {
+  const q = Number(qty);
+  return Number.isFinite(q) && q > 0 ? q : "";
+}
+function qtyFieldPlaceholder(_banQty) {
+  return "後填";
+}
+function banSelectHtml(optsOrValue, maybeId) {
+  const opts =
+    optsOrValue && typeof optsOrValue === "object"
+      ? optsOrValue
+      : { key: "line-ban", id: maybeId || "form", value: optsOrValue };
+  const key = opts.key || "line-ban";
+  const id = opts.id != null ? opts.id : "form";
+  const cur = Number(opts.value);
+  const selected = Number.isFinite(cur) && cur > 0 ? round(cur) : 0;
+  const max = Math.max(BAN_SELECT_MAX, selected);
+  const options = [`<option value="">（空白）</option>`];
+  for (let n = 1; n <= max; n++) {
+    options.push(`<option value="${n}"${selected === n ? " selected" : ""}>${n}版</option>`);
+  }
+  return `<select class="book-input line-ban-select" data-${key}="${esc(String(id))}" aria-label="${esc(opts.aria || "版數")}">${options.join("")}</select>`;
+}
+function banQuickHtml(banQty, attrHtml = 'data-k="ban-quick"') {
+  return BAN_QUICK.map((n) => {
+    const on = Number(banQty) === n ? " on" : "";
+    return `<button type="button" class="pick ban-quick${on}" ${attrHtml} data-v="${n}" tabindex="0">${banQuickLabel(n)}</button>`;
+  }).join("");
+}
+function syncFormQtyPlaceholder(row = document.querySelector("#ha-lines .item-line")) {
+  if (!row) return;
+  const qty = row.querySelector("[data-line-qty]");
+  if (!qty) return;
+  const ban = Number(row.querySelector("[data-line-ban]")?.value) || 0;
+  const filled = Number(qty.value) > 0;
+  // 有件數時不蓋掉顯示；僅空值時用 placeholder 提示
+  qty.placeholder = filled ? "" : qtyFieldPlaceholder(ban);
+}
 const FORM_KINDS = {
   leaf: {
     label: "地瓜葉",
@@ -1956,10 +2054,11 @@ function renderLabelPrints() {
 function labelProductText(l) {
   const s = skuById(l.skuId);
   const name = l.labelName || (s ? skuShortName(s) : l.skuId);
+  const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
-  const unit = s?.unit || "件";
-  return `${name}${pack}${size} ${fmt(l.qty)}${unit}`;
+  const unit = Number(l.qty) > 0 ? s?.unit || "件" : "";
+  return `${name}${ban}${pack}${size} ${lineQtyText(l)}${unit}`;
 }
 function labelRemarkText(o, l) {
   const bits = [];
@@ -2031,7 +2130,7 @@ function labelRowsForDay(day) {
   list.sort((a, b) => String(a.customer || "").localeCompare(b.customer || "", "zh-Hant") || a.no - b.no);
   for (const o of list) {
     (o.lines || []).forEach((l, i) => {
-      if (!l || !l.qty) return;
+      if (!lineHasItem(l)) return;
       rows.push({
         key: `${o.id}:${i}`,
         customer: o.customer || "",
@@ -2696,6 +2795,7 @@ function shipLabelSkuText(l) {
   const s = skuById(l?.skuId);
   if (!s) return String(l?.skuId || "").trim();
   const bits = [skuShortName(s)];
+  if (lineBanText(l)) bits.push(lineBanText(l));
   if (l.pack) bits.push(l.pack);
   if (l.size) bits.push(l.size);
   return bits.filter(Boolean).join(" ");
@@ -2718,7 +2818,7 @@ function collectShipLabelRows(customer, day) {
     for (const l of o.lines || []) {
       if (!(l.qty > 0)) continue;
       const skuText = shipLabelSkuText(l);
-      const key = `${l.skuId || ""}\t${l.pack || ""}\t${l.size || ""}\t${skuText}`;
+      const key = `${l.skuId || ""}\t${l.pack || ""}\t${l.size || ""}\t${lineBanQty(l)}\t${skuText}`;
       const cur = map.get(key);
       if (cur) cur.qty = round(cur.qty + l.qty);
       else {
@@ -3343,11 +3443,12 @@ function startInlineEdit(orderId) {
   inlineEdit = {
     id: o.id,
     lines: (o.lines || [])
-      .filter((l) => l.qty > 0)
+      .filter((l) => lineHasItem(l))
       .map((l) => ({ ...l })),
     addSkuId: "",
     addQty: 1,
     addPack: "籃裝",
+    addBanQty: "",
   };
   editing = "";
   const editId = document.getElementById("edit-id");
@@ -3378,8 +3479,10 @@ function inlineEditAddLine() {
   const o = state.orders.find((x) => x.id === inlineEdit.id);
   if (o && sku.co !== o.co) return setStatus(`這張是${coLabel(o.co)}單，只能加同帳本品項。`, true);
   const qty = round(Number(inlineEdit.addQty) || 0);
-  if (!(qty > 0)) return setStatus("加品項數量須大於 0。", true);
+  const banQty = Number(inlineEdit.addBanQty) > 0 ? round(Number(inlineEdit.addBanQty)) : 0;
+  if (!(qty > 0) && !(banQty > 0)) return setStatus("加品項請填版數或件數（件數可對點後填）。", true);
   const line = { skuId, qty };
+  applyBanQty(line, banQty);
   if (inlineEditSkuNeedsPack(skuId)) line.pack = inlineEdit.addPack || "籃裝";
   const dest = (inlineEdit.lines.find((l) => String(l.dest || "").trim()) || {}).dest;
   if (dest) {
@@ -3390,6 +3493,7 @@ function inlineEditAddLine() {
   inlineEdit.addSkuId = "";
   inlineEdit.addQty = 1;
   inlineEdit.addPack = "籃裝";
+  inlineEdit.addBanQty = "";
   renderOrders();
 }
 function commitInlineEdit() {
@@ -3406,7 +3510,7 @@ function commitInlineEdit() {
       if (inlineEditSkuNeedsPack(copy.skuId) && !copy.pack) copy.pack = "籃裝";
       return cleanLine(copy);
     })
-    .filter((l) => l.qty > 0 && l.skuId);
+    .filter((l) => lineHasItem(l));
   if (!lines.length) return setStatus("至少留一個品項。", true);
   for (const l of lines) {
     const sku = skuById(l.skuId);
@@ -3448,10 +3552,15 @@ function inlineEditPanelHtml(o) {
           : l.pack
             ? `<span class="muted">${esc(l.pack)}</span>`
             : "";
+      const banVal = lineBanQty(l) > 0 ? lineBanQty(l) : "";
+      const qtyVal = qtyFieldValue(l.qty);
       return `<div class="inline-edit-row">
         <span class="inline-edit-name">${esc(ticketLineName(l))}</span>
         ${pack}
-        ${qtyStepperHtml({ key: "inline-qty", id: String(i), value: l.qty, step, aria: "數量" })}
+        <div class="metric-pair">
+          <label class="inline-metric"><span class="metric-lab">版數</span>${banSelectHtml({ key: "inline-ban", id: String(i), value: banVal, aria: "版數" })}</label>
+          <label class="inline-metric"><span class="metric-lab">件數</span>${qtyStepperHtml({ key: "inline-qty", id: String(i), value: qtyVal, step, placeholder: qtyFieldPlaceholder(banVal), aria: "件數" })}</label>
+        </div>
         <span class="unit">${esc(unit)}</span>
         <button type="button" class="tiny-btn ghost" data-inline-del="${i}">刪</button>
       </div>`;
@@ -3461,6 +3570,7 @@ function inlineEditPanelHtml(o) {
   const addOpts = skus
     .map((s) => `<option value="${esc(s.id)}"${inlineEdit.addSkuId === s.id ? " selected" : ""}>${esc(skuShortName(s))}</option>`)
     .join("");
+  const addBanVal = Number(inlineEdit.addBanQty) > 0 ? inlineEdit.addBanQty : "";
   return `<div class="inline-edit" data-inline-box="${esc(o.id)}">
     <p class="inline-edit-lab">改單 #${esc(o.no)}</p>
     <div class="inline-edit-rows">${rows || `<p class="empty">尚無品項，請下方加入。</p>`}</div>
@@ -3476,7 +3586,10 @@ function inlineEditPanelHtml(o) {
             </select>`
           : ""
       }
-      ${qtyStepperHtml({ key: "inline-add-qty", id: "new", value: inlineEdit.addQty, step: skuById(inlineEdit.addSkuId) ? skuStep(skuById(inlineEdit.addSkuId)) : 1, aria: "加品項數量" })}
+      <div class="metric-pair">
+        <label class="inline-metric"><span class="metric-lab">版數</span>${banSelectHtml({ key: "inline-add-ban", id: "new", value: addBanVal, aria: "加品項版數" })}</label>
+        <label class="inline-metric"><span class="metric-lab">件數</span>${qtyStepperHtml({ key: "inline-add-qty", id: "new", value: qtyFieldValue(inlineEdit.addQty), step: skuById(inlineEdit.addSkuId) ? skuStep(skuById(inlineEdit.addSkuId)) : 1, placeholder: qtyFieldPlaceholder(addBanVal), aria: "加品項件數" })}</label>
+      </div>
       <button type="button" class="tiny-btn primary" data-inline-add>加入</button>
     </div>
     <div class="inline-edit-acts">
@@ -3932,22 +4045,24 @@ function available(sku, current, date) {
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
   const shown = l.labelName || (s ? s.name : l.skuId);
-  const unit = s && withUnit ? ` ${s.unit}` : "";
+  const unit = s && withUnit && Number(l.qty) > 0 ? ` ${s.unit}` : "";
+  const ban = lineBanText(l) ? `（${lineBanText(l)}）` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const size = l.size ? `（${l.size}）` : "";
   const dest = l.dest ? `（${l.dest}）` : "";
   const note = l.note ? `（${l.note}）` : "";
   const pallet = l.pallet ? "（疊棧板）" : "";
-  return `${shown} ${fmt(l.qty)}${unit}${pack}${size}${dest}${note}${pallet}`;
+  return `${shown}${ban} ${lineQtyText(l)}${unit}${pack}${size}${dest}${note}${pallet}`;
 }
 function ticketLineName(l) {
   const s = skuById(l.skuId);
   const name = l.labelName || (s ? s.name : l.skuId);
+  const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
   const pallet = l.pallet ? " 疊棧板" : "";
   const lot = l.lotContainer || l.lotUha ? ` ${l.lotContainer || l.lotUha}` : skuNeedsShipLot(l.skuId) ? " 未選編號" : "";
-  return `${name}${pack}${size}${lot}${pallet}`;
+  return `${name}${ban}${pack}${size}${lot}${pallet}`;
 }
 function ticketWhoText() {
   return document.getElementById("customer")?.value.trim() || "尚未填出貨對象";
@@ -4029,9 +4144,20 @@ function renderTicket() {
       .map((l, i) => {
         const sku = skuById(l.skuId);
         const step = sku ? skuStep(sku) : 1;
+        const banVal = lineBanQty(l) > 0 ? lineBanQty(l) : "";
+        const qtyVal = qtyFieldValue(l.qty);
+        const qtyPh = qtyFieldPlaceholder(banVal);
+        const quick = banQuickHtml(banVal, `data-ticket-ban-quick="${i}"`);
         return `<li>
           <span class="ticket-name">${esc(ticketLineName(l))}</span>
-          ${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: l.qty, step, aria: "數量" })}
+          <div class="metric-pair ticket-metric-pair">
+            <div class="ticket-metric ticket-metric-ban">
+              <span class="metric-lab">版數</span>
+              ${banSelectHtml({ key: "ticket-ban", id: String(i), value: banVal, aria: "版數" })}
+              <div class="sku-subs line-ban-quick ticket-ban-quick" aria-label="版數快捷">${quick}</div>
+            </div>
+            <label class="ticket-metric ticket-metric-qty"><span class="metric-lab">件數</span>${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: qtyVal, step, placeholder: qtyPh, aria: "件數" })}</label>
+          </div>
           <span class="unit">${esc(sku?.unit || "")}</span>
           <button type="button" class="pick ticket-pallet${l.pallet ? " on" : ""}" data-ticket-pallet="${i}" aria-pressed="${l.pallet ? "true" : "false"}">疊棧板</button>
           ${
@@ -4061,22 +4187,23 @@ function pushPickerToTicket(nextBig) {
   if (isCustomFam(big)) {
     const name = String(row.querySelector("[data-custom-name]")?.value || "").trim();
     const qty = Number(row.querySelector("[data-line-qty]")?.value);
+    const banQty = Number(row.querySelector("[data-line-ban]")?.value);
     if (!name) {
       setStatus("請先填自行輸入的品名", true);
       row.querySelector("[data-custom-name]")?.focus();
       return false;
     }
-    if (!(qty > 0) && !nextBig) {
-      setStatus("請先選品項並填數量", true);
+    if (!(qty > 0) && !(banQty > 0) && !nextBig) {
+      setStatus("請填版數或件數（件數可對點後填）", true);
       return false;
     }
   }
   const extra = unifiedLinesFromForm();
   if (!extra.length && !nextBig) {
-    setStatus("請先選品項並填數量", true);
+    setStatus("請先選品項，並填版數或件數", true);
     return false;
   }
-  const needLot = extra.find((l) => skuNeedsShipLot(l.skuId) && !l.lotUha);
+  const needLot = extra.find((l) => skuNeedsShipLot(l.skuId) && Number(l.qty) > 0 && !l.lotUha);
   if (needLot) {
     openLotModal({ skuId: needLot.skuId, qty: needLot.qty, selectedUha: formLot?.uha, addAfter: true });
     return false;
@@ -4101,9 +4228,10 @@ function isOrderEntering() {
   if (!form || form.hidden) return false;
   const who = document.getElementById("customer")?.value?.trim();
   const qtyOn = [...document.querySelectorAll("#sheet [data-line-qty]")].some((el) => Number(el.value) > 0);
+  const banOn = [...document.querySelectorAll("#sheet [data-line-ban]")].some((el) => Number(el.value) > 0);
   const note = document.getElementById("order-note")?.value?.trim();
   const edit = document.getElementById("edit-id")?.value;
-  return !!(who || qtyOn || ticketLines.length || note || edit);
+  return !!(who || qtyOn || banOn || ticketLines.length || note || edit);
 }
 function syncOrderEntering() {
   const on = isOrderEntering();
@@ -4126,6 +4254,10 @@ function cleanLine(l) {
   if (!String(out.note || "").trim()) delete out.note;
   if (!String(out.labelName || "").trim()) delete out.labelName;
   else out.labelName = String(out.labelName).trim();
+  if (lineBanQty(out) > 0) out.banQty = lineBanQty(out);
+  else delete out.banQty;
+  delete out.ban;
+  out.qty = Number(out.qty) > 0 ? round(Number(out.qty)) : 0;
   return out;
 }
 function isCustomFam(fam) {
@@ -4344,7 +4476,7 @@ function focusPickGroup(row, key, preferOn = true) {
 function focusItemLineStart(row = document.querySelector("#ha-lines .item-line")) {
   if (!row) return;
   if (focusPickGroup(row, "big", false)) return;
-  row.querySelector("[data-line-qty]")?.focus();
+  focusLineBanOrQty(row);
 }
 function applyItemLinePick(row, pick) {
   if (!row || !pick) return;
@@ -4373,6 +4505,12 @@ function advanceItemLineAfterPick(row, key) {
   for (let i = Math.max(0, idx + 1); i < keys.length; i++) {
     if (focusPickGroup(row, keys[i], true)) return;
   }
+  const ban = row.querySelector("[data-line-ban]");
+  if (ban) {
+    ban.focus();
+    if (ban.tagName !== "SELECT" && typeof ban.select === "function") ban.select();
+    return;
+  }
   const qty = row.querySelector("[data-line-qty]");
   if (qty) {
     qty.focus();
@@ -4395,8 +4533,29 @@ function handleItemLineEnter(e) {
   const pick = t.closest?.(".item-line .pick");
   if (pick) {
     e.preventDefault();
+    if (pick.dataset.k === "ban-quick") {
+      setFormBanQty(row, Number(pick.dataset.v) || 0);
+      const qty = row.querySelector("[data-line-qty]");
+      if (qty) {
+        qty.focus();
+        if (typeof qty.select === "function") qty.select();
+      }
+      return true;
+    }
     applyItemLinePick(row, pick);
     advanceItemLineAfterPick(row, pick.dataset.k);
+    return true;
+  }
+  if (t.closest?.("[data-line-ban]")) {
+    e.preventDefault();
+    const qty = row.querySelector("[data-line-qty]");
+    if (qty) {
+      qty.focus();
+      if (typeof qty.select === "function") qty.select();
+      return true;
+    }
+    const ok = pushPickerToTicket();
+    if (ok) requestAnimationFrame(() => focusItemLineStart());
     return true;
   }
   if (t.closest?.("[data-line-qty]")) {
@@ -4407,6 +4566,12 @@ function handleItemLineEnter(e) {
   }
   if (t.closest?.("[data-custom-name]")) {
     e.preventDefault();
+    const ban = row.querySelector("[data-line-ban]");
+    if (ban) {
+      ban.focus();
+      if (ban.tagName !== "SELECT" && typeof ban.select === "function") ban.select();
+      return true;
+    }
     const qty = row.querySelector("[data-line-qty]");
     if (qty) {
       qty.focus();
@@ -4420,7 +4585,7 @@ function handleItemLineEnter(e) {
     if (ok) requestAnimationFrame(() => focusItemLineStart());
     return true;
   }
-  if (t.closest?.("[data-ticket-qty]") || t.closest?.("#order-note") || t.closest?.("#order-urgent-btn")) {
+  if (t.closest?.("[data-ticket-qty]") || t.closest?.("[data-ticket-ban]") || t.closest?.("#order-note") || t.closest?.("#order-urgent-btn")) {
     return false;
   }
   return false;
@@ -4517,22 +4682,64 @@ function famExtrasHtml(fam, rec = {}) {
   }
   return `<span data-nq-extras>${nqExtrasHtml(fam, rec)}</span>`;
 }
+function setFormBanQty(row, n) {
+  if (!row) return;
+  const inp = row.querySelector("[data-line-ban]");
+  if (!inp) return;
+  const v = Number(n);
+  const next = Number.isFinite(v) && v > 0 ? String(round(v)) : "";
+  if (inp.tagName === "SELECT" && next && ![...inp.options].some((o) => o.value === next)) {
+    const opt = document.createElement("option");
+    opt.value = next;
+    opt.textContent = `${next}版`;
+    inp.appendChild(opt);
+  }
+  inp.value = next;
+  syncBanQuick(row);
+  syncFormQtyPlaceholder(row);
+  syncOrderEntering();
+}
+function syncBanQuick(row = document.querySelector("#ha-lines .item-line")) {
+  if (!row) return;
+  const cur = Number(row.querySelector("[data-line-ban]")?.value) || 0;
+  row.querySelectorAll(".pick[data-k='ban-quick']").forEach((b) => {
+    b.classList.toggle("on", Number(b.dataset.v) === cur);
+  });
+  syncFormQtyPlaceholder(row);
+}
 function unifiedLineHtml(rec = {}) {
   const hasItem = !!(rec.skuId || rec.fam);
   const big = hasItem ? lineBigOf(rec) : "";
-  const qty = rec.qty > 0 ? rec.qty : "";
+  const qty = qtyFieldValue(rec.qty);
+  const banQty = lineBanQty(rec) > 0 ? lineBanQty(rec) : "";
   const step = big === "on-b" || big === "pk-b" || big === "basil-kg" ? "0.1" : "1";
   const pack = rec.pack || "籃裝";
   const unitFam = big === "leaf" ? (rec.skuId === "sl-fang" ? "sl-fang" : "sl-zhi") : big;
+  const quick = banQuickHtml(banQty);
   return `<div class="ha-line item-line">
     <div class="pick-block">
       ${lineBigButtons(big)}
       <div data-sub>${lineSubHtml(big, rec)}</div>
     </div>
-    <div class="line-qty-row">
-      ${qtyStepperHtml({ key: "line-qty", id: "form", value: qty, step, placeholder: "數量", aria: "數量" })}
-      <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
-      <button type="button" class="tiny-btn ghost" data-ha-del>清掉</button>
+    <div class="line-qty-row line-metrics">
+      <p class="line-metrics-hint">可先選版數，件數對點後再補</p>
+      <div class="line-metric-cards">
+        <div class="line-metric-card line-metric-ban">
+          <span class="line-metric-lab">版數</span>
+          <div class="line-metric-body line-ban-body">
+            ${banSelectHtml({ key: "line-ban", id: "form", value: banQty, aria: "版數" })}
+            <div class="sku-subs line-ban-quick" aria-label="版數快捷">${quick}</div>
+          </div>
+        </div>
+        <div class="line-metric-card line-metric-qty">
+          <span class="line-metric-lab">件數</span>
+          <div class="line-metric-body">
+            ${qtyStepperHtml({ key: "line-qty", id: "form", value: qty, step, placeholder: qtyFieldPlaceholder(banQty), aria: "件數" })}
+            <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="tiny-btn ghost line-metrics-clear" data-ha-del>清掉</button>
     </div>
     <div class="lot-row" data-lot-row hidden>
       <button type="button" class="ghost lot-pick-btn" data-lot-pick-form>${esc(lotBtnLabel(formLot))}</button>
@@ -4540,7 +4747,7 @@ function unifiedLineHtml(rec = {}) {
     </div>
     <div class="item-add-bar">
       <button type="button" class="primary" data-ticket-add>加入本單</button>
-      <span class="muted item-add-hint">選好數量可直接按送出，也會自動加入。</span>
+      <span class="muted item-add-hint">選好也可直接按送出。</span>
     </div>
   </div>`;
 }
@@ -4649,13 +4856,23 @@ function withPallet(row, line) {
   if (row?.querySelector("[data-ha-pallet]")?.checked) line.pallet = true;
   return line;
 }
+function withBan(row, line) {
+  const banQty = Number(row.querySelector("[data-line-ban]")?.value);
+  return applyBanQty(line, banQty);
+}
+function formLineReady(qty, banQty) {
+  return Number(qty) > 0 || Number(banQty) > 0;
+}
 function unifiedLinesFromForm() {
   const out = [];
   document.querySelectorAll("#ha-lines .item-line").forEach((row) => {
-    const qty = Number(row.querySelector("[data-line-qty]")?.value);
-    if (!(qty > 0)) return;
+    const qtyRaw = Number(row.querySelector("[data-line-qty]")?.value);
+    const banQty = Number(row.querySelector("[data-line-ban]")?.value);
+    if (!formLineReady(qtyRaw, banQty)) return;
+    const qty = Number(qtyRaw) > 0 ? round(qtyRaw) : 0;
     const big = pickVal(row, "big");
     if (!big) return;
+    const finish = (line) => withBan(row, withPallet(row, line));
     if (isHaFam(big)) {
       let skuId = "on-nz-20";
       if (big === "on-b") skuId = "on-b-kg";
@@ -4663,9 +4880,9 @@ function unifiedLinesFromForm() {
       else if (big === "on" || big === "on-p") {
         skuId = haOnionSku(pickVal(row, "origin"), pickVal(row, "spec"), big === "on-p");
       } else skuId = haPkSku(pickVal(row, "var"), pickVal(row, "pkspec"));
-      const line = { skuId, qty: round(qty) };
+      const line = { skuId, qty };
       if (big === "on" || big === "on-p") line.size = haOnionSizeOf({ size: pickVal(row, "size") });
-      out.push(withPallet(row, line));
+      out.push(finish(line));
       return;
     }
     if (isHaVegFam(big)) {
@@ -4673,26 +4890,26 @@ function unifiedLinesFromForm() {
       const allowed = def.opts.map((x) => x[0]);
       let opt = pickVal(row, "veg");
       if (!allowed.includes(opt)) opt = allowed[0];
-      out.push(withPallet(row, { skuId: haVegSkuId(big, opt), qty: round(qty) }));
+      out.push(finish({ skuId: haVegSkuId(big, opt), qty }));
       return;
     }
     if (isCustomFam(big)) {
       const name = String(row.querySelector("[data-custom-name]")?.value || "").trim();
       if (!name) return;
-      out.push(withPallet(row, { skuId: big, qty: round(qty), labelName: name }));
+      out.push(finish({ skuId: big, qty, labelName: name }));
       return;
     }
     if (big === "leaf") {
-      out.push(withPallet(row, { skuId: pickVal(row, "leaf") || "sl-zhi", qty: round(qty), pack: pickVal(row, "pack") || "籃裝" }));
+      out.push(finish({ skuId: pickVal(row, "leaf") || "sl-zhi", qty, pack: pickVal(row, "pack") || "籃裝" }));
       return;
     }
     if (big === "basil") {
       const kind = pickVal(row, "basil") || "rb";
       const vendor = pickVal(row, "vendor") || "芳";
-      out.push(withPallet(row, { skuId: BASIL_SKU[kind][vendor] || BASIL_SKU[kind]["芳"], qty: round(qty) }));
+      out.push(finish({ skuId: BASIL_SKU[kind][vendor] || BASIL_SKU[kind]["芳"], qty }));
       return;
     }
-    out.push(withPallet(row, { skuId: big, qty: round(qty) }));
+    out.push(finish({ skuId: big, qty }));
   });
   return out;
 }
@@ -6428,7 +6645,7 @@ function ordersListHtml(opts = {}) {
       const bookTag = `<span class="tag">${esc(coLabel(o.co))}</span>`;
       const st = orderStatusLabel(o);
       const lines = o.lines
-        .filter((l) => l.qty)
+        .filter((l) => lineHasItem(l))
         .map((l) => `<span class="order-chip">${esc(lineLabel(l, true))}</span>`)
         .join("");
       const bits = [];
@@ -6610,7 +6827,7 @@ function ordersTodayCustomerHtml() {
           const editingHere = inlineEdit && inlineEdit.id === o.id;
           const selected = multi && orderMulti.ids.has(o.id);
           const lines = (o.lines || [])
-            .filter((l) => l.qty)
+            .filter((l) => lineHasItem(l))
             .map((l) => `<span class="order-chip">${esc(lineLabel(l, true))}</span>`)
             .join("");
           const acts = [];
@@ -6650,7 +6867,7 @@ function ordersTodayCustomerHtml() {
         const lineBits = [...new Set(
           orders.flatMap((o) =>
             (o.lines || [])
-              .filter((l) => l.qty > 0)
+              .filter((l) => lineHasItem(l))
               .map((l) => lineLabel(l, true)),
           ),
         )];
@@ -7336,7 +7553,7 @@ function settleBlockers(o) {
       return `請先選出貨編號：${ticketLineName(line)}（單號 #${o.no}）`;
     }
   }
-  if (!(o.lines || []).some((l) => l.qty > 0 && l.skuId)) return `單號 #${o.no} 沒有品項，不能結單。`;
+  if (!(o.lines || []).some((l) => lineHasItem(l))) return `單號 #${o.no} 沒有品項，不能結單。`;
   return "";
 }
 function markOrderSettled(o) {
@@ -7381,7 +7598,7 @@ function settleCustomerDay(customer, day = ordersViewDay()) {
   );
   if (!orders.length) return setStatus(`「${who}」已結單或找不到未結單。`, true);
   const cos = [...new Set(orders.map((o) => coLabel(o.co)))].join("／");
-  const lineN = orders.reduce((n, o) => n + (o.lines || []).filter((l) => l.qty > 0).length, 0);
+  const lineN = orders.reduce((n, o) => n + (o.lines || []).filter((l) => lineHasItem(l)).length, 0);
   const msg =
     orders.length > 1
       ? `確定結單「${who}」？\n共 ${orders.length} 張（${cos}）、${lineN} 品項。\n＝會計收單確認，進入備貨；不會扣庫、不會標已送出。`
@@ -7858,14 +8075,14 @@ function orderBlockHtml(o) {
   return `<div class="drive-order"><p class="drive-co">${esc(bits.join(" · "))}</p>${addr ? `<p class="drive-addr">${esc(addr)}</p>` : ""}${driverLineList(o)}${proofHtml(o)}</div>`;
 }
 function driverLineList(o) {
-  const lines = (o.lines || []).filter((l) => l.qty > 0);
+  const lines = (o.lines || []).filter((l) => lineHasItem(l));
   if (!lines.length) return '<p class="empty">沒有品項</p>';
   return `<ul class="drive-lines">${lines
     .map((l) => {
       const sku = skuById(l.skuId);
-      const unit = sku?.unit || "";
+      const unit = Number(l.qty) > 0 ? sku?.unit || "" : "";
       const note = l.note ? `<em>${esc(l.note)}</em>` : "";
-      return `<li><span>${esc(ticketLineName(l))}${note}</span><strong>${fmt(l.qty)}${unit ? ` ${esc(unit)}` : ""}</strong></li>`;
+      return `<li><span>${esc(ticketLineName(l))}${note}</span><strong>${esc(lineQtyText(l))}${unit ? ` ${esc(unit)}` : ""}</strong></li>`;
     })
     .join("")}</ul>`;
 }
@@ -10084,8 +10301,9 @@ document.getElementById("sheet").addEventListener("click", (e) => {
   }
   if (e.target.closest("[data-lot-pick-form]")) {
     const draft = unifiedLinesFromForm()[0] || draftSkuFromFormRow();
-    if (!draft?.skuId) return setStatus("請先選品項並填數量，再選出貨編號。", true);
+    if (!draft?.skuId) return setStatus("請先選品項並填件數，再選出貨編號。", true);
     const qty = Number(draft.qty) || Number(document.querySelector("[data-line-qty]")?.value);
+    if (!(qty > 0)) return setStatus("件數後填時先不用選出貨編號；填件數後再選。", true);
     openLotModal({ skuId: draft.skuId, qty, selectedUha: formLot?.uha });
     return;
   }
@@ -10093,10 +10311,23 @@ document.getElementById("sheet").addEventListener("click", (e) => {
   const pickRow = pick?.closest(".item-line");
   if (pick && pickRow) {
     const key = pick.dataset.k;
+    if (key === "ban-quick") {
+      const cur = Number(pickRow.querySelector("[data-line-ban]")?.value) || 0;
+      const n = Number(pick.dataset.v) || 0;
+      setFormBanQty(pickRow, cur === n ? 0 : n);
+      renderCheck();
+      if (Number(pickRow.querySelector("[data-line-ban]")?.value) > 0 && pickVal(pickRow, "big")) {
+        const ready = unifiedLinesFromForm();
+        if (ready.length) pushPickerToTicket();
+      }
+      return;
+    }
     if (key === "big") {
-      const hasQty = Number(pickRow.querySelector("[data-line-qty]")?.value) > 0;
+      const hasLine =
+        Number(pickRow.querySelector("[data-line-qty]")?.value) > 0 ||
+        Number(pickRow.querySelector("[data-line-ban]")?.value) > 0;
       const cur = pickVal(pickRow, "big");
-      if (hasQty && cur) {
+      if (hasLine && cur) {
         pushPickerToTicket(pick.dataset.v);
         return;
       }
@@ -10109,6 +10340,7 @@ document.getElementById("sheet").addEventListener("click", (e) => {
     formLot = null;
     syncLineMeta(pickRow);
     renderCheck();
+    syncOrderEntering();
     return;
   }
   const del = e.target.closest("[data-ha-del]");
@@ -10118,6 +10350,22 @@ document.getElementById("sheet").addEventListener("click", (e) => {
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("click", (e) => {
+  const banQuick = e.target.closest("[data-ticket-ban-quick]");
+  if (banQuick) {
+    e.preventDefault();
+    const i = Number(banQuick.dataset.ticketBanQuick);
+    const n = Number(banQuick.dataset.v) || 0;
+    if (!ticketLines[i]) return;
+    const cur = lineBanQty(ticketLines[i]);
+    applyBanQty(ticketLines[i], cur === n ? 0 : n);
+    if (!lineHasItem(ticketLines[i])) {
+      ticketLines.splice(i, 1);
+      syncHiddenShipAddr();
+    }
+    renderTicket();
+    renderCheck();
+    return;
+  }
   const bump = e.target.closest("[data-qty-step]");
   if (bump) {
     e.preventDefault();
@@ -10239,14 +10487,44 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
     if (addr) addr.textContent = drops.join("／");
     return;
   }
+  const banInp = e.target.closest("[data-ticket-ban]");
+  if (banInp) {
+    const i = Number(banInp.dataset.i ?? banInp.dataset.ticketBan);
+    if (!ticketLines[i]) return;
+    // 只改版數，不碰件數
+    applyBanQty(ticketLines[i], banInp.value);
+    if (!lineHasItem(ticketLines[i])) {
+      ticketLines.splice(i, 1);
+      syncHiddenShipAddr();
+      renderTicket();
+    } else {
+      const li = banInp.closest("li");
+      const name = li?.querySelector(".ticket-name");
+      if (name) name.textContent = ticketLineName(ticketLines[i]);
+      const banN = lineBanQty(ticketLines[i]);
+      li?.querySelectorAll("[data-ticket-ban-quick]").forEach((b) => {
+        b.classList.toggle("on", Number(b.dataset.v) === banN);
+      });
+      const qtyInp = li?.querySelector("[data-ticket-qty]");
+      if (qtyInp && !(Number(qtyInp.value) > 0)) {
+        qtyInp.placeholder = qtyFieldPlaceholder(banN);
+      }
+    }
+    renderCheck();
+    return;
+  }
   const inp = e.target.closest("[data-ticket-qty]");
   if (!inp) return;
   const i = Number(inp.dataset.i ?? inp.dataset.ticketQty);
   if (!ticketLines[i]) return;
   const n = Number(inp.value);
   if (!(n > 0)) {
-    ticketLines.splice(i, 1);
-    syncHiddenShipAddr();
+    ticketLines[i].qty = 0;
+    if (skuNeedsShipLot(ticketLines[i].skuId)) clearLineLot(ticketLines[i]);
+    if (!lineHasItem(ticketLines[i])) {
+      ticketLines.splice(i, 1);
+      syncHiddenShipAddr();
+    }
     renderTicket();
   } else {
     ticketLines[i].qty = round(n);
@@ -10258,8 +10536,21 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
   }
   renderCheck();
 });
+document.getElementById("ticket")?.addEventListener("change", (e) => {
+  if (!e.target.closest("[data-ticket-ban]")) return;
+  e.target.dispatchEvent(new Event("input", { bubbles: true }));
+});
+function onFormBanFieldChange(e) {
+  if (!e.target.closest("[data-line-ban]")) return;
+  const row = e.target.closest(".item-line");
+  syncBanQuick(row);
+  syncFormQtyPlaceholder(row);
+  syncOrderEntering();
+}
+document.getElementById("sheet").addEventListener("input", onFormBanFieldChange);
+document.getElementById("sheet").addEventListener("change", onFormBanFieldChange);
 document.getElementById("sheet").addEventListener("focusout", (e) => {
-  if (!e.target.closest("[data-line-qty]")) return;
+  if (!e.target.closest("[data-line-qty]") && !e.target.closest("[data-line-ban]")) return;
   const leftover = unifiedLinesFromForm();
   if (leftover.length) pushPickerToTicket();
 });
@@ -10629,7 +10920,7 @@ document.getElementById("order-form").onsubmit = (e) => {
   if (leftover.length) {
     if (!pushPickerToTicket()) return;
   }
-  const lines = ticketLines.map(cleanLine).filter((l) => Number(l.qty) > 0);
+  const lines = ticketLines.map(cleanLine).filter((l) => lineHasItem(l));
   if (!lines.length) return setStatus("請先加入至少一項到本單，齊了再確認送出。", true);
   if (missingPack(lines)) return setStatus("地瓜葉有數量時請選擇裝箱樣式（籃裝或箱裝）", true);
   const missingLot = lines.find((l) => skuNeedsShipLot(l.skuId) && !l.lotUha);
@@ -10834,10 +11125,21 @@ document.getElementById("ship-labels-gate")?.addEventListener("change", (e) => {
 });
 document.getElementById("orders-today")?.addEventListener("input", (e) => {
   if (!inlineEdit) return;
+  const ban = e.target.closest("[data-inline-ban]");
+  if (ban) {
+    const i = Number(ban.dataset.inlineBan);
+    if (inlineEdit.lines[i]) applyBanQty(inlineEdit.lines[i], ban.value);
+    return;
+  }
   const qty = e.target.closest("[data-inline-qty]");
   if (qty) {
     const i = Number(qty.dataset.inlineQty);
     if (inlineEdit.lines[i]) inlineEdit.lines[i].qty = Math.max(0, Number(qty.value) || 0);
+    return;
+  }
+  const addBan = e.target.closest("[data-inline-add-ban]");
+  if (addBan) {
+    inlineEdit.addBanQty = Math.max(0, Number(addBan.value) || 0) || "";
     return;
   }
   const addQty = e.target.closest("[data-inline-add-qty]");
@@ -10847,6 +11149,17 @@ document.getElementById("orders-today")?.addEventListener("input", (e) => {
 });
 document.getElementById("orders-today")?.addEventListener("change", (e) => {
   if (!inlineEdit) return;
+  const ban = e.target.closest("[data-inline-ban]");
+  if (ban) {
+    const i = Number(ban.dataset.inlineBan);
+    if (inlineEdit.lines[i]) applyBanQty(inlineEdit.lines[i], ban.value);
+    return;
+  }
+  const addBan = e.target.closest("[data-inline-add-ban]");
+  if (addBan) {
+    inlineEdit.addBanQty = Math.max(0, Number(addBan.value) || 0) || "";
+    return;
+  }
   const pack = e.target.closest("[data-inline-pack]");
   if (pack) {
     const i = Number(pack.dataset.inlinePack);
@@ -10859,7 +11172,9 @@ document.getElementById("orders-today")?.addEventListener("change", (e) => {
     inlineEdit.addSkuId = addSku.value;
     inlineEdit.addPack = "籃裝";
     const sku = skuById(inlineEdit.addSkuId);
-    if (sku && !(Number(inlineEdit.addQty) > 0)) inlineEdit.addQty = skuStep(sku) >= 1 ? 1 : 0.1;
+    if (sku && !(Number(inlineEdit.addQty) > 0) && !(Number(inlineEdit.addBanQty) > 0)) {
+      inlineEdit.addQty = skuStep(sku) >= 1 ? 1 : 0.1;
+    }
     renderOrders();
     return;
   }
@@ -11022,7 +11337,7 @@ function onOrdersListClick(e) {
     if (more && (o.shipDate || today()) !== today()) more.open = true;
     const fallbackDest = destFromRemembered(o.shipAddr || lastShipAddr(o.customer));
     ticketLines = (o.lines || [])
-      .filter((l) => l.qty > 0)
+      .filter((l) => lineHasItem(l))
       .map((l) => {
         const copy = { ...l };
         if (!String(copy.dest || "").trim() && fallbackDest) copy.dest = fallbackDest;

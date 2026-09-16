@@ -241,6 +241,17 @@
 
   function packSpecText(line) {
     const bits = [];
+    const banN =
+      typeof lineBanQty === "function"
+        ? lineBanQty(line)
+        : Number(line.banQty) > 0
+          ? Number(line.banQty)
+          : line.ban === "一版"
+            ? 1
+            : line.ban === "兩版"
+              ? 2
+              : 0;
+    if (banN > 0) bits.push(`${banN}版`);
     if (line.pack) bits.push(line.pack);
     if (line.size) bits.push(line.size);
     if (line.pallet) bits.push("疊棧板");
@@ -269,12 +280,23 @@
       if (stQ && orderStatusKey(o) !== stQ) continue;
       if (custQ && !String(o.customer || "").toLowerCase().includes(custQ)) continue;
 
-      const lines = (o.lines || []).filter((l) => Number(l.qty) > 0);
+      const lines = (o.lines || []).filter((l) =>
+        typeof lineHasItem === "function" ? lineHasItem(l) : Number(l.qty) > 0 || Number(l.banQty) > 0,
+      );
       const lineCount = lines.length;
       const qtySum = lines.reduce((n, l) => n + (Number(l.qty) || 0), 0);
       const itemPreview = lines
         .slice(0, 3)
-        .map((l) => itemDisplayName(l))
+        .map((l) => {
+          const nm = itemDisplayName(l);
+          const ban =
+            typeof lineBanText === "function"
+              ? lineBanText(l)
+              : Number(l.banQty) > 0
+                ? `${l.banQty}版`
+                : "";
+          return ban ? `${nm}（${ban}）` : nm;
+        })
         .filter(Boolean)
         .join("、");
       const statusLabel = typeof orderStatusLabel === "function" ? orderStatusLabel(o) : o.status || "";
@@ -853,23 +875,27 @@
 
       const statusLabel = typeof orderStatusLabel === "function" ? orderStatusLabel(o) : o.status || "";
       const coName = typeof coLabel === "function" ? coLabel(o.co) : o.co || "";
-      const lines = (o.lines || []).filter((l) => Number(l.qty) > 0);
+      const lines = (o.lines || []).filter((l) =>
+        typeof lineHasItem === "function" ? lineHasItem(l) : Number(l.qty) > 0 || Number(l.banQty) > 0,
+      );
       if (!lines.length) continue;
 
       for (const line of lines) {
         const name = itemDisplayName(line);
         if (itemQ) {
-          const hay = `${name} ${line.skuId || ""} ${line.note || ""}`.toLowerCase();
+          const hay = `${name} ${line.skuId || ""} ${line.note || ""} ${packSpecText(line)}`.toLowerCase();
           if (!hay.includes(itemQ)) continue;
         }
+        const qtyShown =
+          typeof lineQtyText === "function" ? lineQtyText(line) : Number(line.qty) > 0 ? qtyText(line.qty) : "後填";
         rows.push({
           shipDate: shipDay,
           co: coName,
           no: o.no,
           customer: o.customer || "",
           item: name,
-          qty: qtyText(line.qty),
-          unit: itemUnit(line),
+          qty: qtyShown,
+          unit: Number(line.qty) > 0 ? itemUnit(line) : "",
           pack: packSpecText(line),
           status: statusLabel,
           shippedOn: o.shippedOn || "",

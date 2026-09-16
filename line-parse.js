@@ -200,13 +200,18 @@
     if (/紫蘇/.test(t)) return { skuId: "shiso-kg", qty, pallet };
     if (/九層塔散|塔散|塔kg/.test(t)) return { skuId: "basil-kg", qty, pallet };
     if (/高麗菜/.test(t)) {
-      if (/印尼/.test(t)) return { skuId: "veg-cab-id", qty, pallet };
-      if (/越/.test(t)) return { skuId: "veg-cab-vn", qty, pallet };
-      return { skuId: "veg-cab-kr", qty, pallet };
+      let skuId = "veg-cab-kr";
+      if (/印尼/.test(t)) skuId = "veg-cab-id";
+      else if (/越/.test(t)) skuId = "veg-cab-vn";
+      const line = { skuId, qty, pallet };
+      const specs = ["奧奇那", "硬種", "半軟", "全軟", "228", "633"];
+      const hit = specs.find((s) => t.includes(s));
+      line.spec = hit || "硬種";
+      return line;
     }
     if (/大白菜/.test(t)) {
-      if (/越/.test(t)) return { skuId: "veg-nap-vn", qty, pallet };
-      return { skuId: "veg-nap-kr", qty, pallet };
+      if (/袋/.test(t)) return { skuId: "veg-nap-bag", qty, pallet };
+      return { skuId: "veg-nap-box", qty, pallet };
     }
     if (/小辣/.test(t)) return { skuId: "veg-chili-sm", qty, pallet };
     if (/大辣|大辣椒|朝天椒/.test(t)) return { skuId: "veg-chili-lg", qty, pallet };
@@ -292,6 +297,7 @@
         const line = { skuId: hit.skuId, qty: hit.qty };
         if (hit.pack) line.pack = hit.pack;
         if (hit.size) line.size = hit.size;
+        if (hit.spec) line.spec = hit.spec;
         if (hit.pallet) line.pallet = true;
         lines.push(line);
       } else unknown.push(chunk);

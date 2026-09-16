@@ -2311,6 +2311,19 @@ body.on-home .home-open .hub-mark.has-pic {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+  align-items: center;
+}
+.sku-subs select,
+.cab-spec-sel {
+  min-height: 2.35rem;
+  min-width: 6.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: #fff;
+  font: inherit;
+  font-size: 0.94rem;
+  font-weight: 700;
 }
 .custom-sku-name {
   width: min(100%, 18rem);

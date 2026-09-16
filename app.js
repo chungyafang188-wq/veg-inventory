@@ -109,12 +109,11 @@ const FORM_KINDS = {
     label: "地瓜葉",
     title: "穠全 地瓜葉出貨",
     formTitle: "填寫地瓜葉出貨數量",
-    hint: "手打或點出貨對象，廠商可先待定（理貨再選誌／芳），裝箱選籃裝或箱裝。無叫貨按「今日無叫貨」。",
-    formHint: "地瓜葉：數量＋裝箱；廠商可待定，理貨時選誌／芳會自動回寫訂單。",
+    hint: "手打或點出貨對象，選裝箱（籃裝／箱裝）。廠商在理貨時再選誌／芳並回寫訂單。無叫貨按「今日無叫貨」。",
+    formHint: "地瓜葉：數量＋裝箱；廠商於理貨指定。",
     skuIds: ["sl-pend", "sl-zhi", "sl-fang"],
     cols: [
-      { key: "slZhi", label: "地瓜葉／誌", kind: "qty" },
-      { key: "slFang", label: "地瓜葉／芳", kind: "qty" },
+      { key: "slPend", label: "地瓜葉", kind: "qty" },
       { key: "pack", label: "裝箱樣式", kind: "pack" },
     ],
   },
@@ -122,14 +121,12 @@ const FORM_KINDS = {
     label: "九層塔",
     title: "穠全 九層塔出貨",
     formTitle: "填寫九層塔出貨數量",
-    hint: "手打或點出貨對象，選紅骨／綠骨；廠商可先待定，理貨再選芳／琳／其他會自動回寫。無叫貨按「今日無叫貨」。",
-    formHint: "九層塔：紅骨／綠骨＋數量；廠商可待定，理貨選廠商後自動回寫訂單。",
+    hint: "手打或點出貨對象，選紅骨／綠骨。廠商在理貨時再選芳／琳／其他並回寫訂單。無叫貨按「今日無叫貨」。",
+    formHint: "九層塔：紅骨／綠骨＋數量；廠商於理貨指定。",
     skuIds: ["rb-pend", "rb-fang", "rb-lin", "rb-oth", "gb-pend", "gb-fang", "gb-lin", "gb-oth"],
     cols: [
       { key: "rb", label: "紅骨", kind: "qty" },
-      { key: "rbVendor", label: "紅骨廠商", kind: "rbVendor" },
       { key: "gb", label: "綠骨", kind: "qty" },
-      { key: "gbVendor", label: "綠骨廠商", kind: "gbVendor" },
       { key: "note", label: "備註", kind: "note" },
     ],
   },
@@ -210,9 +207,10 @@ const OLD_LEAF = {
   "sl-b-fang": { id: "sl-fang", pack: "籃裝" },
   "sl-x-fang": { id: "sl-fang", pack: "箱裝" },
 };
+const CAB_SPECS = ["硬種", "奧奇那", "228", "633", "半軟", "全軟"];
 const HA_VEG = {
-  cab: { label: "高麗菜", opts: [["kr", "韓國"], ["vn", "越南"], ["id", "印尼"]] },
-  nap: { label: "大白菜", opts: [["kr", "韓國"], ["vn", "越南"]] },
+  cab: { label: "高麗菜", opts: [["kr", "韓國"], ["vn", "越南"], ["id", "印尼"]], optLab: "國別" },
+  nap: { label: "大白菜", opts: [["box", "箱裝"], ["bag", "袋裝"]], optLab: "裝箱", nameStyle: "paren" },
   bur: { label: "牛蒡", opts: [["l", "L"], ["2l", "2L"]] },
   wk: { label: "白K", opts: [["m", "M"], ["l", "L"], ["2l", "2L"], ["cut", "切頭"]] },
   ice: { label: "美生菜", opts: [["vn", "越南"], ["kr", "韓國"]] },
@@ -220,8 +218,24 @@ const HA_VEG = {
   bro: { label: "青花", opts: [["vn", "越南"]] },
   chili: { label: "辣椒", opts: [["lg", "大辣"], ["sm", "小辣"]] },
 };
+function cabSpecOf(v) {
+  const s = String(v || "").trim();
+  return CAB_SPECS.includes(s) ? s : CAB_SPECS[0];
+}
+function cabSpecSelectHtml(cur) {
+  return `<select class="cab-spec-sel" data-cab-spec aria-label="高麗菜規格">${optsHtml(CAB_SPECS, cabSpecOf(cur))}</select>`;
+}
+function isCabSku(skuId) {
+  return skuById(skuId)?.vegFam === "cab";
+}
 function haVegSkuId(fam, opt) {
   return `veg-${fam}-${opt}`;
+}
+function haVegSkuName(fam, optLab) {
+  const def = HA_VEG[fam];
+  if (!def) return optLab;
+  if (def.nameStyle === "paren") return `${def.label}(${optLab})`;
+  return `${def.label}／${optLab}`;
 }
 function isHaVegFam(fam) {
   return !!HA_VEG[fam];
@@ -233,7 +247,7 @@ function haVegSkuList() {
       out.push({
         id: haVegSkuId(fam, opt),
         co: "ha",
-        name: `${def.label}／${lab}`,
+        name: haVegSkuName(fam, lab),
         unit: "件",
         trade: true,
         vegFam: fam,
@@ -251,7 +265,10 @@ function haVegExtrasHtml(fam, rec = {}) {
   const opts = def.opts
     .map(([v, lab]) => `<option value="${esc(v)}"${v === opt ? " selected" : ""}>${esc(lab)}</option>`)
     .join("");
-  return `<select data-veg-opt aria-label="${esc(def.label)}規格">${opts}</select>`;
+  const aria = def.optLab || "規格";
+  const bits = [`<select data-veg-opt aria-label="${esc(def.label)}${esc(aria)}">${opts}</select>`];
+  if (fam === "cab") bits.push(cabSpecSelectHtml(rec.spec));
+  return bits.join("");
 }
 const SKUS = [
   { id: "sl-pend", co: "nq", name: "本產蔬菜－地瓜葉／待定", unit: "籃", packRemark: true, vendorPending: true, trade: true },
@@ -364,9 +381,11 @@ const SKU_REMAP = {
   "cb-kr": "veg-cab-kr",
   "cb-vn": "veg-cab-vn",
   "cb-id": "veg-cab-id",
-  "np-kr": "veg-nap-kr",
-  "np-vn": "veg-nap-vn",
-  "np-id": "veg-nap-vn",
+  "np-kr": "veg-nap-box",
+  "np-vn": "veg-nap-box",
+  "np-id": "veg-nap-box",
+  "veg-nap-kr": "veg-nap-box",
+  "veg-nap-vn": "veg-nap-box",
   "pk-gen": "pk-mi-18",
   "pk-ds": "pk-mi-18",
   "veg-pks-mi": "pk-mi-18",
@@ -873,7 +892,7 @@ function stockWarehouseLabel(code) {
 }
 function skuLotGroup(sku) {
   if (!sku) return "";
-  if (sku.vegFam === "nap") return sku.vegOpt === "kr" ? "nap-kr" : sku.vegOpt === "vn" ? "nap-vn" : "";
+  if (sku.vegFam === "nap") return "nap";
   if (sku.vegFam === "cab") return sku.vegOpt === "id" ? "cab-id" : sku.vegOpt === "vn" ? "cab-vn" : "";
   if (sku.vegFam === "ice") return sku.vegOpt === "vn" ? "ice-vn" : "";
   if (sku.vegFam === "bro") return "bro";
@@ -893,6 +912,7 @@ function allContainerLots() {
 function lotsForSku(skuId) {
   const g = skuLotGroup(skuById(skuId));
   if (!g) return [];
+  if (g === "nap") return allContainerLots().filter((l) => String(l.group || "").startsWith("nap"));
   return allContainerLots().filter((l) => l.group === g);
 }
 function skuNeedsShipLot(skuId) {
@@ -2090,8 +2110,9 @@ function labelProductText(l) {
   const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
+  const spec = lineSpecText(l) ? ` ${lineSpecText(l)}` : "";
   const unit = Number(l.qty) > 0 ? s?.unit || "件" : "";
-  return `${name}${ban}${pack}${size} ${lineQtyText(l)}${unit}`;
+  return `${name}${ban}${pack}${size}${spec} ${lineQtyText(l)}${unit}`;
 }
 function labelRemarkText(o, l) {
   const bits = [];
@@ -2863,6 +2884,7 @@ function shipLabelSkuText(l) {
   if (lineBanText(l)) bits.push(lineBanText(l));
   if (l.pack) bits.push(l.pack);
   if (l.size) bits.push(l.size);
+  if (lineSpecText(l)) bits.push(lineSpecText(l));
   return bits.filter(Boolean).join(" ");
 }
 function shipLabelDefaultCopies(l) {
@@ -2883,7 +2905,7 @@ function collectShipLabelRows(customer, day) {
     for (const l of o.lines || []) {
       if (!(l.qty > 0)) continue;
       const skuText = shipLabelSkuText(l);
-      const key = `${l.skuId || ""}\t${l.pack || ""}\t${l.size || ""}\t${lineBanQty(l)}\t${skuText}`;
+      const key = `${l.skuId || ""}\t${l.pack || ""}\t${l.size || ""}\t${l.spec || ""}\t${lineBanQty(l)}\t${skuText}`;
       const cur = map.get(key);
       if (cur) cur.qty = round(cur.qty + l.qty);
       else {
@@ -3513,6 +3535,7 @@ function startInlineEdit(orderId) {
     addSkuId: "",
     addQty: 1,
     addPack: "籃裝",
+    addSpec: CAB_SPECS[0],
     addBanQty: "",
   };
   editing = "";
@@ -3549,6 +3572,7 @@ function inlineEditAddLine() {
   const line = { skuId, qty };
   applyBanQty(line, banQty);
   if (inlineEditSkuNeedsPack(skuId)) line.pack = inlineEdit.addPack || "籃裝";
+  if (isCabSku(skuId)) line.spec = cabSpecOf(inlineEdit.addSpec);
   const dest = (inlineEdit.lines.find((l) => String(l.dest || "").trim()) || {}).dest;
   if (dest) {
     line.dest = dest;
@@ -3558,6 +3582,7 @@ function inlineEditAddLine() {
   inlineEdit.addSkuId = "";
   inlineEdit.addQty = 1;
   inlineEdit.addPack = "籃裝";
+  inlineEdit.addSpec = CAB_SPECS[0];
   inlineEdit.addBanQty = "";
   renderOrders();
 }
@@ -3617,11 +3642,14 @@ function inlineEditPanelHtml(o) {
           : l.pack
             ? `<span class="muted">${esc(l.pack)}</span>`
             : "";
+      const cabSpec = isCabSku(l.skuId)
+        ? `<select class="inline-pack" data-inline-spec="${i}" aria-label="規格">${optsHtml(CAB_SPECS, cabSpecOf(l.spec))}</select>`
+        : "";
       const banVal = lineBanQty(l) > 0 ? lineBanQty(l) : "";
       const qtyVal = qtyFieldValue(l.qty);
       return `<div class="inline-edit-row">
         <span class="inline-edit-name">${esc(ticketLineName(l))}</span>
-        ${pack}
+        ${pack}${cabSpec}
         <div class="metric-pair">
           <label class="inline-metric"><span class="metric-lab">版數</span>${banSelectHtml({ key: "inline-ban", id: String(i), value: banVal, aria: "版數" })}</label>
           <label class="inline-metric"><span class="metric-lab">件數</span>${qtyStepperHtml({ key: "inline-qty", id: String(i), value: qtyVal, step, placeholder: qtyFieldPlaceholder(banVal), aria: "件數" })}</label>
@@ -3632,6 +3660,7 @@ function inlineEditPanelHtml(o) {
     })
     .join("");
   const needPack = inlineEditSkuNeedsPack(inlineEdit.addSkuId);
+  const needCabSpec = isCabSku(inlineEdit.addSkuId);
   const addOpts = skus
     .map((s) => `<option value="${esc(s.id)}"${inlineEdit.addSkuId === s.id ? " selected" : ""}>${esc(skuShortName(s))}</option>`)
     .join("");
@@ -3649,6 +3678,11 @@ function inlineEditPanelHtml(o) {
           ? `<select data-inline-add-pack aria-label="裝箱">
               ${PACK_OPTS.map((p) => `<option value="${esc(p)}"${inlineEdit.addPack === p ? " selected" : ""}>${esc(p)}</option>`).join("")}
             </select>`
+          : ""
+      }
+      ${
+        needCabSpec
+          ? `<select data-inline-add-spec aria-label="規格">${optsHtml(CAB_SPECS, cabSpecOf(inlineEdit.addSpec))}</select>`
           : ""
       }
       <div class="metric-pair">
@@ -4107,6 +4141,9 @@ function available(sku, current, date) {
   const on = isSiteSku(sku) ? ready(sku) : onHand(sku, day);
   return round(on - reservedAhead(sku.id, current, day));
 }
+function lineSpecText(l) {
+  return String(l?.spec || "").trim();
+}
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
   const shown = l.labelName || (s ? s.name : l.skuId);
@@ -4114,10 +4151,11 @@ function lineLabel(l, withUnit) {
   const ban = lineBanText(l) ? `（${lineBanText(l)}）` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
   const size = l.size ? `（${l.size}）` : "";
+  const spec = lineSpecText(l) ? `（${lineSpecText(l)}）` : "";
   const dest = l.dest ? `（${l.dest}）` : "";
   const note = l.note ? `（${l.note}）` : "";
   const pallet = l.pallet ? "（疊棧板）" : "";
-  return `${shown}${ban} ${lineQtyText(l)}${unit}${pack}${size}${dest}${note}${pallet}`;
+  return `${shown}${ban} ${lineQtyText(l)}${unit}${pack}${size}${spec}${dest}${note}${pallet}`;
 }
 function ticketLineName(l) {
   const s = skuById(l.skuId);
@@ -4125,9 +4163,10 @@ function ticketLineName(l) {
   const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
+  const spec = lineSpecText(l) ? ` ${lineSpecText(l)}` : "";
   const pallet = l.pallet ? " 疊棧板" : "";
   const lot = l.lotContainer || l.lotUha ? ` ${l.lotContainer || l.lotUha}` : skuNeedsShipLot(l.skuId) ? " 未選編號" : "";
-  return `${name}${ban}${pack}${size}${lot}${pallet}`;
+  return `${name}${ban}${pack}${size}${spec}${lot}${pallet}`;
 }
 function ticketWhoText() {
   return document.getElementById("customer")?.value.trim() || "尚未填出貨對象";
@@ -4319,6 +4358,9 @@ function cleanLine(l) {
   if (!String(out.note || "").trim()) delete out.note;
   if (!String(out.labelName || "").trim()) delete out.labelName;
   else out.labelName = String(out.labelName).trim();
+  if (isCabSku(out.skuId)) out.spec = cabSpecOf(out.spec);
+  else if (!String(out.spec || "").trim()) delete out.spec;
+  else out.spec = String(out.spec).trim();
   if (lineBanQty(out) > 0) out.banQty = lineBanQty(out);
   else delete out.banQty;
   delete out.ban;
@@ -4487,12 +4529,6 @@ function nqExtrasHtml(cat, rec = {}) {
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
     return `<select data-nq-pack aria-label="裝箱">${optsHtml(PACK_OPTS, pack)}</select>`;
   }
-  if (cat === "rb" || cat === "gb") {
-    const parsed = BASIL_REV[rec.skuId];
-    const vendor = parsed && VENDOR_OPTS.includes(parsed.val) ? parsed.val : VENDOR_PENDING;
-    const opts = [VENDOR_PENDING, ...VENDOR_OPTS];
-    return `<select data-nq-vendor aria-label="廠商">${optsHtml(opts, vendor)}</select>`;
-  }
   return "";
 }
 function nqUnitOfCat(cat, pack) {
@@ -4523,8 +4559,8 @@ function pickVal(row, key) {
   return row?.querySelector(`.pick[data-k="${CSS.escape(key)}"].on`)?.dataset.v || "";
 }
 function itemLineSubKeys(big) {
-  if (big === "leaf") return ["leaf", "pack"];
-  if (big === "basil") return ["basil", "vendor"];
+  if (big === "leaf") return ["pack"];
+  if (big === "basil") return ["basil"];
   if (isHaVegFam(big)) return ["veg"];
   if (big === "on" || big === "on-p") return ["origin", "spec", "size"];
   if (big === "pk") return ["var", "pkspec"];
@@ -4682,38 +4718,21 @@ function lineSubHtml(big, rec = {}) {
   if (!big) return "";
   const bits = [];
   if (big === "leaf") {
-    const leaf =
-      rec.skuId === "sl-fang" ? "sl-fang" : rec.skuId === "sl-zhi" ? "sl-zhi" : "sl-pend";
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
-    bits.push(
-      `<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml(
-        "leaf",
-        [
-          ["sl-pend", VENDOR_PENDING],
-          ["sl-zhi", "誌"],
-          ["sl-fang", "芳"],
-        ],
-        leaf,
-      )}</div>`,
-    );
     bits.push(`<p class="pick-lab">裝箱</p><div class="sku-subs">${pickHtml("pack", PACK_OPTS.map((p) => [p, p]), pack)}</div>`);
   } else if (big === "basil") {
     const parsed = BASIL_REV[rec.skuId] || { qty: "rb", val: VENDOR_PENDING };
     const kind = parsed.qty === "gb" ? "gb" : "rb";
-    const vendor = VENDOR_OPTS.includes(parsed.val) ? parsed.val : "pend";
     bits.push(`<p class="pick-lab">種類</p><div class="sku-subs">${pickHtml("basil", [["rb", "紅骨"], ["gb", "綠骨"]], kind)}</div>`);
-    bits.push(
-      `<p class="pick-lab">廠商</p><div class="sku-subs">${pickHtml(
-        "vendor",
-        [["pend", VENDOR_PENDING], ...VENDOR_OPTS.map((p) => [p, p])],
-        vendor,
-      )}</div>`,
-    );
   } else if (isHaVegFam(big)) {
     const def = HA_VEG[big];
     const cur = rec.skuId ? skuById(rec.skuId)?.vegOpt : rec.vegOpt;
     const opt = def.opts.some((x) => x[0] === cur) ? cur : def.opts[0][0];
-    bits.push(`<p class="pick-lab">國別／規格</p><div class="sku-subs">${pickHtml("veg", def.opts, opt)}</div>`);
+    const lab = def.optLab || "國別／規格";
+    bits.push(`<p class="pick-lab">${esc(lab)}</p><div class="sku-subs">${pickHtml("veg", def.opts, opt)}</div>`);
+    if (big === "cab") {
+      bits.push(`<p class="pick-lab">規格</p><div class="sku-subs">${cabSpecSelectHtml(rec.spec)}</div>`);
+    }
   } else if (big === "on" || big === "on-p") {
     const parsed = rec.skuId ? haParseSku(rec.skuId) : { origin: "紐西蘭", spec: "20K" };
     bits.push(`<p class="pick-lab">國別</p><div class="sku-subs">${pickHtml("origin", HA_ONION_ORIGINS.map((p) => [p, p]), parsed.origin || "紐西蘭")}</div>`);
@@ -4735,7 +4754,7 @@ function syncLineMeta(row) {
   if (!row) return;
   const big = pickVal(row, "big");
   const pack = pickVal(row, "pack") || "籃裝";
-  const unitFam = big === "leaf" ? pickVal(row, "leaf") || "sl-pend" : big;
+  const unitFam = big === "leaf" ? "sl-pend" : big;
   const unit = row.querySelector("[data-line-unit]");
   if (unit) unit.textContent = nqUnitOfCat(unitFam, pack);
   const qty = row.querySelector("[data-line-qty]");
@@ -4800,14 +4819,7 @@ function unifiedLineHtml(rec = {}) {
   const banQty = lineBanQty(rec) > 0 ? lineBanQty(rec) : "";
   const step = big === "on-b" || big === "pk-b" || big === "basil-kg" ? "0.1" : "1";
   const pack = rec.pack || "籃裝";
-  const unitFam =
-    big === "leaf"
-      ? rec.skuId === "sl-fang"
-        ? "sl-fang"
-        : rec.skuId === "sl-zhi"
-          ? "sl-zhi"
-          : "sl-pend"
-      : big;
+  const unitFam = big === "leaf" ? "sl-pend" : big;
   const quick = banQuickHtml(banQty);
   return `<div class="ha-line item-line">
     <div class="pick-block">
@@ -4983,7 +4995,9 @@ function unifiedLinesFromForm() {
       const allowed = def.opts.map((x) => x[0]);
       let opt = pickVal(row, "veg");
       if (!allowed.includes(opt)) opt = allowed[0];
-      out.push(finish({ skuId: haVegSkuId(big, opt), qty }));
+      const line = { skuId: haVegSkuId(big, opt), qty };
+      if (big === "cab") line.spec = cabSpecOf(row.querySelector("[data-cab-spec]")?.value);
+      out.push(finish(line));
       return;
     }
     if (isCustomFam(big)) {
@@ -4993,14 +5007,12 @@ function unifiedLinesFromForm() {
       return;
     }
     if (big === "leaf") {
-      out.push(finish({ skuId: pickVal(row, "leaf") || "sl-pend", qty, pack: pickVal(row, "pack") || "籃裝" }));
+      out.push(finish({ skuId: "sl-pend", qty, pack: pickVal(row, "pack") || "籃裝" }));
       return;
     }
     if (big === "basil") {
-      const kind = pickVal(row, "basil") || "rb";
-      const vendor = pickVal(row, "vendor") || "pend";
-      const skuId = vendor === "pend" || vendor === VENDOR_PENDING ? `${kind}-pend` : BASIL_SKU[kind][vendor] || `${kind}-pend`;
-      out.push(finish({ skuId, qty }));
+      const kind = pickVal(row, "basil") === "gb" ? "gb" : "rb";
+      out.push(finish({ skuId: `${kind}-pend`, qty }));
       return;
     }
     out.push(finish({ skuId: big, qty }));
@@ -7097,6 +7109,7 @@ function planDayLineRows(day) {
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
+        spec: l.spec || "",
         vendor: planLeafBasilVendor(l.skuId),
         done: o.status !== "open",
         pendingVendor: isVendorPendingSku(l.skuId),
@@ -7109,7 +7122,7 @@ function ensurePrepStore() {
   if (!state.prep || typeof state.prep !== "object") state.prep = {};
 }
 function prepLineKey(r) {
-  return `${String(r.customer || "").trim()}\t${r.skuId}\t${r.pack || ""}`;
+  return `${String(r.customer || "").trim()}\t${r.skuId}\t${r.pack || ""}\t${r.spec || ""}`;
 }
 function isLinePrepped(day, r) {
   if (r.done) return true;
@@ -7311,7 +7324,7 @@ function planCardView(g) {
 function planMergeDayLines(rows) {
   const merged = new Map();
   for (const r of rows) {
-    const key = `${r.customer}\t${r.skuId}\t${r.pack || ""}\t${r.done ? 1 : 0}`;
+    const key = `${r.customer}\t${r.skuId}\t${r.pack || ""}\t${r.spec || ""}\t${r.done ? 1 : 0}`;
     const cur = merged.get(key);
     if (cur) cur.qty = round(cur.qty + r.qty);
     else merged.set(key, { ...r });
@@ -7324,6 +7337,7 @@ function planLineSpec(r) {
     const vend = r.vendor || planLeafBasilVendor(r.skuId);
     return vend === VENDOR_PENDING ? `${VENDOR_PENDING}・${pack}` : vend === "誌" || vend === "芳" ? `${vend}・${pack}` : pack;
   }
+  if (r.spec) return r.spec;
   return r.vendor || "";
 }
 function planTotChipsHtml(rows, mode) {
@@ -7497,6 +7511,7 @@ function openLinesForCustomerDay(customer, day) {
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
+        spec: l.spec || "",
         done: false,
       });
     }
@@ -7551,6 +7566,7 @@ function planCropCustomerEntries(day, g) {
             qty: round(l.qty),
             unit: sku.unit,
             pack: l.pack || "",
+            spec: l.spec || "",
             done: false,
           });
         }
@@ -7591,6 +7607,7 @@ function planCropPendingLines(day, g, customer) {
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
+        spec: l.spec || "",
         vendor: planLeafBasilVendor(l.skuId),
         done: false,
         pendingVendor: true,
@@ -7756,6 +7773,7 @@ function planLineNote(o, skuIds) {
     if (l.skuId === "sl-fang") bits.push("芳");
     if (l.pack) bits.push(l.pack);
     if (l.size) bits.push(l.size);
+    if (l.spec) bits.push(l.spec);
     if (l.note) bits.push(l.note);
   }
   return [...new Set(bits.filter(Boolean))].join("　");
@@ -9292,11 +9310,17 @@ function draftSkuSelectHtml(skuId) {
 function draftIsOnionSku(id) {
   return /^(on|onp)-(nz|au|kr|vn)-(12|20)$/.test(String(id || ""));
 }
+function draftIsCabSku(id) {
+  return isCabSku(id);
+}
 function draftLineExtrasHtml(l) {
   const sku = skuById(l.skuId);
   const bits = [];
   if (draftIsOnionSku(l.skuId)) {
     bits.push(`<select data-draft-size aria-label="尺寸">${optsHtml(HA_ONION_SIZES, haOnionSizeOf(l))}</select>`);
+  }
+  if (draftIsCabSku(l.skuId)) {
+    bits.push(`<select data-draft-spec aria-label="規格">${optsHtml(CAB_SPECS, cabSpecOf(l.spec))}</select>`);
   }
   if (sku?.packRemark) {
     bits.push(`<select data-draft-pack aria-label="裝箱">${optsHtml(PACK_OPTS, l.pack === "箱裝" ? "箱裝" : "籃裝")}</select>`);
@@ -10458,6 +10482,7 @@ document.getElementById("line-drafts")?.addEventListener("change", (e) => {
   const skuSel = e.target.closest("[data-draft-sku]");
   const sizeSel = e.target.closest("[data-draft-size]");
   const packSel = e.target.closest("[data-draft-pack]");
+  const specSel = e.target.closest("[data-draft-spec]");
   const pal = e.target.closest("[data-draft-pallet]");
   const d = draftFromEl(e.target);
   const row = e.target.closest("tr");
@@ -10469,6 +10494,8 @@ document.getElementById("line-drafts")?.addEventListener("change", (e) => {
     const sku = skuById(line.skuId);
     if (!draftIsOnionSku(line.skuId)) delete line.size;
     else if (!line.size) line.size = "大球";
+    if (draftIsCabSku(line.skuId)) line.spec = cabSpecOf(line.spec);
+    else delete line.spec;
     if (!sku?.packRemark) delete line.pack;
     else if (!line.pack) line.pack = "籃裝";
     const unit = row.querySelector(".draft-unit");
@@ -10482,6 +10509,11 @@ document.getElementById("line-drafts")?.addEventListener("change", (e) => {
   }
   if (sizeSel) {
     line.size = sizeSel.value;
+    persistDraft(d);
+    return;
+  }
+  if (specSel) {
+    line.spec = cabSpecOf(specSel.value);
     persistDraft(d);
     return;
   }
@@ -11424,10 +11456,18 @@ document.getElementById("orders-today")?.addEventListener("change", (e) => {
     renderOrders();
     return;
   }
+  const spec = e.target.closest("[data-inline-spec]");
+  if (spec) {
+    const i = Number(spec.dataset.inlineSpec);
+    if (inlineEdit.lines[i]) inlineEdit.lines[i].spec = cabSpecOf(spec.value);
+    renderOrders();
+    return;
+  }
   const addSku = e.target.closest("[data-inline-add-sku]");
   if (addSku) {
     inlineEdit.addSkuId = addSku.value;
     inlineEdit.addPack = "籃裝";
+    inlineEdit.addSpec = CAB_SPECS[0];
     const sku = skuById(inlineEdit.addSkuId);
     if (sku && !(Number(inlineEdit.addQty) > 0) && !(Number(inlineEdit.addBanQty) > 0)) {
       inlineEdit.addQty = skuStep(sku) >= 1 ? 1 : 0.1;
@@ -11438,6 +11478,10 @@ document.getElementById("orders-today")?.addEventListener("change", (e) => {
   const addPack = e.target.closest("[data-inline-add-pack]");
   if (addPack) {
     inlineEdit.addPack = addPack.value;
+  }
+  const addSpec = e.target.closest("[data-inline-add-spec]");
+  if (addSpec) {
+    inlineEdit.addSpec = cabSpecOf(addSpec.value);
   }
 });
 function onOrdersListClick(e) {

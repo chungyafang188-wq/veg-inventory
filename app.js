@@ -2152,18 +2152,48 @@ function ensureLabelSel(day, rows) {
   const keys = new Set(rows.map((r) => r.key));
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
+/** Physical label artwork size (mm). Wider-than-tall → auto-rotate onto portrait @page for thermal drivers. */
+const LABEL_PRINT_W_MM = 70;
+const LABEL_PRINT_H_MM = 50;
+function labelPrintNeedsRotate() {
+  return LABEL_PRINT_W_MM > LABEL_PRINT_H_MM;
+}
 function labelPrintCss() {
-  return `@page { size: 70mm 50mm; margin: 0; }
-html, body { margin: 0; padding: 0; background: #fff; }
+  const w = LABEL_PRINT_W_MM;
+  const h = LABEL_PRINT_H_MM;
+  const rotate = labelPrintNeedsRotate();
+  // Thermal drivers usually take paper as short×long (portrait feed). Landscape artwork is
+  // rotated 90° onto that page so orientation matches the sticker without manual printer tweaks.
+  const pageW = rotate ? h : w;
+  const pageH = rotate ? w : h;
+  const pageRule = `@page { size: ${pageW}mm ${pageH}mm; margin: 0; }`;
+  const frame = rotate
+    ? `.label-page {
+  width: ${pageW}mm; height: ${pageH}mm; margin: 0; padding: 0; overflow: hidden;
+  position: relative; box-sizing: border-box;
+  page-break-after: always; break-after: page;
+}
+.label-page:last-child { page-break-after: auto; break-after: auto; }
 .label-sticker {
-  width: 70mm; height: 50mm; box-sizing: border-box;
+  width: ${w}mm; height: ${h}mm; box-sizing: border-box;
   padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
+  position: absolute; top: 0; left: 0;
+  transform: translate(${h}mm, 0) rotate(90deg);
+  transform-origin: top left;
+  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
+}`
+    : `.label-sticker {
+  width: ${w}mm; height: ${h}mm; box-sizing: border-box;
+  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
+  position: relative;
   page-break-after: always; break-after: page;
   font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
 }
-.label-sticker:last-child { page-break-after: auto; break-after: auto; }
+.label-sticker:last-child { page-break-after: auto; break-after: auto; }`;
+  return `${pageRule}
+html, body { margin: 0; padding: 0; background: #fff; width: ${pageW}mm; }
+${frame}
 .label-sticker.is-text {
-  position: relative;
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
@@ -2224,7 +2254,6 @@ html, body { margin: 0; padding: 0; background: #fff; }
 .label-sticker.is-ship .sticker-text-solar { left: 2mm; right: auto; }
 .label-sticker.is-ship .sticker-text-seq { right: 2mm; left: auto; }
 .label-sticker.is-ship {
-  position: relative;
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
@@ -2429,8 +2458,11 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
+  const body = labelPrintNeedsRotate()
+    ? cards.map((c) => `<div class="label-page">${c}</div>`).join("")
+    : cards.join("");
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
-<style>${labelPrintCss()}</style></head><body>${cards.join("")}</body></html>`;
+<style>${labelPrintCss()}</style></head><body>${body}</body></html>`;
   let w = null;
   try {
     // Do not pass noopener here — it makes window.open return null and print never runs.
@@ -2558,7 +2590,7 @@ function renderLabels() {
     b.classList.toggle("on", b.dataset.labelKind === labelKind);
   });
   const hint = document.getElementById("label-kind-hint");
-  if (hint) hint.textContent = "熱感紙 70mm × 50mm。";
+  if (hint) hint.textContent = "熱感紙 70mm × 50mm（列印自動對齊方向）。";
   const paneText = document.getElementById("label-pane-text");
   const paneCont = document.getElementById("label-pane-container");
   const paneShip = document.getElementById("label-pane-ship");

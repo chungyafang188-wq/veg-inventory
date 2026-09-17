@@ -898,6 +898,27 @@
     return `${orderId}:${lineIdx}`;
   }
 
+  function parseLedgerRowId(id) {
+    const s = String(id || "");
+    const i = s.lastIndexOf(":");
+    if (i < 0) return null;
+    const lineIdx = Number(s.slice(i + 1));
+    if (!Number.isFinite(lineIdx) || lineIdx < 0) return null;
+    return { orderId: s.slice(0, i), lineIdx };
+  }
+
+  function isLedgerLineDeleted(line) {
+    return !!(line && (line.ledgerDeleted || line.deleted));
+  }
+
+  function findLedgerLine(rowId) {
+    const parsed = parseLedgerRowId(rowId);
+    if (!parsed) return null;
+    const o = (state.orders || []).find((ord) => ord.id === parsed.orderId);
+    if (!o || !Array.isArray(o.lines) || !o.lines[parsed.lineIdx]) return null;
+    return { order: o, line: o.lines[parsed.lineIdx], lineIdx: parsed.lineIdx };
+  }
+
   function buildLedgerRows() {
     const f = filters.ledger;
     const custQ = String(f.customer || "").trim().toLowerCase();
@@ -927,6 +948,7 @@
         const qtyShown =
           typeof lineQtyText === "function" ? lineQtyText(line) : Number(line.qty) > 0 ? qtyText(line.qty) : "後填";
         const id = ledgerRowId(o.id, lineIdx);
+        const ledgerDeleted = isLedgerLineDeleted(line);
         rows.push({
           id,
           orderId: o.id,
@@ -949,6 +971,8 @@
           lineNote: line.note || "",
           remark: o.remark || "",
           by: o.enteredBy || "",
+          ledgerDeleted,
+          ledgerDeletedBy: line.ledgerDeletedBy || "",
         });
       });
     }
@@ -1005,6 +1029,10 @@
     const body = rows
       .map((r) => {
         const on = selectedLedgerIds.has(r.id);
+        const del = !!r.ledgerDeleted;
+        const statusHtml = del
+          ? `<span class="st-ledger-del-tag">已刪除</span>${r.status ? ` ${esc(r.status)}` : ""}`
+          : esc(r.status || "");
         const cells = [
           { text: r.shipDate, cls: "st-cell-date" },
           { text: r.co },
@@ -1014,7 +1042,7 @@
           { text: String(r.qty), cls: "st-num" },
           { text: r.unit },
           { text: r.pack },
-          { text: r.status },
+          { html: statusHtml },
           { text: r.shippedOn, cls: "st-cell-date" },
           { text: r.wh },
           { text: r.lot },
@@ -1027,10 +1055,12 @@
         const tds = cells
           .map((c) => {
             const cls = c.cls ? ` class="${esc(c.cls)}"` : "";
+            if (c.html != null) return `<td${cls}>${c.html}</td>`;
             return `<td${cls}>${esc(String(c.text ?? ""))}</td>`;
           })
           .join("");
-        return `<tr class="${on ? "st-row-on" : ""}">
+        const rowCls = [on ? "st-row-on" : "", del ? "st-row-ledger-del" : ""].filter(Boolean).join(" ");
+        return `<tr class="${rowCls}"${del ? ' title="清單已刪除（資料仍保留）"' : ""}>
           <td class="st-check-col">
             <label class="st-check">
               <input type="checkbox" data-bl-pick="${esc(r.id)}" ${on ? "checked" : ""} aria-label="選取 ${esc(String(r.no))} ${esc(r.item)}" />
@@ -1048,12 +1078,102 @@
     </div>`;
   }
 
+  function setLedgerLinesDeleted(ids, deleted) {
+    const staff = typeof currentStaff === "function" ? currentStaff() : "";
+    let n = 0;
+    for (const id of ids) {
+      const hit = findLedgerLine(id);
+      if (!hit) continue;
+      const { order, line } = hit;
+      const was = isLedgerLineDeleted(line);
+      if (deleted === was) continue;
+      if (deleted) {
+        line.ledgerDeleted = true;
+        line.ledgerDeletedBy = staff || "";
+        line.ledgerDeletedAt = Date.now();
+        if (typeof pushAudit === "function") {
+          pushAudit("ledger", "delete", `進銷存清單刪除 #${order.no || ""} ${order.customer || ""} ${itemDisplayName(line)}`, {
+            orderId: order.id,
+            no: order.no,
+            lineIdx: hit.lineIdx,
+            skuId: line.skuId,
+            item: itemDisplayName(line),
+          });
+        }
+      } else {
+        delete line.ledgerDeleted;
+        delete line.ledgerDeletedBy;
+        delete line.ledgerDeletedAt;
+        if (line.deleted) delete line.deleted;
+        if (typeof pushAudit === "function") {
+          pushAudit("ledger", "undelete", `進銷存清單取消刪除 #${order.no || ""} ${order.customer || ""} ${itemDisplayName(line)}`, {
+            orderId: order.id,
+            no: order.no,
+            lineIdx: hit.lineIdx,
+            skuId: line.skuId,
+            item: itemDisplayName(line),
+          });
+        }
+      }
+      n += 1;
+    }
+    if (n && typeof save === "function") save();
+    return n;
+  }
+
+  function softDeleteSelectedLedger() {
+    if (!canBooksLedger()) {
+      if (typeof setStatus === "function") setStatus("沒有倉管／帳款權限。", true);
+      return;
+    }
+    const ids = [...selectedLedgerIds].filter((id) => {
+      const hit = findLedgerLine(id);
+      return hit && !isLedgerLineDeleted(hit.line);
+    });
+    if (!ids.length) {
+      if (typeof setStatus === "function") setStatus("請先勾選要刪除的明細（尚未標刪除者）。", true);
+      return;
+    }
+    if (!confirm(`確定刪除這 ${ids.length} 筆明細？\n刪除後仍留在清單，以紅線標「已刪除」，資料不會消失。`)) return;
+    const n = setLedgerLinesDeleted(ids, true);
+    if (typeof setStatus === "function") setStatus(`已標刪除 ${n} 筆（仍顯示於清單）。`, false);
+    renderBooksLedger();
+  }
+
+  function undeleteSelectedLedger() {
+    if (!canBooksLedger()) {
+      if (typeof setStatus === "function") setStatus("沒有倉管／帳款權限。", true);
+      return;
+    }
+    const ids = [...selectedLedgerIds].filter((id) => {
+      const hit = findLedgerLine(id);
+      return hit && isLedgerLineDeleted(hit.line);
+    });
+    if (!ids.length) {
+      if (typeof setStatus === "function") setStatus("請先勾選已刪除的明細。", true);
+      return;
+    }
+    const n = setLedgerLinesDeleted(ids, false);
+    if (typeof setStatus === "function") setStatus(`已取消刪除 ${n} 筆。`, false);
+    renderBooksLedger();
+  }
+
   function ledgerBody() {
     const f = filters.ledger;
     pruneOrphanLedgerSelection();
     const rows = buildLedgerRows();
-    const qtySum = rows.reduce((n, r) => n + (parseFloat(String(r.qty).replace(/,/g, "")) || 0), 0);
+    const activeRows = rows.filter((r) => !r.ledgerDeleted);
+    const qtySum = activeRows.reduce((n, r) => n + (parseFloat(String(r.qty).replace(/,/g, "")) || 0), 0);
+    const deletedN = rows.length - activeRows.length;
     const selected = selectedLedgerIds.size;
+    let selDel = 0;
+    let selActive = 0;
+    for (const id of selectedLedgerIds) {
+      const hit = findLedgerLine(id);
+      if (!hit) continue;
+      if (isLedgerLineDeleted(hit.line)) selDel += 1;
+      else selActive += 1;
+    }
     const fields = [
       filterField({ id: "st-ledger-from", label: "出貨日起", type: "date", value: f.from }),
       filterField({ id: "st-ledger-to", label: "出貨日迄", type: "date", value: f.to }),
@@ -1081,16 +1201,20 @@
         options: statusOptions(),
       }),
     ];
+    const kpis = [
+      { value: rows.length, label: "明細列" },
+      { value: qtyText(qtySum), label: "數量合計" },
+      { value: selected, label: "已選取" },
+    ];
+    if (deletedN) kpis.push({ value: deletedN, label: "已刪除" });
     return `
-      ${sheetFiltersHtml(fields, "data-st-clear=\"ledger\"", "一列＝一筆訂單明細（進銷存銷售列）。勾選後可備往後同步進銷存。")}
-      ${sheetKpis([
-        { value: rows.length, label: "明細列" },
-        { value: qtyText(qtySum), label: "數量合計" },
-        { value: selected, label: "已選取" },
-      ])}
+      ${sheetFiltersHtml(fields, "data-st-clear=\"ledger\"", "一列＝一筆訂單明細（進銷存銷售列）。刪除＝紅線標示，資料不消失。勾選後可備往後同步進銷存（略過已刪除）。")}
+      ${sheetKpis(kpis)}
       <div class="st-ledger-actions btn-row">
         <button type="button" class="ghost" data-bl-clear-sel${selected ? "" : " disabled"}>清除選取</button>
-        <button type="button" class="primary" disabled title="即將開放">同步進銷存（即將開放）</button>
+        <button type="button" class="ghost danger" data-bl-del-sel${selActive ? "" : " disabled"}>刪除${selActive ? `（${selActive}）` : ""}</button>
+        <button type="button" class="ghost" data-bl-undel-sel${selDel ? "" : " disabled"}>取消刪除${selDel ? `（${selDel}）` : ""}</button>
+        <button type="button" class="primary" disabled title="即將開放：同步時會略過已刪除列">同步進銷存（即將開放）</button>
       </div>
       ${ledgerSheetHtml(rows)}`;
   }
@@ -1112,7 +1236,7 @@
     root.innerHTML = `
       <header class="st-head">
         <h2>進銷存清單</h2>
-        <p class="muted">訂單明細列（Excel 式）。可勾選列，之後同步進銷存。</p>
+        <p class="muted">訂單明細列（Excel 式）。可勾選後刪除（紅線標示、資料保留），之後同步進銷存。</p>
       </header>
       <div class="st-range" role="group" aria-label="區間">
         <button type="button" class="pick${ledgerRange === "7" ? " on" : ""}" data-bl-range="7">近7日</button>
@@ -1291,6 +1415,16 @@
         renderBooksLedger();
         return;
       }
+      const delSel = e.target.closest("[data-bl-del-sel]");
+      if (delSel) {
+        softDeleteSelectedLedger();
+        return;
+      }
+      const undelSel = e.target.closest("[data-bl-undel-sel]");
+      if (undelSel) {
+        undeleteSelectedLedger();
+        return;
+      }
       const clearBtn = e.target.closest("[data-st-clear]");
       if (clearBtn) {
         const which = clearBtn.getAttribute("data-st-clear") || "";
@@ -1341,5 +1475,12 @@
   window.renderBooksLedger = renderBooksLedger;
   window.getSelectedLedgerIds = function () {
     return [...selectedLedgerIds];
+  };
+  /** 勾選列中尚未軟刪除者（同步進銷存時用） */
+  window.getSelectedLedgerSyncIds = function () {
+    return [...selectedLedgerIds].filter((id) => {
+      const hit = findLedgerLine(id);
+      return hit && !isLedgerLineDeleted(hit.line);
+    });
   };
 })();

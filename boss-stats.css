@@ -232,8 +232,58 @@
 .st-sheet tbody tr.st-row-on td {
   background: #e2f0e7;
 }
-.st-ledger-actions {
+.st-ledger-actions.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  grid-template-columns: unset;
   margin: 0 0 0.65rem;
   gap: 0.45rem;
-  flex-wrap: wrap;
+}
+.st-ledger-actions .ghost.danger {
+  color: #b42318;
+  border-color: #e0b4b4;
+}
+.st-sheet tbody tr.st-row-ledger-del td {
+  color: #b42318;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  background: #fdf2f0;
+}
+.st-sheet tbody tr.st-row-ledger-del:nth-child(even) td {
+  background: #fce8e5;
+}
+.st-sheet tbody tr.st-row-ledger-del:hover td,
+.st-sheet tbody tr.st-row-ledger-del.st-row-on td {
+  background: #f9d9d4;
+}
+.st-sheet tbody tr.st-row-ledger-del .st-check-col,
+.st-sheet tbody tr.st-row-ledger-del:nth-child(even) .st-check-col,
+.st-sheet tbody tr.st-row-ledger-del:hover .st-check-col,
+.st-sheet tbody tr.st-row-ledger-del.st-row-on .st-check-col {
+  background: inherit;
+  text-decoration: none;
+}
+.st-sheet tbody tr.st-row-ledger-del .st-check {
+  text-decoration: none;
+}
+.st-ledger-del-tag {
+  display: inline-block;
+  margin-right: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #b42318;
+  text-decoration: none;
+  vertical-align: middle;
+}
+.st-ledger-kpis:has(> :nth-child(4)) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .st-ledger-kpis:has(> :nth-child(4)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

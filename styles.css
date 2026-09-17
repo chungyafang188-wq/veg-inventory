@@ -4983,36 +4983,40 @@ body.on-home .home-open .hub-mark.has-pic {
 }
 .label-pick-body { display: grid; gap: 0.15rem; min-width: 0; }
 .label-pick-body strong { font-size: 0.98rem; }
-/* Preview mirrors print: flex column, in-flow footer, ~5mm bottom reserve. No absolute footers. */
+/* Preview mirrors print window CSS (labelPrintCss): grid 1fr|auto, bottom 5mm reserve. */
 .label-sticker {
   width: 50mm;
   height: 70mm;
   max-height: 70mm;
   box-sizing: border-box;
   margin: 0;
-  padding: 2.5mm 2mm 5mm;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  padding: 1.2mm 2mm 5mm;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  justify-items: stretch;
   background: #fff;
   border: 1px dashed #bbb;
-  color: #111;
+  color: #000;
   overflow: hidden;
 }
 .sticker-foot {
-  flex: 0 0 auto;
+  grid-row: 2;
+  align-self: end;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   width: 100%;
   gap: 1.5mm;
-  margin: 1mm 0 0;
+  margin: 0.6mm 0 0;
   padding: 0;
   min-height: 3.2mm;
+  max-height: 4.5mm;
   font-size: 3mm;
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1;
+  overflow: hidden;
 }
 .sticker-foot-left,
 .sticker-foot-right {
@@ -5024,8 +5028,9 @@ body.on-home .home-open .hub-mark.has-pic {
 .sticker-foot:empty { display: none; }
 .label-sticker.is-text { text-align: center; }
 .sticker-text-main {
-  flex: 1 1 auto;
+  grid-row: 1;
   min-height: 0;
+  max-height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -5058,7 +5063,7 @@ body.on-home .home-open .hub-mark.has-pic {
 }
 .sticker-text-only.is-split span { display: block; }
 .sticker-text-remark {
-  margin: 1.6mm 0 0;
+  margin: 1.2mm 0 0;
   font-size: 0.62em;
   font-weight: 800;
   line-height: 1.05;
@@ -5068,8 +5073,9 @@ body.on-home .home-open .hub-mark.has-pic {
 }
 .label-sticker.is-ship { text-align: center; }
 .sticker-ship-main {
-  flex: 1 1 auto;
+  grid-row: 1;
   min-height: 0;
+  max-height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -5090,7 +5096,7 @@ body.on-home .home-open .hub-mark.has-pic {
   overflow: hidden;
 }
 .sticker-ship-sku {
-  margin: 2.4mm 0 0;
+  margin: 2mm 0 0;
   max-width: 100%;
   font-size: 0.78em;
   font-weight: 800;
@@ -5106,38 +5112,39 @@ body.on-home .home-open .hub-mark.has-pic {
 .sticker-ship-sku span { display: block; }
 .label-sticker.is-container {
   text-align: center;
-  padding: 3mm 2mm 5mm;
+  padding: 1mm 1.6mm 5mm;
 }
 .sticker-cont-main {
-  flex: 1 1 auto;
+  grid-row: 1;
   min-height: 0;
+  max-height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4mm;
+  gap: 2.2mm;
   overflow: hidden;
   padding: 0 0.2mm;
   box-sizing: border-box;
 }
 .sticker-cont-name {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   margin: 0;
-  padding: 0 0.4mm;
+  padding: 0 0.2mm;
   width: 100%;
   box-sizing: border-box;
-  font-size: 11.5mm;
+  font-size: 13.5mm;
   font-weight: 900;
-  line-height: 0.95;
-  letter-spacing: 0.04em;
+  line-height: 0.92;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   word-break: keep-all;
 }
 .sticker-cont-name.is-long {
-  font-size: 8mm;
-  letter-spacing: 0.02em;
+  font-size: 10mm;
+  letter-spacing: 0.015em;
 }
 .label-sticker.is-container .sticker-box {
   flex: 0 0 auto;
@@ -5150,42 +5157,45 @@ body.on-home .home-open .hub-mark.has-pic {
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: 0.35mm 0.5mm;
-  font-size: 5.4mm;
+  gap: 0.4mm 0.6mm;
+  font-size: 7.2mm;
   font-weight: 900;
   letter-spacing: 0;
-  line-height: 1.05;
+  line-height: 1.02;
   white-space: nowrap;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 4.6mm; gap: 0.3mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 4mm; gap: 0.2mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.2mm; gap: 0.3mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.2mm; gap: 0.2mm; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }
 .sticker-box-md,
 .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
-  flex: 0 0 auto;
+  grid-row: 2;
+  align-self: end;
   margin: 0;
-  padding-top: 0.8mm;
+  padding-top: 0.4mm;
+  max-height: 6mm;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   justify-content: center;
   gap: 1mm 1.4mm;
-  font-size: 4.2mm;
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: 0.06em;
+  font-size: 4.8mm;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
   overflow: hidden;
+  white-space: nowrap;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 3.8mm; }
+.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.4mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;
-  font-weight: 400;
+  font-weight: 700;
 }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }

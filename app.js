@@ -2461,35 +2461,52 @@ function ensureLabelSel(day, rows) {
 const LABEL_PRINT_W_MM = 50;
 const LABEL_PRINT_H_MM = 70;
 /**
- * One layout model for all stickers:
- *   article.label-sticker (flex column, fixed 50×70, overflow hidden)
- *     main block (flex:1, centers 客戶／品名／文字)
- *     optional meta (container country/vendor)
- *     footer.sticker-foot (in-flow 流水／太陽日 — never position:absolute)
- * Bottom padding ~5mm keeps empty reserve under the footer.
+ * Print path injects this CSS into a blank window — styles.css is NOT used for printing.
+ *
+ * Layout (CSS grid, all in-flow — no absolute):
+ *   article.label-sticker  fixed 50×70, overflow hidden, grid rows: 1fr | auto
+ *     main (row1–2 content; minmax(0,1fr) so it cannot push row 3 off-page)
+ *     foot/meta (第三排: ship/text = 太陽日／流水; container = 國別／廠商)
+ *
+ * Why 第三排 used to hit page 2: large flex children ignored max-height in print,
+ * so the in-flow third block paginated. Grid reserves the auto row inside 70mm.
  */
 function labelPrintCss() {
   const w = LABEL_PRINT_W_MM;
   const h = LABEL_PRINT_H_MM;
   return `@page { size: ${w}mm ${h}mm; margin: 0; }
-html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
-* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; background: #fff;
+  width: ${w}mm; max-width: ${w}mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+* {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  text-shadow: none !important; box-shadow: none !important;
+  filter: none !important; opacity: 1 !important;
+  transform: none !important; -webkit-font-smoothing: none;
+}
 .label-sticker {
   width: ${w}mm; height: ${h}mm; max-height: ${h}mm;
-  margin: 0; padding: 2.5mm 2mm 5mm;
-  display: flex; flex-direction: column; align-items: stretch;
+  margin: 0; padding: 1.2mm 2mm 5mm;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch; justify-items: stretch;
   overflow: hidden;
   page-break-inside: avoid; break-inside: avoid;
   page-break-after: always; break-after: page;
-  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: #000; background: #fff;
 }
 .label-sticker:last-child { page-break-after: auto; break-after: auto; }
 .sticker-foot {
-  flex: 0 0 auto;
+  grid-row: 2; align-self: end;
   display: flex; align-items: baseline; justify-content: space-between;
-  width: 100%; gap: 1.5mm; margin: 1mm 0 0; padding: 0;
-  min-height: 3.2mm;
+  width: 100%; gap: 1.5mm; margin: 0.6mm 0 0; padding: 0;
+  min-height: 3.2mm; max-height: 4.5mm;
   font-size: 3mm; font-weight: 800; letter-spacing: 0.04em; line-height: 1;
+  color: #000; overflow: hidden;
 }
 .sticker-foot-left, .sticker-foot-right {
   margin: 0; max-width: 48%; white-space: nowrap; overflow: hidden;
@@ -2497,9 +2514,9 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
 .sticker-foot:empty { display: none; }
 .label-sticker.is-text { text-align: center; }
 .sticker-text-main {
-  flex: 1 1 auto; min-height: 0; width: 100%;
+  grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  overflow: hidden; font-size: 14mm;
+  overflow: hidden; font-size: 14mm; color: #000;
 }
 .sticker-text-main.is-long { font-size: 9.5mm; }
 .sticker-text-main.is-split { font-size: 12mm; }
@@ -2507,7 +2524,7 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   display: flex; align-items: center; justify-content: center;
   width: 100%; margin: 0;
   font-size: 1em; font-weight: 900; line-height: 0.95; letter-spacing: 0.05em;
-  word-break: break-word; overflow: hidden;
+  word-break: break-word; overflow: hidden; color: #000;
 }
 .sticker-text-only.is-long { letter-spacing: 0.02em; }
 .sticker-text-only.is-split {
@@ -2515,60 +2532,62 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
 }
 .sticker-text-only.is-split span { display: block; }
 .sticker-text-remark {
-  margin: 1.6mm 0 0; font-size: 0.62em; font-weight: 800;
+  margin: 1.2mm 0 0; font-size: 0.62em; font-weight: 800;
   line-height: 1.05; letter-spacing: 0.03em; word-break: break-word; overflow: hidden;
+  color: #000;
 }
 .label-sticker.is-ship { text-align: center; }
 .sticker-ship-main {
-  flex: 1 1 auto; min-height: 0; width: 100%;
+  grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  overflow: hidden; font-size: 14.5mm;
+  overflow: hidden; font-size: 14.5mm; color: #000;
 }
 .sticker-ship-main.is-long { font-size: 11.5mm; }
 .sticker-ship-cust {
   margin: 0; max-width: 100%;
   font-size: 1em; font-weight: 900; line-height: 0.95; letter-spacing: 0.05em;
-  word-break: break-word; overflow: hidden;
+  word-break: break-word; overflow: hidden; color: #000;
 }
 .sticker-ship-sku {
-  margin: 2.4mm 0 0; max-width: 100%;
+  margin: 2mm 0 0; max-width: 100%;
   font-size: 0.78em; font-weight: 800; line-height: 1.02; letter-spacing: 0.03em;
-  word-break: break-word; overflow: hidden;
+  word-break: break-word; overflow: hidden; color: #000;
   display: flex; flex-direction: column; align-items: center; gap: 0.4mm;
 }
 .sticker-ship-sku span { display: block; }
-.label-sticker.is-container { text-align: center; padding: 3mm 2mm 5mm; }
+.label-sticker.is-container { text-align: center; padding: 1mm 1.6mm 5mm; }
 .sticker-cont-main {
-  flex: 1 1 auto; min-height: 0; width: 100%;
+  grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4mm; overflow: hidden; padding: 0 0.2mm;
+  gap: 2.2mm; overflow: hidden; padding: 0 0.2mm; color: #000;
 }
 .sticker-cont-name {
-  flex: 0 0 auto; margin: 0; padding: 0 0.4mm; width: 100%;
-  font-size: 11.5mm; font-weight: 900; line-height: 0.95; letter-spacing: 0.04em;
-  white-space: nowrap; overflow: hidden; word-break: keep-all;
+  flex: 0 1 auto; margin: 0; padding: 0 0.2mm; width: 100%;
+  font-size: 13.5mm; font-weight: 900; line-height: 0.92; letter-spacing: 0.03em;
+  white-space: nowrap; overflow: hidden; word-break: keep-all; color: #000;
 }
-.sticker-cont-name.is-long { font-size: 8mm; letter-spacing: 0.02em; }
+.sticker-cont-name.is-long { font-size: 10mm; letter-spacing: 0.015em; }
 .label-sticker.is-container .sticker-box {
   flex: 0 0 auto; margin: 0; padding: 0; width: 100%; max-width: 100%;
   display: flex; align-items: center; justify-content: center; flex-wrap: nowrap;
-  gap: 0.35mm 0.5mm;
-  font-size: 5.4mm; font-weight: 900; letter-spacing: 0; line-height: 1.05;
-  white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums;
+  gap: 0.4mm 0.6mm;
+  font-size: 7.2mm; font-weight: 900; letter-spacing: 0; line-height: 1.02;
+  white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; color: #000;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 4.6mm; gap: 0.3mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 4mm; gap: 0.2mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.2mm; gap: 0.3mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.2mm; gap: 0.2mm; }
 .sticker-box-no, .sticker-box-md, .sticker-box-seq { display: inline-block; }
 .sticker-box-md, .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
-  flex: 0 0 auto; margin: 0; padding-top: 0.8mm;
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center;
+  grid-row: 2; align-self: end;
+  margin: 0; padding-top: 0.4mm; max-height: 6mm;
+  display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: center;
   gap: 1mm 1.4mm;
-  font-size: 4.2mm; font-weight: 400; line-height: 1.1; letter-spacing: 0.06em;
-  overflow: hidden;
+  font-size: 4.8mm; font-weight: 700; line-height: 1.05; letter-spacing: 0.04em;
+  overflow: hidden; white-space: nowrap; color: #000;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 3.8mm; }
-.sticker-cont-country, .sticker-cont-vendor { font-size: 1em; font-weight: 400; }`;
+.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.4mm; }
+.sticker-cont-country, .sticker-cont-vendor { font-size: 1em; font-weight: 700; }`;
 }
 function stickerFootHtml(left, right) {
   const L = String(left || "").trim();

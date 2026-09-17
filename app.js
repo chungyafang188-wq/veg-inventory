@@ -2457,52 +2457,27 @@ function ensureLabelSel(day, rows) {
   const keys = new Set(rows.map((r) => r.key));
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
-/** Physical label artwork size (mm). Wider-than-tall → auto-rotate onto portrait @page for thermal drivers. */
-const LABEL_PRINT_W_MM = 70;
-const LABEL_PRINT_H_MM = 50;
-function labelPrintNeedsRotate() {
-  return LABEL_PRINT_W_MM > LABEL_PRINT_H_MM;
-}
+/** Physical label artwork size (mm): portrait 50×70 thermal sticker (no print rotate). */
+const LABEL_PRINT_W_MM = 50;
+const LABEL_PRINT_H_MM = 70;
 function labelPrintCss() {
   const w = LABEL_PRINT_W_MM;
   const h = LABEL_PRINT_H_MM;
-  const rotate = labelPrintNeedsRotate();
-  // Thermal drivers usually take paper as short×long (portrait feed). Landscape artwork is
-  // rotated 90° onto that page so orientation matches the sticker without manual printer tweaks.
-  const pageW = rotate ? h : w;
-  const pageH = rotate ? w : h;
-  const pageRule = `@page { size: ${pageW}mm ${pageH}mm; margin: 0; }`;
-  const frame = rotate
-    ? `.label-page {
-  width: ${pageW}mm; height: ${pageH}mm; margin: 0; padding: 0; overflow: hidden;
-  position: relative; box-sizing: border-box;
-  page-break-after: always; break-after: page;
-}
-.label-page:last-child { page-break-after: auto; break-after: auto; }
+  return `@page { size: ${w}mm ${h}mm; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
 .label-sticker {
   width: ${w}mm; height: ${h}mm; box-sizing: border-box;
-  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
-  position: absolute; top: 0; left: 0;
-  transform: translate(${h}mm, 0) rotate(90deg);
-  transform-origin: top left;
-  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
-}`
-    : `.label-sticker {
-  width: ${w}mm; height: ${h}mm; box-sizing: border-box;
-  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
+  padding: 3mm 2.2mm 2.6mm; display: flex; flex-direction: column;
   position: relative;
   page-break-after: always; break-after: page;
   font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
 }
-.label-sticker:last-child { page-break-after: auto; break-after: auto; }`;
-  return `${pageRule}
-html, body { margin: 0; padding: 0; background: #fff; width: ${pageW}mm; }
-${frame}
+.label-sticker:last-child { page-break-after: auto; break-after: auto; }
 .label-sticker.is-text {
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 1.2mm 1.4mm 5mm;
+  padding: 2mm 1.6mm 6mm;
 }
 .sticker-text-main {
   flex: 1;
@@ -2512,10 +2487,10 @@ ${frame}
   justify-content: center;
   gap: 0;
   width: 100%;
-  font-size: 17mm;
+  font-size: 15mm;
 }
-.sticker-text-main.is-long { font-size: 11.2mm; }
-.sticker-text-main.is-split { font-size: 13.6mm; }
+.sticker-text-main.is-long { font-size: 10mm; }
+.sticker-text-main.is-split { font-size: 12.5mm; }
 .sticker-text-only {
   display: flex;
   align-items: center;
@@ -2525,44 +2500,44 @@ ${frame}
   font-size: 1em;
   font-weight: 900;
   line-height: 0.95;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   word-break: break-word;
 }
 .sticker-text-only.is-long { letter-spacing: 0.02em; }
 .sticker-text-only.is-split {
   flex-direction: column;
-  gap: 0;
-  letter-spacing: 0.04em;
+  gap: 0.4mm;
+  letter-spacing: 0.03em;
   line-height: 0.92;
 }
 .sticker-text-only.is-split span { display: block; }
 .sticker-text-remark {
-  margin: 1.5mm 0 0;
-  font-size: 0.72em;
+  margin: 2mm 0 0;
+  font-size: 0.68em;
   font-weight: 800;
   line-height: 1.05;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   word-break: break-word;
 }
 .sticker-text-solar,
 .sticker-text-seq {
   position: absolute;
-  bottom: 1.6mm;
+  bottom: 2mm;
   margin: 0;
-  font-size: 4.2mm;
+  font-size: 3.8mm;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   line-height: 1;
 }
-.sticker-text-solar { right: 2mm; }
-.sticker-text-seq { left: 2mm; }
-.label-sticker.is-ship .sticker-text-solar { left: 2mm; right: auto; }
-.label-sticker.is-ship .sticker-text-seq { right: 2mm; left: auto; }
+.sticker-text-solar { right: 1.8mm; }
+.sticker-text-seq { left: 1.8mm; }
+.label-sticker.is-ship .sticker-text-solar { left: 1.8mm; right: auto; }
+.label-sticker.is-ship .sticker-text-seq { right: 1.8mm; left: auto; }
 .label-sticker.is-ship {
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 1.2mm 1.4mm 5mm;
+  padding: 2mm 1.6mm 6mm;
 }
 .sticker-ship-main {
   flex: 1;
@@ -2571,38 +2546,39 @@ ${frame}
   align-items: center;
   justify-content: center;
   width: 100%;
-  font-size: 16mm;
+  font-size: 14mm;
 }
-.sticker-ship-main.is-long { font-size: 12mm; }
+.sticker-ship-main.is-long { font-size: 10.5mm; }
 .sticker-ship-cust {
   margin: 0;
   font-size: 1em;
   font-weight: 900;
   line-height: 0.95;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   word-break: break-word;
 }
 .sticker-ship-sku {
-  margin: 3.2mm 0 0;
-  font-size: 0.72em;
+  margin: 4mm 0 0;
+  font-size: 0.7em;
   font-weight: 800;
-  line-height: 1.02;
-  letter-spacing: 0.04em;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
   word-break: break-word;
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.6mm;
 }
 .sticker-ship-sku span { display: block; }
-.sticker-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2mm; }
-.sticker-cust { margin: 0; font-size: 7.4mm; font-weight: 900; line-height: 1.12; flex: 1; overflow: hidden; }
-.sticker-seq { font-size: 3.1mm; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
-.sticker-sku { margin: 1.2mm 0 0; font-size: 4.6mm; font-weight: 800; line-height: 1.2; }
+.sticker-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5mm; }
+.sticker-cust { margin: 0; font-size: 6.2mm; font-weight: 900; line-height: 1.12; flex: 1; overflow: hidden; }
+.sticker-seq { font-size: 3mm; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
+.sticker-sku { margin: 1.4mm 0 0; font-size: 4.2mm; font-weight: 800; line-height: 1.25; }
 .label-sticker.is-container {
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 3.6mm 2.8mm 3.2mm;
+  padding: 4mm 2mm 3.2mm;
   gap: 0;
 }
 .sticker-cont-main {
@@ -2611,37 +2587,37 @@ ${frame}
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4mm;
+  gap: 5.5mm;
   width: 100%;
   min-height: 0;
   box-sizing: border-box;
-  padding: 0 0.4mm;
+  padding: 0 0.2mm;
 }
 .sticker-cont-name {
   flex: 0 0 auto;
   display: block;
   margin: 0;
-  padding: 0 0.6mm;
+  padding: 0 0.4mm;
   width: 100%;
   box-sizing: border-box;
   min-height: 0;
-  font-size: 13mm;
+  font-size: 12mm;
   font-weight: 900;
-  line-height: 0.92;
-  letter-spacing: 0.06em;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
   white-space: nowrap;
   overflow: hidden;
   word-break: keep-all;
 }
 .sticker-cont-name.is-long {
-  font-size: 9.6mm;
-  letter-spacing: 0.03em;
+  font-size: 8.4mm;
+  letter-spacing: 0.02em;
 }
 .sticker-box {
   margin: 0;
-  font-size: 5.6mm;
+  font-size: 4.8mm;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.15;
   word-break: break-all;
 }
 .label-sticker.is-container .sticker-box {
@@ -2649,23 +2625,24 @@ ${frame}
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55mm;
+  flex-wrap: wrap;
+  gap: 0.35mm 0.5mm;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   min-height: 0;
   margin: 0;
-  padding: 0 0.2mm;
-  font-size: 7.6mm;
+  padding: 0;
+  font-size: 5.6mm;
   font-weight: 900;
-  letter-spacing: 0.01em;
-  line-height: 1;
+  letter-spacing: 0;
+  line-height: 1.05;
   white-space: nowrap;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 6.4mm; letter-spacing: 0; gap: 0.4mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.4mm; letter-spacing: 0; gap: 0.25mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 4.8mm; gap: 0.3mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 4.2mm; gap: 0.2mm; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }
@@ -2674,27 +2651,28 @@ ${frame}
 .sticker-cont-meta {
   flex: 0 0 auto;
   margin: 0;
-  padding-top: 0.6mm;
+  padding-top: 1mm;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
-  gap: 1.6mm;
-  font-size: 5.6mm;
+  gap: 1.2mm 1.6mm;
+  font-size: 4.6mm;
   font-weight: 400;
-  line-height: 1;
-  letter-spacing: 0.08em;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 5mm; }
+.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.2mm; }
 .sticker-cont-country,
 .sticker-cont-vendor {
   font-size: 1em;
   font-weight: 400;
 }
-.sticker-remark { margin: 0.8mm 0 0; font-size: 3mm; line-height: 1.2; min-height: 3.2mm; }
+.sticker-remark { margin: 1mm 0 0; font-size: 2.8mm; line-height: 1.2; min-height: 3mm; }
 .sticker-remark.is-empty { visibility: hidden; }
-.sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
-.sticker-solar { font-size: 3.2mm; font-weight: 700; }
-.sticker-md { font-size: 4.2mm; font-weight: 900; }`;
+.sticker-foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 1.5mm; }
+.sticker-solar { font-size: 3mm; font-weight: 700; }
+.sticker-md { font-size: 3.8mm; font-weight: 900; }`;
 }
 function labelStickerHtml(item, forPrint) {
   const kind = item.kind || "ship";
@@ -2763,9 +2741,7 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
-  const body = labelPrintNeedsRotate()
-    ? cards.map((c) => `<div class="label-page">${c}</div>`).join("")
-    : cards.join("");
+  const body = cards.join("");
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
 <style>${labelPrintCss()}</style></head><body>${body}</body></html>`;
   let w = null;
@@ -2895,7 +2871,7 @@ function renderLabels() {
     b.classList.toggle("on", b.dataset.labelKind === labelKind);
   });
   const hint = document.getElementById("label-kind-hint");
-  if (hint) hint.textContent = "熱感紙 70mm × 50mm（橫式；列印自動轉正）。";
+  if (hint) hint.textContent = "熱感紙 50mm × 70mm（直式）。";
   const paneText = document.getElementById("label-pane-text");
   const paneCont = document.getElementById("label-pane-container");
   const paneShip = document.getElementById("label-pane-ship");

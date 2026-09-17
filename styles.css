@@ -5098,7 +5098,7 @@ body.on-home .home-open .hub-mark.has-pic {
 .sticker-ship-sku {
   margin: 1.6mm 0 0;
   max-width: 100%;
-  font-size: 0.78em;
+  font-size: 0.88em;
   font-weight: 800;
   line-height: 1.02;
   letter-spacing: 0.03em;
@@ -5123,7 +5123,7 @@ body.on-home .home-open .hub-mark.has-pic {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.8mm;
+  gap: 1.4mm;
   overflow: hidden;
   padding: 0 0.2mm;
   box-sizing: border-box;
@@ -5134,17 +5134,17 @@ body.on-home .home-open .hub-mark.has-pic {
   padding: 0 0.2mm;
   width: 100%;
   box-sizing: border-box;
-  font-size: 12.5mm;
+  font-size: 14mm;
   font-weight: 900;
-  line-height: 0.92;
-  letter-spacing: 0.03em;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
   word-break: keep-all;
 }
 .sticker-cont-name.is-long {
-  font-size: 9.5mm;
-  letter-spacing: 0.015em;
+  font-size: 10.5mm;
+  letter-spacing: 0.012em;
 }
 .label-sticker.is-container .sticker-box {
   flex: 0 0 auto;
@@ -5157,18 +5157,18 @@ body.on-home .home-open .hub-mark.has-pic {
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: 0.4mm 0.55mm;
-  font-size: 7.6mm;
+  gap: 0.35mm 0.5mm;
+  font-size: 9mm;
   font-weight: 900;
   letter-spacing: 0;
-  line-height: 1.02;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 6.6mm; gap: 0.3mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.6mm; gap: 0.25mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 7.8mm; gap: 0.28mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 6.6mm; gap: 0.22mm; }
 .sticker-box-no,
 .sticker-box-md,
 .sticker-box-seq { display: inline-block; }

@@ -2579,7 +2579,7 @@ ${frame}
 }
 .sticker-ship-sku {
   margin: 1.6mm 0 0; max-width: 100%;
-  font-size: 0.78em; font-weight: 800; line-height: 1.02; letter-spacing: 0.03em;
+  font-size: 0.88em; font-weight: 800; line-height: 1.02; letter-spacing: 0.03em;
   word-break: break-word; overflow: hidden; color: #000;
   display: flex; flex-direction: column; align-items: center; gap: 0.3mm;
 }
@@ -2588,24 +2588,24 @@ ${frame}
 .sticker-cont-main {
   grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1.8mm; overflow: hidden; padding: 0 0.2mm; color: #000;
+  gap: 1.4mm; overflow: hidden; padding: 0 0.2mm; color: #000;
 }
 .sticker-cont-name {
   flex: 0 1 auto; margin: 0; padding: 0 0.2mm; width: 100%;
-  font-size: 12.5mm; font-weight: 900; line-height: 0.92; letter-spacing: 0.03em;
+  font-size: 14mm; font-weight: 900; line-height: 0.9; letter-spacing: 0.02em;
   white-space: nowrap; overflow: hidden; word-break: keep-all; color: #000;
 }
-.sticker-cont-name.is-long { font-size: 9.5mm; letter-spacing: 0.015em; }
+.sticker-cont-name.is-long { font-size: 10.5mm; letter-spacing: 0.012em; }
 .label-sticker.is-container .sticker-box {
   flex: 0 0 auto; margin: 0; padding: 0; width: 100%; max-width: 100%;
   display: flex; align-items: center; justify-content: center; flex-wrap: nowrap;
-  gap: 0.4mm 0.55mm;
-  font-size: 7.6mm; font-weight: 900; letter-spacing: 0; line-height: 1.02;
+  gap: 0.35mm 0.5mm;
+  font-size: 9mm; font-weight: 900; letter-spacing: 0; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums; color: #000;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 6.6mm; gap: 0.3mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.6mm; gap: 0.25mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 7.8mm; gap: 0.28mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 6.6mm; gap: 0.22mm; }
 .sticker-box-no, .sticker-box-md, .sticker-box-seq { display: inline-block; }
 .sticker-box-md, .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {

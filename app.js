@@ -2460,7 +2460,7 @@ function ensureLabelSel(day, rows) {
 /**
  * Artwork is landscape 寬版 70×50 (user / physical sticker look).
  * Thermal drivers usually expect portrait 50×70 feed, so print wraps each sticker in
- * .label-page and rotates 90° onto @page 50×70. On-screen preview stays 70×50 WYSIWYG.
+ * .label-page and rotates -90° onto @page 50×70. On-screen preview stays 70×50 WYSIWYG.
  */
 const LABEL_PRINT_W_MM = 70;
 const LABEL_PRINT_H_MM = 50;
@@ -2512,7 +2512,7 @@ function labelPrintCss() {
 .label-sticker {
   ${stickerBase}
   position: absolute; top: 0; left: 0;
-  transform: translate(${h}mm, 0) rotate(90deg);
+  transform: translate(0, ${w}mm) rotate(-90deg);
   transform-origin: top left;
 }`
     : `.label-sticker {
@@ -2532,7 +2532,7 @@ ${frame}
 .sticker-foot {
   grid-row: 2; align-self: end;
   display: flex; align-items: baseline; justify-content: space-between;
-  width: 100%; gap: 1.5mm; margin: 0.4mm 0 0; padding: 0;
+  width: 100%; gap: 1.5mm; margin: 0.4mm 0 1.6mm; padding: 0;
   min-height: 3.2mm; max-height: 4.2mm;
   font-size: 3.2mm; font-weight: 800; letter-spacing: 0.04em; line-height: 1;
   color: #000; overflow: hidden;
@@ -2610,7 +2610,7 @@ ${frame}
 .sticker-box-md, .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
   grid-row: 2; align-self: end;
-  margin: 0; padding-top: 0.3mm; max-height: 5.5mm;
+  margin: 0 0 0.8mm; padding-top: 0.3mm; max-height: 5.5mm;
   display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: center;
   gap: 1mm 1.4mm;
   font-size: 4.5mm; font-weight: 700; line-height: 1.05; letter-spacing: 0.04em;

@@ -2469,6 +2469,7 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   width: ${w}mm; height: ${h}mm; box-sizing: border-box;
   padding: 3mm 2.2mm 2.6mm; display: flex; flex-direction: column;
   position: relative;
+  overflow: hidden;
   page-break-after: always; break-after: page;
   font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
 }
@@ -2477,7 +2478,8 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.6mm 6mm;
+  /* Bottom reserve so 太陽日／流水 stay inside 50×70 and not flush on edge */
+  padding: 2mm 1.6mm 9mm;
 }
 .sticker-text-main {
   flex: 1;
@@ -2487,6 +2489,7 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   justify-content: center;
   gap: 0;
   width: 100%;
+  min-height: 0;
   font-size: 15mm;
 }
 .sticker-text-main.is-long { font-size: 10mm; }
@@ -2522,12 +2525,16 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
 .sticker-text-solar,
 .sticker-text-seq {
   position: absolute;
-  bottom: 2mm;
+  bottom: 4.5mm;
   margin: 0;
-  font-size: 3.8mm;
+  max-width: 46%;
+  font-size: 3.2mm;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 .sticker-text-solar { right: 1.8mm; }
 .sticker-text-seq { left: 1.8mm; }
@@ -2537,7 +2544,8 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.6mm 6mm;
+  /* Bottom reserve so 太陽日／流水 stay inside 50×70 and not flush on edge */
+  padding: 2mm 1.6mm 9mm;
 }
 .sticker-ship-main {
   flex: 1;
@@ -2546,20 +2554,24 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   align-items: center;
   justify-content: center;
   width: 100%;
-  font-size: 14mm;
+  min-height: 0;
+  font-size: 16.5mm;
 }
-.sticker-ship-main.is-long { font-size: 10.5mm; }
+.sticker-ship-main.is-long { font-size: 12.5mm; }
 .sticker-ship-cust {
   margin: 0;
+  max-width: 100%;
   font-size: 1em;
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0.05em;
   word-break: break-word;
+  overflow: hidden;
 }
 .sticker-ship-sku {
-  margin: 4mm 0 0;
-  font-size: 0.7em;
+  margin: 3.2mm 0 0;
+  max-width: 100%;
+  font-size: 0.82em;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: 0.03em;
@@ -2568,6 +2580,7 @@ html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
   flex-direction: column;
   align-items: center;
   gap: 0.6mm;
+  overflow: hidden;
 }
 .sticker-ship-sku span { display: block; }
 .sticker-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5mm; }

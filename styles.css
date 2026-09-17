@@ -4993,6 +4993,7 @@ body.on-home .home-open .hub-mark.has-pic {
   background: #fff;
   border: 1px dashed #bbb;
   color: #111;
+  overflow: hidden;
 }
 .sticker-top {
   display: flex;
@@ -5041,7 +5042,8 @@ body.on-home .home-open .hub-mark.has-pic {
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.6mm 6mm;
+  /* Bottom reserve so 太陽日／流水 stay inside 50×70 and not flush on edge */
+  padding: 2mm 1.6mm 9mm;
 }
 .sticker-text-main {
   flex: 1;
@@ -5051,6 +5053,7 @@ body.on-home .home-open .hub-mark.has-pic {
   justify-content: center;
   gap: 0;
   width: 100%;
+  min-height: 0;
   font-size: 15mm;
 }
 .sticker-text-main.is-long { font-size: 10mm; }
@@ -5086,12 +5089,16 @@ body.on-home .home-open .hub-mark.has-pic {
 .sticker-text-solar,
 .sticker-text-seq {
   position: absolute;
-  bottom: 2mm;
+  bottom: 4.5mm;
   margin: 0;
-  font-size: 3.8mm;
+  max-width: 46%;
+  font-size: 3.2mm;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 .sticker-text-solar { right: 1.8mm; }
 .sticker-text-seq { left: 1.8mm; }
@@ -5102,7 +5109,8 @@ body.on-home .home-open .hub-mark.has-pic {
   justify-content: flex-start;
   align-items: stretch;
   text-align: center;
-  padding: 2mm 1.6mm 6mm;
+  /* Bottom reserve so 太陽日／流水 stay inside 50×70 and not flush on edge */
+  padding: 2mm 1.6mm 9mm;
 }
 .sticker-ship-main {
   flex: 1;
@@ -5111,20 +5119,24 @@ body.on-home .home-open .hub-mark.has-pic {
   align-items: center;
   justify-content: center;
   width: 100%;
-  font-size: 14mm;
+  min-height: 0;
+  font-size: 16.5mm;
 }
-.sticker-ship-main.is-long { font-size: 10.5mm; }
+.sticker-ship-main.is-long { font-size: 12.5mm; }
 .sticker-ship-cust {
   margin: 0;
+  max-width: 100%;
   font-size: 1em;
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0.05em;
   word-break: break-word;
+  overflow: hidden;
 }
 .sticker-ship-sku {
-  margin: 4mm 0 0;
-  font-size: 0.7em;
+  margin: 3.2mm 0 0;
+  max-width: 100%;
+  font-size: 0.82em;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: 0.03em;
@@ -5133,6 +5145,7 @@ body.on-home .home-open .hub-mark.has-pic {
   flex-direction: column;
   align-items: center;
   gap: 0.6mm;
+  overflow: hidden;
 }
 .sticker-ship-sku span { display: block; }
 .label-sticker.is-container {

@@ -15,11 +15,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=335" />
+    <link rel="stylesheet" href="./styles.css?v=337" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
     <link rel="stylesheet" href="./unpack-flow.css?v=10" />
     <link rel="stylesheet" href="./site-work.css?v=3" />
-    <link rel="stylesheet" href="./boss-stats.css?v=5" />
+    <link rel="stylesheet" href="./boss-stats.css?v=6" />
   </head>
   <body>
     <div class="app">
@@ -318,6 +318,9 @@
           <div id="sales-list" hidden></div>
         </section>
       </section>
+      <section id="page-ledger" hidden>
+        <div id="bl-root" class="st-root"></div>
+      </section>
       <section id="page-unpack" hidden>
         <div id="up-list" class="up-list"></div>
         <div id="up-detail" class="up-detail" hidden></div>
@@ -417,7 +420,7 @@
           <button type="button" class="tab" data-label-kind="container">貨櫃標籤</button>
           <button type="button" class="tab" data-label-kind="ship">出貨標籤</button>
         </nav>
-        <p class="hint label-page-hint" id="label-kind-hint">熱感紙 70mm × 50mm（列印自動對齊方向）。</p>
+        <p class="hint label-page-hint" id="label-kind-hint">熱感紙 70mm × 50mm（橫式列印）。</p>
         <div class="label-layout">
           <div class="label-form-col">
             <section class="card label-pane-card" id="label-pane-text">
@@ -547,10 +550,10 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=335"></script>
+    <script src="./app.js?v=337"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=13"></script>
     <script src="./site-work.js?v=3"></script>
-    <script src="./boss-stats.js?v=11"></script>
+    <script src="./boss-stats.js?v=12"></script>
   </body>
 </html>

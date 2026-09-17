@@ -672,16 +672,72 @@ button {
 .n-enter { color: var(--c-enter); }
 .n-ship { color: var(--c-out); font-weight: 600; }
 .n-cancel { color: var(--bad); }
-.order-card.was-edited {
+.order-card.was-edited,
+.settle-card.was-edited,
+.settle-order.was-edited {
   outline: 2px solid #e8c48a;
+  background: #fffaf2;
 }
 .tag.tag-edit {
   background: var(--c-edit);
+  color: #fff;
+  font-weight: 800;
 }
 .order-st.st-deleted { background: #f8e4e4; color: var(--bad); }
 .order-edit-who {
   color: var(--c-edit);
   font-weight: 800;
+}
+.order-edit-hist {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  margin: 0.25rem 0 0.15rem;
+  font-size: 0.82rem;
+}
+.order-edit-stamps {
+  color: var(--c-edit);
+  font-weight: 700;
+}
+.order-edit-details {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.order-edit-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+  list-style: none;
+}
+.order-edit-details summary::-webkit-details-marker { display: none; }
+.order-edit-details ul {
+  margin: 0.25rem 0 0;
+  padding: 0 0 0 1rem;
+  color: var(--ink);
+}
+.order-edit-details li { margin: 0.1rem 0; }
+.inline-remark-field,
+.inline-note-field,
+.ticket-line-note-field {
+  display: grid;
+  gap: 0.15rem;
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.inline-remark-field input,
+.inline-note-field input,
+.ticket-line-note-field input {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: #fff;
 }
 .order-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
 .order-chip {

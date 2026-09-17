@@ -518,6 +518,10 @@ function migrate(data) {
         line.spec = napSpecOf(line.spec);
         changed = true;
       }
+      if (line.labelName && skuById(line.skuId) && !/[\u4e00-\u9fff]/.test(String(line.labelName))) {
+        delete line.labelName;
+        changed = true;
+      }
       if (isCabSku(line.skuId)) {
         if (!CAB_LEAF_TYPES.includes(String(line.leafType || ""))) {
           line.leafType = cabLeafTypeOf(line.leafType);
@@ -966,7 +970,26 @@ function bindWorkDates() {
 }
 
 function skuById(id) {
-  return SKUS.find((s) => s.id === id);
+  const mapped = remapSkuId(id);
+  return SKUS.find((s) => s.id === mapped) || (mapped !== id ? SKUS.find((s) => s.id === id) : undefined);
+}
+/** Prefer Chinese catalog name; ignore English / sku-code labelName on known SKUs (e.g. 大白菜). */
+function lineSkuName(l) {
+  const s = skuById(l?.skuId);
+  const label = String(l?.labelName || "").trim();
+  if (s) {
+    if (!label) return s.name;
+    if (!/[\u4e00-\u9fff]/.test(label)) return s.name;
+    return label;
+  }
+  if (label) return label;
+  const raw = String(l?.skuId || "").trim();
+  const mapped = remapSkuId(raw);
+  if (mapped !== raw) {
+    const again = SKUS.find((x) => x.id === mapped);
+    if (again) return again.name;
+  }
+  return raw;
 }
 function isSiteSku(sku) {
   return !!(sku && (sku.site || sku.onion));
@@ -1855,6 +1878,7 @@ function renderHomeHub() {
     acct.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
     acct.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
     acct.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
+    acct.push(hubLink('data-go="books" data-books="ledger"', "clip", "進銷存清單"));
   }
   const help = [hubLink('data-go="help"', "truck", "貨運帳務比對")];
   const openCard = (id, tone, icon, title, bodyHtml) =>
@@ -2328,7 +2352,7 @@ function renderLabelPrints() {
 }
 function labelProductText(l) {
   const s = skuById(l.skuId);
-  const name = l.labelName || (s ? skuShortName(s) : l.skuId);
+  const name = lineSkuName(l);
   const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
@@ -2433,37 +2457,15 @@ function ensureLabelSel(day, rows) {
   const keys = new Set(rows.map((r) => r.key));
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
-/** Physical label artwork size (mm). Wider-than-tall → auto-rotate onto portrait @page for thermal drivers. */
+/** Physical label artwork size (mm) — landscape 橫式 (70×50). */
 const LABEL_PRINT_W_MM = 70;
 const LABEL_PRINT_H_MM = 50;
-function labelPrintNeedsRotate() {
-  return LABEL_PRINT_W_MM > LABEL_PRINT_H_MM;
-}
 function labelPrintCss() {
   const w = LABEL_PRINT_W_MM;
   const h = LABEL_PRINT_H_MM;
-  const rotate = labelPrintNeedsRotate();
-  // Thermal drivers usually take paper as short×long (portrait feed). Landscape artwork is
-  // rotated 90° onto that page so orientation matches the sticker without manual printer tweaks.
-  const pageW = rotate ? h : w;
-  const pageH = rotate ? w : h;
-  const pageRule = `@page { size: ${pageW}mm ${pageH}mm; margin: 0; }`;
-  const frame = rotate
-    ? `.label-page {
-  width: ${pageW}mm; height: ${pageH}mm; margin: 0; padding: 0; overflow: hidden;
-  position: relative; box-sizing: border-box;
-  page-break-after: always; break-after: page;
-}
-.label-page:last-child { page-break-after: auto; break-after: auto; }
-.label-sticker {
-  width: ${w}mm; height: ${h}mm; box-sizing: border-box;
-  padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
-  position: absolute; top: 0; left: 0;
-  transform: translate(${h}mm, 0) rotate(90deg);
-  transform-origin: top left;
-  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #111;
-}`
-    : `.label-sticker {
+  // Landscape page matches sticker artwork; preview and print stay the same orientation.
+  const pageRule = `@page { size: ${w}mm ${h}mm; margin: 0; }`;
+  const frame = `.label-sticker {
   width: ${w}mm; height: ${h}mm; box-sizing: border-box;
   padding: 2.4mm 2.6mm 2.2mm; display: flex; flex-direction: column;
   position: relative;
@@ -2472,7 +2474,7 @@ function labelPrintCss() {
 }
 .label-sticker:last-child { page-break-after: auto; break-after: auto; }`;
   return `${pageRule}
-html, body { margin: 0; padding: 0; background: #fff; width: ${pageW}mm; }
+html, body { margin: 0; padding: 0; background: #fff; width: ${w}mm; }
 ${frame}
 .label-sticker.is-text {
   justify-content: flex-start;
@@ -2739,15 +2741,13 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
-  const body = labelPrintNeedsRotate()
-    ? cards.map((c) => `<div class="label-page">${c}</div>`).join("")
-    : cards.join("");
+  const body = cards.join("");
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
 <style>${labelPrintCss()}</style></head><body>${body}</body></html>`;
   let w = null;
   try {
     // Do not pass noopener here — it makes window.open return null and print never runs.
-    w = window.open("", "_blank", "width=420,height=640");
+    w = window.open("", "_blank", "width=780,height=420");
   } catch (_) {
     w = null;
   }
@@ -2871,7 +2871,7 @@ function renderLabels() {
     b.classList.toggle("on", b.dataset.labelKind === labelKind);
   });
   const hint = document.getElementById("label-kind-hint");
-  if (hint) hint.textContent = "熱感紙 70mm × 50mm（列印自動對齊方向）。";
+  if (hint) hint.textContent = "熱感紙 70mm × 50mm（橫式列印）。";
   const paneText = document.getElementById("label-pane-text");
   const paneCont = document.getElementById("label-pane-container");
   const paneShip = document.getElementById("label-pane-ship");
@@ -3738,12 +3738,51 @@ function applyRoleUi() {
   if (isUnpackerRole() && !can("page-unpack") && page === "unpack") page = homePage();
   syncOpsFlowTabs();
 }
-function markOrderEdited(o) {
+function markOrderEdited(o, summary) {
   o.edited = true;
-  o.editedBy = currentStaff();
+  o.editedBy = currentStaff() || "未填";
   o.editedAt = Date.now();
   if (!Array.isArray(o.editLog)) o.editLog = [];
-  o.editLog.push({ by: o.editedBy, at: o.editedAt });
+  const entry = { by: o.editedBy, at: o.editedAt };
+  const sum = String(summary || "").trim();
+  if (sum) entry.summary = sum;
+  o.editLog.push(entry);
+}
+function orderEditLog(o) {
+  if (!o) return [];
+  if (Array.isArray(o.editLog) && o.editLog.length) return o.editLog;
+  if (o.edited || o.editedAt || o.editedBy) {
+    return [{ by: o.editedBy || "未填", at: o.editedAt || 0 }];
+  }
+  return [];
+}
+function orderEditStampText(entry) {
+  const by = String(entry?.by || "未填").trim() || "未填";
+  const t = labelPrintTimeText(entry?.at);
+  return t && t !== "—" ? `${by} ${t}` : by;
+}
+function orderEditedTagHtml(o) {
+  if (!o?.edited && !orderEditLog(o).length) return "";
+  return `<span class="tag tag-edit">修改單</span>`;
+}
+function orderEditHistoryHtml(o) {
+  const log = orderEditLog(o);
+  if (!log.length) return "";
+  const stamps = log.map(orderEditStampText).filter(Boolean);
+  const shown = stamps.slice(-5);
+  const head = shown.join("／");
+  const more = stamps.length > 5 ? `　+${stamps.length - 5}` : "";
+  const details = log
+    .map((e) => {
+      const sum = e.summary ? `　${esc(e.summary)}` : "";
+      return `<li><strong>${esc(orderEditStampText(e))}</strong>${sum}</li>`;
+    })
+    .join("");
+  return `<div class="order-edit-hist">
+      ${orderEditedTagHtml(o)}
+      <span class="order-edit-stamps">${esc(head)}${esc(more)}</span>
+      <details class="order-edit-details"><summary>修改紀錄（${log.length}）</summary><ul>${details}</ul></details>
+    </div>`;
 }
 function startInlineEdit(orderId) {
   if (!requireStaff()) return;
@@ -3752,11 +3791,12 @@ function startInlineEdit(orderId) {
   if (o.status === "shipped" && !can("edit-shipped")) return setStatus("已送出後請由會計或主管改件數。", true);
   if (
     o.status === "shipped" &&
-    !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「已改單」，並依新件數重算庫存。`)
+    !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「修改單」，並依新件數重算庫存。`)
   )
     return;
   inlineEdit = {
     id: o.id,
+    remark: String(o.remark || ""),
     lines: (o.lines || [])
       .filter((l) => lineHasItem(l))
       .map((l) => ({ ...l })),
@@ -3766,6 +3806,7 @@ function startInlineEdit(orderId) {
     addSpec: CAB_SPECS[0],
     addLeafType: CAB_LEAF_TYPES[0],
     addBanQty: "",
+    addNote: "",
     addContainerNo: "",
     addShipWh: "",
   };
@@ -3808,6 +3849,8 @@ function inlineEditAddLine() {
     line.spec = napSpecOf(inlineEdit.addSpec);
   }
   applyShipMeta(line, inlineEdit.addContainerNo, inlineEdit.addShipWh);
+  const note = String(inlineEdit.addNote || "").trim();
+  if (note) line.note = note;
   const dest = (inlineEdit.lines.find((l) => String(l.dest || "").trim()) || {}).dest;
   if (dest) {
     line.dest = dest;
@@ -3820,6 +3863,7 @@ function inlineEditAddLine() {
   inlineEdit.addSpec = isNapSku(skuId) ? NAP_SPECS[0] : CAB_SPECS[0];
   inlineEdit.addLeafType = CAB_LEAF_TYPES[0];
   inlineEdit.addBanQty = "";
+  inlineEdit.addNote = "";
   inlineEdit.addContainerNo = "";
   inlineEdit.addShipWh = "";
   renderOrders();
@@ -3852,8 +3896,13 @@ function commitInlineEdit() {
   const wasShipped = o.status === "shipped" || o.status === "delivered";
   const shipMeta = snapshotShipMeta(o);
   if (o.status === "shipped") unwindShipment(o);
+  const prevRemark = String(o.remark || "").trim();
+  const nextRemark = String(inlineEdit.remark || "").trim();
   o.lines = mine;
-  markOrderEdited(o);
+  o.remark = nextRemark;
+  const summaryBits = ["改品項"];
+  if (prevRemark !== nextRemark) summaryBits.push("改備註");
+  markOrderEdited(o, summaryBits.join("／"));
   if (wasShipped) {
     applyOpenShipment(o);
     restoreShipMeta(o, shipMeta);
@@ -3869,7 +3918,7 @@ function commitInlineEdit() {
   setStatus(
     wasShipped
       ? `已改件數並重算扣庫。修改人員：${currentStaff()}。${otherNote}`
-      : `已改單，修改人員：${currentStaff()}。${otherNote}`,
+      : `已修改單，修改人員：${currentStaff()}。${otherNote}`,
     false,
   );
   render();
@@ -3931,6 +3980,7 @@ function inlineEditPanelHtml(o) {
           whAttr: `data-inline-ship-wh="${i}"`,
           compact: true,
         })}
+        <label class="inline-note-field"><span class="metric-lab">品項備註</span><input data-inline-note="${i}" type="text" value="${esc(l.note || "")}" placeholder="可不填" autocomplete="off" spellcheck="false" /></label>
         <span class="unit">${esc(unit)}</span>
         <button type="button" class="tiny-btn ghost" data-inline-del="${i}">刪</button>
       </div>`;
@@ -3942,6 +3992,7 @@ function inlineEditPanelHtml(o) {
   const addBanVal = Number(inlineEdit.addBanQty) > 0 ? inlineEdit.addBanQty : "";
   return `<div class="inline-edit" data-inline-box="${esc(o.id)}">
     <p class="inline-edit-lab">改單 #${esc(o.no)}（${esc(coLabel(o.co))}）</p>
+    <label class="inline-remark-field"><span class="metric-lab">整單備註</span><input data-inline-remark type="text" value="${esc(inlineEdit.remark || "")}" placeholder="整單備註，可不填" autocomplete="off" spellcheck="false" /></label>
     <div class="inline-edit-rows">${rows || `<p class="empty">尚無品項，請下方加入。</p>`}</div>
     <div class="inline-edit-add">
       <select data-inline-add-sku aria-label="加品項">
@@ -3976,6 +4027,7 @@ function inlineEditPanelHtml(o) {
           compact: true,
         },
       )}
+      <label class="inline-note-field"><span class="metric-lab">品項備註</span><input data-inline-add-note type="text" value="${esc(inlineEdit.addNote || "")}" placeholder="可不填" autocomplete="off" spellcheck="false" /></label>
       <button type="button" class="tiny-btn primary" data-inline-add>加入</button>
     </div>
     <div class="inline-edit-acts">
@@ -4000,9 +4052,11 @@ function staffNoteHtml(o) {
   const bits = [];
   if (o.enteredBy) bits.push(`<span class="n-enter">入單 ${esc(o.enteredBy)}</span>`);
   else bits.push(`<span class="n-enter">入單未填會計</span>`);
-  if (o.edited) {
-    const n = Array.isArray(o.editLog) && o.editLog.length > 1 ? `×${o.editLog.length}` : "";
-    bits.push(`<span class="order-edit-who">已改單${n} ${esc(o.editedBy || "未填會計")}</span>`);
+  if (o.edited || orderEditLog(o).length) {
+    const log = orderEditLog(o);
+    const n = log.length > 1 ? `×${log.length}` : "";
+    const last = log[log.length - 1];
+    bits.push(`<span class="order-edit-who">修改單${n} ${esc(orderEditStampText(last))}</span>`);
   }
   if (o.settled) bits.push(`<span class="n-ship">結單 ${esc(o.settledBy || "未填會計")}</span>`);
   if (o.assignedDriver) bits.push(`<span class="n-ship">${esc(o.status === "open" && o.runOut ? "接單處理中" : o.status === "open" ? "派單" : "司機")} ${esc(o.assignedDriver)}</span>`);
@@ -4438,7 +4492,7 @@ function lineSpecText(l) {
 }
 function lineLabel(l, withUnit) {
   const s = skuById(l.skuId);
-  const shown = l.labelName || (s ? s.name : l.skuId);
+  const shown = lineSkuName(l);
   const unit = s && withUnit && Number(l.qty) > 0 ? ` ${s.unit}` : "";
   const ban = lineBanText(l) ? `（${lineBanText(l)}）` : "";
   const pack = l.pack ? `（${l.pack}）` : "";
@@ -4451,8 +4505,7 @@ function lineLabel(l, withUnit) {
   return `${shown}${ban} ${lineQtyText(l)}${unit}${pack}${size}${spec}${ship}${dest}${note}${pallet}`;
 }
 function ticketLineName(l) {
-  const s = skuById(l.skuId);
-  const name = l.labelName || (s ? s.name : l.skuId);
+  const name = lineSkuName(l);
   const ban = lineBanText(l) ? ` ${lineBanText(l)}` : "";
   const pack = l.pack ? ` ${l.pack}` : "";
   const size = l.size ? ` ${l.size}` : "";
@@ -4569,7 +4622,7 @@ function renderTicket() {
               ? `<button type="button" class="ghost lot-pick-btn" data-ticket-lot="${i}">${esc(l.lotContainer || l.lotUha || "選出貨編號")}</button>`
               : ""
           }
-          ${l.note ? `<p class="ticket-line-note-text">${esc(l.note)}</p>` : ""}
+          <label class="ticket-line-note-field"><span class="metric-lab">備註</span><input data-ticket-note="${i}" type="text" value="${esc(l.note || "")}" placeholder="品項備註" autocomplete="off" spellcheck="false" /></label>
           <button type="button" class="tiny-btn ghost" data-ticket-del="${i}">刪</button>
         </li>`;
       })
@@ -4658,8 +4711,13 @@ function cleanLine(l) {
   else out.destFreight = true;
   if (!String(out.dest || "").trim()) delete out.dest;
   if (!String(out.note || "").trim()) delete out.note;
+  out.skuId = remapSkuId(out.skuId);
   if (!String(out.labelName || "").trim()) delete out.labelName;
-  else out.labelName = String(out.labelName).trim();
+  else {
+    out.labelName = String(out.labelName).trim();
+    // Drop English / code-like labelName when catalog has Chinese name (大白菜 etc.)
+    if (skuById(out.skuId) && !/[\u4e00-\u9fff]/.test(out.labelName)) delete out.labelName;
+  }
   if (isCabSku(out.skuId)) {
     out.leafType = cabLeafTypeOf(out.leafType);
     out.spec = cabSpecOf(out.spec);
@@ -7121,7 +7179,7 @@ function confirmNqSchedule() {
     setStatus(
       wasShipped
         ? `已改件數並重算扣庫。修改人員：${currentStaff()}。`
-        : `已改單，修改人員：${currentStaff()}。`,
+        : `已修改單，修改人員：${currentStaff()}。`,
       false,
     );
     render();
@@ -7296,7 +7354,7 @@ function ordersListHtml(opts = {}) {
       ]
         .filter(Boolean)
         .join(" ");
-      const tag = o.edited ? '<span class="tag tag-edit">已改單</span>' : "";
+      const tag = orderEditedTagHtml(o);
       const urgentTag = isOrderUrgent(o) ? '<span class="tag tag-urgent">急單</span>' : "";
       const preTag = isPreorderDay(o.shipDate) || o.preorder ? '<span class="tag tag-pre">預開</span>' : "";
       const bookTag = `<span class="tag">${esc(coLabel(o.co))}</span>`;
@@ -7337,6 +7395,7 @@ function ordersListHtml(opts = {}) {
           </div>
           <p class="order-meta">出貨日 ${esc(o.shipDate)}　單號 #${esc(o.no)}${o.shipAddr ? `　送貨 ${esc(o.shipAddr)}` : ""}</p>
           ${o.remark ? `<p class="order-remark">${esc(o.remark)}</p>` : ""}
+          ${orderEditHistoryHtml(o)}
           <p class="order-staff">${staffNoteHtml(o)}</p>
           <div class="order-chips">${lines}</div>
           ${acts}
@@ -7626,9 +7685,10 @@ function ordersTodayCustomerHtml() {
               ${isOrderUrgent(o) ? '<span class="tag tag-urgent">急單</span>' : ""}
               <span class="settle-no">#${esc(o.no)}</span>
               <span class="order-st st-${esc(o.settled && o.status === "open" ? "delivered" : o.status)}">${esc(orderStatusLabel(o))}</span>
-              ${o.edited ? '<span class="tag tag-edit">已改單</span>' : ""}
+              ${orderEditedTagHtml(o)}
             </div>
             ${editingHere ? "" : o.remark ? `<p class="order-remark">${esc(o.remark)}</p>` : ""}
+            ${editingHere ? "" : orderEditHistoryHtml(o)}
             ${editingHere ? "" : `<p class="order-staff">${staffNoteHtml(o)}</p>`}
             ${editingHere ? inlineEditPanelHtml(o) : `<div class="order-chips">${lines || '<span class="muted">無品項</span>'}</div>`}
             ${!editingHere && acts.length ? `<div class="order-actions">${acts.join("")}</div>` : ""}
@@ -7658,7 +7718,7 @@ function ordersTodayCustomerHtml() {
         return `<article class="settle-card is-shipped is-compact${edited ? " was-edited" : ""}${orders.some((o) => highlightOrderIds.includes(o.id)) ? " just-in" : ""}${canMulti ? " is-pickable" : ""}" data-orders-cust="${esc(customer)}" data-orders-nos="${esc(nosAttr)}" ${canMulti && firstId ? `data-order-pick="${esc(firstId)}" data-order-pick-all="${esc(orders.map((o) => o.id).join(","))}"` : ""}>
           <div class="settle-compact">
             <div class="settle-compact-top">
-              <strong class="settle-who">${esc(customer)}</strong>
+              <strong class="settle-who">${edited ? '<span class="tag tag-edit">修改單</span>' : ""}${esc(customer)}</strong>
               <span class="order-st st-shipped">已送出</span>
             </div>
             <p class="settle-compact-meta">${esc(nos)}${addr ? `　${esc(addr)}` : ""}　${orders.length} 張</p>
@@ -7669,7 +7729,7 @@ function ordersTodayCustomerHtml() {
       return `<article class="settle-card is-${stClass}${urgent ? " is-urgent" : ""}${edited ? " was-edited" : ""}${orders.some((o) => highlightOrderIds.includes(o.id)) ? " just-in" : ""}${multi ? " is-multi" : ""}" data-orders-cust="${esc(customer)}" data-orders-nos="${esc(orders.map((o) => String(o.no || "")).join(" "))}">
         <div class="settle-head">
           <div>
-            <strong class="settle-who">${urgent ? '<span class="tag tag-urgent">急單</span>' : ""}${esc(customer)}</strong>
+            <strong class="settle-who">${urgent ? '<span class="tag tag-urgent">急單</span>' : ""}${edited ? '<span class="tag tag-edit">修改單</span>' : ""}${esc(customer)}</strong>
             <p class="order-meta">出貨日 ${esc(day)}${addr ? `　送貨 ${esc(addr)}` : ""}　${orders.length} 張</p>
           </div>
           <span class="order-st st-${esc(allSettled || someSettled ? "delivered" : "open")}">${esc(st)}</span>
@@ -7778,7 +7838,7 @@ function planDayLineRows(day) {
       rows.push({
         customer: o.customer || "未填",
         skuId: l.skuId,
-        name: l.labelName || skuShortName(sku),
+        name: lineSkuName(l),
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
@@ -8239,7 +8299,7 @@ function openLinesForCustomerDay(customer, day) {
       rows.push({
         customer,
         skuId: l.skuId,
-        name: l.labelName || skuShortName(sku),
+        name: lineSkuName(l),
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
@@ -8295,7 +8355,7 @@ function planCropCustomerEntries(day, g) {
           lines.push({
             customer: row.who,
             skuId: l.skuId,
-            name: l.labelName || skuShortName(sku),
+            name: lineSkuName(l),
             qty: round(l.qty),
             unit: sku.unit,
             pack: l.pack || "",
@@ -8341,7 +8401,7 @@ function planCropVendorLines(day, g, customer) {
       lines.push({
         customer,
         skuId: l.skuId,
-        name: l.labelName || skuShortName(sku),
+        name: lineSkuName(l),
         qty: round(l.qty),
         unit: sku.unit,
         pack: l.pack || "",
@@ -9080,7 +9140,7 @@ function groupShipAddr(orders) {
 }
 function orderBlockHtml(o) {
   const bits = [`#${o.no}`, coLabel(o.co)];
-  if (o.edited) bits.push("已改單");
+  if (o.edited) bits.push("修改單");
   if (o.preorder) bits.push("預開");
   if (o.assignedDriver && o.status === "open") bits.push(o.runOut ? "送貨中" : "已派單");
   else if (o.assignedDriver) bits.push(`司機 ${o.assignedDriver}`);
@@ -10404,6 +10464,8 @@ function render() {
           ? "進貨"
         : page === "books" && booksPart === "sales"
           ? "出貨帳單"
+        : page === "books" && booksPart === "ledger"
+          ? "進銷存清單"
         : page === "books"
           ? "倉管／帳款"
           : page === "help"
@@ -10447,6 +10509,8 @@ function render() {
   if (pageIn) pageIn.hidden = !(onBooks && booksPart === "in");
   const pageSales = document.getElementById("page-sales");
   if (pageSales) pageSales.hidden = !(onBooks && booksPart === "sales");
+  const pageLedger = document.getElementById("page-ledger");
+  if (pageLedger) pageLedger.hidden = !(onBooks && booksPart === "ledger");
   const pageRack = document.getElementById("page-rack");
   if (pageRack) pageRack.hidden = !onRack;
   const kindTabs = document.getElementById("stock-kind-tabs");
@@ -10503,6 +10567,9 @@ function render() {
     run(() => applyInPane(false));
   }
   if (onBooks && booksPart === "sales") run(renderSalesBooks);
+  if (onBooks && booksPart === "ledger" && typeof window.renderBooksLedger === "function") {
+    run(window.renderBooksLedger);
+  }
   if (onRack) run(renderRack);
 }
 
@@ -11579,6 +11646,16 @@ document.getElementById("ticket")?.addEventListener("click", (e) => {
   renderCheck();
 });
 document.getElementById("ticket")?.addEventListener("input", (e) => {
+  const ticketNote = e.target.closest("[data-ticket-note]");
+  if (ticketNote) {
+    const i = Number(ticketNote.dataset.ticketNote);
+    if (ticketLines[i]) {
+      const v = ticketNote.value.trim();
+      if (v) ticketLines[i].note = v;
+      else delete ticketLines[i].note;
+    }
+    return;
+  }
   const ticketCont = e.target.closest("[data-ticket-container-no]");
   if (ticketCont) {
     const i = Number(ticketCont.dataset.ticketContainerNo);
@@ -12148,12 +12225,14 @@ document.getElementById("order-form").onsubmit = (e) => {
     if (!mine.length) return setStatus(`這張是${coLabel(o.co)}單，請至少留一項${coLabel(o.co)}品項。`, true);
     o.customer = who;
     o.shipAddr = shipAddrValue();
+    const prevRemark = String(o.remark || "").trim();
     o.remark = orderNoteValue();
     o.shipDate = day;
     o.preorder = isPreorderDay(day);
     o.urgent = orderUrgentValue();
     o.lines = mine;
-    markOrderEdited(o);
+    const remarkChanged = prevRemark !== String(o.remark || "").trim();
+    markOrderEdited(o, remarkChanged ? "改品項／備註" : "改品項");
     savedIds.push(o.id);
     let siblingId = "";
     if (other.length) {
@@ -12171,7 +12250,7 @@ document.getElementById("order-form").onsubmit = (e) => {
       : "";
     editNote = wasShipped
       ? `已改件數並重算扣庫。修改人員：${currentStaff()}。${otherNote}`
-      : `已改單，修改人員：${currentStaff()}。${otherNote}`;
+      : `已修改單，修改人員：${currentStaff()}。${otherNote}`;
   } else {
     if (ha.length) savedIds.push(addOpenOrderFor("ha", who, day, ha, shipAddrValue()));
     if (nq.length) savedIds.push(addOpenOrderFor("nq", who, day, nq, shipAddrValue()));
@@ -12328,6 +12407,26 @@ document.getElementById("ship-labels-gate")?.addEventListener("change", (e) => {
 });
 document.getElementById("orders-today")?.addEventListener("input", (e) => {
   if (!inlineEdit) return;
+  const remark = e.target.closest("[data-inline-remark]");
+  if (remark) {
+    inlineEdit.remark = remark.value;
+    return;
+  }
+  const note = e.target.closest("[data-inline-note]");
+  if (note) {
+    const i = Number(note.dataset.inlineNote);
+    if (inlineEdit.lines[i]) {
+      const v = note.value.trim();
+      if (v) inlineEdit.lines[i].note = v;
+      else delete inlineEdit.lines[i].note;
+    }
+    return;
+  }
+  const addNote = e.target.closest("[data-inline-add-note]");
+  if (addNote) {
+    inlineEdit.addNote = addNote.value;
+    return;
+  }
   const ban = e.target.closest("[data-inline-ban]");
   if (ban) {
     const i = Number(ban.dataset.inlineBan);
@@ -12576,7 +12675,7 @@ function onOrdersListClick(e) {
     if (o.status === "shipped" && !can("edit-shipped")) return setStatus("已送出後請由會計或主管改件數。", true);
     if (
       o.status === "shipped" &&
-      !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「已改單」，並依新件數重算庫存。`)
+      !confirm(`「${o.customer}」已送出並扣庫。送出修改會標「修改單」，並依新件數重算庫存。`)
     )
       return;
     inlineEdit = null;

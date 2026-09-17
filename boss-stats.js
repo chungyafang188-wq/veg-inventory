@@ -1,8 +1,10 @@
-/** 雅芳（主管）營運統計：進銷存式明細表＋刪除紀錄. Loads last. */
+/** 雅芳（主管）營運統計：Excel 式明細＋刪除紀錄；帳款「進銷存清單」亦由此模組繪製. Loads last. */
 (function () {
-  let statsTab = "orders"; // orders | labels | flow | unpack | ledger | audit
+  let statsTab = "orders"; // orders | labels | flow | unpack | audit
   let statsRange = "30"; // 7 | 30 | all
+  let ledgerRange = "30"; // 7 | 30 | all（帳款進銷存清單）
   let sheetFocus = null; // { id, start, end }
+  const selectedLedgerIds = new Set();
 
   const filters = {
     orders: { from: "", to: "", customer: "", status: "", q: "" },
@@ -54,12 +56,16 @@
     return String(tsOrYmd).slice(0, 10);
   }
 
-  function rangeStart() {
-    if (statsRange === "all") return "";
-    const n = statsRange === "7" ? 7 : 30;
+  function rangeStartFor(rangeKey) {
+    if (rangeKey === "all") return "";
+    const n = rangeKey === "7" ? 7 : 30;
     const d = new Date();
     d.setDate(d.getDate() - (n - 1));
     return dayKey(d.getTime());
+  }
+
+  function rangeStart() {
+    return rangeStartFor(statsRange);
   }
 
   function inRange(ymd) {
@@ -68,7 +74,7 @@
     return String(ymd || "") >= start;
   }
 
-  function passDay(ymd, from, to) {
+  function passDay(ymd, from, to, rangeKey) {
     const day = String(ymd || "");
     const f = String(from || "").trim();
     const t = String(to || "").trim();
@@ -77,7 +83,9 @@
       if (t && day > t) return false;
       return true;
     }
-    return inRange(day);
+    const start = rangeStartFor(rangeKey || statsRange);
+    if (!start) return true;
+    return day >= start;
   }
 
   function qtyText(n) {
@@ -404,7 +412,7 @@
       { text: r.by },
     ]);
     return `
-      ${sheetFiltersHtml(fields, "data-st-clear=\"orders\"", "一列＝一張訂單。品項明細請看「進銷存清單」。")}
+      ${sheetFiltersHtml(fields, "data-st-clear=\"orders\"", "一列＝一張訂單。品項明細請到帳款業務「進銷存清單」。")}
       ${sheetKpis([
         { value: rows.length, label: "訂單筆數" },
         { value: qtyText(qtySum), label: "數量合計" },
@@ -876,10 +884,18 @@
       )}`;
   }
 
-  /* ── 進銷存清單（訂單明細列） ── */
+  /* ── 進銷存清單（訂單明細列；帳款業務） ── */
+
+  function canBooksLedger() {
+    return typeof can === "function" && can("page-books");
+  }
 
   function ledgerStatusKey(o) {
     return orderStatusKey(o);
+  }
+
+  function ledgerRowId(orderId, lineIdx) {
+    return `${orderId}:${lineIdx}`;
   }
 
   function buildLedgerRows() {
@@ -891,26 +907,31 @@
 
     for (const o of state.orders || []) {
       const shipDay = o.shipDate || dayKey(o.createdAt || 0);
-      if (!passDay(shipDay, f.from, f.to)) continue;
+      if (!passDay(shipDay, f.from, f.to, ledgerRange)) continue;
       if (stQ && ledgerStatusKey(o) !== stQ) continue;
       if (custQ && !String(o.customer || "").toLowerCase().includes(custQ)) continue;
 
       const statusLabel = typeof orderStatusLabel === "function" ? orderStatusLabel(o) : o.status || "";
       const coName = typeof coLabel === "function" ? coLabel(o.co) : o.co || "";
-      const lines = (o.lines || []).filter((l) =>
-        typeof lineHasItem === "function" ? lineHasItem(l) : Number(l.qty) > 0 || Number(l.banQty) > 0,
-      );
-      if (!lines.length) continue;
+      const lines = o.lines || [];
 
-      for (const line of lines) {
+      lines.forEach((line, lineIdx) => {
+        const has =
+          typeof lineHasItem === "function" ? lineHasItem(line) : Number(line.qty) > 0 || Number(line.banQty) > 0;
+        if (!has) return;
         const name = itemDisplayName(line);
         if (itemQ) {
           const hay = `${name} ${line.skuId || ""} ${line.note || ""} ${packSpecText(line)}`.toLowerCase();
-          if (!hay.includes(itemQ)) continue;
+          if (!hay.includes(itemQ)) return;
         }
         const qtyShown =
           typeof lineQtyText === "function" ? lineQtyText(line) : Number(line.qty) > 0 ? qtyText(line.qty) : "後填";
+        const id = ledgerRowId(o.id, lineIdx);
         rows.push({
+          id,
+          orderId: o.id,
+          lineIdx,
+          skuId: line.skuId || "",
           shipDate: shipDay,
           co: coName,
           no: o.no,
@@ -929,7 +950,7 @@
           remark: o.remark || "",
           by: o.enteredBy || "",
         });
-      }
+      });
     }
 
     rows.sort(
@@ -942,10 +963,97 @@
     return rows;
   }
 
+  function pruneOrphanLedgerSelection() {
+    const valid = new Set();
+    for (const o of state.orders || []) {
+      (o.lines || []).forEach((_, i) => valid.add(ledgerRowId(o.id, i)));
+    }
+    for (const id of [...selectedLedgerIds]) {
+      if (!valid.has(id)) selectedLedgerIds.delete(id);
+    }
+  }
+
+  function ledgerSheetHtml(rows) {
+    if (!rows.length) return `<p class="st-empty">沒有符合條件的明細</p>`;
+    const allOn = rows.every((r) => selectedLedgerIds.has(r.id));
+    const someOn = !allOn && rows.some((r) => selectedLedgerIds.has(r.id));
+    const headCheck = `<th class="st-check-col">
+      <label class="st-check">
+        <input type="checkbox" data-bl-pick-all ${allOn ? "checked" : ""}${someOn ? " data-indeterminate=\"1\"" : ""} aria-label="全選目前篩選列" />
+      </label>
+    </th>`;
+    const headers = [
+      "出貨日",
+      "帳本",
+      "單號",
+      "客戶",
+      "品項",
+      "數量",
+      "單位",
+      "包裝／規格",
+      "狀態",
+      "實際出貨",
+      "出貨倉",
+      "貨櫃編號",
+      "送往",
+      "送貨地址",
+      "明細備註",
+      "訂單備註",
+      "入單",
+    ];
+    const head = headCheck + headers.map((h) => `<th>${esc(h)}</th>`).join("");
+    const body = rows
+      .map((r) => {
+        const on = selectedLedgerIds.has(r.id);
+        const cells = [
+          { text: r.shipDate, cls: "st-cell-date" },
+          { text: r.co },
+          { text: `#${r.no}`, cls: "st-num" },
+          { text: r.customer },
+          { text: r.item },
+          { text: String(r.qty), cls: "st-num" },
+          { text: r.unit },
+          { text: r.pack },
+          { text: r.status },
+          { text: r.shippedOn, cls: "st-cell-date" },
+          { text: r.wh },
+          { text: r.lot },
+          { text: r.dest },
+          { text: r.addr },
+          { text: r.lineNote },
+          { text: r.remark },
+          { text: r.by },
+        ];
+        const tds = cells
+          .map((c) => {
+            const cls = c.cls ? ` class="${esc(c.cls)}"` : "";
+            return `<td${cls}>${esc(String(c.text ?? ""))}</td>`;
+          })
+          .join("");
+        return `<tr class="${on ? "st-row-on" : ""}">
+          <td class="st-check-col">
+            <label class="st-check">
+              <input type="checkbox" data-bl-pick="${esc(r.id)}" ${on ? "checked" : ""} aria-label="選取 ${esc(String(r.no))} ${esc(r.item)}" />
+            </label>
+          </td>
+          ${tds}
+        </tr>`;
+      })
+      .join("");
+    return `<div class="st-sheet-wrap">
+      <table class="st-sheet st-sheet-pick">
+        <thead><tr>${head}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+  }
+
   function ledgerBody() {
     const f = filters.ledger;
+    pruneOrphanLedgerSelection();
     const rows = buildLedgerRows();
     const qtySum = rows.reduce((n, r) => n + (parseFloat(String(r.qty).replace(/,/g, "")) || 0), 0);
+    const selected = selectedLedgerIds.size;
     const fields = [
       filterField({ id: "st-ledger-from", label: "出貨日起", type: "date", value: f.from }),
       filterField({ id: "st-ledger-to", label: "出貨日迄", type: "date", value: f.to }),
@@ -973,53 +1081,49 @@
         options: statusOptions(),
       }),
     ];
-    const cells = rows.map((r) => [
-      { text: r.shipDate, cls: "st-cell-date" },
-      { text: r.co },
-      { text: `#${r.no}`, cls: "st-num" },
-      { text: r.customer },
-      { text: r.item },
-      { text: String(r.qty), cls: "st-num" },
-      { text: r.unit },
-      { text: r.pack },
-      { text: r.status },
-      { text: r.shippedOn, cls: "st-cell-date" },
-      { text: r.wh },
-      { text: r.lot },
-      { text: r.dest },
-      { text: r.addr },
-      { text: r.lineNote },
-      { text: r.remark },
-      { text: r.by },
-    ]);
     return `
-      ${sheetFiltersHtml(fields, "data-st-clear=\"ledger\"", "一列＝一筆訂單明細（進銷存銷售列）。")}
+      ${sheetFiltersHtml(fields, "data-st-clear=\"ledger\"", "一列＝一筆訂單明細（進銷存銷售列）。勾選後可備往後同步進銷存。")}
       ${sheetKpis([
         { value: rows.length, label: "明細列" },
         { value: qtyText(qtySum), label: "數量合計" },
+        { value: selected, label: "已選取" },
       ])}
-      ${sheetTable(
-        [
-          "出貨日",
-          "帳本",
-          "單號",
-          "客戶",
-          "品項",
-          "數量",
-          "單位",
-          "包裝／規格",
-          "狀態",
-          "實際出貨",
-          "出貨倉",
-          "貨櫃編號",
-          "送往",
-          "送貨地址",
-          "明細備註",
-          "訂單備註",
-          "入單",
-        ],
-        cells,
-      )}`;
+      <div class="st-ledger-actions btn-row">
+        <button type="button" class="ghost" data-bl-clear-sel${selected ? "" : " disabled"}>清除選取</button>
+        <button type="button" class="primary" disabled title="即將開放">同步進銷存（即將開放）</button>
+      </div>
+      ${ledgerSheetHtml(rows)}`;
+  }
+
+  function applyIndeterminateChecks(root) {
+    (root || document).querySelectorAll('[data-bl-pick-all][data-indeterminate="1"]').forEach((el) => {
+      el.indeterminate = true;
+    });
+  }
+
+  function renderBooksLedger() {
+    bindOnce();
+    const root = document.getElementById("bl-root");
+    if (!root) return;
+    if (!canBooksLedger()) {
+      root.innerHTML = `<p class="st-empty">沒有倉管／帳款權限。</p>`;
+      return;
+    }
+    root.innerHTML = `
+      <header class="st-head">
+        <h2>進銷存清單</h2>
+        <p class="muted">訂單明細列（Excel 式）。可勾選列，之後同步進銷存。</p>
+      </header>
+      <div class="st-range" role="group" aria-label="區間">
+        <button type="button" class="pick${ledgerRange === "7" ? " on" : ""}" data-bl-range="7">近7日</button>
+        <button type="button" class="pick${ledgerRange === "30" ? " on" : ""}" data-bl-range="30">近30日</button>
+        <button type="button" class="pick${ledgerRange === "all" ? " on" : ""}" data-bl-range="all">全部</button>
+      </div>
+      <div class="st-body">${ledgerBody()}</div>`;
+    applyIndeterminateChecks(root);
+    restoreSheetFocus();
+    const coName = document.getElementById("co-name");
+    if (coName) coName.textContent = "進銷存清單";
   }
 
   /* ── 刪除紀錄 ── */
@@ -1118,12 +1222,13 @@
     const root = document.getElementById("st-root");
     if (!root) return;
 
+    if (statsTab === "ledger") statsTab = "orders";
+
     let body = "";
     if (statsTab === "orders") body = ordersBody();
     else if (statsTab === "labels") body = labelsBody();
     else if (statsTab === "flow") body = flowBody();
     else if (statsTab === "unpack") body = unpackBody();
-    else if (statsTab === "ledger") body = ledgerBody();
     else {
       const audits = auditRows();
       body = `
@@ -1135,7 +1240,7 @@
     root.innerHTML = `
       <header class="st-head">
         <h2>營運統計</h2>
-        <p class="muted">雅芳專用：訂單／標籤／進出調撥／拆櫃數量／進銷存清單與刪除紀錄（Excel 式明細）。</p>
+        <p class="muted">雅芳專用：訂單／標籤／進出調撥／拆櫃數量與刪除紀錄。進銷存清單已移至帳款業務。</p>
       </header>
       <div class="st-range" role="group" aria-label="區間">
         <button type="button" class="pick${statsRange === "7" ? " on" : ""}" data-st-range="7">近7日</button>
@@ -1147,7 +1252,6 @@
         <button type="button" class="tab${statsTab === "labels" ? " on" : ""}" data-st-tab="labels">標籤</button>
         <button type="button" class="tab${statsTab === "flow" ? " on" : ""}" data-st-tab="flow">進出調撥</button>
         <button type="button" class="tab${statsTab === "unpack" ? " on" : ""}" data-st-tab="unpack">拆櫃數量</button>
-        <button type="button" class="tab${statsTab === "ledger" ? " on" : ""}" data-st-tab="ledger">進銷存清單</button>
         <button type="button" class="tab${statsTab === "audit" ? " on" : ""}" data-st-tab="audit">刪除紀錄</button>
       </nav>
       <div class="st-body">${body}</div>`;
@@ -1165,6 +1269,7 @@
       const tab = e.target.closest("[data-st-tab]");
       if (tab) {
         statsTab = tab.getAttribute("data-st-tab") || "orders";
+        if (statsTab === "ledger") statsTab = "orders";
         renderStats();
         return;
       }
@@ -1174,10 +1279,24 @@
         renderStats();
         return;
       }
+      const blRange = e.target.closest("[data-bl-range]");
+      if (blRange) {
+        ledgerRange = blRange.getAttribute("data-bl-range") || "30";
+        renderBooksLedger();
+        return;
+      }
+      const clearSel = e.target.closest("[data-bl-clear-sel]");
+      if (clearSel) {
+        selectedLedgerIds.clear();
+        renderBooksLedger();
+        return;
+      }
       const clearBtn = e.target.closest("[data-st-clear]");
       if (clearBtn) {
-        clearFilters(clearBtn.getAttribute("data-st-clear") || "");
-        renderStats();
+        const which = clearBtn.getAttribute("data-st-clear") || "";
+        clearFilters(which);
+        if (which === "ledger") renderBooksLedger();
+        else renderStats();
       }
     });
     document.body.addEventListener("input", (e) => {
@@ -1185,19 +1304,42 @@
       if (!t?.id || !LIVE_INPUT_IDS.has(t.id)) return;
       captureFocus(t);
       readFiltersFromDom();
-      renderStats();
+      if (String(t.id).startsWith("st-ledger-")) renderBooksLedger();
+      else renderStats();
     });
     document.body.addEventListener("change", (e) => {
+      const pick = e.target.closest("[data-bl-pick]");
+      if (pick) {
+        const id = pick.getAttribute("data-bl-pick") || "";
+        if (!id) return;
+        if (pick.checked) selectedLedgerIds.add(id);
+        else selectedLedgerIds.delete(id);
+        renderBooksLedger();
+        return;
+      }
+      const pickAll = e.target.closest("[data-bl-pick-all]");
+      if (pickAll) {
+        const rows = buildLedgerRows();
+        if (pickAll.checked) rows.forEach((r) => selectedLedgerIds.add(r.id));
+        else rows.forEach((r) => selectedLedgerIds.delete(r.id));
+        renderBooksLedger();
+        return;
+      }
       const t = e.target;
       if (!t?.id || !FILTER_KEYS[t.id]) return;
       if (LIVE_INPUT_IDS.has(t.id)) return;
       readFiltersFromDom();
-      renderStats();
+      if (String(t.id).startsWith("st-ledger-")) renderBooksLedger();
+      else renderStats();
     });
   }
 
   window.renderBossStats = function () {
     bindOnce();
     renderStats();
+  };
+  window.renderBooksLedger = renderBooksLedger;
+  window.getSelectedLedgerIds = function () {
+    return [...selectedLedgerIds];
   };
 })();

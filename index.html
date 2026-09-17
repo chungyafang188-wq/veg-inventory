@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=313" />
+    <link rel="stylesheet" href="./styles.css?v=335" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
     <link rel="stylesheet" href="./unpack-flow.css?v=10" />
     <link rel="stylesheet" href="./site-work.css?v=3" />
@@ -226,6 +226,22 @@
                 <label class="date-inline">日期 <input id="orders-today-date" type="date" /></label>
               </div>
               <p class="hint">下單後依客戶彙整。未送貨在上、已送出在下；急單排最前。未結可改；核對後按「結單」＝會計收單確認（不扣庫）。備貨完成後再送貨才扣庫。</p>
+              <div class="orders-today-search" id="orders-today-search">
+                <label class="orders-today-q-lab" for="orders-today-q">搜尋</label>
+                <div class="orders-today-q-row">
+                  <input
+                    id="orders-today-q"
+                    type="text"
+                    placeholder="客戶名稱或訂單號碼"
+                    autocomplete="off"
+                    spellcheck="false"
+                    enterkeyhint="search"
+                    inputmode="search"
+                  />
+                  <button type="button" class="ghost is-idle" id="orders-today-q-clear" tabindex="-1" aria-hidden="true">清除</button>
+                </div>
+              </div>
+              <p class="empty" id="orders-today-q-miss" hidden></p>
               <div id="orders-today-rest"></div>
               <div id="orders-today"></div>
             </section>
@@ -244,8 +260,10 @@
           <div class="orders-swipe" id="plan-main-swipe">
             <div class="orders-pane" data-plan-main-page="short">
               <h2 id="plan-short-title">現場排程・備貨</h2>
-              <p class="hint plan-short-hint">點品項卡看該菜客戶清單；備貨中在上、已送貨在下。</p>
+              <p class="hint plan-short-hint">上「當日訂單」依品項看客戶；中「理貨確認」勾選備妥；下「全部訂單」看狀態。備貨中在上、已送貨在下。點區標題可摺疊。</p>
               <div id="plan-short"></div>
+              <div id="plan-break" class="plan-break-host" aria-label="理貨確認區"></div>
+              <div id="plan-all" class="plan-all-host" aria-label="全部訂單區"></div>
             </div>
             <div class="orders-pane" data-plan-main-page="ship">
               <nav class="tabs" id="plan-pane-tabs" aria-label="送貨切換">
@@ -256,7 +274,6 @@
               <div id="plan-done" hidden></div>
             </div>
           </div>
-          <div id="plan-break"></div>
         </section>
       </section>
       <section id="page-stock" hidden>
@@ -527,13 +544,13 @@
       </div>
       <p id="status" class="status" hidden></p>
     </div>
-    <script src="./line-parse.js?v=90"></script>
+    <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=313"></script>
+    <script src="./app.js?v=335"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=13"></script>
     <script src="./site-work.js?v=3"></script>
-    <script src="./boss-stats.js?v=5"></script>
+    <script src="./boss-stats.js?v=11"></script>
   </body>
 </html>

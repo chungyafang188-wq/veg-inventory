@@ -188,12 +188,25 @@
       return { skuId: "rb-pend", qty, pallet };
     }
     if (/洋蔥?\s*B|蔥B|洋B/.test(t)) return { skuId: "on-b-kg", qty, pallet };
-    if (/南瓜?\s*B|瓜B/.test(t)) return { skuId: "pk-b-kg", qty, pallet };
-    if (t.includes("阿成")) return { skuId: onionBits.spec12 === false || /20/.test(raw) ? "pk-ch-20" : "pk-ch-18", qty, pallet };
-    if (t.includes("密本") || /東昇/.test(t) || /南瓜/.test(t)) {
-      const use20 = onionBits.spec12 === false || /20/.test(raw);
-      const use18 = onionBits.spec12 === true || /18/.test(raw);
-      return { skuId: use20 && !use18 ? "pk-mi-20" : "pk-mi-18", qty, pallet };
+    if (/南瓜?\s*B|瓜B|Ｂ級|B級/.test(t) && /南瓜|瓜/.test(t)) {
+      const line = { skuId: "pk-b-20", qty, pallet, spec: "Ｂ級", weight: /其他/.test(t) ? "其他" : /25/.test(t) ? "25K" : /18/.test(t) ? "18K" : "20K" };
+      if (line.weight === "其他") line.skuId = "pk-b-kg";
+      else if (line.weight === "25K") line.skuId = "pk-b-25";
+      else if (line.weight === "18K") line.skuId = "pk-b-18";
+      return line;
+    }
+    if (t.includes("阿成") || t.includes("密本") || /東昇/.test(t) || /南瓜/.test(t) || /其他/.test(t) && /南瓜|瓜/.test(t)) {
+      let variety = "密本";
+      if (t.includes("阿成")) variety = "阿成";
+      else if (/其他/.test(t) && /南瓜|瓜/.test(t)) variety = "其他";
+      let weight = "18K";
+      if (/25/.test(t)) weight = "25K";
+      else if (/其他重|重量其他|其他K/.test(t)) weight = "其他";
+      else if (/20/.test(t) && !/18/.test(t)) weight = "20K";
+      else if (onionBits.spec12 === false || (/20/.test(raw) && !/18/.test(raw))) weight = "20K";
+      const code = { 密本: "mi", 阿成: "ch", 其他: "oth" }[variety] || "mi";
+      const wCode = weight === "其他" ? "x" : weight === "25K" ? "25" : weight === "20K" ? "20" : "18";
+      return { skuId: `pk-${code}-${wCode}`, qty, pallet, spec: variety, weight };
     }
     if (/薄荷/.test(t)) return { skuId: "mint-kg", qty, pallet };
     if (/紫蘇/.test(t) && /斤/.test(t)) return { skuId: "shiso-jin", qty, pallet };
@@ -204,14 +217,19 @@
       if (/印尼/.test(t)) skuId = "veg-cab-id";
       else if (/越/.test(t)) skuId = "veg-cab-vn";
       const line = { skuId, qty, pallet };
+      line.leafType = /撥白/.test(t) ? "撥白" : "綠葉";
       const specs = ["奧奇那", "硬種", "半軟", "全軟", "228", "633"];
       const hit = specs.find((s) => t.includes(s));
       line.spec = hit || "硬種";
       return line;
     }
     if (/大白菜/.test(t)) {
-      if (/袋/.test(t)) return { skuId: "veg-nap-bag", qty, pallet };
-      return { skuId: "veg-nap-box", qty, pallet };
+      let skuId = "veg-nap-kr";
+      if (/印尼/.test(t)) skuId = "veg-nap-id";
+      else if (/越/.test(t)) skuId = "veg-nap-vn";
+      const line = { skuId, qty, pallet };
+      line.spec = /袋/.test(t) ? "袋裝" : "箱裝";
+      return line;
     }
     if (/小辣/.test(t)) return { skuId: "veg-chili-sm", qty, pallet };
     if (/大辣|大辣椒|朝天椒/.test(t)) return { skuId: "veg-chili-lg", qty, pallet };

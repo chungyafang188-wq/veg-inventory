@@ -31,6 +31,16 @@
     return el;
   }
 
+  function orderNoSortKey(no) {
+    const s = String(no ?? "").trim();
+    const m = /^(\d+)(?:-(\d+))?$/.exec(s);
+    if (!m) {
+      const n = Number(no);
+      return Number.isFinite(n) ? n * 1000 : 0;
+    }
+    return Number(m[1]) * 1000 + (m[2] != null ? Number(m[2]) : 0);
+  }
+
   function dayKey(tsOrYmd) {
     if (!tsOrYmd) return "";
     if (typeof tsOrYmd === "number") {
@@ -254,15 +264,27 @@
     if (banN > 0) bits.push(`${banN}版`);
     if (line.pack) bits.push(line.pack);
     if (line.size) bits.push(line.size);
+    if (line.leafType) bits.push(line.leafType);
+    if (line.spec) bits.push(line.spec);
+    if (line.weight || line.wt) bits.push(line.weight || line.wt);
     if (line.pallet) bits.push("疊棧板");
     return bits.join("／");
   }
 
   function lotText(line) {
-    return line.lotContainer || line.lotUha || "";
+    const cont =
+      typeof lineContainerNo === "function"
+        ? lineContainerNo(line)
+        : String(line.containerNo || line.contNo || "").trim();
+    return cont || line.lotContainer || line.lotUha || "";
   }
 
   function lineWhText(line) {
+    const ship =
+      typeof lineShipWh === "function"
+        ? lineShipWh(line)
+        : String(line.shipWh || line.outWh || "").trim();
+    if (ship) return ship;
     if (!line.lotWh) return "";
     return typeof warehouseLabel === "function" ? warehouseLabel(line.lotWh) : String(line.lotWh);
   }
@@ -329,7 +351,7 @@
       (a, b) =>
         String(b.shipDate).localeCompare(String(a.shipDate)) ||
         String(a.customer).localeCompare(String(b.customer), "zh-Hant") ||
-        Number(a.no) - Number(b.no),
+        orderNoSortKey(a.no) - orderNoSortKey(b.no),
     );
     return rows;
   }
@@ -914,7 +936,7 @@
       (a, b) =>
         String(b.shipDate).localeCompare(String(a.shipDate)) ||
         String(a.customer).localeCompare(String(b.customer), "zh-Hant") ||
-        Number(a.no) - Number(b.no) ||
+        orderNoSortKey(a.no) - orderNoSortKey(b.no) ||
         String(a.item).localeCompare(String(b.item), "zh-Hant"),
     );
     return rows;
@@ -988,8 +1010,8 @@
           "包裝／規格",
           "狀態",
           "實際出貨",
-          "倉庫",
-          "出貨編號",
+          "出貨倉",
+          "貨櫃編號",
           "送往",
           "送貨地址",
           "明細備註",

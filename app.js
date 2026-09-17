@@ -2457,55 +2457,84 @@ function ensureLabelSel(day, rows) {
   const keys = new Set(rows.map((r) => r.key));
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
-/** Physical label artwork size (mm): portrait 50×70 thermal sticker (no print rotate). */
-const LABEL_PRINT_W_MM = 50;
-const LABEL_PRINT_H_MM = 70;
+/**
+ * Artwork is landscape 寬版 70×50 (user / physical sticker look).
+ * Thermal drivers usually expect portrait 50×70 feed, so print wraps each sticker in
+ * .label-page and rotates 90° onto @page 50×70. On-screen preview stays 70×50 WYSIWYG.
+ */
+const LABEL_PRINT_W_MM = 70;
+const LABEL_PRINT_H_MM = 50;
+function labelPrintNeedsRotate() {
+  return LABEL_PRINT_W_MM > LABEL_PRINT_H_MM;
+}
 /**
  * Print path injects this CSS into a blank window — styles.css is NOT used for printing.
  *
- * Layout (CSS grid, all in-flow — no absolute):
- *   article.label-sticker  fixed 50×70, overflow hidden, grid rows: 1fr | auto
- *     main (row1–2 content; minmax(0,1fr) so it cannot push row 3 off-page)
- *     foot/meta (第三排: ship/text = 太陽日／流水; container = 國別／廠商)
- *
- * Why 第三排 used to hit page 2: large flex children ignored max-height in print,
- * so the in-flow third block paginated. Grid reserves the auto row inside 70mm.
+ * Layout (CSS grid, all in-flow — no absolute footers):
+ *   article.label-sticker  fixed 70×50, overflow hidden, grid rows: 1fr | auto
+ *     main (客戶／品名／貨櫃編號; minmax(0,1fr) so foot cannot spill to page 2)
+ *     foot/meta (太陽日／流水; container = 國別／廠商); bottom 5mm pad reserved
  */
 function labelPrintCss() {
   const w = LABEL_PRINT_W_MM;
   const h = LABEL_PRINT_H_MM;
-  return `@page { size: ${w}mm ${h}mm; margin: 0; }
-html, body {
-  margin: 0; padding: 0; background: #fff;
-  width: ${w}mm; max-width: ${w}mm;
-  -webkit-print-color-adjust: exact; print-color-adjust: exact;
-}
-* {
+  const rotate = labelPrintNeedsRotate();
+  const pageW = rotate ? h : w;
+  const pageH = rotate ? w : h;
+  const pageRule = `@page { size: ${pageW}mm ${pageH}mm; margin: 0; }`;
+  // Do not put transform:none on .label-sticker — rotate print needs it.
+  const sharpen = `* {
   box-sizing: border-box;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
   text-shadow: none !important; box-shadow: none !important;
   filter: none !important; opacity: 1 !important;
-  transform: none !important; -webkit-font-smoothing: none;
+  -webkit-font-smoothing: none;
 }
-.label-sticker {
-  width: ${w}mm; height: ${h}mm; max-height: ${h}mm;
-  margin: 0; padding: 1.2mm 2mm 5mm;
+.label-sticker * {
+  transform: none !important;
+}`;
+  const stickerBase = `width: ${w}mm; height: ${h}mm; max-height: ${h}mm;
+  margin: 0; padding: 1.2mm 2.2mm 5mm; box-sizing: border-box;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   align-content: stretch; justify-items: stretch;
   overflow: hidden;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: #000; background: #fff;`;
+  const frame = rotate
+    ? `.label-page {
+  width: ${pageW}mm; height: ${pageH}mm; margin: 0; padding: 0; overflow: hidden;
+  position: relative; box-sizing: border-box;
   page-break-inside: avoid; break-inside: avoid;
   page-break-after: always; break-after: page;
-  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
-  color: #000; background: #fff;
 }
-.label-sticker:last-child { page-break-after: auto; break-after: auto; }
+.label-page:last-child { page-break-after: auto; break-after: auto; }
+.label-sticker {
+  ${stickerBase}
+  position: absolute; top: 0; left: 0;
+  transform: translate(${h}mm, 0) rotate(90deg);
+  transform-origin: top left;
+}`
+    : `.label-sticker {
+  ${stickerBase}
+  page-break-inside: avoid; break-inside: avoid;
+  page-break-after: always; break-after: page;
+}
+.label-sticker:last-child { page-break-after: auto; break-after: auto; }`;
+  return `${pageRule}
+html, body {
+  margin: 0; padding: 0; background: #fff;
+  width: ${pageW}mm; max-width: ${pageW}mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+${sharpen}
+${frame}
 .sticker-foot {
   grid-row: 2; align-self: end;
   display: flex; align-items: baseline; justify-content: space-between;
-  width: 100%; gap: 1.5mm; margin: 0.6mm 0 0; padding: 0;
-  min-height: 3.2mm; max-height: 4.5mm;
-  font-size: 3mm; font-weight: 800; letter-spacing: 0.04em; line-height: 1;
+  width: 100%; gap: 1.5mm; margin: 0.4mm 0 0; padding: 0;
+  min-height: 3.2mm; max-height: 4.2mm;
+  font-size: 3.2mm; font-weight: 800; letter-spacing: 0.04em; line-height: 1;
   color: #000; overflow: hidden;
 }
 .sticker-foot-left, .sticker-foot-right {
@@ -2516,10 +2545,10 @@ html, body {
 .sticker-text-main {
   grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  overflow: hidden; font-size: 14mm; color: #000;
+  overflow: hidden; font-size: 15mm; color: #000;
 }
-.sticker-text-main.is-long { font-size: 9.5mm; }
-.sticker-text-main.is-split { font-size: 12mm; }
+.sticker-text-main.is-long { font-size: 10mm; }
+.sticker-text-main.is-split { font-size: 12.5mm; }
 .sticker-text-only {
   display: flex; align-items: center; justify-content: center;
   width: 100%; margin: 0;
@@ -2528,11 +2557,11 @@ html, body {
 }
 .sticker-text-only.is-long { letter-spacing: 0.02em; }
 .sticker-text-only.is-split {
-  flex-direction: column; gap: 0.4mm; letter-spacing: 0.03em; line-height: 0.92;
+  flex-direction: column; gap: 0.3mm; letter-spacing: 0.03em; line-height: 0.92;
 }
 .sticker-text-only.is-split span { display: block; }
 .sticker-text-remark {
-  margin: 1.2mm 0 0; font-size: 0.62em; font-weight: 800;
+  margin: 1mm 0 0; font-size: 0.62em; font-weight: 800;
   line-height: 1.05; letter-spacing: 0.03em; word-break: break-word; overflow: hidden;
   color: #000;
 }
@@ -2540,53 +2569,54 @@ html, body {
 .sticker-ship-main {
   grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  overflow: hidden; font-size: 14.5mm; color: #000;
+  overflow: hidden; font-size: 15mm; color: #000;
 }
-.sticker-ship-main.is-long { font-size: 11.5mm; }
+.sticker-ship-main.is-long { font-size: 12mm; }
 .sticker-ship-cust {
   margin: 0; max-width: 100%;
   font-size: 1em; font-weight: 900; line-height: 0.95; letter-spacing: 0.05em;
   word-break: break-word; overflow: hidden; color: #000;
 }
 .sticker-ship-sku {
-  margin: 2mm 0 0; max-width: 100%;
+  margin: 1.6mm 0 0; max-width: 100%;
   font-size: 0.78em; font-weight: 800; line-height: 1.02; letter-spacing: 0.03em;
   word-break: break-word; overflow: hidden; color: #000;
-  display: flex; flex-direction: column; align-items: center; gap: 0.4mm;
+  display: flex; flex-direction: column; align-items: center; gap: 0.3mm;
 }
 .sticker-ship-sku span { display: block; }
-.label-sticker.is-container { text-align: center; padding: 1mm 1.6mm 5mm; }
+.label-sticker.is-container { text-align: center; padding: 1mm 2mm 5mm; }
 .sticker-cont-main {
   grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2.2mm; overflow: hidden; padding: 0 0.2mm; color: #000;
+  gap: 1.8mm; overflow: hidden; padding: 0 0.2mm; color: #000;
 }
 .sticker-cont-name {
   flex: 0 1 auto; margin: 0; padding: 0 0.2mm; width: 100%;
-  font-size: 13.5mm; font-weight: 900; line-height: 0.92; letter-spacing: 0.03em;
+  font-size: 12.5mm; font-weight: 900; line-height: 0.92; letter-spacing: 0.03em;
   white-space: nowrap; overflow: hidden; word-break: keep-all; color: #000;
 }
-.sticker-cont-name.is-long { font-size: 10mm; letter-spacing: 0.015em; }
+.sticker-cont-name.is-long { font-size: 9.5mm; letter-spacing: 0.015em; }
 .label-sticker.is-container .sticker-box {
   flex: 0 0 auto; margin: 0; padding: 0; width: 100%; max-width: 100%;
   display: flex; align-items: center; justify-content: center; flex-wrap: nowrap;
-  gap: 0.4mm 0.6mm;
-  font-size: 7.2mm; font-weight: 900; letter-spacing: 0; line-height: 1.02;
-  white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; color: #000;
+  gap: 0.4mm 0.55mm;
+  font-size: 7.6mm; font-weight: 900; letter-spacing: 0; line-height: 1.02;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums; color: #000;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 6.2mm; gap: 0.3mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.2mm; gap: 0.2mm; }
+.label-sticker.is-container .sticker-box.is-wide { font-size: 6.6mm; gap: 0.3mm; }
+.label-sticker.is-container .sticker-box.is-xwide { font-size: 5.6mm; gap: 0.25mm; }
 .sticker-box-no, .sticker-box-md, .sticker-box-seq { display: inline-block; }
 .sticker-box-md, .sticker-box-seq { letter-spacing: 0.02em; }
 .sticker-cont-meta {
   grid-row: 2; align-self: end;
-  margin: 0; padding-top: 0.4mm; max-height: 6mm;
+  margin: 0; padding-top: 0.3mm; max-height: 5.5mm;
   display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: center;
   gap: 1mm 1.4mm;
-  font-size: 4.8mm; font-weight: 700; line-height: 1.05; letter-spacing: 0.04em;
+  font-size: 4.5mm; font-weight: 700; line-height: 1.05; letter-spacing: 0.04em;
   overflow: hidden; white-space: nowrap; color: #000;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.4mm; }
+.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.1mm; }
 .sticker-cont-country, .sticker-cont-vendor { font-size: 1em; font-weight: 700; }`;
 }
 function stickerFootHtml(left, right) {
@@ -2633,8 +2663,8 @@ function labelStickerHtml(item, forPrint) {
       ? `<span class="sticker-box-no">${esc(no)}</span>${md ? `<span class="sticker-box-md">${esc(md)}</span>` : ""}${seq ? `<span class="sticker-box-seq">${esc(seq)}</span>` : ""}`
       : esc(box);
     const fullLen = (parts?.full || box).length;
-    // Typical max: UHA + 4 digits + MMDD + 2-digit seq = 13
-    const boxWide = fullLen > 14 ? " is-xwide" : fullLen > 13 ? " is-wide" : "";
+    // 寬版 70mm: typical UHA223+MMDD+seq ≈ 12 fits large; scale only for longer codes
+    const boxWide = fullLen > 15 ? " is-xwide" : fullLen > 14 ? " is-wide" : "";
     return `<article class="${cls}">
       <div class="sticker-cont-main">
         <p class="sticker-cont-name${long}">${esc(name)}</p>
@@ -2658,13 +2688,15 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
-  const body = cards.join("");
+  const body = labelPrintNeedsRotate()
+    ? cards.map((c) => `<div class="label-page">${c}</div>`).join("")
+    : cards.join("");
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
 <style>${labelPrintCss()}</style></head><body>${body}</body></html>`;
   let w = null;
   try {
     // Do not pass noopener here — it makes window.open return null and print never runs.
-    w = window.open("", "_blank", "width=420,height=640");
+    w = window.open("", "_blank", "width=560,height=420");
   } catch (_) {
     w = null;
   }
@@ -2788,7 +2820,7 @@ function renderLabels() {
     b.classList.toggle("on", b.dataset.labelKind === labelKind);
   });
   const hint = document.getElementById("label-kind-hint");
-  if (hint) hint.textContent = "熱感紙 50mm × 70mm（直式）。";
+  if (hint) hint.textContent = "熱感紙 70mm × 50mm（寬版）。預覽＝印出樣子。";
   const paneText = document.getElementById("label-pane-text");
   const paneCont = document.getElementById("label-pane-container");
   const paneShip = document.getElementById("label-pane-ship");

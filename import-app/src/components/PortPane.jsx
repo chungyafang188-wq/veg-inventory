@@ -269,7 +269,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
             sortBy={sortBy}
             onSort={setSortBy}
             sortOpts={SORT_OPTS.port}
-            placeholder="搜尋編號、櫃號、品名、碼頭…"
+            placeholder="搜尋編號、櫃號、品名、碼頭、備註…"
             resultCount={viewed.length}
             totalCount={(rows || []).length}
           />
@@ -368,6 +368,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                         <span className="font-mono text-sm font-semibold text-slate-700">{r.containerNo || "無櫃號"}</span>
                       </div>
                       <p className="m-0 mt-0.5 text-base font-semibold text-slate-800">{r.product || "—"}</p>
+                      {r.note ? <p className="m-0 mt-0.5 truncate text-xs text-slate-500">備註 {r.note}</p> : null}
                     </div>
 
                     <button type="button" className="imp-btn-primary" onClick={() => markOne(uha)}>
@@ -419,6 +420,18 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                         onChange={(e) => patch(uha, "missingData", e.target.checked)}
                       />
                       <span className="whitespace-nowrap text-xs font-semibold text-slate-800">缺資料</span>
+                    </label>
+                  </div>
+
+                  <div className="border-t border-slate-100/60 bg-white px-3 py-2">
+                    <label className="block min-w-0">
+                      <span className="imp-field-lab">備註</span>
+                      <input
+                        className="imp-field"
+                        value={r.note || ""}
+                        placeholder="查驗備註（選填）"
+                        onChange={(e) => patch(uha, "note", e.target.value)}
+                      />
                     </label>
                   </div>
 

@@ -1103,6 +1103,7 @@
     if (row.fumigateAt == null) row.fumigateAt = "";
     if (row.customsNo == null) row.customsNo = "";
     if (row.dock == null) row.dock = "";
+    if (row.note == null) row.note = "";
     /** 缺電放／缺資料：分開勾選，才知道要通知缺哪個 */
     if (row.missingTelex == null) row.missingTelex = false;
     if (row.missingData == null) row.missingData = false;

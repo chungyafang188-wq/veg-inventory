@@ -10646,29 +10646,31 @@ function Le({ value: e, placeholder: t = "+ 點擊填寫", onSave: n, rowIndex: 
 function Re({ value: e, kind: t, onChange: n }) {
 	let [r, i] = (0, l.useState)(!1), [a, o] = (0, l.useState)(null), s = (0, l.useRef)(null), c = (0, l.useRef)(null), u = (0, l.useRef)(null), d = e || "none", f = x(t), p = () => {
 		let e = c.current;
-		if (!e) return;
-		let t = e.getBoundingClientRect(), n = Math.max(t.width, 120), r = window.innerHeight - t.bottom, i = r < 160 && t.top > r, a = t.left;
-		a + n > window.innerWidth - 8 && (a = Math.max(8, window.innerWidth - n - 8)), a < 8 && (a = 8), o({
-			top: i ? void 0 : t.bottom + 4,
-			bottom: i ? window.innerHeight - t.top + 4 : void 0,
-			left: a,
+		if (!e) return null;
+		let t = e.getBoundingClientRect(), n = Math.max(t.width, 128), r = Math.max(40, f.length * 32 + 12), i = window.innerHeight - t.bottom, a = i < r + 8 && t.top > i, s = t.left;
+		s + n > window.innerWidth - 8 && (s = Math.max(8, window.innerWidth - n - 8)), s < 8 && (s = 8);
+		let l = {
+			top: a ? void 0 : t.bottom + 4,
+			bottom: a ? window.innerHeight - t.top + 4 : void 0,
+			left: s,
 			minWidth: n
-		});
+		};
+		return o(l), l;
 	};
 	(0, l.useEffect)(() => {
 		if (!r) return;
 		p();
 		let e = () => p(), t = (e) => {
 			let t = e.target;
-			s.current?.contains(t) || u.current?.contains(t) || i(!1);
+			s.current?.contains(t) || u.current?.contains(t) || (i(!1), o(null));
 		}, n = window.setTimeout(() => {
-			document.addEventListener("pointerdown", t, !0);
-		}, 0);
+			document.addEventListener("pointerdown", t);
+		}, 10);
 		return window.addEventListener("resize", e), window.addEventListener("scroll", e, !0), () => {
-			window.clearTimeout(n), document.removeEventListener("pointerdown", t, !0), window.removeEventListener("resize", e), window.removeEventListener("scroll", e, !0);
+			window.clearTimeout(n), document.removeEventListener("pointerdown", t), window.removeEventListener("resize", e), window.removeEventListener("scroll", e, !0);
 		};
 	}, [r]);
-	let m = typeof document < "u" ? document.querySelector(".imp-tw") || document.body : null, h = r && a && m ? (0, me.createPortal)(/* @__PURE__ */ (0, E.jsx)("div", {
+	let m = r && a && typeof document < "u" ? (0, me.createPortal)(/* @__PURE__ */ (0, E.jsx)("div", {
 		ref: u,
 		className: "imp-st-menu imp-st-menu-fixed",
 		role: "listbox",
@@ -10682,12 +10684,13 @@ function Re({ value: e, kind: t, onChange: n }) {
 			type: "button",
 			role: "option",
 			className: `imp-st-opt ${je(e.id)}${e.id === d ? " is-on" : ""}`,
-			onClick: () => {
-				i(!1), e.id !== d && n?.(e.id);
+			onPointerDown: (e) => e.stopPropagation(),
+			onClick: (t) => {
+				t.preventDefault(), t.stopPropagation(), i(!1), o(null), e.id !== d && n?.(e.id);
 			},
 			children: e.lab
 		}, e.id))
-	}), m) : null;
+	}), document.body) : null;
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "imp-st-wrap",
 		ref: s,
@@ -10698,10 +10701,13 @@ function Re({ value: e, kind: t, onChange: n }) {
 			"aria-expanded": r,
 			"aria-haspopup": "listbox",
 			onClick: (e) => {
-				e.stopPropagation(), i((e) => !e);
+				e.preventDefault(), e.stopPropagation(), i((e) => {
+					let t = !e;
+					return t ? p() : o(null), t;
+				});
 			},
 			children: te(d, t)
-		}), h]
+		}), m]
 	});
 }
 function ze(e) {

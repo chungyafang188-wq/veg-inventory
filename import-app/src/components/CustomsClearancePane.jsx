@@ -252,20 +252,23 @@ function StatusMini({ value, kind, onChange }) {
 
   const placeMenu = () => {
     const el = btnRef.current;
-    if (!el) return;
+    if (!el) return null;
     const r = el.getBoundingClientRect();
-    const menuW = Math.max(r.width, 120);
+    const menuW = Math.max(r.width, 128);
+    const approxH = Math.max(40, opts.length * 32 + 12);
     const spaceBelow = window.innerHeight - r.bottom;
-    const openUp = spaceBelow < 160 && r.top > spaceBelow;
+    const openUp = spaceBelow < approxH + 8 && r.top > spaceBelow;
     let left = r.left;
     if (left + menuW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuW - 8);
     if (left < 8) left = 8;
-    setMenuPos({
+    const pos = {
       top: openUp ? undefined : r.bottom + 4,
       bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
       left,
       minWidth: menuW,
-    });
+    };
+    setMenuPos(pos);
+    return pos;
   };
 
   useEffect(() => {
@@ -276,24 +279,24 @@ function StatusMini({ value, kind, onChange }) {
       const t = e.target;
       if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
       setOpen(false);
+      setMenuPos(null);
     };
-    // 延遲綁定，避免手機開啟當下的 pointer/touch 立刻把選單關掉
+    // 延遲綁定，避免開啟當下的 pointer 立刻關掉；不用 capture，以免表格內點選被搶先關掉
     const t = window.setTimeout(() => {
-      document.addEventListener("pointerdown", onDoc, true);
-    }, 0);
+      document.addEventListener("pointerdown", onDoc);
+    }, 10);
     window.addEventListener("resize", onReposition);
     window.addEventListener("scroll", onReposition, true);
     return () => {
       window.clearTimeout(t);
-      document.removeEventListener("pointerdown", onDoc, true);
+      document.removeEventListener("pointerdown", onDoc);
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
   }, [open]);
 
-  const menuHost = typeof document !== "undefined" ? document.querySelector(".imp-tw") || document.body : null;
   const menu =
-    open && menuPos && menuHost
+    open && menuPos && typeof document !== "undefined"
       ? createPortal(
           <div
             ref={menuRef}
@@ -312,8 +315,12 @@ function StatusMini({ value, kind, onChange }) {
                 type="button"
                 role="option"
                 className={`imp-st-opt ${statusTone(o.id)}${o.id === id ? " is-on" : ""}`}
-                onClick={() => {
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setOpen(false);
+                  setMenuPos(null);
                   if (o.id !== id) onChange?.(o.id);
                 }}
               >
@@ -321,7 +328,7 @@ function StatusMini({ value, kind, onChange }) {
               </button>
             ))}
           </div>,
-          menuHost,
+          document.body,
         )
       : null;
 
@@ -334,8 +341,14 @@ function StatusMini({ value, kind, onChange }) {
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpen((v) => {
+            const next = !v;
+            if (next) placeMenu();
+            else setMenuPos(null);
+            return next;
+          });
         }}
       >
         {clearLab(id, kind)}

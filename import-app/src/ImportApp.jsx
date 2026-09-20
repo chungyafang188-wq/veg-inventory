@@ -131,12 +131,14 @@ export default function ImportApp({ initialPane = "parse" }) {
     const unpack = unpackApi?.listJobs?.(unpackTab) || [];
     const sumCounts = a.sumTabCounts?.() || { open: 0, needQty: 0, customer: 0, coldstore: 0 };
     const sum = a.listSum?.(sumTab) || [];
+    const checklist = a.listClearanceSheet?.() || [];
     return {
       drafts,
       port,
       portCounts,
       release: a.listRelease?.(releaseTab) || [],
       releaseCounts,
+      checklist,
       stock,
       upBoard,
       upBoardMeta,
@@ -150,6 +152,7 @@ export default function ImportApp({ initialPane = "parse" }) {
         parse: drafts.length,
         port: portCounts.open,
         release: releaseCounts.open,
+        checklist: checklist.length,
         upBoard: upBoardMeta.total,
         unpack: unpackCounts.pending,
         sum: sumCounts.open,

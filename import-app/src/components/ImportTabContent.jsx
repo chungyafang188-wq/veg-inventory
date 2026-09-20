@@ -1,5 +1,6 @@
 import { api } from "../bridge";
 import { PANE_TITLE } from "../constants";
+import { ClearanceListPane } from "./ClearanceListPane";
 import { CountBadge } from "./CountBadge";
 import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
@@ -63,6 +64,15 @@ export function ImportTabContent({
           refresh={refresh}
           onDispatched={() => setActiveTab?.("upBoard")}
           onAfterUnmark={() => setActiveTab?.("port")}
+        />
+      ) : null}
+
+      {activeTab === "checklist" ? (
+        <ClearanceListPane
+          title={title}
+          rows={lists.checklist}
+          refresh={refresh}
+          openDrawer={openDrawer}
         />
       ) : null}
 

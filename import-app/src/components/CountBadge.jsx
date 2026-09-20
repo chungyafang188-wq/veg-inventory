@@ -1,5 +1,5 @@
 /** 頂部分頁要顯示積壓數的 id */
-export const TAB_COUNT_IDS = new Set(["parse", "port", "release", "upBoard", "unpack", "sum", "stock"]);
+export const TAB_COUNT_IDS = new Set(["parse", "port", "release", "checklist", "upBoard", "unpack", "sum", "stock"]);
 
 export function CountBadge({ count, warn = false }) {
   const n = Number(count) || 0;

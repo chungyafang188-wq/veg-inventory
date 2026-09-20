@@ -3257,6 +3257,89 @@
         check: s.check,
       };
     },
+    /** 查驗清單：海關查驗＋已放行狀態總覽（後台 Excel 式） */
+    listClearanceSheet() {
+      ensureState();
+      fixArriveDaysInState();
+      const cabBy = new Map((state.importCabinets || []).map((c) => [c.uha, c]));
+      const rows = [];
+
+      for (const c of portWaitingList()) {
+        const t = c.track || {};
+        ensureClearanceShape(t);
+        rows.push({
+          key: c.uha,
+          stage: "待驗",
+          stageId: "port",
+          released: false,
+          uha: c.uha || "",
+          containerNo: c.containerNo || "",
+          arriveDay: c.arriveDay || "",
+          product: c.product || "",
+          seller: c.seller || "",
+          shipCo: c.shipCo || "",
+          broker: c.broker || "",
+          customsNo: t.customsNo || c.customsNo || "",
+          inspect: t.inspect || "none",
+          inspectAt: t.inspectAt || "",
+          fumigate: t.fumigate || "none",
+          fumigateAt: t.fumigateAt || "",
+          dock: t.dock || "",
+          missingTelex: !!t.missingTelex,
+          missingData: !!t.missingData,
+          note: t.note || "",
+          trailer: t.trailer || "",
+          trailerPhone: t.trailerPhone || "",
+          pickupDay: "",
+          unpackSite: "",
+          assignee: "",
+          ftLabel: "",
+          status: portStatusLabel(t),
+        });
+      }
+
+      for (const r of releaseWorkList()) {
+        const cab = cabBy.get(r.uha) || {};
+        ensureClearanceShape(r);
+        rows.push({
+          key: r.uha,
+          stage: "已放行",
+          stageId: "release",
+          released: true,
+          uha: r.uha || "",
+          containerNo: r.containerNo || cab.containerNo || "",
+          arriveDay: r.arriveDay || cab.arriveDay || "",
+          product: r.product || cab.product || "",
+          seller: r.seller || cab.seller || "",
+          shipCo: r.shipCo || cab.shipCo || "",
+          broker: r.broker || cab.broker || "",
+          customsNo: r.customsNo || cab.customsNo || "",
+          inspect: r.inspect || "none",
+          inspectAt: r.inspectAt || "",
+          fumigate: r.fumigate || "none",
+          fumigateAt: r.fumigateAt || "",
+          dock: r.dock || "",
+          missingTelex: !!r.missingTelex,
+          missingData: !!r.missingData,
+          note: r.note || "",
+          trailer: r.trailer || "",
+          trailerPhone: r.trailerPhone || "",
+          pickupDay: r.pickupDay || "",
+          unpackSite: r.unpackSite || "",
+          assignee: r.assignee || "",
+          ftLabel: formatFtLabel(r),
+          status: releaseStatusLabel(r),
+        });
+      }
+
+      rows.sort((a, b) => {
+        const da = String(a.arriveDay || "");
+        const db = String(b.arriveDay || "");
+        if (da !== db) return db.localeCompare(da);
+        return String(a.uha || "").localeCompare(String(b.uha || ""), "en", { numeric: true });
+      });
+      return rows;
+    },
     listStock() {
       ensureState();
       return (state.importArrivals || []).map((a) => ({

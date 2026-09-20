@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../bridge";
 import { DateChip } from "./DateChip";
+import { InlineEdit } from "./InlineEdit";
 import { ListQueryBar } from "./ListQueryBar";
 import { defaultPickupFromFt, formatMd, ftUrgency } from "../lib/dateChip";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS } from "../lib/listQuery";
@@ -90,7 +91,7 @@ function FtPickupCell({ row, uha, patch, disabled }) {
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-0.5">
       <div className="flex flex-wrap items-center gap-1">
         <DateChip value={ft} onChange={onFt} prefix="FT" emptyLab="填 FT" disabled={disabled} ariaLabel="免堆期 FT" />
         {urg.kind !== "none" ? (
@@ -114,6 +115,7 @@ function FtPickupCell({ row, uha, patch, disabled }) {
 
 /**
  * 已放行：桌面 6 欄雙層緊湊表 + 手機卡片 + 批量通知。
+ * 欄位預設純文字，點擊才編輯。
  */
 export function ReleasePane({
   title,
@@ -246,57 +248,58 @@ export function ReleasePane({
     </div>
   );
 
-  const trailerControl = (r, uha) =>
-    trailerOpts.length ? (
-      <select
-        className="imp-field"
-        value={r.trailer || ""}
-        disabled={!!r.dispatched}
-        onChange={(e) => patch(uha, "trailer", e.target.value)}
-        aria-label="拖車"
-      >
-        <option value="">選拖車</option>
-        {trailerOpts.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-        {r.trailer && !trailerOpts.includes(r.trailer) ? <option value={r.trailer}>{r.trailer}</option> : null}
-      </select>
-    ) : (
-      <input
-        className="imp-field"
-        list="imp-trailer-list"
-        value={r.trailer || ""}
-        placeholder="選或輸入拖車"
-        disabled={!!r.dispatched}
-        onChange={(e) => patch(uha, "trailer", e.target.value)}
-      />
-    );
-
-  const siteControl = (r, uha) => (
-    <input
-      className="imp-field"
-      value={r.unpackSite || ""}
-      placeholder="冰庫／客戶"
+  const dockEdit = (r, uha) => (
+    <InlineEdit
+      value={r.dock || ""}
+      emptyLab="碼頭"
       disabled={!!r.dispatched}
-      onChange={(e) => patch(uha, "unpackSite", e.target.value)}
-      list="imp-site-hints"
+      ariaLabel="碼頭"
+      onChange={(v) => patch(uha, "dock", v)}
     />
   );
 
-  const assigneeControl = (r, uha) => (
-    <input
-      className="imp-field"
-      list="imp-unpacker-list"
-      value={r.assignee || ""}
-      placeholder="拆工"
+  const trailerEdit = (r, uha) =>
+    trailerOpts.length ? (
+      <InlineEdit
+        mode="select"
+        value={r.trailer || ""}
+        options={trailerOpts}
+        emptyLab="選拖車"
+        disabled={!!r.dispatched}
+        ariaLabel="拖車"
+        commitOnChange
+        onChange={(v) => patch(uha, "trailer", v)}
+      />
+    ) : (
+      <InlineEdit
+        value={r.trailer || ""}
+        emptyLab="拖車"
+        listId="imp-trailer-list"
+        disabled={!!r.dispatched}
+        ariaLabel="拖車"
+        onChange={(v) => patch(uha, "trailer", v)}
+      />
+    );
+
+  const siteEdit = (r, uha) => (
+    <InlineEdit
+      value={r.unpackSite || ""}
+      emptyLab="交貨點"
+      listId="imp-site-hints"
       disabled={!!r.dispatched}
-      onChange={(e) => patch(uha, "assignee", e.target.value)}
-      onBlur={(e) => {
-        const v = e.target.value.trim();
-        if (v && !r.dispatched) patch(uha, "assignee", v);
-      }}
+      ariaLabel="交貨點"
+      onChange={(v) => patch(uha, "unpackSite", v)}
+    />
+  );
+
+  const assigneeEdit = (r, uha) => (
+    <InlineEdit
+      value={r.assignee || ""}
+      emptyLab="拆工"
+      listId="imp-unpacker-list"
+      disabled={!!r.dispatched}
+      ariaLabel="拆工"
+      onChange={(v) => patch(uha, "assignee", v)}
     />
   );
 
@@ -306,7 +309,7 @@ export function ReleasePane({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 text-xl font-bold text-slate-800">{title || "已放行"}</h2>
         </div>
-        <p className="mt-1 m-0 text-xs text-slate-400">以 FT／領櫃日為決策軸心；日期以晶片顯示（MM/DD）。勾選後可批量通知。</p>
+        <p className="mt-1 m-0 text-xs text-slate-400">點擊欄位即可編輯；日期顯示 MM/DD。勾選後可批量通知。</p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
             ["open", "待派送", counts?.open],
@@ -397,22 +400,13 @@ export function ReleasePane({
                           <FtPickupCell row={r} uha={uha} patch={patch} disabled={!!r.dispatched} />
                         </td>
                         <td className="px-2 py-2 text-left">
-                          <div className="mb-1">
-                            <input
-                              className="imp-field"
-                              value={r.dock || ""}
-                              placeholder="碼頭"
-                              disabled={!!r.dispatched}
-                              onChange={(e) => patch(uha, "dock", e.target.value)}
-                              aria-label="碼頭"
-                            />
-                          </div>
-                          {trailerControl(r, uha)}
+                          <div className="mb-0.5">{dockEdit(r, uha)}</div>
+                          {trailerEdit(r, uha)}
                         </td>
                         <td className="px-2 py-2 text-left">
-                          <div className="mb-1">{siteControl(r, uha)}</div>
+                          <div className="mb-0.5">{siteEdit(r, uha)}</div>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="min-w-0 flex-1">{assigneeControl(r, uha)}</div>
+                            <div className="min-w-0 flex-1">{assigneeEdit(r, uha)}</div>
                             <button
                               type="button"
                               className="imp-btn-ghost shrink-0 px-2 py-1 text-xs"
@@ -468,33 +462,27 @@ export function ReleasePane({
                         退回查驗
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
-                      <div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
+                      <div className="col-span-2">
                         <span className="imp-field-lab">免堆期 FT／領櫃日</span>
                         <FtPickupCell row={r} uha={uha} patch={patch} disabled={!!r.dispatched} />
                       </div>
-                      <label className="min-w-0">
+                      <div>
                         <span className="imp-field-lab">碼頭</span>
-                        <input
-                          className="imp-field"
-                          value={r.dock || ""}
-                          placeholder="碼頭"
-                          disabled={!!r.dispatched}
-                          onChange={(e) => patch(uha, "dock", e.target.value)}
-                        />
-                      </label>
-                      <label className="min-w-0">
+                        {dockEdit(r, uha)}
+                      </div>
+                      <div>
                         <span className="imp-field-lab">拖車</span>
-                        {trailerControl(r, uha)}
-                      </label>
-                      <label className="min-w-0">
+                        {trailerEdit(r, uha)}
+                      </div>
+                      <div>
                         <span className="imp-field-lab">交貨點</span>
-                        {siteControl(r, uha)}
-                      </label>
-                      <label className="min-w-0">
-                        <span className="imp-field-lab">拆工（填了順便派工）</span>
-                        {assigneeControl(r, uha)}
-                      </label>
+                        {siteEdit(r, uha)}
+                      </div>
+                      <div>
+                        <span className="imp-field-lab">拆工</span>
+                        {assigneeEdit(r, uha)}
+                      </div>
                     </div>
                   </li>
                 );

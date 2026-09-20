@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatMd, formatMdHm, toDateInput, toDateTimeInput } from "../lib/dateChip";
 
 /**
- * 點擊編輯的日期／時間晶片（顯示 MM/DD 或 MM/DD HH:mm，隱藏年份）
+ * 點擊編輯的日期／時間：預設純文字 MM/DD，點擊才開 picker。
  */
 export function DateChip({
   value,
@@ -18,6 +18,7 @@ export function DateChip({
   const ref = useRef(null);
   const show = mode === "datetime" ? formatMdHm(value) : formatMd(value);
   const inputVal = mode === "datetime" ? toDateTimeInput(value) : toDateInput(value);
+  const label = show ? (prefix ? `${prefix} ${show}` : show) : emptyLab;
 
   useEffect(() => {
     if (!editing) return;
@@ -33,9 +34,8 @@ export function DateChip({
 
   if (disabled) {
     return (
-      <span className={`inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[0.72rem] font-semibold text-slate-500 ${className}`}>
-        {prefix}
-        {show || "—"}
+      <span className={`inline-flex min-h-[1.5rem] items-center px-1.5 py-0.5 text-[0.82rem] font-semibold text-slate-500 ${className}`}>
+        {label || "—"}
       </span>
     );
   }
@@ -48,10 +48,7 @@ export function DateChip({
         className={`imp-field imp-field-at max-w-[11rem] ${className}`}
         value={inputVal}
         aria-label={ariaLabel || prefix || emptyLab}
-        onChange={(e) => {
-          const v = e.target.value;
-          onChange?.(v);
-        }}
+        onChange={(e) => onChange?.(e.target.value)}
         onBlur={() => setEditing(false)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === "Escape") {
@@ -66,13 +63,14 @@ export function DateChip({
   return (
     <button
       type="button"
-      className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.72rem] font-bold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 ${
-        show ? "" : "text-slate-400"
+      className={`inline-flex max-w-full min-h-[1.5rem] items-center rounded px-1.5 py-0.5 text-left text-[0.82rem] font-semibold transition-colors hover:bg-gray-100 cursor-pointer ${
+        show ? "text-slate-800" : "text-slate-400 font-medium"
       } ${className}`}
       onClick={() => setEditing(true)}
       aria-label={ariaLabel || prefix || emptyLab}
+      title={label}
     >
-      {prefix ? <span className="font-semibold text-slate-400">{prefix}</span> : null}
+      {prefix && show ? <span className="mr-1 font-medium text-slate-400">{prefix}</span> : null}
       <span>{show || emptyLab}</span>
     </button>
   );

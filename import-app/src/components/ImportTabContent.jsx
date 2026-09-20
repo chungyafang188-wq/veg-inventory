@@ -59,7 +59,7 @@ export function ImportTabContent({
           trailers={lists.trailers}
           unpackers={lists.unpackers}
           refresh={refresh}
-          onDispatched={() => setActiveTab?.("upBoard")}
+          onDispatched={undefined}
           onAfterUnmark={() => setActiveTab?.("port")}
         />
       ) : null}

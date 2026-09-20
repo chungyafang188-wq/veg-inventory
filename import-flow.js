@@ -3465,17 +3465,31 @@
     const row = findReleased(uha);
     if (!row) return false;
     patchReleased(uha, field, value);
-    /** 填拆工且有拖車 → 順便派工到拆卸資料 */
-    if (field === "assignee" && String(value || "").trim() && !row.dispatched) {
-      if (String(row.trailer || "").trim()) {
-        if (!row.unpackSite && row.dock) row.unpackSite = row.dock;
-        const ok = dispatchToUnpackBoard(row);
-        if (ok && typeof save === "function") save();
-        return ok ? "dispatched" : true;
-      }
-      if (typeof setStatus === "function") setStatus("已記拆工；請再填拖車後派送。", true);
-    }
+    // 只存欄位，不自動派工（避免填拆工時整頁跳走／列消失）
     return true;
+  }
+
+  /** 已放行列手動派工至拆卸資料（需拖車；建議先填拆工） */
+  function dispatchRelease(uha) {
+    ensureState();
+    const row = findReleased(uha);
+    if (!row) {
+      if (typeof setStatus === "function") setStatus("找不到此櫃。", true);
+      return false;
+    }
+    ensureClearanceShape(row);
+    if (row.dispatched) {
+      if (typeof setStatus === "function") setStatus(`${uha} 已派送。`, true);
+      return false;
+    }
+    if (!String(row.trailer || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先填拖車再派工。", true);
+      return false;
+    }
+    if (!row.unpackSite && row.dock) row.unpackSite = row.dock;
+    const ok = dispatchToUnpackBoard(row);
+    if (ok && typeof save === "function") save();
+    return ok;
   }
 
   function notifyOperatorLabel() {
@@ -4214,6 +4228,7 @@
     unmarkPortReleased,
     unmarkPortReleasedMany,
     patchReleaseField,
+    dispatchRelease,
     notifyReleaseMany,
     confirmReleasePickup,
     trailerNames,

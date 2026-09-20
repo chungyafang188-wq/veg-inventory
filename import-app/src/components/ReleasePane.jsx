@@ -165,9 +165,34 @@ export function ReleasePane({
   };
 
   const patch = (uha, field, value) => {
-    const result = api().patchReleaseField?.(uha, field, value);
+    api().patchReleaseField?.(uha, field, value);
     refresh?.();
-    if (result === "dispatched") onDispatched?.(uha);
+  };
+
+  const dispatchOne = (uha) => {
+    const row = sorted.find((r) => (r.uha || r.key) === uha);
+    if (!row || row.dispatched) return;
+    if (!String(row.trailer || "").trim()) {
+      alert("請先填拖車再派工。");
+      return;
+    }
+    if (!String(row.assignee || "").trim()) {
+      if (!confirm(`${uha} 尚未填拆工，仍要派工？`)) return;
+    } else if (!confirm(`確定將 ${uha} 派工至拆卸資料？`)) {
+      return;
+    }
+    const ok = api().dispatchRelease?.(uha);
+    if (!ok) {
+      alert("派工失敗，請確認已填拖車。");
+      return;
+    }
+    setPicked((prev) => {
+      const next = new Set(prev);
+      next.delete(uha);
+      return next;
+    });
+    refresh?.();
+    onDispatched?.(uha);
   };
 
   const unmarkOne = (uha) => {
@@ -407,6 +432,15 @@ export function ReleasePane({
                           <div className="mb-0.5">{siteEdit(r, uha)}</div>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <div className="min-w-0 flex-1">{assigneeEdit(r, uha)}</div>
+                            {!r.dispatched ? (
+                              <button
+                                type="button"
+                                className="imp-btn-primary shrink-0 px-2 py-1 text-xs"
+                                onClick={() => dispatchOne(uha)}
+                              >
+                                派工
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="imp-btn-ghost shrink-0 px-2 py-1 text-xs"
@@ -481,7 +515,14 @@ export function ReleasePane({
                       </div>
                       <div>
                         <span className="imp-field-lab">拆工</span>
-                        {assigneeEdit(r, uha)}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="min-w-0 flex-1">{assigneeEdit(r, uha)}</div>
+                          {!r.dispatched ? (
+                            <button type="button" className="imp-btn-primary shrink-0 px-2 py-1 text-xs" onClick={() => dispatchOne(uha)}>
+                              派工
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </li>

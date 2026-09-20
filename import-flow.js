@@ -224,6 +224,7 @@
         dock: d.dock || "",
         checkKind: d.checkKind || "",
         inspect: d.inspect || "none",
+        inspectAt: d.inspectAt || "",
         fumigate: d.fumigate || "none",
         raw: d.raw || "",
         photoName: d.photoName || "",
@@ -824,7 +825,7 @@
           gKind = line.match(/本票\s*(海關查驗|儀檢|藥檢)/)[1];
         }
         const zh = line.replace(/[^\u4e00-\u9fff]/g, "");
-        if (/^下貨|^拖櫃|拖車名|已報關|船期|靠\d|碼頭|^下[\u4e00-\u9fff]|^[\u4e00-\u9fff]{1,8}拖|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到/.test(line.trim())) {
+        if (/^下貨|^拖櫃|拖車名|已報關|船期|靠\d|碼頭|^下[\u4e00-\u9fff]|^[\u4e00-\u9fff]{1,8}拖|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到|已取樣|出報告|F\s*\/?\s*T/.test(line.trim())) {
           // header / status — not product
         } else if (/[A-Z]{4}\s*\d{6,7}/i.test(line)) {
           const lead = line.match(/^([\u4e00-\u9fff（）()]{1,20})/);
@@ -990,8 +991,9 @@
       for (const line of lines) {
         const compact = line.replace(/\s+/g, "");
         if (isContainerNo(compact.replace(/[-–—].*$/, "")) || /^(?:UHA|NC)\d/i.test(compact)) continue;
-        if (/F\s*\/?\s*T|船期|靠\d|碼頭|已報|沒有|儀檢|海關|下貨|領櫃|拖櫃|拖車名|^下[\u4e00-\u9fff]|拖\s*[*＊]?$|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到/i.test(line)) continue;
+        if (/F\s*\/?\s*T|船期|靠\d|碼頭|已報|沒有|儀檢|海關|下貨|領櫃|拖櫃|拖車名|^下[\u4e00-\u9fff]|拖\s*[*＊]?$|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到|已取樣|出報告/i.test(line)) continue;
         if (/到[\u4e00-\u9fff]/.test(line) && /\d{1,2}\s*[\/.\-]/.test(line)) continue;
+        if (/已取樣|出報告|取樣/.test(line)) continue;
         if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(line.trim())) continue; // 旭興-二崙
         if (/^[\u4e00-\u9fff]{1,8}拖\s*[*＊]?$/.test(line.trim())) continue;
         if (/\d{2,4}[-\s]?\d{3,4}[-\s]?\d{3,4}/.test(line) && /0\d/.test(line)) continue; // 電話行
@@ -1193,11 +1195,39 @@
       }
     }
 
-    // 藥檢：沒有藥檢／無藥檢／免藥檢 → skip；需要藥檢 → wait
+    // 藥檢：沒有藥檢／無藥檢／免藥檢 → skip；已取樣／出報告 → wait＋報告時間
     let inspect = "none";
+    let inspectAt = "";
     if (/沒有藥檢|無藥檢|免藥檢|不需藥檢|無須藥檢/.test(text)) inspect = "skip";
-    else if (/需要藥檢|要藥檢|抽藥檢/.test(text)) inspect = "wait";
+    else if (/需要藥檢|要藥檢|抽藥檢|已取樣|出報告|送檢/.test(text)) inspect = "wait";
     else if (/藥檢完成|已藥檢/.test(text)) inspect = "done";
+
+    const toYmd = (mo, da) => {
+      const m = Number(mo);
+      const d = Number(da);
+      if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
+      const now = new Date();
+      let y = now.getFullYear();
+      const cand = new Date(y, m - 1, d);
+      if (cand.getTime() < now.getTime() - 45 * 86400000) y += 1;
+      return `${y}-${pad2(m)}-${pad2(d)}`;
+    };
+    // 9/21出報告 → 藥檢報告時間；9/18已取樣 → 備註
+    const reportM = text.match(/(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})\s*出報告/);
+    if (reportM) {
+      const day = toYmd(reportM[1], reportM[2]);
+      if (day) {
+        inspectAt = `${day}T09:00`;
+        if (inspect === "none") inspect = "wait";
+      }
+    }
+    const sampleM = text.match(/(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})\s*已取樣/);
+    let sampleNote = "";
+    if (sampleM) {
+      const day = toYmd(sampleM[1], sampleM[2]);
+      if (day) sampleNote = `${day.slice(5).replace("-", "/")}已取樣`;
+      if (inspect === "none") inspect = "wait";
+    }
 
     let fumigate = "none";
     if (/沒有薰蒸|無薰蒸|免薰蒸|不需薰蒸|無須薰蒸/.test(text)) fumigate = "skip";
@@ -1216,6 +1246,8 @@
     if (voyageNote) noteBits.push(voyageNote);
     if (dock) noteBits.push(`靠${dock}碼頭`);
     if (fumigateNote) noteBits.push(fumigateNote);
+    if (sampleNote) noteBits.push(sampleNote);
+    if (inspectAt) noteBits.push(`出報告 ${inspectAt.replace("T", " ").slice(0, 16)}`);
     if (trailerContact) noteBits.push(`拖車聯絡人 ${trailerContact}`);
     if (assignQty) noteBits.push(`${assignQty}${/[箱]/.test(text) ? "箱" : "袋"}`);
     if (unpackSite) noteBits.push(`下貨 ${unpackSite}`);
@@ -1229,10 +1261,11 @@
       if (shipCo && line === shipCo) continue;
       if (/^(?:UHA|NC)\d/i.test(compact)) continue;
       if (/船期|靠\d|碼頭/.test(line) && arriveDay) continue;
+      if (/F\s*\/?\s*T/i.test(line) && arriveDay) continue;
       if (/^-{3,}/.test(line)) continue;
       if (/^下貨|拖櫃|拖車名|^下[\u4e00-\u9fff]|^[\u4e00-\u9fff]{1,8}拖/.test(line.trim())) continue;
       if (/\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到/.test(line)) continue;
-      if (/薰蒸|燻好到|薰好到/.test(line)) continue;
+      if (/薰蒸|燻好到|薰好到|已取樣|出報告/.test(line)) continue;
       if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(line.trim())) continue;
       if (/^[\u4e00-\u9fff]{1,8}拖\s*[*＊]?$/.test(line.trim())) continue;
       if (/拖車名\s*[=:：]/.test(line)) continue;
@@ -1271,6 +1304,7 @@
       assignQty,
       dock,
       inspect,
+      inspectAt,
       fumigate,
       note,
       raw: text.slice(0, 4000),
@@ -1519,6 +1553,7 @@
       track.inspect = d.inspect;
       track.inspectManual = true;
     }
+    if (d.inspectAt) track.inspectAt = String(d.inspectAt).trim();
     if (d.fumigate && d.fumigate !== "none") {
       track.fumigate = d.fumigate;
       track.fumigateManual = true;

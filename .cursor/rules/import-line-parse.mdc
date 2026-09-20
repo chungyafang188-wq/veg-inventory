@@ -35,7 +35,8 @@ alwaysApply: false
 | `第一班薰蒸`／`燻好到…` | `fumigate=wait`, note 班次 | |
 | `下貨-穠全`／`下二崙`／`到二崙`／`燻好到二崙` | `unpackSite` | |
 | `9/18 14:00到二崙` | `unpackAt`, `arriveDay`, `unpackSite` | |
-| `9/18(五)…薰蒸` | `arriveDay` | 星期可忽略 |
+| `9/18已取樣 9/21出報告` | `inspect=wait`, `inspectAt`（出報告日）, note 取樣 | 藥檢時間＝報告時間 |
+| `F/T 9/22` | `arriveDay` | 與船期相同寫法 |
 | `(1260箱`／`(1550袋` | `assignQty` | 確認寫入 track／cab.qty |
 | `拖車名=阿彬`／`偉菘拖*`／`旭興-二崙` 左側 | `trailer` | 對照 `trailerNames()` |
 | `旭興-二崙` 右側／下貨點 | `unpackSite` | 勿整行當品名 |

@@ -438,6 +438,14 @@
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
   border: 1px solid #e2e8f0;
 }
+.imp-tw .imp-st-menu-fixed {
+  position: fixed;
+  z-index: 80;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+}
 .imp-tw .imp-st-opt {
   display: block;
   width: 100%;

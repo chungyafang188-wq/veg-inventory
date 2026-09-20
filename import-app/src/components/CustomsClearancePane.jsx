@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../bridge";
 import { clearLab, clearOptsFor } from "../constants";
 import { ListQueryBar } from "./ListQueryBar";
@@ -242,42 +243,104 @@ function InlineText({ value, placeholder = "+ 點擊填寫", onSave, rowIndex, c
 
 function StatusMini({ value, kind, onChange }) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
   const boxRef = useRef(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
   const id = value || "none";
   const opts = clearOptsFor(kind);
 
+  const placeMenu = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const menuW = Math.max(r.width, 120);
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < 160 && r.top > spaceBelow;
+    let left = r.left;
+    if (left + menuW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuW - 8);
+    if (left < 8) left = 8;
+    setMenuPos({
+      top: openUp ? undefined : r.bottom + 4,
+      bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+      left,
+      minWidth: menuW,
+    });
+  };
+
   useEffect(() => {
     if (!open) return;
+    placeMenu();
+    const onReposition = () => placeMenu();
     const onDoc = (e) => {
-      if (!boxRef.current?.contains(e.target)) setOpen(false);
+      const t = e.target;
+      if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    // 延遲綁定，避免手機開啟當下的 pointer/touch 立刻把選單關掉
+    const t = window.setTimeout(() => {
+      document.addEventListener("pointerdown", onDoc, true);
+    }, 0);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("pointerdown", onDoc, true);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
   }, [open]);
+
+  const menuHost = typeof document !== "undefined" ? document.querySelector(".imp-tw") || document.body : null;
+  const menu =
+    open && menuPos && menuHost
+      ? createPortal(
+          <div
+            ref={menuRef}
+            className="imp-st-menu imp-st-menu-fixed"
+            role="listbox"
+            style={{
+              top: menuPos.top != null ? `${menuPos.top}px` : "auto",
+              bottom: menuPos.bottom != null ? `${menuPos.bottom}px` : "auto",
+              left: `${menuPos.left}px`,
+              minWidth: `${menuPos.minWidth}px`,
+            }}
+          >
+            {opts.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="option"
+                className={`imp-st-opt ${statusTone(o.id)}${o.id === id ? " is-on" : ""}`}
+                onClick={() => {
+                  setOpen(false);
+                  if (o.id !== id) onChange?.(o.id);
+                }}
+              >
+                {o.lab}
+              </button>
+            ))}
+          </div>,
+          menuHost,
+        )
+      : null;
 
   return (
     <div className="imp-st-wrap" ref={boxRef}>
-      <button type="button" className={`imp-st-badge ${statusTone(id)}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`imp-st-badge ${statusTone(id)}`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
         {clearLab(id, kind)}
       </button>
-      {open ? (
-        <div className="imp-st-menu" role="listbox">
-          {opts.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              role="option"
-              className={`imp-st-opt ${statusTone(o.id)}${o.id === id ? " is-on" : ""}`}
-              onClick={() => {
-                setOpen(false);
-                if (o.id !== id) onChange?.(o.id);
-              }}
-            >
-              {o.lab}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {menu}
     </div>
   );
 }
@@ -767,7 +830,7 @@ export function CustomsClearancePane({
                   return (
                     <li
                       key={uha}
-                      className={`overflow-hidden rounded-xl border ${
+                      className={`rounded-xl border ${
                         checked ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200/90 bg-white"
                       }`}
                     >

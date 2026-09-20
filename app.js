@@ -161,6 +161,8 @@ const FREIGHT_RUN_DEFAULT = [
   { key: "台中（新豐）", recv: "06:00", ship: "07:00", note: "" },
 ];
 let ticketLines = [];
+/** 下單品項分類分頁：nq＝穠全、ha＝鴻安 */
+let formSkuBrand = "nq";
 const BASIL_SKU = {
   rb: { 芳: "rb-fang", 琳: "rb-lin", 其他: "rb-oth" },
   gb: { 芳: "gb-fang", 琳: "gb-lin", 其他: "gb-oth" },
@@ -5303,7 +5305,8 @@ function syncShipMore() {
     const n = ticketLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
     const nTxt = n > 0 ? `（${fmt(n)}件）` : "";
     if (editing) submit.textContent = `確認改單${nTxt}`;
-    else submit.textContent = pre ? `確認預訂單${nTxt}` : `送出訂單${nTxt}`;
+    else if (pre) submit.textContent = `確認預訂單${nTxt}`;
+    else submit.textContent = n > 0 ? `送出訂單${nTxt}` : "送出訂單";
   }
 }
 function formDestMode() {
@@ -5357,6 +5360,25 @@ function syncFormRouteUi() {
       hint.textContent = "";
     }
   }
+  syncRouteCompactLab();
+}
+function syncRouteCompactLab() {
+  const lab = document.getElementById("route-compact-lab");
+  if (!lab) return;
+  const wh = formShipWhValue();
+  const mode = formDestMode();
+  const extra = formDestExtraValue();
+  const dest = mode === "寄貨運" || mode === "其他" ? extra || mode || "未選點" : mode || "未選點";
+  if (!wh && !mode) lab.textContent = "預設";
+  else if (!wh) lab.textContent = dest;
+  else if (!mode) lab.textContent = wh;
+  else lab.textContent = `${wh}→${dest}`;
+}
+function setRoutePopoverOpen(open) {
+  const pop = document.getElementById("route-popover");
+  const btn = document.getElementById("route-compact-btn");
+  if (pop) pop.hidden = !open;
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
 }
 function applyFormDestToTicket(mode) {
   const v = String(mode || "").trim();
@@ -5418,10 +5440,30 @@ function fillSkuQuickList() {
 function pickBigFromSearchLabel(lab) {
   const name = String(lab || "").trim();
   if (!name) return "";
+  const codeMap = {
+    "1": "leaf",
+    "01": "leaf",
+    "2": "basil",
+    "02": "basil",
+    "3": "on",
+    "03": "on",
+    "4": "on-p",
+    "04": "on-p",
+    "5": "cab",
+    "05": "cab",
+    "6": "pk",
+    "06": "pk",
+    "7": "nap",
+    "07": "nap",
+  };
+  if (codeMap[name]) return codeMap[name];
+  const codeHit = name.match(/^(\d{1,2})\s*[.\-_]?\s*(.*)$/);
+  if (codeHit && codeMap[codeHit[1]]) return codeMap[codeHit[1]];
   const map = {
     地瓜葉: "leaf",
     九層塔: "basil",
     九層塔散賣: "basil-kg",
+    散賣: "basil-kg",
     洋蔥: "on",
     紫洋蔥: "on-p",
     洋蔥B: "on-b",
@@ -5431,6 +5473,21 @@ function pickBigFromSearchLabel(lab) {
   for (const [id, def] of Object.entries(HA_VEG)) {
     if (def.label === name) return id;
   }
+  const lower = name.toLowerCase();
+  for (const [lab2, id] of Object.entries(map)) {
+    if (lab2.includes(name) || name.includes(lab2)) return id;
+  }
+  for (const [id, def] of Object.entries(HA_VEG)) {
+    if (def.label.includes(name) || name.includes(def.label)) return id;
+  }
+  if (/地瓜|葉/.test(name)) return "leaf";
+  if (/九層|塔/.test(name)) return name.includes("散") ? "basil-kg" : "basil";
+  if (/紫洋/.test(name)) return "on-p";
+  if (/洋蔥/.test(name)) return "on";
+  if (/高麗/.test(name)) return "cab";
+  if (/南瓜/.test(name)) return "pk";
+  if (/大白/.test(name)) return "nap";
+  void lower;
   return "";
 }
 function ticketDestHtml(l, i) {
@@ -5454,6 +5511,7 @@ function renderTicket() {
     box.innerHTML = `<p class="ticket-empty">本單還沒有品項<span class="ticket-kind">${esc(kind)}</span></p>`;
     syncShipMore();
     syncOrderEntering();
+    syncSkuCountBadges();
     return;
   }
   box.classList.remove("is-empty");
@@ -5463,61 +5521,166 @@ function renderTicket() {
   const totalQty = ticketLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
   box.innerHTML = `<p class="ticket-head"><span class="ticket-who-name">${esc(who || "未填客戶")}</span><span class="ticket-kind">${esc(kind)}</span></p>
     <p class="ticket-route muted">${esc(routeTxt)}</p>
-    <ul class="ticket-list">${ticketLines
+    <ul class="ticket-list ticket-list--slim">${ticketLines
       .map((l, i) => {
         const sku = skuById(l.skuId);
         const step = sku ? skuStep(sku) : 1;
         const banVal = lineBanQty(l) > 0 ? lineBanQty(l) : "";
         const qtyVal = qtyFieldValue(l.qty);
         const qtyPh = qtyFieldPlaceholder(banVal);
-        const quick = banQuickHtml(banVal, `data-ticket-ban-quick="${i}"`);
-        const dest = String(l.dest || "").trim();
-        const lineWh = lineShipWh(l);
-        const metaBits = [lineWh, dest].filter(Boolean).join(" → ");
-        return `<li class="ticket-item">
-          <div class="ticket-item-top">
-            <strong class="ticket-name">${esc(ticketLineName(l))}</strong>
-            <button type="button" class="tiny-btn ghost" data-ticket-del="${i}" aria-label="刪除">刪除</button>
-          </div>
-          ${metaBits ? `<p class="ticket-item-meta muted">${esc(metaBits)}</p>` : ""}
-          <div class="metric-pair ticket-metric-pair">
-            <div class="ticket-metric ticket-metric-ban">
-              <span class="metric-lab">版數</span>
-              ${banSelectHtml({ key: "ticket-ban", id: String(i), value: banVal, aria: "版數" })}
-              <div class="sku-subs line-ban-quick ticket-ban-quick" aria-label="版數快捷">${quick}</div>
-            </div>
-            <label class="ticket-metric ticket-metric-qty"><span class="metric-lab">件數</span>${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: qtyVal, step, placeholder: qtyPh, aria: "件數" })}</label>
-          </div>
-          <span class="unit">${esc(sku?.unit || "")}</span>
-          ${lineShipMetaFieldsHtml(l, {
-            listId: `ticket-cont-nos-${i}`,
-            contAttr: `data-ticket-container-no="${i}"`,
-            whAttr: `data-ticket-ship-wh="${i}"`,
-            compact: true,
-          })}
-          <button type="button" class="pick ticket-pallet${l.pallet ? " on" : ""}" data-ticket-pallet="${i}" aria-pressed="${l.pallet ? "true" : "false"}">疊棧板</button>
-          ${
-            skuNeedsShipLot(l.skuId)
-              ? `<button type="button" class="ghost lot-pick-btn" data-ticket-lot="${i}">${esc(l.lotContainer || l.lotUha || "選出貨編號")}</button>`
-              : ""
-          }
-          <label class="ticket-line-note-field"><span class="metric-lab">備註</span><input data-ticket-note="${i}" type="text" value="${esc(l.note || "")}" placeholder="品項備註" autocomplete="off" spellcheck="false" /></label>
+        const unit = sku?.unit || "";
+        const banHint = banVal ? `<span class="muted" style="font-size:0.72rem">版${esc(String(banVal))}</span>` : "";
+        return `<li class="ticket-item ticket-item--slim">
+          <strong class="ticket-name">${esc(ticketLineName(l))}${unit ? ` <span class="muted" style="font-weight:600">${esc(unit)}</span>` : ""}${banHint ? " " + banHint : ""}</strong>
+          ${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: qtyVal, step, placeholder: qtyPh || "0", aria: "件數" })}
+          <button type="button" class="ticket-del-x" data-ticket-del="${i}" aria-label="刪除">×</button>
         </li>`;
       })
       .join("")}</ul>
     <p class="ticket-total">總件數 <strong>${esc(fmt(totalQty))}</strong> 件</p>`;
   syncShipMore();
   syncOrderEntering();
+  syncSkuCountBadges();
+}
+function skuBrandOf(big) {
+  if (big === "leaf" || big === "basil" || big === "basil-kg" || big === "custom-nq") return "nq";
+  if (big) return "ha";
+  return formSkuBrand === "ha" ? "ha" : "nq";
+}
+function nqBigOpts() {
+  return [
+    ["leaf", "地瓜葉"],
+    ["basil", "九層塔"],
+    ["basil-kg", "九層塔散賣"],
+    ["custom-nq", "自行輸入"],
+  ];
+}
+function haBigOpts() {
+  return [
+    ["on", "洋蔥"],
+    ["on-p", "紫洋蔥"],
+    ["on-b", "洋蔥B"],
+    ["pk", "南瓜"],
+    ...Object.entries(HA_VEG).map(([id, def]) => [id, def.label]),
+    ["custom-ha", "自行輸入"],
+  ];
+}
+function syncSkuHotUi(big) {
+  document.querySelectorAll("#sku-hot-chips [data-hot-big]").forEach((b) => {
+    b.classList.toggle("is-on", !!big && b.dataset.hotBig === big);
+  });
+}
+function ticketQtyByBig() {
+  const map = {};
+  for (const l of ticketLines) {
+    const big = lineBigOf(l);
+    if (!big) continue;
+    const q = Number(l.qty) || 0;
+    const b = lineBanQty(l);
+    map[big] = round((map[big] || 0) + (q > 0 ? q : b > 0 ? b : 0));
+  }
+  return map;
+}
+function syncSkuCountBadges() {
+  const map = ticketQtyByBig();
+  const apply = (btn, big) => {
+    if (!btn || !big) return;
+    const n = Number(map[big]) || 0;
+    btn.classList.toggle("has-qty", n > 0);
+    let badge = btn.querySelector(".sku-qty-badge");
+    if (n > 0) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "sku-qty-badge";
+        btn.appendChild(badge);
+      }
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else if (badge) {
+      badge.remove();
+    }
+  };
+  document.querySelectorAll("#sku-hot-chips [data-hot-big]").forEach((b) => apply(b, b.dataset.hotBig));
+  document.querySelectorAll("#sheet .pick[data-k='big']").forEach((b) => apply(b, b.dataset.v));
+}
+function findTicketIndexByBig(big) {
+  if (!big) return -1;
+  return ticketLines.findIndex((l) => lineBigOf(l) === big);
+}
+function bumpTicketQtyByBig(big, delta = 1) {
+  const idx = findTicketIndexByBig(big);
+  if (idx < 0) return false;
+  const line = ticketLines[idx];
+  const next = round(Math.max(0, (Number(line.qty) || 0) + delta));
+  if (!(next > 0) && !(lineBanQty(line) > 0)) {
+    ticketLines.splice(idx, 1);
+    syncHiddenShipAddr();
+  } else {
+    line.qty = next;
+  }
+  renderTicket();
+  renderCheck();
+  return true;
+}
+function rebuildPickerBlock(row, big) {
+  if (!row) return;
+  const block = row.querySelector(".pick-block");
+  if (!block) return;
+  block.innerHTML = `${lineBigButtons(big || "")}<div data-sub>${lineSubHtml(big || "", {})}</div>`;
+  row.classList.toggle("is-compose", isCustomFam(big));
+  syncSkuCountBadges();
+}
+function ensureFormQtyForQuickAdd(row) {
+  const qty = row?.querySelector("[data-line-qty]");
+  const ban = row?.querySelector("[data-line-ban]");
+  if (!qty) return;
+  if (!(Number(qty.value) > 0) && !(Number(ban?.value) > 0)) qty.value = "1";
 }
 function selectPickerBig(big) {
-  const row = document.querySelector("#ha-lines .item-line");
-  if (!row || !big) return;
-  const btn = [...row.querySelectorAll(".pick[data-k='big']")].find((b) => b.dataset.v === big);
-  if (!btn) return;
-  row.querySelectorAll(".pick[data-k='big']").forEach((b) => b.classList.toggle("on", b === btn));
-  const sub = row.querySelector("[data-sub]");
-  if (sub) sub.innerHTML = lineSubHtml(big, {});
+  if (!big) return;
+  formSkuBrand = skuBrandOf(big);
+  let row = document.querySelector("#ha-lines .item-line");
+  if (!row) {
+    renderItemSheet();
+    row = document.querySelector("#ha-lines .item-line");
+  }
+  if (!row) return;
+  if (!row.querySelector(`.pick[data-k="big"][data-v="${CSS.escape(big)}"]`)) {
+    rebuildPickerBlock(row, big);
+  } else {
+    row.querySelectorAll(".pick[data-k='big']").forEach((b) => b.classList.toggle("on", b.dataset.v === big));
+    const sub = row.querySelector("[data-sub]");
+    if (sub) sub.innerHTML = lineSubHtml(big, {});
+    row.classList.toggle("is-compose", isCustomFam(big));
+  }
   syncLineMeta(row);
+  syncSkuHotUi(big);
+  syncSkuCountBadges();
+}
+/** 點品項：首次加入 1 件；再點同一品項連擊 +1。自行輸入改開編輯列 */
+function bumpOrAddBig(big) {
+  if (!big) return false;
+  if (isCustomFam(big)) {
+    selectPickerBig(big);
+    const row = document.querySelector("#ha-lines .item-line");
+    row?.querySelector("[data-custom-name]")?.focus();
+    syncOrderEntering();
+    return false;
+  }
+  if (bumpTicketQtyByBig(big, 1)) {
+    syncSkuHotUi(big);
+    return true;
+  }
+  selectPickerBig(big);
+  const row = document.querySelector("#ha-lines .item-line");
+  if (!row) return false;
+  ensureFormQtyForQuickAdd(row);
+  const ok = pushPickerToTicket();
+  syncSkuHotUi(big);
+  return ok;
+}
+/** @deprecated 改用 bumpOrAddBig；保留相容 */
+function quickAddBigToTicket(big) {
+  return bumpOrAddBig(big);
 }
 function pushPickerToTicket(nextBig) {
   const row = document.querySelector("#ha-lines .item-line");
@@ -6020,24 +6183,15 @@ function handleItemLineEnter(e) {
   return false;
 }
 function lineBigButtons(selected) {
-  const nq = [
-    ["leaf", "地瓜葉"],
-    ["basil", "九層塔"],
-    ["basil-kg", "九層塔散賣"],
-    ["custom-nq", "自行輸入"],
-  ];
-  const ha = [
-    ["on", "洋蔥"],
-    ["on-p", "紫洋蔥"],
-    ["on-b", "洋蔥B"],
-    ["pk", "南瓜"],
-    ...Object.entries(HA_VEG).map(([id, def]) => [id, def.label]),
-    ["custom-ha", "自行輸入"],
-  ];
-  return `<p class="pick-lab">穠全</p>
-    <div class="sku-picks">${pickHtml("big", nq, selected)}</div>
-    <p class="pick-lab">鴻安</p>
-    <div class="sku-picks sku-picks-ha">${pickHtml("big", ha, selected)}</div>`;
+  if (selected) formSkuBrand = skuBrandOf(selected);
+  return `<div class="sku-brand-block">
+      <p class="sku-brand-lab">穠全</p>
+      <div class="sku-picks" role="group" aria-label="穠全品項">${pickHtml("big", nqBigOpts(), selected)}</div>
+    </div>
+    <div class="sku-brand-block">
+      <p class="sku-brand-lab">鴻安</p>
+      <div class="sku-picks sku-picks-ha" role="group" aria-label="鴻安品項">${pickHtml("big", haBigOpts(), selected)}</div>
+    </div>`;
 }
 function lineOptCell(lab, inner) {
   return `<div class="line-opt-cell"><span class="line-opt-lab">${esc(lab)}</span><div class="line-opt-body">${inner}</div></div>`;
@@ -6185,14 +6339,14 @@ function unifiedLineHtml(rec = {}) {
   const pack = rec.pack || "籃裝";
   const unitFam = big === "leaf" ? "sl-pend" : big;
   const quick = banQuickHtml(banQty);
-  return `<div class="ha-line item-line">
+  return `<div class="ha-line item-line${isCustomFam(big) ? " is-compose" : ""}">
     <div class="pick-block">
       ${lineBigButtons(big)}
       <div data-sub>${lineSubHtml(big, rec)}</div>
     </div>
     ${lineShipMetaFieldsHtml(rec, { listId: "form-cont-nos" })}
     <div class="line-qty-row line-metrics">
-      <p class="line-metrics-hint">可先選版數，件數對點後再補</p>
+      <p class="line-metrics-hint">自行輸入請填品名與件數後加入</p>
       <div class="line-metric-cards">
         <div class="line-metric-card line-metric-ban">
           <span class="line-metric-lab">版數</span>
@@ -6219,7 +6373,7 @@ function unifiedLineHtml(rec = {}) {
       <input id="line-note" data-line-note type="text" value="${esc(rec.note || "")}" placeholder="可不填" autocomplete="off" spellcheck="false" />
     </label>
     <div class="item-add-bar">
-      <button type="button" class="primary" data-ticket-add>＋ 加入本單（按 Enter 即可）</button>
+      <button type="button" class="primary" data-ticket-add>＋ 加入本單</button>
     </div>
   </div>`;
 }
@@ -6234,6 +6388,8 @@ function renderItemSheet() {
   syncFormLotRow();
   fillSkuQuickList();
   syncFormRouteUi();
+  syncSkuHotUi("");
+  syncSkuCountBadges();
 }
 function draftSkuFromFormRow() {
   const extra = unifiedLinesFromForm();
@@ -12493,19 +12649,13 @@ document.getElementById("sheet").addEventListener("click", (e) => {
       return;
     }
     if (key === "big") {
-      const hasLine =
-        Number(pickRow.querySelector("[data-line-qty]")?.value) > 0 ||
-        Number(pickRow.querySelector("[data-line-ban]")?.value) > 0;
-      const cur = pickVal(pickRow, "big");
-      if (hasLine && cur) {
-        pushPickerToTicket(pick.dataset.v);
-        return;
-      }
+      bumpOrAddBig(pick.dataset.v);
+      return;
     }
     pickRow.querySelectorAll(`.pick[data-k="${key}"]`).forEach((b) => b.classList.toggle("on", b === pick));
-    if (key === "big") {
-      const sub = pickRow.querySelector("[data-sub]");
-      if (sub) sub.innerHTML = lineSubHtml(pick.dataset.v, {});
+    if (key === "pkvar") {
+      const wSel = pickRow.querySelector("[data-pk-weight]");
+      if (wSel) wSel.value = pkDefaultWeight(pick.dataset.v);
     }
     formLot = null;
     syncLineMeta(pickRow);
@@ -13164,6 +13314,12 @@ document.getElementById("order-urgent-btn")?.addEventListener("click", () => {
   syncOrderEntering();
 });
 document.getElementById("order-form")?.addEventListener("click", (e) => {
+  const routeBtn = e.target.closest("#route-compact-btn");
+  if (routeBtn) {
+    const pop = document.getElementById("route-popover");
+    setRoutePopoverOpen(!!pop?.hidden);
+    return;
+  }
   const dest = e.target.closest("[data-form-dest]");
   if (dest) {
     applyFormDestToTicket(dest.dataset.formDest);
@@ -13171,11 +13327,7 @@ document.getElementById("order-form")?.addEventListener("click", (e) => {
   }
   const hot = e.target.closest("[data-hot-big]");
   if (hot) {
-    selectPickerBig(hot.dataset.hotBig);
-    document.querySelectorAll("#sku-hot-chips .sku-hot-chip").forEach((b) => {
-      b.classList.toggle("is-on", b === hot);
-    });
-    syncOrderEntering();
+    bumpOrAddBig(hot.dataset.hotBig);
     return;
   }
 });
@@ -13204,22 +13356,27 @@ document.getElementById("sku-quick-search")?.addEventListener("change", () => {
   const el = document.getElementById("sku-quick-search");
   const big = pickBigFromSearchLabel(el?.value);
   if (!big) return;
-  selectPickerBig(big);
-  document.querySelectorAll("#sku-hot-chips .sku-hot-chip").forEach((b) => {
-    b.classList.toggle("is-on", b.dataset.hotBig === big);
-  });
+  bumpOrAddBig(big);
   if (el) el.value = "";
-  syncOrderEntering();
+  el?.focus();
 });
 document.getElementById("sku-quick-search")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
   const el = document.getElementById("sku-quick-search");
-  const big = pickBigFromSearchLabel(el?.value);
-  if (!big) return;
-  selectPickerBig(big);
+  const raw = String(el?.value || "").trim();
+  if (!raw) {
+    if (ticketLines.length) document.getElementById("order-submit")?.click();
+    return;
+  }
+  const big = pickBigFromSearchLabel(raw);
+  if (!big) {
+    setStatus("找不到這個品項，請改名稱或簡碼", true);
+    return;
+  }
+  bumpOrAddBig(big);
   if (el) el.value = "";
-  focusItemLineStart();
+  el?.focus();
 });
 document.getElementById("lot-cancel")?.addEventListener("click", closeLotModal);
 document.getElementById("lot-gate")?.addEventListener("click", (e) => {

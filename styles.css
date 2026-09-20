@@ -3635,7 +3635,7 @@ body.on-home .home-open .hub-mark.has-pic {
   padding: 0.25rem 0.7rem;
   font-size: 0.85rem;
 }
-/* —— 網頁下單桌面：雙欄＋降噪卡片 —— */
+/* —— 網頁下單桌面：快打雙欄 —— */
 #order-form.order-desk {
   margin: 0;
   padding: 0;
@@ -3643,93 +3643,149 @@ body.on-home .home-open .hub-mark.has-pic {
   background: transparent;
   box-shadow: none;
 }
-.order-desk-top {
-  margin-bottom: 0.75rem;
-  padding: 0.85rem 1rem;
+.order-desk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
   border: 0;
-  border-radius: 0.9rem;
+}
+.order-desk-top {
+  margin-bottom: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border: 0;
+  border-radius: 0.85rem;
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
-.order-desk-top-lead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.55rem;
-}
-.order-desk-top-lead h2 {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 800;
-}
-.order-desk-top-fields {
+.order-desk-top-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.55rem 0.75rem;
+  gap: 0.4rem 0.55rem;
 }
-.order-desk-top-fields .order-who-field {
-  flex: 1 1 12rem;
+.order-desk-top-row .order-who-field {
+  flex: 1 1 10rem;
   min-width: 0;
   margin: 0;
 }
-.order-desk-top-fields .order-date-field {
+.order-desk-top-row .order-date-field {
   flex: 0 0 auto;
   margin: 0;
-  min-width: 9.5rem;
+  min-width: 8.8rem;
+}
+.order-desk-top-row .urgent-toggle {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  min-height: 2.35rem;
 }
 .order-desk-dayhint {
-  margin: 0.45rem 0 0;
-  font-size: 0.82rem;
+  margin: 0;
+  align-self: center;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--muted);
+  white-space: nowrap;
+}
+.route-compact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  width: auto;
+  min-height: 2.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #065f46;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.route-compact-btn[aria-expanded="true"],
+.route-compact-btn:hover {
+  background: #047857;
+  color: #fff;
+}
+.route-compact-ico {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+.route-compact-btn strong {
+  font-weight: 800;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.route-compact-edit {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+.order-desk-top-row .order-line-jump {
+  margin-left: auto;
+  width: auto;
+  min-height: 2.35rem;
+  padding: 0.3rem 0.75rem;
+  white-space: nowrap;
+}
+.route-popover {
+  margin-top: 0.55rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: 0.7rem;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
 }
 .order-desk-grid {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
   align-items: start;
 }
 body.layout-web .order-desk-grid {
-  grid-template-columns: minmax(0, 1.35fr) minmax(17rem, 0.9fr);
+  grid-template-columns: minmax(0, 7fr) minmax(15rem, 3fr);
 }
 .order-desk-main {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.75rem;
   min-width: 0;
 }
 .order-block {
   margin: 0;
-  padding: 0.9rem 1rem 1rem;
+  padding: 0.8rem 0.9rem 0.9rem;
   border: 0;
-  border-radius: 0.9rem;
+  border-radius: 0.85rem;
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 .order-block-title {
-  margin: 0 0 0.65rem;
-  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: 0.02em;
 }
 .route-pair {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.7rem;
 }
 @media (min-width: 720px) {
   body.layout-web .route-pair {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1.15fr;
   }
 }
 .route-leg-lab {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin: 0 0 0.4rem;
-  font-size: 0.8rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: #334155;
 }
@@ -3737,12 +3793,12 @@ body.layout-web .order-desk-grid {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 999px;
   background: #ecfdf5;
   color: #047857;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 800;
 }
 .route-ico.is-end {
@@ -3752,76 +3808,296 @@ body.layout-web .order-desk-grid {
 .route-wh {
   width: 100%;
   margin: 0;
-  min-height: 2.5rem;
+  min-height: 2.3rem;
 }
 .route-dest-picks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.28rem;
 }
 .route-dest-picks .dest-chip {
   margin: 0;
   width: auto;
-  min-height: 2.2rem;
-  padding: 0.35rem 0.7rem;
+  min-height: 1.95rem;
+  padding: 0.25rem 0.6rem;
+  border: 0;
   border-radius: 999px;
-  font-size: 0.82rem;
+  background: #f1f5f9;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.route-dest-picks .dest-chip.on,
+.route-dest-picks .dest-chip[aria-pressed="true"] {
+  background: #047857;
+  color: #fff;
 }
 .route-dest-other {
-  margin-top: 0.45rem;
+  margin-top: 0.35rem;
   width: 100%;
 }
 .route-dest-hint {
-  margin: 0.35rem 0 0;
-  font-size: 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
 }
 .sku-search-field {
-  margin: 0 0 0.55rem;
+  position: relative;
+  margin: 0 0 0.45rem;
+}
+.sku-search-lab {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.sku-search-field input {
+  min-height: 2.55rem;
+  font-size: 0.95rem;
+  font-weight: 650;
 }
 .sku-hot {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.65rem;
+  gap: 0.28rem;
+  margin-bottom: 0.55rem;
 }
+.sku-mini,
 .sku-hot-chip {
+  position: relative;
   margin: 0;
   width: auto;
-  min-height: 2.15rem;
-  padding: 0.3rem 0.75rem;
+  min-height: 1.9rem;
+  padding: 0.22rem 0.65rem;
   border: 0;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #1e293b;
-  font-size: 0.82rem;
-  font-weight: 700;
+  border-radius: 0.45rem;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.78rem;
+  font-weight: 750;
   cursor: pointer;
+  line-height: 1.2;
 }
-.sku-hot-chip.is-on,
-.sku-hot-chip:hover {
+.sku-mini.has-qty,
+.sku-hot-chip.has-qty,
+.sku-mini.is-on,
+.sku-hot-chip.is-on {
   background: #047857;
   color: #fff;
 }
-body.layout-web .order-desk .item-line .line-ship-meta,
+.sku-mini:hover,
+.sku-hot-chip:hover {
+  background: #059669;
+  color: #fff;
+}
+.sku-qty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.28rem;
+  padding: 0 0.22rem;
+  border-radius: 999px;
+  background: #fbbf24;
+  color: #78350f;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.sku-mini.has-qty .sku-qty-badge,
+.pick.has-qty .sku-qty-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+.sku-brand-block {
+  margin: 0 0 0.55rem;
+}
+.sku-brand-lab {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.03em;
+}
+.order-desk-tip {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.order-sheet #ha-lines {
+  margin: 0;
+}
+body.layout-web .order-desk .item-line {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 0.4rem;
+}
+body.layout-web .order-desk .pick-block {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+body.layout-web .order-desk .sku-picks {
+  gap: 0.28rem;
+}
+body.layout-web .order-desk .sku-picks .pick {
+  position: relative;
+  min-height: 1.9rem;
+  min-width: 0;
+  padding: 0.22rem 0.58rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: #f1f5f9;
+  box-shadow: none;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+body.layout-web .order-desk .sku-picks .pick.on,
+body.layout-web .order-desk .sku-picks .pick.has-qty,
+body.layout-web .order-desk .sku-picks .pick:hover {
+  background: #047857;
+  color: #fff;
+}
+body.layout-web .order-desk .line-metrics,
+body.layout-web .order-desk .item-add-bar,
+body.layout-web .order-desk .line-note-field,
+body.layout-web .order-desk .line-ship-meta,
 .order-desk .item-line .line-ship-meta {
   display: none;
 }
+body.layout-web .order-desk .item-line.is-compose .line-metrics,
+body.layout-web .order-desk .item-line.is-compose .item-add-bar,
+body.layout-web .order-desk .item-line.is-compose .line-note-field {
+  display: grid;
+}
+body.layout-web .order-desk .item-line.is-compose .line-metrics {
+  gap: 0.4rem;
+}
+body.layout-web .order-desk .sku-subs .pick {
+  min-height: 1.85rem;
+  min-width: 2.5rem;
+  padding: 0.22rem 0.5rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #f1f5f9;
+  font-size: 0.78rem;
+}
+body.layout-web .order-desk .sku-subs .pick.on {
+  background: #059669;
+  color: #fff;
+}
+body.layout-web .order-desk .line-metric-card {
+  border: 0;
+  box-shadow: inset 0 0 0 1px #e8eef2;
+  background: #f8fafc;
+}
+body.layout-web .order-desk .item-add-bar .primary {
+  width: 100%;
+  min-height: 2.35rem;
+}
 body.layout-web .order-desk-cart {
   position: sticky;
-  top: 0.6rem;
-  max-height: calc(100dvh - 5.5rem);
-  overflow: auto;
+  top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 4.8rem);
+  padding-bottom: 0.7rem;
+  overflow: hidden;
 }
 body.layout-web .order-desk-cart .ticket {
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+  overflow: auto;
+}
+.order-cart-foot {
+  flex: 0 0 auto;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e8eef2;
+  background: #fff;
+}
+.order-cart-note {
+  margin: 0 0 0.5rem;
+}
+.order-submit-row {
+  margin: 0;
+  gap: 0.35rem;
+}
+.order-submit-row .primary {
+  flex: 1 1 auto;
+  min-height: 2.6rem;
+  font-weight: 800;
+}
+.order-submit-row .ghost {
+  width: auto;
+  min-height: 2.6rem;
 }
 .ticket-route {
-  margin: 0 0 0.55rem;
-  font-size: 0.78rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+}
+.ticket-list--slim {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ticket-item--slim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e8eef2;
+}
+.ticket-item--slim .ticket-name {
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+.ticket-item--slim .stepper {
+  margin: 0;
+}
+.ticket-item--slim .stepper input {
+  width: 2.6rem;
+  min-height: 1.9rem;
+  text-align: center;
+  font-weight: 800;
+}
+.ticket-item--slim .stepper button {
+  width: 1.9rem;
+  min-height: 1.9rem;
+  padding: 0;
+}
+.ticket-del-x {
+  margin: 0;
+  width: 1.9rem;
+  min-height: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.ticket-del-x:hover {
+  background: #fecaca;
 }
 .ticket-item-top {
   display: flex;
@@ -3834,32 +4110,16 @@ body.layout-web .order-desk-cart .ticket {
   font-size: 0.75rem;
 }
 .ticket-total {
-  margin: 0.65rem 0 0;
-  padding-top: 0.55rem;
+  margin: 0.55rem 0 0;
+  padding-top: 0.45rem;
   border-top: 1px dashed #e2e8f0;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: #334155;
 }
 .ticket-total strong {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   color: #047857;
-}
-.order-cart-note {
-  margin-top: 0.65rem;
-}
-body.layout-web .order-desk .pick-block {
-  padding: 0.55rem 0 0;
-  border: 0;
-  background: transparent;
-}
-body.layout-web .order-desk .line-metric-card {
-  border: 0;
-  box-shadow: inset 0 0 0 1px #e8eef2;
-  background: #f8fafc;
-}
-body.layout-web .order-desk .item-add-bar .primary {
-  width: 100%;
 }
 @media (max-width: 899px) {
   body.layout-web .order-desk-grid {
@@ -3868,6 +4128,17 @@ body.layout-web .order-desk .item-add-bar .primary {
   body.layout-web .order-desk-cart {
     position: static;
     max-height: none;
+    overflow: visible;
+  }
+  body.layout-web .order-desk-cart .ticket {
+    overflow: visible;
+  }
+  .order-desk-top-row .order-line-jump {
+    margin-left: 0;
+  }
+  body.layout-web .order-desk .line-metrics,
+  body.layout-web .order-desk .item-add-bar {
+    display: grid;
   }
 }
 

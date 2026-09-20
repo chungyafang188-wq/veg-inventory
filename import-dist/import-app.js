@@ -12499,10 +12499,10 @@ function wt(e) {
 		lab: "已派工",
 		cls: "bg-slate-200 text-slate-700"
 	} : e.pickup ? {
-		lab: "已可領",
+		lab: "已排櫃",
 		cls: "bg-emerald-100 text-emerald-800"
 	} : {
-		lab: "已放行",
+		lab: "待排",
 		cls: "bg-amber-100 text-amber-800"
 	};
 }
@@ -12698,19 +12698,19 @@ function Et({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 						role: "tablist",
 						children: [
 							[
-								"open",
-								"待派送",
-								r?.open
-							],
-							[
 								"arrange",
 								"待排",
 								r?.arrange
 							],
 							[
 								"pickup",
-								"已可領",
+								"已排櫃",
 								r?.pickup
+							],
+							[
+								"open",
+								"總放行清單",
+								r?.open
 							]
 						].map(([e, r, i]) => /* @__PURE__ */ (0, D.jsxs)("button", {
 							type: "button",
@@ -13608,7 +13608,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 //#endregion
 //#region src/ImportApp.jsx
 function qt({ initialPane: e = "parse" }) {
-	let t = ue(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("open"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [E, re] = (0, l.useState)(() => ie());
+	let t = ue(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("arrange"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [E, re] = (0, l.useState)(() => ie());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
 	}, [y]);

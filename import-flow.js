@@ -9,7 +9,7 @@
  */
 (function () {
   let importPane = "parse"; // parse | buy | port | release | stock | sum | files | broker...
-  let releaseListTab = "open"; // open | arrange | check | pickup
+  let releaseListTab = "arrange"; // arrange | pickup | open
   let drawer = null; // { kind, key } | null
   let drawerFull = false;
   /** 本機草稿：Drawer 開啟期間不受背景 Pull 覆蓋 */
@@ -3100,9 +3100,9 @@
   }
 
   function releaseStatusLabel(c) {
-    if (c.pickup) return "可排拆櫃";
+    if (c.pickup) return "已排櫃";
     if (c.checking) return "待排（藥檢／薰蒸中）";
-    return "待排拆櫃";
+    return "待排";
   }
 
   function formatFtLabel(c) {
@@ -3158,9 +3158,9 @@
 
     body.innerHTML = `
       <div class="imp-filter-row" role="tablist" aria-label="放行篩選">
-        <button type="button" class="imp-filter${releaseListTab === "open" ? " is-on" : ""}" data-imp-rel-tab="open">全部 ${s.total}</button>
-        <button type="button" class="imp-filter${releaseListTab === "arrange" ? " is-on" : ""}" data-imp-rel-tab="arrange">待排拆櫃 ${s.arrange}</button>
-        <button type="button" class="imp-filter${releaseListTab === "pickup" ? " is-on" : ""}" data-imp-rel-tab="pickup">可排拆櫃 ${s.pickup}</button>
+        <button type="button" class="imp-filter${releaseListTab === "arrange" ? " is-on" : ""}" data-imp-rel-tab="arrange">待排 ${s.arrange}</button>
+        <button type="button" class="imp-filter${releaseListTab === "pickup" ? " is-on" : ""}" data-imp-rel-tab="pickup">已排櫃 ${s.pickup}</button>
+        <button type="button" class="imp-filter${releaseListTab === "open" ? " is-on" : ""}" data-imp-rel-tab="open">總放行清單 ${s.total}</button>
       </div>
       <div class="imp-filter-row" role="group" aria-label="排序">
         <span class="imp-one-hint" style="margin:0">排序</span>

@@ -72,8 +72,8 @@ function NotifyBadges({ row }) {
 
 function stageLab(r) {
   if (r.dispatched) return { lab: "已派工", cls: "bg-slate-200 text-slate-700" };
-  if (r.pickup) return { lab: "已可領", cls: "bg-emerald-100 text-emerald-800" };
-  return { lab: "已放行", cls: "bg-amber-100 text-amber-800" };
+  if (r.pickup) return { lab: "已排櫃", cls: "bg-emerald-100 text-emerald-800" };
+  return { lab: "待排", cls: "bg-amber-100 text-amber-800" };
 }
 
 function FtPickupCell({ row, uha, patch, disabled }) {
@@ -337,9 +337,9 @@ export function ReleasePane({
         <p className="mt-1 m-0 text-xs text-slate-400">點擊欄位即可編輯；日期顯示 MM/DD。勾選後可批量通知。</p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
-            ["open", "待派送", counts?.open],
             ["arrange", "待排", counts?.arrange],
-            ["pickup", "已可領", counts?.pickup],
+            ["pickup", "已排櫃", counts?.pickup],
+            ["open", "總放行清單", counts?.open],
           ].map(([id, lab, count]) => (
             <button key={id} type="button" className={releaseTab === id ? chipOn : chipIdle} onClick={() => setReleaseTab(id)}>
               {lab}

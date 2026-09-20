@@ -1,16 +1,25 @@
 import { useCallback, useRef, useState } from "react";
 import { api, ensureImportState, saveState, setStatus } from "../bridge";
-import { compressImageFile, imageFileFromClipboard, textFromClipboard } from "../lib/imagePaste";
+import {
+  captureDisplayFrame,
+  compressDataUrl,
+  compressImageFile,
+  imageFileFromClipboard,
+  textFromClipboard,
+} from "../lib/imagePaste";
+import { RegionCropOverlay } from "./RegionCropOverlay";
 
 /**
- * 判讀：文字解析＋LINE 式截圖貼上（預覽後建草稿）。
+ * 判讀：文字解析＋框選截圖／貼上預覽後建草稿。
  */
 export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
   const [text, setText] = useState("");
   const [shot, setShot] = useState(null); // { dataUrl, name }
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null); // full capture awaiting region select
   const fileRef = useRef(null);
+  const cropFileRef = useRef(null);
 
   const runParse = () => {
     if (!String(text).trim()) {
@@ -49,24 +58,63 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
     onOpenDraft?.(first.id || 0);
   };
 
-  const ingestImage = useCallback(async (file, extraText = "") => {
-    if (!file) return;
+  const applyShot = useCallback(async (dataUrl, name) => {
+    const compressed = await compressDataUrl(dataUrl, { name: name || `crop-${Date.now()}.jpg` });
+    setShot({ dataUrl: compressed.dataUrl, name: compressed.name });
+    setStatus("已框選截圖，可再補文字後按「建立草稿」。");
+  }, []);
+
+  const ingestImage = useCallback(
+    async (file, extraText = "", { goCrop = false } = {}) => {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const compressed = await compressImageFile(file, { maxSide: goCrop ? 2400 : 1280, quality: goCrop ? 0.92 : 0.72 });
+        if (extraText) setText((t) => (t ? `${t}\n${extraText}` : extraText));
+        if (goCrop) {
+          setCropSrc(compressed.dataUrl);
+        } else {
+          setShot({ dataUrl: compressed.dataUrl, name: compressed.name });
+          setStatus("已貼上截圖，可再補文字後按「建立草稿」。");
+        }
+      } catch (err) {
+        setStatus(String(err.message || err || "圖片處理失敗"), true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  /** 點「框選截圖」：分享畫面 → 凍結 → 拖曳框選 */
+  const startRegionCapture = async () => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setStatus("此裝置不支援畫面擷取，改選圖片後再框選。", true);
+      cropFileRef.current?.click();
+      return;
+    }
     setBusy(true);
     try {
-      const compressed = await compressImageFile(file);
-      setShot({ dataUrl: compressed.dataUrl, name: compressed.name });
-      if (extraText) setText((t) => (t ? `${t}\n${extraText}` : extraText));
-      setStatus("已貼上截圖，可再補文字後按「建立草稿」。");
+      setStatus("請在彈窗選要截的視窗／螢幕（建議選 LINE 或文件視窗）…");
+      const frame = await captureDisplayFrame();
+      setCropSrc(frame);
+      setStatus("請在畫面上拖曳框選範圍。");
     } catch (err) {
-      setStatus(String(err.message || err || "圖片處理失敗"), true);
+      const msg = String(err?.message || err || "");
+      if (/NotAllowedError|Permission denied|denied|NotAllowed/i.test(msg) || err?.name === "NotAllowedError") {
+        setStatus("已取消畫面分享。可改貼上截圖，或選圖片後框選。", true);
+      } else {
+        setStatus(msg || "畫面擷取失敗", true);
+        cropFileRef.current?.click();
+      }
     } finally {
       setBusy(false);
     }
-  }, []);
+  };
 
   const createShotDraft = () => {
     if (!shot?.dataUrl) {
-      setStatus("請先貼上或選取截圖。", true);
+      setStatus("請先框選或貼上截圖。", true);
       return;
     }
     const state = ensureImportState();
@@ -88,7 +136,6 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
       photoData: shot.dataUrl,
       missing: ["編號", "櫃號", "到港日", "品名"],
     };
-    // 若同時有文字，先跑解析再併入圖片
     if (note) {
       const parsed = api().parseImportDocText?.(note);
       if (parsed) {
@@ -117,26 +164,69 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
     if (!img) return;
     e.preventDefault();
     const pastedText = textFromClipboard(e);
-    ingestImage(img, pastedText);
+    ingestImage(img, pastedText, { goCrop: true });
   };
 
   const onDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer?.files?.[0];
-    if (file && String(file.type || "").startsWith("image/")) ingestImage(file);
-    else setStatus("請拖放圖片檔（截圖／拍照）。", true);
+    if (file && String(file.type || "").startsWith("image/")) ingestImage(file, "", { goCrop: true });
+    else setStatus("請拖放圖片檔。", true);
   };
 
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm" onPaste={onPasteAnywhere}>
+      {cropSrc ? (
+        <RegionCropOverlay
+          sourceDataUrl={cropSrc}
+          title="拖曳框選要截的範圍"
+          onCancel={() => setCropSrc(null)}
+          onConfirm={async (cropped) => {
+            setCropSrc(null);
+            setBusy(true);
+            try {
+              await applyShot(cropped, `crop-${Date.now()}.jpg`);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ) : null}
+
       <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2>
       <p className="mt-1 text-xs text-slate-400">
-        文字可直接貼上解析；截圖可像 LINE 一樣 Ctrl+V／長按貼上，或拖放進下方框。
+        點「框選截圖」→ 選視窗／螢幕 → 拖曳框選範圍。也可貼上／相簿後再框選。
       </p>
 
       <div className="mt-4 grid gap-3">
-        {/* LINE 式截圖區 */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-700/20 disabled:opacity-50"
+            disabled={busy}
+            onClick={startRegionCapture}
+          >
+            {busy ? "處理中…" : "框選截圖"}
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700"
+            disabled={busy}
+            onClick={() => cropFileRef.current?.click()}
+          >
+            選圖後框選
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            相簿／拍照
+          </button>
+        </div>
+
         <div
           className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
             dragOver ? "border-emerald-500 bg-emerald-50/80" : "border-slate-200 bg-slate-50/60"
@@ -155,49 +245,33 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
           {shot?.dataUrl ? (
             <div className="grid gap-2 p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-600">截圖預覽（類似 LINE 傳送前）</span>
-                <button
-                  type="button"
-                  className="text-xs font-bold text-rose-600 underline"
-                  onClick={() => setShot(null)}
-                >
-                  移除
-                </button>
+                <span className="text-xs font-bold text-slate-600">框選結果預覽</span>
+                <div className="flex gap-2">
+                  <button type="button" className="text-xs font-bold text-emerald-700 underline" onClick={() => setCropSrc(shot.dataUrl)}>
+                    再框選
+                  </button>
+                  <button type="button" className="text-xs font-bold text-rose-600 underline" onClick={() => setShot(null)}>
+                    移除
+                  </button>
+                </div>
               </div>
               <div className="overflow-hidden rounded-xl bg-slate-900/5">
                 <img src={shot.dataUrl} alt="截圖預覽" className="mx-auto max-h-64 w-auto max-w-full object-contain" />
               </div>
-              <p className="m-0 truncate text-[0.7rem] text-slate-400">{shot.name}</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={busy}
-                  onClick={createShotDraft}
-                >
-                  建立草稿並核對
-                </button>
-                <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => fileRef.current?.click()}>
-                  換一張
-                </button>
-              </div>
+              <button
+                type="button"
+                className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={createShotDraft}
+              >
+                建立草稿並核對
+              </button>
             </div>
           ) : (
-            <button
-              type="button"
-              className="flex w-full flex-col items-center gap-2 px-4 py-8 text-center"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-            >
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                  <path d="M4 7h3l2-2h6l2 2h3v12H4V7z" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="12" cy="13" r="3.5" />
-                </svg>
-              </span>
-              <strong className="text-sm text-slate-800">{busy ? "處理圖片中…" : "貼上截圖／拖放／點選相簿"}</strong>
-              <span className="text-xs text-slate-400">支援 LINE 截圖：複製後在此 Ctrl+V（手機可長按貼上）</span>
-            </button>
+            <div className="px-4 py-8 text-center">
+              <p className="m-0 text-sm font-semibold text-slate-700">尚未有截圖</p>
+              <p className="mt-1 m-0 text-xs text-slate-400">按上方「框選截圖」，或 Ctrl+V 貼上後框選</p>
+            </div>
           )}
           <input
             ref={fileRef}
@@ -211,20 +285,31 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
               if (file) ingestImage(file);
             }}
           />
+          <input
+            ref={cropFileRef}
+            type="file"
+            accept="image/*,.png,.jpg,.jpeg,.webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) ingestImage(file, "", { goCrop: true });
+            }}
+          />
         </div>
 
         <label className="grid gap-1.5 text-xs font-semibold text-slate-500">
           文件文字（可與截圖一起用）
           <textarea
             className="min-h-28 w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm font-normal text-slate-800 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
-            placeholder={"例：\nUHA720\n櫃號 YMLU1234567\n品名 韓白\n到港日 2026-01-15"}
+            placeholder={"例：\nUHA720\n櫃號 YMLU1234567\n品名 韓白"}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={(e) => {
               const img = imageFileFromClipboard(e);
               if (img) {
                 e.preventDefault();
-                ingestImage(img, textFromClipboard(e));
+                ingestImage(img, textFromClipboard(e), { goCrop: true });
               }
             }}
           />
@@ -240,12 +325,9 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
         </button>
 
         <div className="mt-1">
-          <p className="mb-2 mt-0 text-xs font-semibold text-slate-500">待確認草稿（點列開啟編輯）</p>
+          <p className="mb-2 mt-0 text-xs font-semibold text-slate-500">待確認草稿</p>
           {!drafts?.length ? (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50/80 px-4 py-10 text-center">
-              <p className="m-0 text-sm font-medium text-slate-500">目前沒有資料</p>
-              <p className="m-0 text-xs text-slate-400">貼文字或截圖後草稿會出現在這裡</p>
-            </div>
+            <p className="m-0 rounded-xl bg-slate-50/80 py-8 text-center text-sm text-slate-400">目前沒有資料</p>
           ) : (
             <ul className="m-0 grid list-none gap-1.5 p-0">
               {drafts.map((d, i) => {
@@ -268,7 +350,7 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold text-slate-800">{d.uha || "缺編號（可後補）"}</span>
                         <span className="block truncate text-xs text-slate-400">
-                          {[d.containerNo, d.product, d.arriveDay, d.photoName].filter(Boolean).join(" · ") || "點此編輯"}
+                          {[d.containerNo, d.product, d.arriveDay].filter(Boolean).join(" · ") || "點此編輯"}
                         </span>
                       </span>
                     </button>

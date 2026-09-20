@@ -1415,12 +1415,21 @@ let loginPickerOpen = false;
 function staffNeedsPin(name) {
   return staffByName(name)?.role === "boss";
 }
+/** 全形數字→半形，並只留數字（避免手機輸入法造成密碼對了卻進不去） */
+function normalizePin(v) {
+  return String(v || "")
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xff10 + 0x30))
+    .replace(/\D/g, "");
+}
 function rememberStaff(name) {
   const n = String(name || "").trim();
-  if (!staffByName(n)) return;
+  if (!staffByName(n)) return false;
   try {
     localStorage.setItem(STAFF_NOW_KEY, n);
-  } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 function hideLoginPin() {
   loginPinName = "";
@@ -1428,21 +1437,27 @@ function hideLoginPin() {
   const people = document.getElementById("login-people");
   const err = document.getElementById("login-pin-err");
   const input = document.getElementById("login-pin-input");
-  if (pin) pin.hidden = true;
+  if (pin) {
+    pin.hidden = true;
+    delete pin.dataset.pinFor;
+  }
   if (people) people.hidden = false;
   if (err) err.hidden = true;
   if (input) input.value = "";
 }
 function showLoginPin(name) {
-  loginPinName = name;
+  loginPinName = String(name || "").trim();
   const pin = document.getElementById("login-pin");
   const people = document.getElementById("login-people");
   const who = document.getElementById("login-pin-who");
   const err = document.getElementById("login-pin-err");
   const input = document.getElementById("login-pin-input");
-  if (who) who.textContent = `請輸入${name}的主管密碼`;
+  if (who) who.textContent = `請輸入${loginPinName}的主管密碼`;
   if (people) people.hidden = true;
-  if (pin) pin.hidden = false;
+  if (pin) {
+    pin.hidden = false;
+    pin.dataset.pinFor = loginPinName;
+  }
   if (err) err.hidden = true;
   if (input) {
     input.value = "";
@@ -1460,7 +1475,12 @@ function returnToLogin() {
   render();
 }
 function finishLogin(name) {
-  rememberStaff(name);
+  const n = String(name || "").trim();
+  if (!rememberStaff(n)) {
+    setStatus("登入失敗：找不到這位使用者，請重新整理後再試。", true);
+    showLoginPin(n || "雅芳");
+    return false;
+  }
   loginPickerOpen = false;
   hideLoginPin();
   closeLoginGate();
@@ -1468,6 +1488,7 @@ function finishLogin(name) {
   hubDept = "";
   hubOpen = "";
   render();
+  return true;
 }
 function pickLoginPerson(name) {
   const n = String(name || "").trim();
@@ -1479,15 +1500,27 @@ function pickLoginPerson(name) {
   finishLogin(n);
 }
 function submitLoginPin() {
+  const form = document.getElementById("login-pin");
   const input = document.getElementById("login-pin-input");
   const err = document.getElementById("login-pin-err");
-  const pin = String(input?.value || "").trim();
-  if (!loginPinName || !staffNeedsPin(loginPinName)) return;
-  if (pin === BOSS_PIN) {
-    finishLogin(loginPinName);
+  const who = String(loginPinName || form?.dataset?.pinFor || "").trim();
+  const pin = normalizePin(input?.value);
+  if (!who || !staffNeedsPin(who)) {
+    if (err) {
+      err.hidden = false;
+      err.textContent = "請先選「雅芳」，再輸入密碼。";
+    }
     return;
   }
-  if (err) err.hidden = false;
+  loginPinName = who;
+  if (pin === BOSS_PIN) {
+    finishLogin(who);
+    return;
+  }
+  if (err) {
+    err.hidden = false;
+    err.textContent = "密碼不對，請再試一次（請用半形數字 1227）。";
+  }
   if (input) {
     input.value = "";
     input.focus();
@@ -3884,7 +3917,6 @@ function openLoginGate() {
 }
 function closeLoginGate() {
   loginPickerOpen = false;
-  hideLoginPin();
   const gate = document.getElementById("login-gate");
   if (gate) gate.hidden = true;
 }

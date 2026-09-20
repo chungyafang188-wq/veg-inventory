@@ -54,10 +54,10 @@
           <h2>請選取使用者</h2>
           <p class="hint">同一台手機或電腦登入一次即可，之後會記住。現場共用「現場」。其他人暫時不用密碼。</p>
           <div id="login-people"></div>
-          <form id="login-pin" class="login-pin" hidden>
+          <form id="login-pin" class="login-pin" hidden novalidate>
             <p class="login-pin-who" id="login-pin-who">請輸入主管密碼</p>
             <label class="field">密碼
-              <input id="login-pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+              <input id="login-pin-input" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code" />
             </label>
             <p class="login-pin-err" id="login-pin-err" hidden>密碼不對，請再試一次。</p>
             <div class="btn-row">
@@ -554,7 +554,7 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=382"></script>
+    <script src="./app.js?v=383"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=15"></script>
     <script src="./import-flow.js?v=49"></script>

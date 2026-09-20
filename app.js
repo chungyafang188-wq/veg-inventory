@@ -5490,6 +5490,18 @@ function pickBigFromSearchLabel(lab) {
   void lower;
   return "";
 }
+function ticketDelBtnHtml(i) {
+  return `<button type="button" class="ticket-del-x" data-ticket-del="${i}" aria-label="刪除" title="刪除">
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+  </button>`;
+}
+function syncTicketFootTotal(totalQty) {
+  const el = document.getElementById("ticket-foot-total");
+  if (!el) return;
+  const n = Number(totalQty) || 0;
+  el.hidden = n <= 0;
+  el.innerHTML = `總件數 <strong>${esc(fmt(n))}</strong> 件`;
+}
 function ticketDestHtml(l, i) {
   const mode = lineDestMode(l);
   const dest = String(l.dest || "").trim();
@@ -5509,6 +5521,7 @@ function renderTicket() {
   if (!ticketLines.length) {
     box.classList.add("is-empty");
     box.innerHTML = `<p class="ticket-empty">本單還沒有品項<span class="ticket-kind">${esc(kind)}</span></p>`;
+    syncTicketFootTotal(0);
     syncShipMore();
     syncOrderEntering();
     syncSkuCountBadges();
@@ -5528,16 +5541,21 @@ function renderTicket() {
         const banVal = lineBanQty(l) > 0 ? lineBanQty(l) : "";
         const qtyVal = qtyFieldValue(l.qty);
         const qtyPh = qtyFieldPlaceholder(banVal);
-        const unit = sku?.unit || "";
-        const banHint = banVal ? `<span class="muted" style="font-size:0.72rem">版${esc(String(banVal))}</span>` : "";
+        const unit = sku?.unit || "件";
+        const banHint = banVal ? `<span class="ticket-ban">版${esc(String(banVal))}</span>` : "";
         return `<li class="ticket-item ticket-item--slim">
-          <strong class="ticket-name">${esc(ticketLineName(l))}${unit ? ` <span class="muted" style="font-weight:600">${esc(unit)}</span>` : ""}${banHint ? " " + banHint : ""}</strong>
-          ${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: qtyVal, step, placeholder: qtyPh || "0", aria: "件數" })}
-          <button type="button" class="ticket-del-x" data-ticket-del="${i}" aria-label="刪除">×</button>
+          <div class="ticket-item-top">
+            <strong class="ticket-name">${esc(ticketLineName(l))}${banHint}</strong>
+            ${ticketDelBtnHtml(i)}
+          </div>
+          <div class="ticket-item-qty">
+            ${qtyStepperHtml({ key: "ticket-qty", id: String(i), value: qtyVal, step, placeholder: qtyPh || "0", aria: "件數" })}
+            <span class="ticket-unit">${esc(unit)}</span>
+          </div>
         </li>`;
       })
-      .join("")}</ul>
-    <p class="ticket-total">總件數 <strong>${esc(fmt(totalQty))}</strong> 件</p>`;
+      .join("")}</ul>`;
+  syncTicketFootTotal(totalQty);
   syncShipMore();
   syncOrderEntering();
   syncSkuCountBadges();

@@ -11302,13 +11302,7 @@ function applyCopy() {
     cust.placeholder = "輸入姓名";
     cust.readOnly = false;
   }
-  const form = document.getElementById("order-form");
-  const sheet = document.getElementById("sheet");
-  const ticket = document.getElementById("ticket");
-  if (form && sheet && ticket) {
-    if (editing) form.insertBefore(ticket, sheet);
-    else if (ticket.previousElementSibling !== sheet) form.insertBefore(sheet, ticket);
-  }
+  // 雙欄桌面：#sheet／#ticket 不再是 form 直屬兄弟，不可 insertBefore 重排
 }
 
 function render() {

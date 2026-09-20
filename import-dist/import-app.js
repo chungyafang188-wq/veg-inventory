@@ -10833,7 +10833,7 @@ function Xe({ value: e, kind: t, onChange: n, displayLab: r, toneClass: i }) {
 }
 function Ze({ value: e, at: t, kind: n, onStatus: r, onAt: i }) {
 	let a = !!String(t || "").trim(), o = e === "wait" || e === "done" || a, s = e || "none", c = te(s, n), l = null;
-	return n === "inspect" ? (a || s === "done") && (c = "已出報告", l = "bg-sky-100 text-sky-800") : a && (c = "已排薰蒸", l = "bg-emerald-100 text-emerald-800"), /* @__PURE__ */ (0, E.jsxs)("div", {
+	return n === "inspect" ? a ? (c = "已出報告", l = "bg-sky-100 text-sky-800") : (s === "wait" || s === "done") && (c = "需要藥檢", l = null) : a && (c = "已排薰蒸", l = "bg-emerald-100 text-emerald-800"), n === "inspect" && !a && (s === "wait" || s === "done") && (l = "bg-red-100 text-red-700"), /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "imp-clear-stack",
 		children: [/* @__PURE__ */ (0, E.jsx)(Xe, {
 			value: s,

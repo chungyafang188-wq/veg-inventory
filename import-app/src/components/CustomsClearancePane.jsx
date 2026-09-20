@@ -366,13 +366,22 @@ function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
   let displayLab = clearLab(id, kind);
   let toneOverride = null;
   if (kind === "inspect") {
-    if (hasAt || id === "done") {
+    // 僅在填了出報告日後才顯示「已出報告」；需要藥檢時維持紅標
+    if (hasAt) {
       displayLab = "已出報告";
       toneOverride = "bg-sky-100 text-sky-800";
+    } else if (id === "wait" || id === "done") {
+      displayLab = "需要藥檢";
+      toneOverride = null; // 沿用 statusTone(wait/done) 或強制紅
     }
   } else if (hasAt) {
     displayLab = "已排薰蒸";
     toneOverride = "bg-emerald-100 text-emerald-800";
+  }
+
+  // 需要藥檢但尚未出報告：強制紅底（含誤標 done 未填日）
+  if (kind === "inspect" && !hasAt && (id === "wait" || id === "done")) {
+    toneOverride = "bg-red-100 text-red-700";
   }
 
   return (

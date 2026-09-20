@@ -9462,13 +9462,67 @@ function ce({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 									})
 								}),
 								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "拖車電話",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										type: "tel",
+										className: O(),
+										value: _.trailerPhone || "",
+										onChange: (e) => c("trailerPhone", e.target.value),
+										placeholder: "0963…"
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "下貨點",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.unpackSite || "",
+										onChange: (e) => c("unpackSite", e.target.value),
+										placeholder: "例：穠全"
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "到達／拆卸時間",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										type: "datetime-local",
+										className: O(),
+										value: (_.unpackAt || "").slice(0, 16),
+										onChange: (e) => c("unpackAt", e.target.value)
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "數量（袋）",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										type: "number",
+										className: O(),
+										value: _.assignQty ?? "",
+										onChange: (e) => c("assignQty", e.target.value)
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "碼頭",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.dock || "",
+										onChange: (e) => c("dock", e.target.value),
+										placeholder: "例：70"
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
 									label: "備註",
 									children: /* @__PURE__ */ (0, E.jsx)("input", {
 										className: O(),
 										value: _.note || "",
 										onChange: (e) => c("note", e.target.value)
 									})
-								})
+								}),
+								_.checkKind ? /* @__PURE__ */ (0, E.jsxs)("p", {
+									className: "m-0 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-[0.78rem] font-semibold text-sky-800",
+									children: ["本櫃查驗類型：", _.checkKind]
+								}) : null,
+								_.inspect && _.inspect !== "none" ? /* @__PURE__ */ (0, E.jsxs)("p", {
+									className: "m-0 text-[0.75rem] text-imp-muted",
+									children: ["藥檢預設：", _.inspect === "skip" ? "無須檢驗" : _.inspect]
+								}) : null
 							]
 						}) : null,
 						v === "port" ? /* @__PURE__ */ (0, E.jsxs)("div", {
@@ -10037,7 +10091,7 @@ function ce({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 							type: "button",
 							className: "rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white",
 							onClick: h,
-							children: "確認列入海關查驗"
+							children: "匯入貨櫃追蹤"
 						}), /* @__PURE__ */ (0, E.jsx)("button", {
 							type: "button",
 							className: "rounded-md border border-imp-line px-3 py-2 text-[0.82rem]",
@@ -11226,15 +11280,28 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 			]
 		};
 		if (c) {
-			let e = _().parseImportDocText?.(c);
-			e && (l = {
-				...e,
-				id: t,
-				photoName: o.name,
-				photoData: o.dataUrl,
-				raw: e.raw || c,
-				missing: e.missing?.length ? e.missing : l.missing
-			});
+			let i = typeof _().parseImportDocTexts == "function" ? _().parseImportDocTexts(c) : (() => {
+				let e = _().parseImportDocText?.(c);
+				return e ? [e] : [];
+			})();
+			if (i?.length) {
+				let l = i.map((e, n) => ({
+					...e,
+					id: n === 0 ? t : `draft_${Date.now()}_${n}`,
+					photoName: o.name,
+					photoData: o.dataUrl,
+					raw: e.raw || c,
+					missing: e.missing?.length ? e.missing : [
+						"編號",
+						"櫃號",
+						"到港日",
+						"品名"
+					]
+				}));
+				for (let t = l.length - 1; t >= 0; t--) e.importParseDrafts.unshift(l[t]);
+				e.importParseDrafts.length > 40 && (e.importParseDrafts.length = 40), s(null), a(""), p(), m(l.length > 1 ? `已建立 ${l.length} 櫃截圖草稿，請逐筆核對。` : "已建立截圖草稿，請核對欄位後確認列入海關查驗。"), n?.(), r?.(l[0].id);
+				return;
+			}
 		}
 		e.importParseDrafts.unshift(l), e.importParseDrafts.length > 40 && (e.importParseDrafts.length = 40), s(null), a(""), p(), m("已建立截圖草稿，請核對欄位後確認列入海關查驗。"), n?.(), r?.(t);
 	};
@@ -11418,15 +11485,29 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 						disabled: c,
 						children: o?.dataUrl ? "建立草稿並核對" : "解析文字"
 					}),
+					t?.length ? /* @__PURE__ */ (0, E.jsxs)("button", {
+						type: "button",
+						className: "rounded-xl border-2 border-emerald-700 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900 disabled:opacity-50",
+						disabled: c,
+						onClick: () => {
+							let e = _().confirmParseDraftsAll?.();
+							e && e.n && n?.();
+						},
+						children: [
+							"全部匯入貨櫃追蹤（",
+							t.length,
+							"）"
+						]
+					}) : null,
 					/* @__PURE__ */ (0, E.jsxs)("div", {
 						className: "mt-1",
 						children: [/* @__PURE__ */ (0, E.jsx)("p", {
 							className: "mb-2 mt-0 text-xs font-semibold text-slate-500",
-							children: "待確認草稿"
+							children: "待確認草稿（比對櫃號後可匯入追蹤）"
 						}), t?.length ? /* @__PURE__ */ (0, E.jsx)("ul", {
 							className: "m-0 grid list-none gap-1.5 p-0",
 							children: t.map((e, t) => {
-								let n = e.id || String(t), i = !String(e.uha || "").trim();
+								let n = e.id || String(t), i = !String(e.uha || "").trim() && !e.matchUha, a = e.trackFlow === "release" ? "→已放行" : "→海關查驗";
 								return /* @__PURE__ */ (0, E.jsx)("li", { children: /* @__PURE__ */ (0, E.jsxs)("button", {
 									type: "button",
 									className: `flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-all hover:bg-emerald-50/50 ${i ? "border-amber-200 bg-amber-50/40" : "border-slate-200/80 bg-white"}`,
@@ -11440,15 +11521,31 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 										children: "文"
 									}), /* @__PURE__ */ (0, E.jsxs)("span", {
 										className: "min-w-0 flex-1",
-										children: [/* @__PURE__ */ (0, E.jsx)("span", {
+										children: [/* @__PURE__ */ (0, E.jsxs)("span", {
 											className: "block font-semibold text-slate-800",
-											children: e.uha || "缺編號（可後補）"
+											children: [
+												e.uha || e.matchUha || "缺編號（可後補）",
+												e.matchExisting && !e.uha ? /* @__PURE__ */ (0, E.jsx)("span", {
+													className: "ml-1 text-[0.7rem] font-bold text-sky-700",
+													children: "已對到"
+												}) : null,
+												/* @__PURE__ */ (0, E.jsx)("span", {
+													className: "ml-1 text-[0.7rem] font-semibold text-slate-400",
+													children: a
+												})
+											]
 										}), /* @__PURE__ */ (0, E.jsx)("span", {
 											className: "block truncate text-xs text-slate-400",
 											children: [
 												e.containerNo,
+												e.checkKind,
 												e.product,
-												e.arriveDay
+												e.unpackSite ? `下貨${e.unpackSite}` : "",
+												e.assignQty ? `${e.assignQty}箱` : "",
+												e.trailer ? `拖車${e.trailer}` : "",
+												e.arriveDay,
+												e.inspect === "skip" ? "無藥檢" : "",
+												e.fumigate === "wait" ? "需薰蒸" : ""
 											].filter(Boolean).join(" · ") || "點此編輯"
 										})]
 									})]

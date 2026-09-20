@@ -140,16 +140,37 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
       missing: ["編號", "櫃號", "到港日", "品名"],
     };
     if (note) {
-      const parsed = api().parseImportDocText?.(note);
-      if (parsed) {
-        draft = {
+      const parsedList =
+        typeof api().parseImportDocTexts === "function"
+          ? api().parseImportDocTexts(note)
+          : (() => {
+              const d = api().parseImportDocText?.(note);
+              return d ? [d] : [];
+            })();
+      if (parsedList?.length) {
+        const drafts = parsedList.map((parsed, idx) => ({
           ...parsed,
-          id,
+          id: idx === 0 ? id : `draft_${Date.now()}_${idx}`,
           photoName: shot.name,
           photoData: shot.dataUrl,
           raw: parsed.raw || note,
-          missing: parsed.missing?.length ? parsed.missing : draft.missing,
-        };
+          missing: parsed.missing?.length ? parsed.missing : ["編號", "櫃號", "到港日", "品名"],
+        }));
+        for (let i = drafts.length - 1; i >= 0; i--) {
+          state.importParseDrafts.unshift(drafts[i]);
+        }
+        if (state.importParseDrafts.length > 40) state.importParseDrafts.length = 40;
+        setShot(null);
+        setText("");
+        saveState();
+        setStatus(
+          drafts.length > 1
+            ? `已建立 ${drafts.length} 櫃截圖草稿，請逐筆核對。`
+            : "已建立截圖草稿，請核對欄位後確認列入海關查驗。",
+        );
+        onParsed?.();
+        onOpenDraft?.(drafts[0].id);
+        return;
       }
     }
     state.importParseDrafts.unshift(draft);
@@ -340,15 +361,32 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
           {shot?.dataUrl ? "建立草稿並核對" : "解析文字"}
         </button>
 
+        {drafts?.length ? (
+          <button
+            type="button"
+            className="rounded-xl border-2 border-emerald-700 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900 disabled:opacity-50"
+            disabled={busy}
+            onClick={() => {
+              const r = api().confirmParseDraftsAll?.();
+              if (r && r.n) {
+                onParsed?.();
+              }
+            }}
+          >
+            全部匯入貨櫃追蹤（{drafts.length}）
+          </button>
+        ) : null}
+
         <div className="mt-1">
-          <p className="mb-2 mt-0 text-xs font-semibold text-slate-500">待確認草稿</p>
+          <p className="mb-2 mt-0 text-xs font-semibold text-slate-500">待確認草稿（比對櫃號後可匯入追蹤）</p>
           {!drafts?.length ? (
             <p className="m-0 rounded-xl bg-slate-50/80 py-8 text-center text-sm text-slate-400">目前沒有資料</p>
           ) : (
             <ul className="m-0 grid list-none gap-1.5 p-0">
               {drafts.map((d, i) => {
                 const key = d.id || String(i);
-                const missUha = !String(d.uha || "").trim();
+                const missUha = !String(d.uha || "").trim() && !d.matchUha;
+                const flowLab = d.trackFlow === "release" ? "→已放行" : "→海關查驗";
                 return (
                   <li key={key}>
                     <button
@@ -364,9 +402,27 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[0.65rem] font-bold text-slate-400">文</span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block font-semibold text-slate-800">{d.uha || "缺編號（可後補）"}</span>
+                        <span className="block font-semibold text-slate-800">
+                          {d.uha || d.matchUha || "缺編號（可後補）"}
+                          {d.matchExisting && !d.uha ? (
+                            <span className="ml-1 text-[0.7rem] font-bold text-sky-700">已對到</span>
+                          ) : null}
+                          <span className="ml-1 text-[0.7rem] font-semibold text-slate-400">{flowLab}</span>
+                        </span>
                         <span className="block truncate text-xs text-slate-400">
-                          {[d.containerNo, d.product, d.arriveDay].filter(Boolean).join(" · ") || "點此編輯"}
+                          {[
+                            d.containerNo,
+                            d.checkKind,
+                            d.product,
+                            d.unpackSite ? `下貨${d.unpackSite}` : "",
+                            d.assignQty ? `${d.assignQty}箱` : "",
+                            d.trailer ? `拖車${d.trailer}` : "",
+                            d.arriveDay,
+                            d.inspect === "skip" ? "無藥檢" : "",
+                            d.fumigate === "wait" ? "需薰蒸" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "點此編輯"}
                         </span>
                       </span>
                     </button>

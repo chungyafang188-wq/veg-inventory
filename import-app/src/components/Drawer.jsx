@@ -164,9 +164,32 @@ export function Drawer({
               <Field label="拖車">
                 <input className={inputCls()} value={f.trailer || ""} onChange={(e) => onField("trailer", e.target.value)} placeholder="例：旭興" />
               </Field>
+              <Field label="拖車電話">
+                <input type="tel" className={inputCls()} value={f.trailerPhone || ""} onChange={(e) => onField("trailerPhone", e.target.value)} placeholder="0963…" />
+              </Field>
+              <Field label="下貨點">
+                <input className={inputCls()} value={f.unpackSite || ""} onChange={(e) => onField("unpackSite", e.target.value)} placeholder="例：穠全" />
+              </Field>
+              <Field label="到達／拆卸時間">
+                <input type="datetime-local" className={inputCls()} value={(f.unpackAt || "").slice(0, 16)} onChange={(e) => onField("unpackAt", e.target.value)} />
+              </Field>
+              <Field label="數量（袋）">
+                <input type="number" className={inputCls()} value={f.assignQty ?? ""} onChange={(e) => onField("assignQty", e.target.value)} />
+              </Field>
+              <Field label="碼頭">
+                <input className={inputCls()} value={f.dock || ""} onChange={(e) => onField("dock", e.target.value)} placeholder="例：70" />
+              </Field>
               <Field label="備註">
                 <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />
               </Field>
+              {f.checkKind ? (
+                <p className="m-0 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-[0.78rem] font-semibold text-sky-800">
+                  本櫃查驗類型：{f.checkKind}
+                </p>
+              ) : null}
+              {f.inspect && f.inspect !== "none" ? (
+                <p className="m-0 text-[0.75rem] text-imp-muted">藥檢預設：{f.inspect === "skip" ? "無須檢驗" : f.inspect}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -438,7 +461,7 @@ export function Drawer({
             {kind === "draft" ? (
               <>
                 <button type="button" className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white" onClick={onConfirmDraft}>
-                  確認列入海關查驗
+                  匯入貨櫃追蹤
                 </button>
                 <button type="button" className="rounded-md border border-imp-line px-3 py-2 text-[0.82rem]" onClick={onDropDraft}>
                   丟棄

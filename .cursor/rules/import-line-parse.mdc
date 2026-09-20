@@ -1,0 +1,125 @@
+---
+description: 鴻安進口 LINE／文件判讀常態格式 → 資料庫欄位對照；後續解析依此處理
+globs: import-flow.js,import-app/src/components/ParsePane.jsx,import-app/src/components/Drawer.jsx,import-app/src/components/ClearanceListPane.jsx
+alwaysApply: false
+---
+
+# 進口判讀：常態訊息 → 資料庫
+
+解析在 `import-flow.js` 的 `parseOneImportChunk`／`parseImportDocTexts`；確認寫入 `importCabinets`＋`importReleased`（track）。  
+**後續遇到同類 LINE／截圖文字，一律依本對照擴充解析，勿另發明欄位名。**
+
+## 匯入貨櫃追蹤
+
+1. 解析 → 待確認草稿（顯示櫃號比對：已對到 UHA／→海關查驗／→已放行）
+2. 單筆「匯入貨櫃追蹤」或「全部匯入貨櫃追蹤」→ `confirmParseDraft`／`confirmParseDraftsAll`
+3. **報關／船期／查驗** → `released=false`（海關查驗）
+4. **下貨／拖車／箱數／電話**（無報關船期）→ `released=true`（已放行追蹤）
+5. 有同櫃號：合併補欄，不另開空編號
+6. 寫入 `importCabinets`＋`importReleased` 追蹤列（藥檢／薰蒸／碼頭／拖車／下貨／數量／時間）
+
+
+## 欄位對照（訊息 → DB）
+
+| 訊息線索 | 草稿／track 欄位 | 備註 |
+|---------|------------------|------|
+| 櫃號 `EMCU…`／`OTPU…`（可帶 `-儀檢`/`-藥檢`/`-海關查驗`） | `containerNo`, `checkKind` | 藥檢後綴 → `inspect=wait` |
+| 船名英文首行 | `shipCo` | 非櫃號、無中文 |
+| `船期09/19PM1430` | `arriveDay`, note 船期時刻 | AM/PM 轉 24h |
+| `靠70碼頭` | `dock` | |
+| 品名中文行／`白菜EMCU…` 前綴 | `product` | 勿把下貨／拖車行當品名 |
+| `已報關` | note | |
+| `沒有藥檢`／`無藥檢` | `inspect=skip` | |
+| `需要藥檢`／櫃號`-藥檢`／`有1櫃有藥檢` | `inspect=wait`（僅該櫃） | 勿全票套 wait |
+| `此票儀檢`／`-儀檢` | `checkKind=儀檢` | 套用該 `---` 票組 |
+| `第一班薰蒸`／`燻好到…` | `fumigate=wait`, note 班次 | |
+| `下貨-穠全`／`下二崙`／`到二崙`／`燻好到二崙` | `unpackSite` | |
+| `9/18 14:00到二崙` | `unpackAt`, `arriveDay`, `unpackSite` | |
+| `9/18(五)…薰蒸` | `arriveDay` | 星期可忽略 |
+| `(1260箱`／`(1550袋` | `assignQty` | 確認寫入 track／cab.qty |
+| `拖車名=阿彬`／`偉菘拖*`／`旭興-二崙` 左側 | `trailer` | 對照 `trailerNames()` |
+| `旭興-二崙` 右側／下貨點 | `unpackSite` | 勿整行當品名 |
+| `0963…黃`／`0978-885-004` | `trailerPhone`, `trailerContact` | |
+| UHA／NC | `uha` | 可後補；確認時可 `待編-` |
+
+## 常態訊息類型（範例 → 預期）
+
+### A. 同船多櫃報關
+
+```
+YM IDEALS / 船期…靠…碼頭
+OTPU…-海關查驗
+YMLU…-儀檢
+鮮白蘿蔔
+已報關 沒有藥檢 …
+```
+
+→ 多筆；共用船期／碼頭／品名／`inspect=skip`；各櫃自己的 `checkKind`。
+
+### B. 同船多櫃、一櫃一品名
+
+```
+VANCOUVER / 船期…
+OERU… + 鮮黃洋蔥(澳洲)
+OOLU… + 鮮高麗菜(印尼)
+```
+
+→ 每櫃自己的 `product`（完整寫入，不用同上）。
+
+### C. `---` 分票組＋此票儀檢／藥檢
+
+```
+IRENES REWARD / 船期…
+[組] 櫃… 品名 此票儀檢
+[組] 櫃-藥檢 櫃… 品名
+已報關 有1櫃有藥檢 另一票儀檢
+```
+
+→ 組內共用品名／查驗；僅 `-藥檢` 櫃 `inspect=wait`。
+
+### D. 下貨／領櫃派送
+
+```
+EMCU…(1550袋
+下貨-穠全 / 旭興-二崙 / 下二崙
+0963…黃
+```
+
+```
+小陸(拖車名=阿彬)
+拖櫃白菜到二崙
+白菜EGSU…(1260箱 + 電話
+```
+
+→ `assignQty`／`unpackSite`／`trailer`／`trailerPhone`；確認對櫃號合併。
+
+### E. 到達時間
+
+```
+EMCU…
+越高
+9/18 14:00到二崙
+0925-…
+```
+
+→ `product`／`unpackAt`／`unpackSite`／`arriveDay`／電話。
+
+### F. 薰蒸班次後下貨
+
+```
+越南青花
+EMCU…
+9/18(五)第一班薰蒸
+燻好到二崙
+0986-…
+```
+
+→ `fumigate=wait`、note「第一班薰蒸」、`unpackSite=二崙`、日期。
+
+## 改解析時 checklist
+
+- [ ] 新句型對到上表既有欄位，或先擴 `ensureClearanceShape` 再寫入
+- [ ] 多櫃／多票組：拆筆且欄位齊全
+- [ ] 回歸：船期報關、一櫃一品、下貨派送、薰蒸、到達時間各測一則
+- [ ] 確認：有同櫃號則 merge，不開重複空編號（除非真的新櫃）
+- [ ] bump `index.html` 的 `import-flow.js?v=`（UI 有改再 build import-app）

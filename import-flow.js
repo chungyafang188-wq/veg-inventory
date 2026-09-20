@@ -215,7 +215,16 @@
         seller: d.seller || "",
         shipCo: d.shipCo || "",
         trailer: d.trailer || "",
+        trailerPhone: d.trailerPhone || "",
+        trailerContact: d.trailerContact || "",
+        unpackSite: d.unpackSite || "",
+        unpackAt: d.unpackAt || "",
+        assignQty: d.assignQty ?? "",
         note: d.note || "",
+        dock: d.dock || "",
+        checkKind: d.checkKind || "",
+        inspect: d.inspect || "none",
+        fumigate: d.fumigate || "none",
         raw: d.raw || "",
         photoName: d.photoName || "",
         photoData: d.photoData || "",
@@ -449,7 +458,16 @@
         seller: fields.seller,
         shipCo: fields.shipCo,
         trailer: fields.trailer,
+        trailerPhone: fields.trailerPhone,
+        trailerContact: fields.trailerContact,
+        unpackSite: fields.unpackSite,
+        unpackAt: fields.unpackAt,
+        assignQty: fields.assignQty,
         note: fields.note,
+        dock: fields.dock,
+        checkKind: fields.checkKind,
+        inspect: fields.inspect || "none",
+        fumigate: fields.fumigate || "none",
       });
       stampRow(d);
     } else if (kind === "port" || kind === "release") {
@@ -721,15 +739,19 @@
     body.innerHTML = `<p class="imp-one-hint">${esc(hints[pane] || "建置中。")}</p>`;
   }
 
-  /** 從報關／進口／LINE 訊息抽出欄位（單筆） */
+  /**
+   * 從報關／進口／LINE 訊息抽出欄位（單筆）。
+   * 常態句型 ↔ 資料庫欄位對照見 .cursor/rules/import-line-parse.mdc
+   * （船期報關／分票儀檢藥檢／下貨拖車／薰蒸／到達時間；一櫃一筆、確認對櫃號合併）
+   */
   function parseOneImportChunk(raw) {
     // 全形英數→半形，方便貼 LINE 訊息
     const text = String(raw || "")
       .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (ch) => {
         const c = ch.charCodeAt(0);
-        if (c >= 0xff21 && c <= 0xff3a) return String.fromCharCode(c - 0xfee0); // Ａ-Ｚ
-        if (c >= 0xff41 && c <= 0xff5a) return String.fromCharCode(c - 0xfee0); // ａ-ｚ
-        if (c >= 0xff10 && c <= 0xff19) return String.fromCharCode(c - 0xfee0); // ０-９
+        if (c >= 0xff21 && c <= 0xff3a) return String.fromCharCode(c - 0xfee0);
+        if (c >= 0xff41 && c <= 0xff5a) return String.fromCharCode(c - 0xfee0);
+        if (c >= 0xff10 && c <= 0xff19) return String.fromCharCode(c - 0xfee0);
         return ch;
       })
       .replace(/\u00a0/g, " ")
@@ -747,19 +769,140 @@
       if (loose) uha = normUha(loose[1]);
     }
 
-    const containers = [];
+    // 櫃號＋後綴狀態：OTPU6504885-海關查驗／YMLU5461502-儀檢／MNBU4532556-藥檢
+    // 一櫃一品名，或同組多櫃共用品名；「此票儀檢」套用整組
+    const containerMeta = [];
+    const cleanContToken = (s) =>
+      String(s || "")
+        .replace(/["'「」\s]/g, "")
+        .replace(/[-–—].*$/, "")
+        .toUpperCase();
+    const taggedRe = /\b([A-Z]{4}\s*\d{6,7})\s*[-–—:：]?\s*(海關查驗|儀檢|藥檢|薰蒸|免驗|免辦)?/gi;
+    let tm;
+    while ((tm = taggedRe.exec(text)) !== null) {
+      const c = normContainer(tm[1]);
+      if (!c) continue;
+      const tag = String(tm[2] || "").trim();
+      const prev = containerMeta.find((x) => x.containerNo === c);
+      if (prev) {
+        if (tag && !prev.checkKind) prev.checkKind = tag;
+      } else {
+        containerMeta.push({ containerNo: c, checkKind: tag, product: "" });
+      }
+    }
     const contRe = /\b([A-Z]{4}\s*\d{6,7})\b/gi;
     let cm;
     while ((cm = contRe.exec(text)) !== null) {
       const c = normContainer(cm[1]);
-      if (c && !containers.includes(c)) containers.push(c);
+      if (c && !containerMeta.some((x) => x.containerNo === c)) {
+        containerMeta.push({ containerNo: c, checkKind: "", product: "" });
+      }
     }
-    const contLabeled = text.match(/(?:櫃號|貨櫃|Container)\s*[:：#]?\s*([A-Z]{4}\s*\d{6,7})/i);
-    if (contLabeled) {
-      const c = normContainer(contLabeled[1]);
-      if (c && !containers.includes(c)) containers.unshift(c);
+
+    // 以 --- 分隔票組；組內共用品名／此票儀檢
+    const groups = [];
+    let curGroup = [];
+    for (const line of lines) {
+      if (/^-{3,}\s*$/.test(line) || /^[─－—]{3,}\s*$/.test(line)) {
+        if (curGroup.length) groups.push(curGroup);
+        curGroup = [];
+        continue;
+      }
+      curGroup.push(line);
     }
+    if (curGroup.length) groups.push(curGroup);
+
+    for (const gLines of groups) {
+      const gContainers = [];
+      let gProduct = "";
+      let gKind = "";
+      for (const line of gLines) {
+        if (/此票\s*(海關查驗|儀檢|藥檢)/.test(line)) {
+          gKind = line.match(/此票\s*(海關查驗|儀檢|藥檢)/)[1];
+        }
+        if (/本票\s*(海關查驗|儀檢|藥檢)/.test(line)) {
+          gKind = line.match(/本票\s*(海關查驗|儀檢|藥檢)/)[1];
+        }
+        const zh = line.replace(/[^\u4e00-\u9fff]/g, "");
+        if (/^下貨|^拖櫃|拖車名|已報關|船期|靠\d|碼頭|^下[\u4e00-\u9fff]|^[\u4e00-\u9fff]{1,8}拖|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到/.test(line.trim())) {
+          // header / status — not product
+        } else if (/[A-Z]{4}\s*\d{6,7}/i.test(line)) {
+          const lead = line.match(/^([\u4e00-\u9fff（）()]{1,20})/);
+          if (lead) {
+            const p = lead[1].replace(/[（）()]/g, "").trim().slice(0, 40);
+            if (p) gProduct = p;
+          }
+        } else if (zh.length >= 2 && /[\u4e00-\u9fff]/.test(line) && !/此票|本票|儀檢|海關|藥檢|沒有藥檢/.test(line)) {
+          if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(line)) {
+            // 旭興-二崙 → 拖車／下貨，不當品名
+          } else {
+            gProduct = line.trim().replace(/\s{2,}/g, " ").slice(0, 80);
+          }
+        }
+        // 同行可能多櫃或帶引號
+        const lineRe = /\b([A-Z]{4}\s*\d{6,7})\b/gi;
+        let lm;
+        while ((lm = lineRe.exec(line)) !== null) {
+          const c = normContainer(lm[1]);
+          if (c) gContainers.push(c);
+        }
+      }
+      for (const c of gContainers) {
+        const hit = containerMeta.find((x) => x.containerNo === c);
+        if (!hit) continue;
+        if (gProduct && !hit.product) hit.product = gProduct;
+        if (gKind && !hit.checkKind) hit.checkKind = gKind;
+      }
+    }
+
+    // 仍無品名：櫃號後往下找中文行（略過同組其他櫃號）
+    for (let li = 0; li < lines.length; li++) {
+      const compact = cleanContToken(lines[li]);
+      const hit = containerMeta.find((x) => x.containerNo === compact || compact.startsWith(x.containerNo));
+      if (!hit || hit.product) continue;
+      for (let j = li + 1; j < lines.length; j++) {
+        const next = lines[j];
+        if (/^-{3,}/.test(next)) break;
+        const nextCompact = cleanContToken(next);
+        if (containerMeta.some((x) => nextCompact === x.containerNo || nextCompact.startsWith(x.containerNo))) {
+          continue; // 同組下一櫃，繼續找共用品名
+        }
+        if (/^(?:UHA|NC)\d/i.test(nextCompact)) break;
+        if (/F\s*\/?\s*T|船期|靠\d|碼頭|已報|沒有|此票|本票|儀檢|海關|下貨|領櫃/i.test(next)) continue;
+        if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(next.trim())) continue;
+        if (/^[A-Z0-9][A-Z0-9\s\-]{2,}$/i.test(next) && !/[\u4e00-\u9fff]/.test(next)) continue;
+        const zh = next.replace(/[^\u4e00-\u9fff]/g, "");
+        if (zh.length >= 2) {
+          hit.product = next.trim().replace(/\s{2,}/g, " ").slice(0, 80);
+          break;
+        }
+      }
+    }
+
+    // 同組內後櫃已有品名時，往前補空品名櫃
+    for (const gLines of groups) {
+      const gCs = [];
+      for (const line of gLines) {
+        const lineRe = /\b([A-Z]{4}\s*\d{6,7})\b/gi;
+        let lm;
+        while ((lm = lineRe.exec(line)) !== null) {
+          const c = normContainer(lm[1]);
+          if (c) gCs.push(c);
+        }
+      }
+      const products = gCs.map((c) => (containerMeta.find((x) => x.containerNo === c) || {}).product).filter(Boolean);
+      const shared = products[0] || "";
+      if (!shared) continue;
+      for (const c of gCs) {
+        const hit = containerMeta.find((x) => x.containerNo === c);
+        if (hit && !hit.product) hit.product = shared;
+      }
+    }
+
+    const containers = containerMeta.map((x) => x.containerNo);
     const containerNo = containers[0] || "";
+    const checkKind = (containerMeta[0] && containerMeta[0].checkKind) || "";
+    let perContainerProducts = [...new Set(containerMeta.map((x) => x.product).filter(Boolean))];
 
     let customsNo = "";
     const custM =
@@ -771,12 +914,35 @@
     }
 
     let arriveDay = "";
+    let voyageNote = "";
+    // 船期09/19PM1430、船期 9/19
+    const voyage = text.match(
+      /船期\s*[:：]?\s*(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})\s*(?:(PM|AM|下午|上午))?\s*(\d{1,2}):?(\d{2})?/i,
+    );
+    if (voyage) {
+      const mo = Number(voyage[1]);
+      const da = Number(voyage[2]);
+      if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) {
+        const now = new Date();
+        let y = now.getFullYear();
+        const cand = new Date(y, mo - 1, da);
+        if (cand.getTime() < now.getTime() - 45 * 86400000) y += 1;
+        arriveDay = `${y}-${pad2(mo)}-${pad2(da)}`;
+        if (voyage[4] != null && voyage[5] != null) {
+          let hh = Number(voyage[4]);
+          const mm = voyage[5];
+          const ap = String(voyage[3] || "").toUpperCase();
+          if ((ap === "PM" || ap === "下午") && hh < 12) hh += 12;
+          if ((ap === "AM" || ap === "上午") && hh === 12) hh = 0;
+          voyageNote = `船期 ${pad2(hh)}:${mm}`;
+        }
+      }
+    }
     const dayM =
       text.match(/(?:到港日|抵達|到港|ETB|ETA)\s*[:：]?\s*([0-9./\-]+)/i) ||
       text.match(/\b(20\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\b/) ||
       text.match(/\b(1[01]\d{5})\b/);
-    if (dayM) arriveDay = parseDay(dayM[1]);
-    // F/T 9/23、FT 9/23（領櫃／FT 日）
+    if (!arriveDay && dayM) arriveDay = parseDay(dayM[1]);
     if (!arriveDay) {
       const ft = text.match(/F\s*\/?\s*T\s*[:：]?\s*(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})/i);
       if (ft) {
@@ -791,16 +957,46 @@
         }
       }
     }
+    // 9/18(五)第一班薰蒸 → 日期（星期可有可無）
+    if (!arriveDay) {
+      const wd = text.match(
+        /(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})\s*[（(]?[一二三四五六日週周天]?[）)]?(?:\s*(?:第一班|第二班|第三班))?(?:\s*薰蒸)?/,
+      );
+      if (wd && /薰蒸|燻|到|下貨|碼頭|船期|F\s*\/?\s*T/i.test(text)) {
+        const mo = Number(wd[1]);
+        const da = Number(wd[2]);
+        if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) {
+          const now = new Date();
+          let y = now.getFullYear();
+          const cand = new Date(y, mo - 1, da);
+          if (cand.getTime() < now.getTime() - 45 * 86400000) y += 1;
+          arriveDay = `${y}-${pad2(mo)}-${pad2(da)}`;
+        }
+      }
+    }
+
+    let dock = "";
+    const dockM = text.match(/靠\s*(\d{1,3})\s*碼頭/) || text.match(/碼頭\s*[:：]?\s*(\d{1,3}|[^\s，,]+)/);
+    if (dockM) dock = String(dockM[1]).trim();
 
     let product = "";
     const prodM = text.match(/(?:品名|貨名|品項|貨物)\s*[:：]?\s*([^\n\r]+)/i);
     if (prodM) product = String(prodM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 80);
+    // 多櫃各有品名時，共用 product 取第一櫃；拆草稿時再覆寫
+    if (!product && containerMeta[0] && containerMeta[0].product) {
+      product = containerMeta[0].product;
+    }
     if (!product) {
       for (const line of lines) {
         const compact = line.replace(/\s+/g, "");
-        if (isContainerNo(compact) || /^(?:UHA|NC)\d/i.test(compact)) continue;
-        if (/F\s*\/?\s*T/i.test(line)) continue;
-        if (/報關|拖車|賣方|船公司|碼頭|已報/.test(line)) continue;
+        if (isContainerNo(compact.replace(/[-–—].*$/, "")) || /^(?:UHA|NC)\d/i.test(compact)) continue;
+        if (/F\s*\/?\s*T|船期|靠\d|碼頭|已報|沒有|儀檢|海關|下貨|領櫃|拖櫃|拖車名|^下[\u4e00-\u9fff]|拖\s*[*＊]?$|\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到|薰蒸|燻好到|薰好到/i.test(line)) continue;
+        if (/到[\u4e00-\u9fff]/.test(line) && /\d{1,2}\s*[\/.\-]/.test(line)) continue;
+        if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(line.trim())) continue; // 旭興-二崙
+        if (/^[\u4e00-\u9fff]{1,8}拖\s*[*＊]?$/.test(line.trim())) continue;
+        if (/\d{2,4}[-\s]?\d{3,4}[-\s]?\d{3,4}/.test(line) && /0\d/.test(line)) continue; // 電話行
+        if (/^[A-Z0-9][A-Z0-9\s\-]{2,}$/i.test(line) && !/[\u4e00-\u9fff]/.test(line)) continue; // 船名行
+        if (/拖車|小陸/.test(line) && /名|阿|彬|電話/.test(line)) continue;
         const zh = line.replace(/[^\u4e00-\u9fff]/g, "");
         if (zh.length >= 2 && zh.length >= Math.ceil(line.length * 0.45)) {
           product = line.slice(0, 80);
@@ -817,35 +1013,250 @@
     const sellerM = text.match(/(?:賣方|出口人|Shipper|Seller)\s*[:：]?\s*([^\n\r]+)/i);
     if (sellerM) seller = String(sellerM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 60);
 
+    // 船名／航次：首行若為英文船名（非櫃號）
     let shipCo = "";
     const shipM = text.match(/(?:船公司|船名|航商|Carrier)\s*[:：]?\s*([^\n\r]+)/i);
     if (shipM) shipCo = String(shipM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
+    if (!shipCo && lines[0]) {
+      const first = lines[0];
+      if (
+        !isContainerNo(first.replace(/\s/g, "")) &&
+        !/[\u4e00-\u9fff]/.test(first) &&
+        /[A-Za-z]/.test(first) &&
+        first.length >= 3 &&
+        first.length <= 40
+      ) {
+        shipCo = first.slice(0, 40);
+      }
+    }
 
     let trailer = "";
-    const trailerM = text.match(/(?:報給)?拖車\s*[:：]?\s*([^\s，,。；;]+)/i);
-    if (trailerM) trailer = String(trailerM[1]).trim().slice(0, 40);
+    const trailerNameM = text.match(/拖車名\s*[=:：]\s*([^\s)）\]】,，]+)/i);
+    if (trailerNameM) trailer = String(trailerNameM[1]).trim().slice(0, 40);
+    if (!trailer) {
+      const trailerM = text.match(/(?:報給)?拖車\s*[:：]?\s*([^\s，,。；;=）)]+)/i);
+      if (trailerM && !/^名/.test(trailerM[1])) trailer = String(trailerM[1]).trim().slice(0, 40);
+    }
+
+    // 下貨／拖櫃派送：EMCU5633040(1550袋、白菜EGSU…(1260箱、拖櫃白菜到二崙
+    let assignQty = "";
+    const qtyM =
+      text.match(/\(\s*(\d{2,6})\s*[箱袋件]/) ||
+      text.match(/(?:數量|袋數|件數|箱數)\s*[:：]?\s*(\d{2,6})/) ||
+      text.match(/\b(\d{3,5})\s*[箱袋件]/);
+    if (qtyM) assignQty = String(Number(qtyM[1]));
+
+    let unpackSite = "";
+    const siteM =
+      text.match(/下貨\s*[-–—:：]?\s*([^\n\r，,]+)/) ||
+      text.match(/拖櫃[^\n\r]{0,30}到\s*([^\n\r，,]+)/) ||
+      text.match(/燻好到\s*([^\n\r，,]+)/) ||
+      text.match(/薰好到\s*([^\n\r，,]+)/) ||
+      text.match(/(?:拆卸位置|卸貨點|卸貨|送到)\s*[:：]?\s*([^\n\r，,]+)/) ||
+      text.match(/(?:^|\n)\s*下\s*([^\s\n\r，,下貨]{1,12})\s*(?:\n|$)/) ||
+      text.match(/\d{1,2}\s*[\/.\-月]\s*\d{1,2}[^\n]{0,20}到\s*([^\n\r，,]+)/) ||
+      text.match(/(?:^|\n)\s*到\s*([^\s\n\r，,]{1,12})\s*(?:\n|$)/);
+    if (siteM) unpackSite = String(siteM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
+
+    // 9/18 14:00到二崙 → 拆卸／到達時間
+    let unpackAt = "";
+    const etaM = text.match(
+      /(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})\s+(\d{1,2}):(\d{2})\s*到/,
+    );
+    if (etaM) {
+      const mo = Number(etaM[1]);
+      const da = Number(etaM[2]);
+      const hh = Number(etaM[3]);
+      const mm = etaM[4];
+      if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) {
+        const now = new Date();
+        let y = now.getFullYear();
+        const cand = new Date(y, mo - 1, da, hh, Number(mm));
+        if (cand.getTime() < now.getTime() - 45 * 86400000) y += 1;
+        unpackAt = `${y}-${pad2(mo)}-${pad2(da)}T${pad2(hh)}:${mm}`;
+        if (!arriveDay) arriveDay = `${y}-${pad2(mo)}-${pad2(da)}`;
+      }
+    }
+
+    // 旭興-二崙／阿彬-穠全：單行「拖車-下貨點」
+    if (!unpackSite || !trailer) {
+      const knownTrailers = new Set(
+        typeof trailerNames === "function"
+          ? trailerNames().map((n) => String(n || "").trim()).filter(Boolean)
+          : ["旭興", "旭", "彬", "瑋", "瑋菘", "偉菘", "尚鴻", "斌"],
+      );
+      for (const line of lines) {
+        const pair = line.match(/^([\u4e00-\u9fffA-Za-z0-9]{1,10})\s*[-–—]\s*([\u4e00-\u9fffA-Za-z0-9]{1,12})$/);
+        if (!pair) continue;
+        if (/[A-Z]{4}\d{6,7}/i.test(line) || /船期|碼頭|已報/.test(line)) continue;
+        const left = pair[1].trim();
+        const right = pair[2].trim();
+        const leftIsTrailer = knownTrailers.has(left) || knownTrailers.has(left.replace(/車$/, ""));
+        // 派送訊息常見：左拖車、右下貨點；或左下貨右拖車較少見
+        if (leftIsTrailer || (!trailer && !unpackSite && left.length <= 4 && right.length <= 6)) {
+          if (!trailer) trailer = left;
+          if (!unpackSite) unpackSite = right;
+          break;
+        }
+      }
+    }
+
+    // 偉菘拖*／旭興拖：單行拖車簡寫
+    if (!trailer) {
+      const knownTrailers = new Set(
+        typeof trailerNames === "function"
+          ? trailerNames().map((n) => String(n || "").trim()).filter(Boolean)
+          : ["旭興", "旭", "彬", "瑋", "瑋菘", "偉菘", "尚鴻", "斌"],
+      );
+      for (const line of lines) {
+        const m =
+          line.match(/^([\u4e00-\u9fff]{1,8})拖\s*[*＊]?$/) ||
+          line.match(/^拖車?\s*[:：]?\s*([\u4e00-\u9fff]{1,8})\s*[*＊]?$/);
+        if (!m) continue;
+        const name = m[1].trim();
+        if (knownTrailers.has(name) || knownTrailers.has(name.replace(/車$/, "")) || name.length <= 4) {
+          trailer = name;
+          break;
+        }
+      }
+    }
+    // 誤把「旭興-二崙」當品名時清掉
+    if (product && trailer && unpackSite) {
+      const glued = `${trailer}-${unpackSite}`;
+      if (product === glued || product === `${trailer}－${unpackSite}` || product === `${trailer}—${unpackSite}`) {
+        product = "";
+      }
+    }
+    if (product && /^[\u4e00-\u9fff]{1,6}\s*[-–—]\s*[\u4e00-\u9fff]{1,8}$/.test(product) && (trailer || unpackSite)) {
+      product = "";
+    }
+
+    let trailerPhone = "";
+    let trailerContact = "";
+    const phoneM = text.match(/(?:^|[^A-Z0-9])(0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{3,4})([\u4e00-\u9fff]{1,4})?/);
+    if (phoneM) {
+      trailerPhone = String(phoneM[1]).replace(/[-\s]/g, "");
+      if (phoneM[2]) trailerContact = phoneM[2];
+    }
+
+    // 品名貼在櫃號前：白菜EGSU5051394(1260箱 + 下一行電話 → 寫入各櫃 meta
+    const gluedRe =
+      /([\u4e00-\u9fff]{1,12})?\s*([A-Z]{4}\s*\d{6,7})\s*(?:[-–—:：]\s*(海關查驗|儀檢|藥檢))?\s*(?:\(\s*(\d{2,6})\s*[箱袋件])?/gi;
+    let gm;
+    while ((gm = gluedRe.exec(text)) !== null) {
+      const c = normContainer(gm[2]);
+      if (!c) continue;
+      let hit = containerMeta.find((x) => x.containerNo === c);
+      if (!hit) {
+        hit = { containerNo: c, checkKind: gm[3] || "", product: "" };
+        containerMeta.push(hit);
+      }
+      if (gm[1]) hit.product = String(gm[1]).trim().slice(0, 40);
+      if (gm[3] && !hit.checkKind) hit.checkKind = gm[3];
+      if (gm[4]) hit.assignQty = String(Number(gm[4]));
+      // 櫃號區塊後的電話（同段下一行）
+      const after = text.slice(gm.index + gm[0].length, gm.index + gm[0].length + 80);
+      const ph = after.match(/^\s*[)\n\r]*\s*(0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{3,4})([\u4e00-\u9fff]{1,4})?/);
+      if (ph) {
+        hit.trailerPhone = String(ph[1]).replace(/[-\s]/g, "");
+        if (ph[2]) hit.trailerContact = ph[2];
+      }
+    }
+    // 同步 containers（glued 可能補進新櫃）
+    for (const item of containerMeta) {
+      if (!containers.includes(item.containerNo)) containers.push(item.containerNo);
+    }
+    perContainerProducts = [...new Set(containerMeta.map((x) => x.product).filter(Boolean))];
+    // 清掉誤當品名的「拖車-下貨點」
+    for (const item of containerMeta) {
+      if (item.product && /^[\u4e00-\u9fff]{1,8}\s*[-–—]\s*[\u4e00-\u9fff]{1,10}$/.test(item.product)) {
+        item.product = "";
+      }
+    }
+    perContainerProducts = [...new Set(containerMeta.map((x) => x.product).filter(Boolean))];
+    const withProd = containerMeta.find((x) => x.product);
+    if (withProd) product = withProd.product;
+    else if (product && /^[\u4e00-\u9fff]{1,8}\s*[-–—]\s*[\u4e00-\u9fff]{1,10}$/.test(product)) product = "";
+    if (!product) {
+      const haulProd = text.match(/拖櫃\s*([^\n\r到]{1,20}?)\s*到/);
+      if (haulProd) product = String(haulProd[1]).trim().slice(0, 40);
+    }
+    if (!assignQty) {
+      const withQty = containerMeta.find((x) => x.assignQty);
+      if (withQty) assignQty = withQty.assignQty;
+    }
+    if (!trailerPhone) {
+      const withPh = containerMeta.find((x) => x.trailerPhone);
+      if (withPh) {
+        trailerPhone = withPh.trailerPhone;
+        if (withPh.trailerContact) trailerContact = withPh.trailerContact;
+      }
+    }
+
+    // 藥檢：沒有藥檢／無藥檢／免藥檢 → skip；需要藥檢 → wait
+    let inspect = "none";
+    if (/沒有藥檢|無藥檢|免藥檢|不需藥檢|無須藥檢/.test(text)) inspect = "skip";
+    else if (/需要藥檢|要藥檢|抽藥檢/.test(text)) inspect = "wait";
+    else if (/藥檢完成|已藥檢/.test(text)) inspect = "done";
+
+    let fumigate = "none";
+    if (/沒有薰蒸|無薰蒸|免薰蒸|不需薰蒸|無須薰蒸/.test(text)) fumigate = "skip";
+    else if (/需要薰蒸|要薰蒸|薰蒸中|第一班薰蒸|第二班薰蒸|第三班薰蒸|安排薰蒸|去薰蒸|燻好到|薰好到/.test(text))
+      fumigate = "wait";
+    else if (/薰蒸完成|已薰蒸/.test(text)) fumigate = "done";
+
+    let fumigateNote = "";
+    const fumeShift = text.match(/((?:第一|第二|第三)班薰蒸)/);
+    if (fumeShift) fumigateNote = fumeShift[1];
+    else if (/薰蒸/.test(text) && fumigate === "wait") fumigateNote = "薰蒸";
 
     const noteBits = [];
+    if (/已報關/.test(text)) noteBits.push("已報關");
+    if (checkKind) noteBits.push(checkKind);
+    if (voyageNote) noteBits.push(voyageNote);
+    if (dock) noteBits.push(`靠${dock}碼頭`);
+    if (fumigateNote) noteBits.push(fumigateNote);
+    if (trailerContact) noteBits.push(`拖車聯絡人 ${trailerContact}`);
+    if (assignQty) noteBits.push(`${assignQty}${/[箱]/.test(text) ? "箱" : "袋"}`);
+    if (unpackSite) noteBits.push(`下貨 ${unpackSite}`);
+    if (unpackAt) noteBits.push(`到達 ${unpackAt.replace("T", " ")}`);
+    if (trailer) noteBits.push(`拖車 ${trailer}`);
     for (const line of lines) {
       const compact = line.replace(/\s+/g, "").toUpperCase();
       if (containers.some((c) => compact.includes(c))) continue;
       if (product && line === product) continue;
+      if (perContainerProducts.includes(line.trim()) || perContainerProducts.includes(line)) continue;
+      if (shipCo && line === shipCo) continue;
       if (/^(?:UHA|NC)\d/i.test(compact)) continue;
+      if (/船期|靠\d|碼頭/.test(line) && arriveDay) continue;
+      if (/^-{3,}/.test(line)) continue;
+      if (/^下貨|拖櫃|拖車名|^下[\u4e00-\u9fff]|^[\u4e00-\u9fff]{1,8}拖/.test(line.trim())) continue;
+      if (/\d{1,2}\s*[\/.\-]\s*\d{1,2}.+到/.test(line)) continue;
+      if (/薰蒸|燻好到|薰好到/.test(line)) continue;
+      if (/^[\u4e00-\u9fffA-Za-z0-9]{1,10}\s*[-–—]\s*[\u4e00-\u9fffA-Za-z0-9]{1,12}$/.test(line.trim())) continue;
+      if (/^[\u4e00-\u9fff]{1,8}拖\s*[*＊]?$/.test(line.trim())) continue;
+      if (/拖車名\s*[=:：]/.test(line)) continue;
+      if (trailerPhone && compact.replace(/-/g, "").includes(trailerPhone)) continue;
+      if (/0\d{1,3}[-\s]?\d{3,4}[-\s]?\d{3,4}/.test(line)) continue;
+      // 狀態摘要列（已報關／沒有藥檢／有1櫃儀檢…）已轉成欄位，勿整句塞備註
+      if (/已報關|沒有藥檢|無藥檢|免藥檢|需要藥檢|有\d*櫃|另\d*櫃|儀檢|海關查驗|此票|本票/.test(line)) continue;
       noteBits.push(line);
     }
-    const note = noteBits.length ? noteBits.join(" · ").slice(0, 200) : "";
+    const note = [...new Set(noteBits)].join(" · ").slice(0, 240);
 
     const missing = [];
     if (!uha) missing.push("編號");
     if (!containerNo) missing.push("櫃號");
-    if (!arriveDay) missing.push("到港日／FT日");
-    if (!product) missing.push("品名");
+    if (!arriveDay && !unpackSite && !unpackAt) missing.push("到港日／船期");
+    if (!product && !unpackSite) missing.push("品名");
 
     return {
       id: uid("draft"),
       uha,
       containerNo,
       containers,
+      containerMeta,
+      checkKind,
       customsNo,
       arriveDay,
       product,
@@ -853,15 +1264,23 @@
       seller,
       shipCo,
       trailer,
+      trailerPhone,
+      trailerContact,
+      unpackSite,
+      unpackAt,
+      assignQty,
+      dock,
+      inspect,
+      fumigate,
       note,
       raw: text.slice(0, 4000),
       missing,
-      parseOk: !!(containerNo || product || uha || note),
+      parseOk: !!(containerNo || product || uha || note || unpackSite || unpackAt),
     };
   }
 
   /**
-   * 解析 → 多筆草稿。多櫃號共用品名時拆成一櫃一筆。
+   * 解析 → 多筆草稿。多櫃號（同船期）拆成一櫃一筆，並帶各自查驗類型。
    */
   function parseImportDocTexts(raw) {
     const text = String(raw || "").replace(/\r\n/g, "\n").trim();
@@ -883,8 +1302,13 @@
       }
     } else {
       const blanks = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+      const isHaulDispatch =
+        /拖車名|拖櫃[^\n]{0,40}到|下貨\s*[-–—]|[\u4e00-\u9fff]{1,6}\s*[-–—]\s*[\u4e00-\u9fff]{1,8}|(?:^|\n)\s*下[\u4e00-\u9fff]|[\u4e00-\u9fff]{1,8}拖\s*[*＊]?/.test(
+          text,
+        );
       if (
         blanks.length > 1 &&
+        !isHaulDispatch &&
         blanks.every((b) => /\b(?:UHA|NC)\s*\d/i.test(b) || /櫃號/i.test(b) || /\b[A-Z]{4}\s*\d{6,7}\b/i.test(b))
       ) {
         parts.push(...blanks);
@@ -897,15 +1321,67 @@
     for (const chunk of parts) {
       const d = parseOneImportChunk(chunk);
       if (!d) continue;
-      const cons = Array.isArray(d.containers) && d.containers.length ? d.containers : d.containerNo ? [d.containerNo] : [];
-      if (cons.length > 1) {
-        for (const c of cons) {
+      const meta =
+        Array.isArray(d.containerMeta) && d.containerMeta.length
+          ? d.containerMeta
+          : (d.containers || []).map((c) => ({ containerNo: c, checkKind: d.checkKind || "" }));
+      if (meta.length > 1) {
+        for (const item of meta) {
+          const kind = item.checkKind || "";
+          const itemProduct = item.product || d.product || "";
+          const itemQty = item.assignQty || d.assignQty || "";
+          const itemPhone = item.trailerPhone || d.trailerPhone || "";
+          const itemContact = item.trailerContact || d.trailerContact || "";
+          const noteParts = [];
+          if (kind) noteParts.push(kind);
+          if (d.trailer) noteParts.push(`拖車 ${d.trailer}`);
+          if (d.unpackSite) noteParts.push(`下貨 ${d.unpackSite}`);
+          if (itemQty) noteParts.push(`${itemQty}${/[箱]/.test(d.raw || "") ? "箱" : "袋"}`);
+          if (itemPhone) noteParts.push(itemPhone);
+          if (itemContact) noteParts.push(`聯絡人 ${itemContact}`);
+          if (d.note) {
+            const otherProducts = meta
+              .filter((m) => m.containerNo !== item.containerNo && m.product)
+              .map((m) => m.product);
+            const cleaned = String(d.note)
+              .split(" · ")
+              .filter(
+                (p) =>
+                  p !== "儀檢" &&
+                  p !== "海關查驗" &&
+                  !/^拖車 /.test(p) &&
+                  !/^下貨 /.test(p) &&
+                  !/^\d+箱$/.test(p) &&
+                  !/^\d+袋$/.test(p) &&
+                  !/^0\d+$/.test(p.replace(/-/g, "")) &&
+                  !/^聯絡人/.test(p) &&
+                  !/^拖車聯絡人/.test(p) &&
+                  !/^[A-Z]{4}\d{6,7}/i.test(p) &&
+                  !otherProducts.includes(p),
+              )
+              .join(" · ");
+            if (cleaned) noteParts.push(cleaned);
+          }
           drafts.push({
             ...d,
             id: uid("draft"),
-            containerNo: c,
-            containers: [c],
-            missing: (d.missing || []).filter((x) => x !== "櫃號"),
+            containerNo: item.containerNo,
+            containers: [item.containerNo],
+            containerMeta: [item],
+            checkKind: kind,
+            product: itemProduct,
+            assignQty: itemQty,
+            trailerPhone: itemPhone,
+            trailerContact: itemContact,
+            trailer: d.trailer || "",
+            unpackSite: d.unpackSite || "",
+            note: [...new Set(noteParts)].join(" · ").slice(0, 240),
+            missing: (d.missing || []).filter((x) => {
+              if (x === "櫃號") return false;
+              if (x === "品名" && itemProduct) return false;
+              if (x === "到港日／船期" && d.unpackSite) return false;
+              return true;
+            }),
             parseOk: true,
           });
         }
@@ -936,20 +1412,52 @@
     return -1;
   }
 
-  function confirmParseDraft(key) {
+  function findTrackByContainer(cno) {
+    const c = normContainer(cno);
+    if (!c) return null;
     ensureState();
+    const cab = (state.importCabinets || []).find((x) => normContainer(x.containerNo) === c);
+    if (cab) {
+      const t = findReleased(cab.uha) || ensureTrackFromCabinet(cab);
+      return { uha: cab.uha, cab, track: t, matched: true };
+    }
+    const rel = (state.importReleased || []).find((r) => normContainer(r.containerNo) === c);
+    if (rel) return { uha: rel.uha, cab: null, track: rel, matched: true };
+    return null;
+  }
+
+  /** 草稿流向：報關／船期 → 海關查驗；下貨／拖車／薰蒸後下貨 → 已放行追蹤 */
+  function draftTrackFlow(d) {
+    if (!d) return "port";
+    const haul =
+      !!(d.unpackSite || d.trailerPhone || d.trailer || d.assignQty || d.unpackAt) &&
+      !!(d.containerNo || d.uha);
+    const customs = !!(d.arriveDay || d.dock || d.shipCo || d.checkKind || (d.inspect && d.inspect !== "none") || /已報關/.test(String(d.note || "")));
+    if (haul && !customs) return "release";
+    if (haul && customs) return "port"; // 同則兼有船期＋下貨：先入查驗，欄位仍寫入追蹤
+    if (haul) return "release";
+    return "port";
+  }
+
+  function confirmParseDraft(key, opts) {
+    ensureState();
+    const quiet = !!(opts && opts.quiet);
     const i = findDraftIndex(key);
     const d = i >= 0 ? state.importParseDrafts[i] : null;
     if (!d) return false;
     let uha = normUha(d.uha);
+    const cno = normContainer(d.containerNo);
+    const hit = !uha && cno ? findTrackByContainer(cno) : null;
+    if (hit) uha = hit.uha;
     if (!uha) uha = makePendingUha();
+    const flow = draftTrackFlow(d);
     const cab = {
       id: uid("cab"),
       uha,
-      containerNo: normContainer(d.containerNo),
+      containerNo: cno,
       arriveDay: parseDay(d.arriveDay) || "",
       product: String(d.product || "").trim(),
-      qty: "",
+      qty: d.assignQty !== undefined && d.assignQty !== "" ? d.assignQty : "",
       seller: String(d.seller || "").trim(),
       shipCo: String(d.shipCo || "").trim(),
       broker: String(d.broker || "").trim(),
@@ -958,29 +1466,128 @@
       price: "",
     };
     const by = new Map(state.importCabinets.map((c) => [c.uha, c]));
-    if (by.has(uha)) Object.assign(by.get(uha), { ...cab, id: by.get(uha).id });
-    else state.importCabinets.push(cab);
+    if (by.has(uha)) {
+      const prev = by.get(uha);
+      Object.assign(prev, {
+        id: prev.id,
+        uha,
+        arriveDay: cab.arriveDay || prev.arriveDay || "",
+        product: cab.product || prev.product || "",
+        containerNo: cab.containerNo || prev.containerNo || "",
+        qty: cab.qty !== "" && cab.qty != null ? cab.qty : prev.qty,
+        seller: cab.seller || prev.seller || "",
+        shipCo: cab.shipCo || prev.shipCo || "",
+        broker: cab.broker || prev.broker || "",
+      });
+    } else state.importCabinets.push(cab);
     const savedCab = by.get(uha) || cab;
     stampRow(savedCab);
     const track = ensureTrackFromCabinet(savedCab);
+    ensureClearanceShape(track);
+    // 同步櫃表可見欄到追蹤列
+    if (savedCab.containerNo) track.containerNo = savedCab.containerNo;
+    if (savedCab.product) track.product = savedCab.product;
+    if (savedCab.arriveDay) track.arriveDay = savedCab.arriveDay;
+    if (savedCab.shipCo) track.shipCo = savedCab.shipCo;
+    if (savedCab.seller) track.seller = savedCab.seller;
+    if (savedCab.broker) track.broker = savedCab.broker;
     if (d.customsNo) track.customsNo = String(d.customsNo).trim();
     if (d.trailer) track.trailer = String(d.trailer).trim();
-    if (d.note) track.note = String(d.note).trim();
-    track.released = false;
+    if (d.trailerPhone) track.trailerPhone = String(d.trailerPhone).trim();
+    if (d.unpackSite) track.unpackSite = String(d.unpackSite).trim();
+    if (d.unpackAt) {
+      track.unpackAt = String(d.unpackAt).trim();
+      if (!track.pickupDay && track.unpackAt.length >= 10) track.pickupDay = track.unpackAt.slice(0, 10);
+    }
+    if (d.assignQty !== undefined && d.assignQty !== "") {
+      const n = Number(d.assignQty);
+      track.assignQty = Number.isFinite(n) ? n : d.assignQty;
+    }
+    if (d.dock) track.dock = String(d.dock).trim();
+    if (d.checkKind) track.checkKind = String(d.checkKind).trim();
+    const noteParts = [];
+    if (d.checkKind) noteParts.push(String(d.checkKind).trim());
+    if (d.trailerContact) noteParts.push(`聯絡人 ${String(d.trailerContact).trim()}`);
+    if (d.note) noteParts.push(String(d.note).trim());
+    if (noteParts.length) {
+      const merged = [
+        ...new Set([...(String(track.note || "").split(" · ").filter(Boolean)), ...noteParts.join(" · ").split(" · ")]),
+      ].join(" · ");
+      track.note = merged.slice(0, 240);
+    }
+    if (d.inspect && d.inspect !== "none") {
+      track.inspect = d.inspect;
+      track.inspectManual = true;
+    }
+    if (d.fumigate && d.fumigate !== "none") {
+      track.fumigate = d.fumigate;
+      track.fumigateManual = true;
+      if (d.arriveDay && !track.fumigateAt) {
+        const day = parseDay(d.arriveDay) || d.arriveDay;
+        if (day) track.fumigateAt = `${day}T09:00`;
+      }
+    }
+    // 流程：下貨／拖車類 → 已放行追蹤；報關／船期 → 海關查驗
+    if (flow === "release") {
+      track.released = true;
+      track.askPickup = true;
+      track.arrangeMonday = true;
+      if (!track.releasedAt) {
+        try {
+          track.releasedAt = new Date().toISOString().slice(0, 16);
+        } catch (_) {
+          track.releasedAt = "";
+        }
+      }
+    } else if (track.released == null) {
+      track.released = false;
+    }
     stampRow(track);
     state.importParseDrafts.splice(i, 1);
     if (typeof save === "function") save();
-    if (typeof setStatus === "function") {
+    if (!quiet && typeof setStatus === "function") {
+      const siteHint = d.unpackSite ? ` · 下貨 ${d.unpackSite}` : "";
+      const where = track.released ? "已放行追蹤" : "海關查驗";
       setStatus(
         isPendingUha(uha)
-          ? `已列入海關查驗（編號待補）${cab.containerNo ? " · " + cab.containerNo : ""}`
-          : `${uha} 已列入海關查驗（到港待驗）。`,
+          ? `已匯入${where}（編號待補）${cno ? " · " + cno : ""}${siteHint}`
+          : `${uha} 已匯入${where}${cno ? " · " + cno : ""}${siteHint}`,
       );
     }
-    importPane = "port";
+    if (!quiet) {
+      importPane = track.released ? "release" : "port";
+      closeDrawer({ force: true });
+      renderImportPage();
+    }
+    return { ok: true, uha, flow: track.released ? "release" : "port", matched: !!hit };
+  }
+
+  /** 待確認草稿一次匯入貨櫃追蹤（海關查驗／已放行） */
+  function confirmParseDraftsAll() {
+    ensureState();
+    const ids = (state.importParseDrafts || []).map((d) => d && d.id).filter(Boolean);
+    if (!ids.length) {
+      if (typeof setStatus === "function") setStatus("沒有待確認草稿。", true);
+      return { n: 0, port: 0, release: 0 };
+    }
+    let port = 0;
+    let release = 0;
+    for (const id of ids.slice()) {
+      const r = confirmParseDraft(id, { quiet: true });
+      if (r && r.ok) {
+        if (r.flow === "release") release += 1;
+        else port += 1;
+      }
+    }
+    if (typeof save === "function") save();
+    const n = port + release;
+    if (typeof setStatus === "function") {
+      setStatus(`已匯入貨櫃追蹤 ${n} 筆（海關查驗 ${port} · 已放行 ${release}）。`);
+    }
+    importPane = release && !port ? "release" : release && port ? "checklist" : "port";
     closeDrawer({ force: true });
     renderImportPage();
-    return true;
+    return { n, port, release };
   }
 
   function discardParseDraft(key) {
@@ -1399,6 +2006,11 @@
     if (row.fumigateAt == null) row.fumigateAt = "";
     if (row.customsNo == null) row.customsNo = "";
     if (row.dock == null) row.dock = "";
+    if (row.checkKind == null) row.checkKind = "";
+    if (row.arriveDay == null) row.arriveDay = "";
+    if (row.shipCo == null) row.shipCo = "";
+    if (row.seller == null) row.seller = "";
+    if (row.broker == null) row.broker = "";
     if (row.note == null) row.note = "";
     /** 缺電放／缺資料：分開勾選，才知道要通知缺哪個 */
     if (row.missingTelex == null) row.missingTelex = false;
@@ -1513,14 +2125,22 @@
       ensureClearanceShape(row);
       if (!row.containerNo && cab.containerNo) row.containerNo = cab.containerNo;
       if (!row.product && cab.product) row.product = cab.product;
+      if (!row.arriveDay && cab.arriveDay) row.arriveDay = cab.arriveDay;
+      if (!row.shipCo && cab.shipCo) row.shipCo = cab.shipCo;
+      if (!row.seller && cab.seller) row.seller = cab.seller;
+      if (!row.broker && cab.broker) row.broker = cab.broker;
       return row;
     }
     row = {
       id: uid("rel"),
       uha: cab.uha,
       containerNo: cab.containerNo || "",
+      arriveDay: cab.arriveDay || "",
       note: "",
       product: cab.product || "",
+      shipCo: cab.shipCo || "",
+      seller: cab.seller || "",
+      broker: cab.broker || "",
       released: false,
       releasedAt: "",
       inspect: "none",
@@ -1528,6 +2148,7 @@
       fumigate: "none",
       fumigateAt: "",
       dock: "",
+      checkKind: "",
       missingTelex: false,
       missingData: false,
       trailer: "",
@@ -3438,6 +4059,9 @@
     parseImportDocText,
     parseImportDocTexts,
     confirmParseDraft,
+    confirmParseDraftsAll,
+    draftTrackFlow,
+    findTrackByContainer,
     discardParseDraft,
     assignPortUha,
     markPortReleased,
@@ -3460,7 +4084,16 @@
       ensureState();
       return (state.importParseDrafts || []).map((d, i) => {
         if (!d.id) d.id = uid("draft");
-        return { ...d, _index: i };
+        const cno = normContainer(d.containerNo);
+        const hit = cno ? findTrackByContainer(cno) : null;
+        const flow = draftTrackFlow(d);
+        return {
+          ...d,
+          _index: i,
+          matchUha: hit ? hit.uha : "",
+          matchExisting: !!hit,
+          trackFlow: flow,
+        };
       });
     },
     listPort(tab) {
@@ -3603,6 +4236,7 @@
           shipCo: c.shipCo || "",
           broker: c.broker || "",
           customsNo: t.customsNo || c.customsNo || "",
+          checkKind: t.checkKind || "",
           inspect: t.inspect || "none",
           inspectAt: t.inspectAt || "",
           fumigate: t.fumigate || "none",
@@ -3637,6 +4271,7 @@
           shipCo: r.shipCo || cab.shipCo || "",
           broker: r.broker || cab.broker || "",
           customsNo: r.customsNo || cab.customsNo || "",
+          checkKind: r.checkKind || "",
           inspect: r.inspect || "none",
           inspectAt: r.inspectAt || "",
           fumigate: r.fumigate || "none",

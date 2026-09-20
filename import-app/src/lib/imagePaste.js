@@ -80,16 +80,27 @@ export function compressImageFile(file, opts = {}) {
 }
 
 /**
- * 選擇整個螢幕／視窗擷取一幀（瀏覽器會跳出分享畫面選單）。
- * 之後再於畫面上框選範圍。
+ * 選擇整個螢幕／視窗擷取一幀。
+ * 會跳出瀏覽器「分享畫面」選單（螢幕／視窗／分頁），不是電腦資料夾。
  */
 export async function captureDisplayFrame() {
+  if (!window.isSecureContext) {
+    throw new Error("需要 https 安全連線才能擷取畫面");
+  }
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error("此裝置／瀏覽器不支援畫面擷取，請改用貼上或相簿。");
+    throw new Error("此瀏覽器不支援畫面擷取");
   }
   const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: true,
+    video: {
+      displaySurface: "monitor",
+      // 讓使用者比較容易選到整螢幕／視窗
+      frameRate: 5,
+    },
     audio: false,
+    preferCurrentTab: false,
+    selfBrowserSurface: "exclude",
+    surfaceSwitching: "include",
+    monitorTypeSurfaces: "include",
   });
   const video = document.createElement("video");
   video.playsInline = true;
@@ -101,7 +112,7 @@ export async function captureDisplayFrame() {
       if (video.videoWidth > 0) resolve();
       else video.onloadedmetadata = () => resolve();
     });
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 250));
     const w = video.videoWidth;
     const h = video.videoHeight;
     if (!w || !h) throw new Error("無法取得畫面尺寸");

@@ -86,26 +86,29 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
     [],
   );
 
-  /** 點「框選截圖」：分享畫面 → 凍結 → 拖曳框選 */
+  /** 點「框選截圖」：只走畫面擷取＋框選，絕不自動開資料夾選檔 */
   const startRegionCapture = async () => {
+    if (!window.isSecureContext) {
+      setStatus("框選截圖需要安全連線（https）。請用線上網址操作，或改按「選圖後框選」。", true);
+      return;
+    }
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      setStatus("此裝置不支援畫面擷取，改選圖片後再框選。", true);
-      cropFileRef.current?.click();
+      setStatus("此裝置／瀏覽器不支援畫面擷取。請改按「選圖後框選」，或先用系統截圖再貼上。", true);
       return;
     }
     setBusy(true);
     try {
-      setStatus("請在彈窗選要截的視窗／螢幕（建議選 LINE 或文件視窗）…");
+      setStatus("請在「分享畫面」視窗選螢幕或視窗（不是電腦資料夾）…");
       const frame = await captureDisplayFrame();
       setCropSrc(frame);
-      setStatus("請在畫面上拖曳框選範圍。");
+      setStatus("請在畫面上拖曳框選要截的範圍，再按確認框選。");
     } catch (err) {
+      const name = err?.name || "";
       const msg = String(err?.message || err || "");
-      if (/NotAllowedError|Permission denied|denied|NotAllowed/i.test(msg) || err?.name === "NotAllowedError") {
-        setStatus("已取消畫面分享。可改貼上截圖，或選圖片後框選。", true);
+      if (name === "NotAllowedError" || /Permission denied|NotAllowed|denied|AbortError|aborted/i.test(msg + name)) {
+        setStatus("已取消分享畫面。若要截圖：再按一次「框選截圖」，或改用「選圖後框選」。", true);
       } else {
-        setStatus(msg || "畫面擷取失敗", true);
-        cropFileRef.current?.click();
+        setStatus(`畫面擷取失敗：${msg || name || "未知錯誤"}。可改用「選圖後框選」。`, true);
       }
     } finally {
       setBusy(false);
@@ -196,7 +199,8 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
 
       <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2>
       <p className="mt-1 text-xs text-slate-400">
-        點「框選截圖」→ 選視窗／螢幕 → 拖曳框選範圍。也可貼上／相簿後再框選。
+        「框選截圖」會跳出瀏覽器的<strong className="font-semibold text-slate-600">分享畫面</strong>
+        （選螢幕／視窗），不是電腦資料夾。選完後再拖曳框選範圍。
       </p>
 
       <div className="mt-4 grid gap-3">
@@ -205,7 +209,11 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             type="button"
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-700/20 disabled:opacity-50"
             disabled={busy}
-            onClick={startRegionCapture}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              startRegionCapture();
+            }}
           >
             {busy ? "處理中…" : "框選截圖"}
           </button>
@@ -213,7 +221,11 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             type="button"
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700"
             disabled={busy}
-            onClick={() => cropFileRef.current?.click()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              cropFileRef.current?.click();
+            }}
           >
             選圖後框選
           </button>
@@ -221,7 +233,11 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             type="button"
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700"
             disabled={busy}
-            onClick={() => fileRef.current?.click()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              fileRef.current?.click();
+            }}
           >
             相簿／拍照
           </button>

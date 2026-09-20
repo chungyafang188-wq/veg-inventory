@@ -10932,16 +10932,24 @@ function Re(e, t = {}) {
 	});
 }
 async function ze() {
-	if (!navigator.mediaDevices?.getDisplayMedia) throw Error("此裝置／瀏覽器不支援畫面擷取，請改用貼上或相簿。");
+	if (!window.isSecureContext) throw Error("需要 https 安全連線才能擷取畫面");
+	if (!navigator.mediaDevices?.getDisplayMedia) throw Error("此瀏覽器不支援畫面擷取");
 	let e = await navigator.mediaDevices.getDisplayMedia({
-		video: !0,
-		audio: !1
+		video: {
+			displaySurface: "monitor",
+			frameRate: 5
+		},
+		audio: !1,
+		preferCurrentTab: !1,
+		selfBrowserSurface: "exclude",
+		surfaceSwitching: "include",
+		monitorTypeSurfaces: "include"
 	}), t = document.createElement("video");
 	t.playsInline = !0, t.muted = !0, t.srcObject = e;
 	try {
 		await t.play(), await new Promise((e) => {
 			t.videoWidth > 0 ? e() : t.onloadedmetadata = () => e();
-		}), await new Promise((e) => setTimeout(e, 200));
+		}), await new Promise((e) => setTimeout(e, 250));
 		let e = t.videoWidth, n = t.videoHeight;
 		if (!e || !n) throw Error("無法取得畫面尺寸");
 		let r = document.createElement("canvas");
@@ -11154,18 +11162,22 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 			}
 		}
 	}, []), te = async () => {
+		if (!window.isSecureContext) {
+			m("框選截圖需要安全連線（https）。請用線上網址操作，或改按「選圖後框選」。", !0);
+			return;
+		}
 		if (!navigator.mediaDevices?.getDisplayMedia) {
-			m("此裝置不支援畫面擷取，改選圖片後再框選。", !0), b.current?.click();
+			m("此裝置／瀏覽器不支援畫面擷取。請改按「選圖後框選」，或先用系統截圖再貼上。", !0);
 			return;
 		}
 		u(!0);
 		try {
-			m("請在彈窗選要截的視窗／螢幕（建議選 LINE 或文件視窗）…");
+			m("請在「分享畫面」視窗選螢幕或視窗（不是電腦資料夾）…");
 			let e = await ze();
-			v(e), m("請在畫面上拖曳框選範圍。");
+			v(e), m("請在畫面上拖曳框選要截的範圍，再按確認框選。");
 		} catch (e) {
-			let t = String(e?.message || e || "");
-			/NotAllowedError|Permission denied|denied|NotAllowed/i.test(t) || e?.name === "NotAllowedError" ? m("已取消畫面分享。可改貼上截圖，或選圖片後框選。", !0) : (m(t || "畫面擷取失敗", !0), b.current?.click());
+			let t = e?.name || "", n = String(e?.message || e || "");
+			t === "NotAllowedError" || /Permission denied|NotAllowed|denied|AbortError|aborted/i.test(n + t) ? m("已取消分享畫面。若要截圖：再按一次「框選截圖」，或改用「選圖後框選」。", !0) : m(`畫面擷取失敗：${n || t || "未知錯誤"}。可改用「選圖後框選」。`, !0);
 		} finally {
 			u(!1);
 		}
@@ -11236,9 +11248,16 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 				className: "m-0 text-xl font-bold text-slate-800",
 				children: e
 			}),
-			/* @__PURE__ */ (0, E.jsx)("p", {
+			/* @__PURE__ */ (0, E.jsxs)("p", {
 				className: "mt-1 text-xs text-slate-400",
-				children: "點「框選截圖」→ 選視窗／螢幕 → 拖曳框選範圍。也可貼上／相簿後再框選。"
+				children: [
+					"「框選截圖」會跳出瀏覽器的",
+					/* @__PURE__ */ (0, E.jsx)("strong", {
+						className: "font-semibold text-slate-600",
+						children: "分享畫面"
+					}),
+					"（選螢幕／視窗），不是電腦資料夾。選完後再拖曳框選範圍。"
+				]
 			}),
 			/* @__PURE__ */ (0, E.jsxs)("div", {
 				className: "mt-4 grid gap-3",
@@ -11250,21 +11269,27 @@ function We({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 								type: "button",
 								className: "rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-700/20 disabled:opacity-50",
 								disabled: c,
-								onClick: te,
+								onClick: (e) => {
+									e.preventDefault(), e.stopPropagation(), te();
+								},
 								children: c ? "處理中…" : "框選截圖"
 							}),
 							/* @__PURE__ */ (0, E.jsx)("button", {
 								type: "button",
 								className: "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700",
 								disabled: c,
-								onClick: () => b.current?.click(),
+								onClick: (e) => {
+									e.preventDefault(), e.stopPropagation(), b.current?.click();
+								},
 								children: "選圖後框選"
 							}),
 							/* @__PURE__ */ (0, E.jsx)("button", {
 								type: "button",
 								className: "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700",
 								disabled: c,
-								onClick: () => y.current?.click(),
+								onClick: (e) => {
+									e.preventDefault(), e.stopPropagation(), y.current?.click();
+								},
 								children: "相簿／拍照"
 							})
 						]

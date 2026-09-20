@@ -14,11 +14,27 @@ function dtValue(v) {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(0, 16) : s.slice(0, 16);
 }
 
+const emptyForm = () => ({
+  uha: "",
+  containerNo: "",
+  arriveDay: new Date().toISOString().slice(0, 10),
+  product: "",
+  inspect: "none",
+  fumigate: "none",
+  dock: "",
+  trailer: "",
+  trailerPhone: "",
+  note: "",
+  released: "否",
+});
+
 /**
- * 海關查驗：同畫面勾選已放行、改藥檢／薰蒸、填拖車派貨，不進抽屜。
+ * 海關查驗：同畫面勾選已放行、改藥檢／薰蒸、填拖車派貨；可手動新增。
  */
 export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, refresh, onAfterRelease }) {
   const [picked, setPicked] = useState(() => new Set());
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState(emptyForm);
 
   const toggle = (uha) => {
     setPicked((prev) => {
@@ -61,6 +77,20 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
     onAfterRelease?.([uha]);
   };
 
+  const submitAdd = () => {
+    const ok = api().addManualPortRow?.(form);
+    if (!ok) {
+      alert("請至少填編號（如 UHA715）。");
+      return;
+    }
+    const wasReleased = form.released === "是";
+    const uha = form.uha;
+    setForm(emptyForm());
+    setShowAdd(false);
+    refresh?.();
+    if (wasReleased) onAfterRelease?.([uha]);
+  };
+
   return (
     <div className="grid gap-2.5">
       <div className="flex w-full flex-row gap-2 overflow-x-auto whitespace-nowrap p-0.5 touch-pan-x" role="tablist" aria-label="海關查驗篩選">
@@ -81,6 +111,9 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
         {hint ? <p className={`m-0 text-xs text-slate-400 ${title ? "mt-1" : ""}`}>{hint}</p> : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" className="rounded-md bg-slate-800 px-3 py-1.5 text-[0.78rem] font-bold text-white" onClick={() => setShowAdd((v) => !v)}>
+            {showAdd ? "收起新增" : "手動新增貨櫃"}
+          </button>
           <button type="button" className="rounded-md border border-slate-200 px-2.5 py-1.5 text-[0.78rem] font-semibold text-slate-600" onClick={toggleAll}>
             {picked.size && picked.size === (rows?.length || 0) ? "取消全選" : "全選本頁"}
           </button>
@@ -92,12 +125,72 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
           >
             標示已放行{picked.size ? `（${picked.size}）` : ""}
           </button>
-          <span className="text-[0.72rem] text-slate-400">勾選貨櫃 → 標示已放行；藥檢／薰蒸／拖車在列上直接改</span>
+          <span className="text-[0.72rem] text-slate-400">勾選→標示已放行；或到「舊資料」下載格式匯入</span>
         </div>
+
+        {showAdd ? (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+            <p className="m-0 text-[0.78rem] font-semibold text-emerald-900">手動新增一筆（編號必填）</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">編號 *</span>
+                <input className={fieldCls} value={form.uha} placeholder="UHA715" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">櫃號</span>
+                <input className={fieldCls} value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">到港日</span>
+                <input type="date" className={fieldCls} value={form.arriveDay} onChange={(e) => setForm({ ...form, arriveDay: e.target.value })} />
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">品名</span>
+                <input className={fieldCls} value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })} />
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">藥檢</span>
+                <select className={fieldCls} value={form.inspect} onChange={(e) => setForm({ ...form, inspect: e.target.value })}>
+                  {CLEAR_OPTS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.lab}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">薰蒸</span>
+                <select className={fieldCls} value={form.fumigate} onChange={(e) => setForm({ ...form, fumigate: e.target.value })}>
+                  {CLEAR_OPTS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.lab}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">拖車</span>
+                <input className={fieldCls} value={form.trailer} onChange={(e) => setForm({ ...form, trailer: e.target.value })} />
+              </label>
+              <label className="grid gap-0.5">
+                <span className="text-[0.7rem] font-semibold text-slate-500">已放行</span>
+                <select className={fieldCls} value={form.released} onChange={(e) => setForm({ ...form, released: e.target.value })}>
+                  <option value="否">否（進查驗）</option>
+                  <option value="是">是（進已放行）</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-2">
+              <button type="button" className="rounded-md bg-emerald-600 px-3 py-1.5 text-[0.8rem] font-bold text-white" onClick={submitAdd}>
+                儲存新增
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-4">
           {!rows?.length ? (
-            <p className="m-0 py-10 text-center text-sm text-slate-400">目前沒有到港待驗資料</p>
+            <p className="m-0 py-10 text-center text-sm text-slate-400">目前沒有到港待驗資料 — 可按「手動新增」或到舊資料匯入格式</p>
           ) : (
             <ul className="m-0 grid list-none gap-3 p-0">
               {rows.map((r) => {
@@ -141,12 +234,7 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
                       </label>
                       <label className="grid gap-0.5">
                         <span className="text-[0.7rem] font-semibold text-slate-500">藥檢時間</span>
-                        <input
-                          type="datetime-local"
-                          className={fieldCls}
-                          value={dtValue(r.inspectAt)}
-                          onChange={(e) => patch(uha, "inspectAt", e.target.value)}
-                        />
+                        <input type="datetime-local" className={fieldCls} value={dtValue(r.inspectAt)} onChange={(e) => patch(uha, "inspectAt", e.target.value)} />
                       </label>
                       <label className="grid gap-0.5">
                         <span className="text-[0.7rem] font-semibold text-slate-500">薰蒸</span>
@@ -160,12 +248,7 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
                       </label>
                       <label className="grid gap-0.5">
                         <span className="text-[0.7rem] font-semibold text-slate-500">薰蒸時間</span>
-                        <input
-                          type="datetime-local"
-                          className={fieldCls}
-                          value={dtValue(r.fumigateAt)}
-                          onChange={(e) => patch(uha, "fumigateAt", e.target.value)}
-                        />
+                        <input type="datetime-local" className={fieldCls} value={dtValue(r.fumigateAt)} onChange={(e) => patch(uha, "fumigateAt", e.target.value)} />
                       </label>
                       <label className="grid gap-0.5">
                         <span className="text-[0.7rem] font-semibold text-slate-500">碼頭</span>
@@ -177,13 +260,7 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
                       </label>
                       <label className="grid gap-0.5">
                         <span className="text-[0.7rem] font-semibold text-slate-500">拖車電話</span>
-                        <input
-                          type="tel"
-                          className={fieldCls}
-                          value={r.trailerPhone || ""}
-                          placeholder="電話"
-                          onChange={(e) => patch(uha, "trailerPhone", e.target.value)}
-                        />
+                        <input type="tel" className={fieldCls} value={r.trailerPhone || ""} placeholder="電話" onChange={(e) => patch(uha, "trailerPhone", e.target.value)} />
                       </label>
                       <label className="grid gap-0.5 sm:col-span-2 lg:col-span-1">
                         <span className="text-[0.7rem] font-semibold text-slate-500">備註</span>

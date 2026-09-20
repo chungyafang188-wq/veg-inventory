@@ -1,6 +1,7 @@
 import { api } from "../bridge";
 import { PANE_TITLE } from "../constants";
 import { CountBadge } from "./CountBadge";
+import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
 import { PortPane } from "./PortPane";
 import { TablePane } from "./TablePane";
@@ -40,7 +41,7 @@ export function ImportTabContent({
       {activeTab === "port" ? (
         <PortPane
           title={title}
-          hint="同畫面勾選已放行；藥檢／薰蒸／拖車派貨直接改，不必進內頁。標示放行後會進「已放行」。"
+          hint="同畫面勾選已放行；藥檢／薰蒸／拖車派貨直接改。也可手動新增，或到「舊資料」下載格式匯入。"
           portTab={portTab}
           setPortTab={setPortTab}
           portCounts={portCounts}
@@ -113,8 +114,9 @@ export function ImportTabContent({
         />
       ) : null}
 
+      {activeTab === "files" ? <FilesPane title={title} refresh={refresh} /> : null}
+
       {activeTab === "buy" ||
-      activeTab === "files" ||
       activeTab === "broker" ||
       activeTab === "vendor" ||
       activeTab === "trailer" ||
@@ -122,39 +124,16 @@ export function ImportTabContent({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2>
           <p className="mt-1 text-xs text-slate-400">
-            {activeTab === "files"
-              ? "比對規則：已拆卸進庫紀錄→庫存；進櫃表有、紀錄沒有→港口查驗待確認。可載入種子或選檔匯入。"
-              : activeTab === "buy"
-                ? "採購單建置中。"
-                : activeTab === "broker"
-                  ? "報關行往來與費用對帳建置中。"
-                  : activeTab === "vendor"
-                    ? "進口廠商資料與對帳建置中。"
-                    : activeTab === "trailer"
-                      ? "拖車費用與調度對帳建置中。"
-                      : "拆櫃工資與工班對帳建置中。"}
+            {activeTab === "buy"
+              ? "採購單建置中。"
+              : activeTab === "broker"
+                ? "報關行往來與費用對帳建置中。"
+                : activeTab === "vendor"
+                  ? "進口廠商資料與對帳建置中。"
+                  : activeTab === "trailer"
+                    ? "拖車費用與調度對帳建置中。"
+                    : "拆櫃工資與工班對帳建置中。"}
           </p>
-          {activeTab === "files" ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="imp-chip imp-chip-on"
-                onClick={async () => {
-                  try {
-                    const counts = await api().loadImportSeedJson?.();
-                    refresh();
-                    alert(
-                      `已載入：進櫃表 ${counts?.cabinets || 0}、庫存 ${counts?.arrivals || 0}、港口待確認 ${counts?.portPending || 0}`,
-                    );
-                  } catch (err) {
-                    alert(String(err.message || err));
-                  }
-                }}
-              >
-                載入115比對種子
-              </button>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>

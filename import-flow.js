@@ -1479,15 +1479,308 @@
 
   function filesPanel() {
     return `<section class="imp-files">
-      <p class="imp-one-hint">比對規則：進櫃紀錄＝已拆卸→庫存；進櫃表有、紀錄沒有→港口辦理／查驗待確認。</p>
+      <p class="imp-one-hint">比對不準時，請下載空白格式自行填寫後匯入；或到「海關查驗」手動新增。</p>
       <div class="imp-file-grid">
-        <label class="imp-file-btn">進櫃表<input type="file" accept=".xlsx,.xls" data-imp-file="cabinet" /></label>
-        <label class="imp-file-btn primary">已拆卸進庫紀錄<input type="file" accept=".xlsx,.xls" data-imp-file="arrival" /></label>
-        <label class="imp-file-btn">已放行<input type="file" accept=".xlsx,.xls" data-imp-file="released" /></label>
+        <button type="button" class="imp-file-btn" data-imp-dl-tpl="port">下載：港口查驗格式</button>
+        <button type="button" class="imp-file-btn" data-imp-dl-tpl="released">下載：已放行格式</button>
+        <button type="button" class="imp-file-btn" data-imp-dl-tpl="arrival">下載：進庫格式</button>
+        <label class="imp-file-btn">匯入港口查驗<input type="file" accept=".xlsx,.xls,.csv" data-imp-file="tpl-port" /></label>
+        <label class="imp-file-btn">匯入已放行<input type="file" accept=".xlsx,.xls,.csv" data-imp-file="tpl-released" /></label>
+        <label class="imp-file-btn primary">匯入進庫<input type="file" accept=".xlsx,.xls,.csv" data-imp-file="tpl-arrival" /></label>
+        <label class="imp-file-btn">舊進櫃表<input type="file" accept=".xlsx,.xls" data-imp-file="cabinet" /></label>
+        <label class="imp-file-btn">舊進庫紀錄<input type="file" accept=".xlsx,.xls" data-imp-file="arrival" /></label>
+        <label class="imp-file-btn">舊已放行<input type="file" accept=".xlsx,.xls" data-imp-file="released" /></label>
         <button type="button" class="imp-file-btn" data-imp-load-seed>載入115比對種子</button>
       </div>
       <p class="imp-file-meta" id="imp-file-meta"></p>
     </section>`;
+  }
+
+  const TPL = {
+    port: {
+      name: "港口查驗_匯入格式",
+      headers: [
+        "編號",
+        "櫃號",
+        "到港日",
+        "品名",
+        "件數",
+        "賣方",
+        "藥檢",
+        "藥檢時間",
+        "薰蒸",
+        "薰蒸時間",
+        "碼頭",
+        "拖車",
+        "拖車電話",
+        "備註",
+        "已放行",
+      ],
+      sample: [
+        ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "彬", "", "抽中薰蒸", "否"],
+        ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "", "", "", "是"],
+      ],
+      hint: "藥檢／薰蒸填：無、進行中、完成、免辦。已放行填：是／否。時間可用 2026-09-22 09:00 或 2026-09-22T09:00。",
+    },
+    released: {
+      name: "已放行_匯入格式",
+      headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "拖車", "拖車電話", "備註"],
+      sample: [["UHA668", "EMCU5583470", "美生-1664", "無", "", "無", "", "油二", "彬", "", "週六放行"]],
+      hint: "整表視為已放行（未拆櫃）。藥檢／薰蒸：無、進行中、完成、免辦。",
+    },
+    arrival: {
+      name: "進庫_匯入格式",
+      headers: ["拆櫃日", "編號", "櫃號", "產品", "賣方", "買方", "報關數量", "拆櫃數量", "卸貨點"],
+      sample: [["2026-09-18", "UHA668", "EMCU5583470", "越南美生", "龍鏻-同同", "鴻安", "1664", "1664", "冰庫"]],
+      hint: "進庫＝已拆卸入庫存。編號必填。",
+    },
+  };
+
+  function mapClearStatus(v) {
+    const s = String(v || "")
+      .trim()
+      .toLowerCase();
+    if (!s || s === "無" || s === "none" || s === "-" || s === "—" || s === "n/a") return "none";
+    if (s === "進行中" || s === "wait" || s === "藥檢中" || s === "薰蒸中" || s === "排程中") return "wait";
+    if (s === "完成" || s === "done" || s === "已完成" || s === "結束") return "done";
+    if (s === "免辦" || s === "skip" || s === "免" || s === "不需") return "skip";
+    return "none";
+  }
+
+  function mapYes(v) {
+    const s = String(v || "")
+      .trim()
+      .toLowerCase();
+    return s === "是" || s === "y" || s === "yes" || s === "1" || s === "true" || s === "已放行";
+  }
+
+  function normalizeAtInput(v) {
+    const s = String(v || "").trim();
+    if (!s) return "";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 16);
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/);
+    if (m) return `${m[1]}T${String(m[2]).padStart(2, "0")}:${m[3]}`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00`;
+    return s.slice(0, 16);
+  }
+
+  function downloadImportTemplate(kind) {
+    const tpl = TPL[kind];
+    if (!tpl) return false;
+    const day = typeof today === "function" ? today() : new Date().toISOString().slice(0, 10);
+    if (typeof downloadCsv === "function") {
+      downloadCsv(`${tpl.name}_${day}`, tpl.headers, tpl.sample);
+    } else {
+      const body = [tpl.headers, ...tpl.sample].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + body], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${tpl.name}_${day}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    if (typeof setStatus === "function") setStatus(`已下載「${tpl.name}」。${tpl.hint}`);
+    return true;
+  }
+
+  function upsertCabinetFromTpl(row) {
+    ensureState();
+    const uha = normUha(row.uha);
+    if (!uha) return null;
+    let cab = (state.importCabinets || []).find((c) => c.uha === uha);
+    if (!cab) {
+      cab = {
+        id: uid("cab"),
+        uha,
+        containerNo: "",
+        arriveDay: "",
+        product: "",
+        qty: 0,
+        seller: "",
+        shipCo: "",
+        broker: "",
+      };
+      state.importCabinets.push(cab);
+    }
+    if (row.containerNo) cab.containerNo = normContainer(row.containerNo);
+    if (row.arriveDay) cab.arriveDay = parseDay(row.arriveDay);
+    if (row.product) cab.product = String(row.product).trim();
+    if (row.qty != null && row.qty !== "") cab.qty = Number(row.qty) || cab.qty || 0;
+    if (row.seller) cab.seller = String(row.seller).trim();
+    stampRow(cab);
+    return cab;
+  }
+
+  function applyTrackFromTpl(uha, row, asReleased) {
+    const cab = (state.importCabinets || []).find((c) => c.uha === uha) || { uha, containerNo: row.containerNo || "", product: row.product || "" };
+    const track = ensureTrackFromCabinet(cab);
+    ensureClearanceShape(track);
+    if (row.inspect != null && row.inspect !== "") track.inspect = mapClearStatus(row.inspect);
+    if (row.inspectAt != null) track.inspectAt = normalizeAtInput(row.inspectAt);
+    if (row.fumigate != null && row.fumigate !== "") track.fumigate = mapClearStatus(row.fumigate);
+    if (row.fumigateAt != null) track.fumigateAt = normalizeAtInput(row.fumigateAt);
+    if (row.dock != null) track.dock = String(row.dock || "").trim();
+    if (row.trailer != null) track.trailer = String(row.trailer || "").trim();
+    if (row.trailerPhone != null) track.trailerPhone = String(row.trailerPhone || "").trim();
+    if (row.note != null) track.note = String(row.note || "").trim();
+    if (asReleased || mapYes(row.released)) {
+      track.released = true;
+      track.portConfirm = "done";
+      track.askPickup = true;
+      track.arrangeMonday = true;
+      track.fromReleasedExcel = true;
+      if (!track.releasedAt) track.releasedAt = new Date().toISOString().slice(0, 16);
+    } else if (track.released !== true) {
+      track.released = false;
+      track.portConfirm = "pending";
+    }
+    stampRow(track);
+    return track;
+  }
+
+  function parseTplPortRows(rows) {
+    const hi = findHeaderRow(rows, ["編號"]);
+    if (hi < 0) return [];
+    const h = rows[hi];
+    const i = (names) => colIndex(h, names);
+    const out = [];
+    for (let r = hi + 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const uha = normUha(cell(row, i(["編號"])));
+      if (!uha) continue;
+      out.push({
+        uha,
+        containerNo: cell(row, i(["櫃號"])),
+        arriveDay: cell(row, i(["到港日", "日期"])),
+        product: cell(row, i(["品名", "產品"])),
+        qty: cell(row, i(["件數"])),
+        seller: cell(row, i(["賣方"])),
+        inspect: cell(row, i(["藥檢"])),
+        inspectAt: cell(row, i(["藥檢時間"])),
+        fumigate: cell(row, i(["薰蒸"])),
+        fumigateAt: cell(row, i(["薰蒸時間"])),
+        dock: cell(row, i(["碼頭"])),
+        trailer: cell(row, i(["拖車"])),
+        trailerPhone: cell(row, i(["拖車電話"])),
+        note: cell(row, i(["備註"])),
+        released: cell(row, i(["已放行"])),
+      });
+    }
+    return out;
+  }
+
+  async function importTemplateFile(file, kind) {
+    const j = await uploadParse(file);
+    const sh = (j.sheets && j.sheets[0]) || null;
+    if (!sh) throw new Error("找不到工作表");
+    const rows = sh.rows || [];
+    ensureState();
+    let n = 0;
+    if (kind === "port" || kind === "tpl-port") {
+      const list = parseTplPortRows(rows);
+      if (!list.length) throw new Error("港口查驗格式沒有讀到編號（請用下載的表頭）");
+      for (const row of list) {
+        upsertCabinetFromTpl(row);
+        applyTrackFromTpl(row.uha, row, false);
+        n += 1;
+      }
+    } else if (kind === "released" || kind === "tpl-released") {
+      const list = parseTplPortRows(rows);
+      if (!list.length) throw new Error("已放行格式沒有讀到編號");
+      for (const row of list) {
+        upsertCabinetFromTpl(row);
+        applyTrackFromTpl(row.uha, row, true);
+        n += 1;
+      }
+    } else if (kind === "arrival" || kind === "tpl-arrival") {
+      const hi = findHeaderRow(rows, ["編號"]);
+      if (hi < 0) throw new Error("進庫格式沒有讀到編號（請用下載的表頭）");
+      const h = rows[hi];
+      const iDay = colIndex(h, ["拆櫃日", "日期"]);
+      const iUha = colIndex(h, ["編號"]);
+      const iCont = colIndex(h, ["櫃號"]);
+      const iProd = colIndex(h, ["產品", "品名"]);
+      const iSeller = colIndex(h, ["賣方"]);
+      const iBuyer = colIndex(h, ["買方"]);
+      const iCus = colIndex(h, ["報關數量"]);
+      const iUnp = colIndex(h, ["拆櫃數量"]);
+      const iUnload = colIndex(h, ["卸貨點"]);
+      const list = [];
+      for (let r = hi + 1; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const uha = normUha(cell(row, iUha));
+        if (!uha) continue;
+        list.push({
+          id: uid("arr"),
+          uha,
+          containerNo: normContainer(cell(row, iCont)),
+          day: parseDay(cell(row, iDay)),
+          seller: String(cell(row, iSeller) || "").trim(),
+          buyer: String(cell(row, iBuyer) || "").trim(),
+          product: String(cell(row, iProd) || "").trim(),
+          customsQty: cell(row, iCus),
+          unpackQty: cell(row, iUnp),
+          unload: String(cell(row, iUnload) || "").trim(),
+        });
+      }
+      if (!list.length) throw new Error("進庫格式沒有讀到資料");
+      const by = new Map((state.importArrivals || []).map((a) => [a.uha, a]));
+      for (const row of list) {
+        const prev = by.get(row.uha);
+        if (prev) Object.assign(prev, { ...row, id: prev.id });
+        else {
+          by.set(row.uha, row);
+          state.importArrivals.push(row);
+        }
+        stampRow(by.get(row.uha));
+        n += 1;
+      }
+      syncPortPendingAfterArrival();
+    } else {
+      throw new Error("未知匯入類型");
+    }
+    if (typeof save === "function") save();
+    return n;
+  }
+
+  /** 海關查驗：手動新增一筆 */
+  function addManualPortRow(fields) {
+    ensureState();
+    const uha = normUha(fields && fields.uha);
+    if (!uha) {
+      if (typeof setStatus === "function") setStatus("請填編號（如 UHA715）。", true);
+      return false;
+    }
+    const row = {
+      uha,
+      containerNo: (fields && fields.containerNo) || "",
+      arriveDay: (fields && fields.arriveDay) || (typeof today === "function" ? today() : ""),
+      product: (fields && fields.product) || "",
+      qty: (fields && fields.qty) || "",
+      seller: (fields && fields.seller) || "",
+      inspect: (fields && fields.inspect) || "none",
+      inspectAt: (fields && fields.inspectAt) || "",
+      fumigate: (fields && fields.fumigate) || "none",
+      fumigateAt: (fields && fields.fumigateAt) || "",
+      dock: (fields && fields.dock) || "",
+      trailer: (fields && fields.trailer) || "",
+      trailerPhone: (fields && fields.trailerPhone) || "",
+      note: (fields && fields.note) || "",
+      released: (fields && fields.released) || "否",
+    };
+    upsertCabinetFromTpl(row);
+    applyTrackFromTpl(uha, row, false);
+    if (typeof save === "function") save();
+    if (typeof setStatus === "function") setStatus(`已新增 ${uha}。`);
+    return true;
+  }
+
+  function templateMeta() {
+    return {
+      port: { ...TPL.port, sample: undefined },
+      released: { ...TPL.released, sample: undefined },
+      arrival: { ...TPL.arrival, sample: undefined },
+    };
   }
 
   function formatAtShort(v) {
@@ -2302,6 +2595,11 @@
       })();
       return;
     }
+    const dlTpl = e.target.closest("[data-imp-dl-tpl]");
+    if (dlTpl) {
+      downloadImportTemplate(dlTpl.dataset.impDlTpl || "port");
+      return;
+    }
     const markRel = e.target.closest("[data-imp-mark-release]");
     if (markRel) {
       if (drawerSession && drawerSession.dirty) commitDrawerSession();
@@ -2475,6 +2773,7 @@
       if (kind === "cabinet") n = await importCabinetFile(file);
       else if (kind === "arrival") n = await importArrivalFile(file);
       else if (kind === "released") n = await importReleasedFile(file);
+      else if (kind === "tpl-port" || kind === "tpl-released" || kind === "tpl-arrival") n = await importTemplateFile(file, kind);
       if (typeof setStatus === "function") setStatus(`已匯入 ${n} 筆。`);
       renderImportPage();
       if (typeof renderHomeHub === "function" && page === "home") renderHomeHub();
@@ -2503,6 +2802,10 @@
     markPortReleasedMany,
     exportSumExcel,
     loadImportSeedJson,
+    downloadImportTemplate,
+    importTemplateFile,
+    addManualPortRow,
+    templateMeta,
     setHostPane(pane) {
       importPane = normalizePane(pane || "parse");
     },

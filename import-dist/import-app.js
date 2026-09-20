@@ -10000,8 +10000,177 @@ function fe({ count: e, warn: t = !1 }) {
 	});
 }
 //#endregion
+//#region src/components/FilesPane.jsx
+var pe = "inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-[0.8rem] font-semibold text-slate-700 hover:bg-slate-50", me = "inline-flex cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-[0.8rem] font-bold text-white hover:bg-emerald-700";
+function he({ title: e, refresh: t }) {
+	let [n, r] = (0, l.useState)(""), i = (0, l.useRef)(null), a = (0, l.useRef)(null), o = (0, l.useRef)(null), s = (e) => {
+		_().downloadImportTemplate?.(e);
+	}, c = async (e, n) => {
+		if (n) {
+			r(e);
+			try {
+				let r = await _().importTemplateFile?.(n, e);
+				t?.(), m?.(`已匯入 ${r} 筆。`), alert(`已匯入 ${r} 筆。`);
+			} catch (e) {
+				alert(String(e.message || e));
+			} finally {
+				r("");
+			}
+		}
+	};
+	return /* @__PURE__ */ (0, C.jsxs)("div", {
+		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
+		children: [
+			/* @__PURE__ */ (0, C.jsx)("h2", {
+				className: "m-0 text-xl font-bold text-slate-800",
+				children: e
+			}),
+			/* @__PURE__ */ (0, C.jsx)("p", {
+				className: "mt-1 text-xs text-slate-400",
+				children: "比對舊表不準時，請下載空白 CSV（Excel 可開），照表頭填好再匯入。海關查驗也可直接手動新增。"
+			}),
+			/* @__PURE__ */ (0, C.jsxs)("div", {
+				className: "mt-4 grid gap-3",
+				children: [
+					/* @__PURE__ */ (0, C.jsxs)("section", {
+						className: "rounded-xl border border-slate-200/80 bg-slate-50/50 p-3",
+						children: [
+							/* @__PURE__ */ (0, C.jsx)("h3", {
+								className: "m-0 text-sm font-bold text-slate-700",
+								children: "① 下載格式（建議）"
+							}),
+							/* @__PURE__ */ (0, C.jsx)("p", {
+								className: "mt-1 text-[0.72rem] text-slate-500",
+								children: "藥檢／薰蒸填：無、進行中、完成、免辦。已放行填：是／否。時間例：2026-09-22 09:00"
+							}),
+							/* @__PURE__ */ (0, C.jsxs)("div", {
+								className: "mt-2 flex flex-wrap gap-2",
+								children: [
+									/* @__PURE__ */ (0, C.jsx)("button", {
+										type: "button",
+										className: pe,
+										onClick: () => s("port"),
+										children: "港口查驗格式"
+									}),
+									/* @__PURE__ */ (0, C.jsx)("button", {
+										type: "button",
+										className: pe,
+										onClick: () => s("released"),
+										children: "已放行格式"
+									}),
+									/* @__PURE__ */ (0, C.jsx)("button", {
+										type: "button",
+										className: pe,
+										onClick: () => s("arrival"),
+										children: "進庫格式"
+									})
+								]
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, C.jsxs)("section", {
+						className: "rounded-xl border border-slate-200/80 bg-slate-50/50 p-3",
+						children: [/* @__PURE__ */ (0, C.jsx)("h3", {
+							className: "m-0 text-sm font-bold text-slate-700",
+							children: "② 匯入填好的檔"
+						}), /* @__PURE__ */ (0, C.jsxs)("div", {
+							className: "mt-2 flex flex-wrap gap-2",
+							children: [
+								/* @__PURE__ */ (0, C.jsx)("button", {
+									type: "button",
+									className: me,
+									disabled: !!n,
+									onClick: () => i.current?.click(),
+									children: n === "tpl-port" ? "匯入中…" : "匯入港口查驗"
+								}),
+								/* @__PURE__ */ (0, C.jsx)("button", {
+									type: "button",
+									className: me,
+									disabled: !!n,
+									onClick: () => a.current?.click(),
+									children: n === "tpl-released" ? "匯入中…" : "匯入已放行"
+								}),
+								/* @__PURE__ */ (0, C.jsx)("button", {
+									type: "button",
+									className: me,
+									disabled: !!n,
+									onClick: () => o.current?.click(),
+									children: n === "tpl-arrival" ? "匯入中…" : "匯入進庫"
+								}),
+								/* @__PURE__ */ (0, C.jsx)("input", {
+									ref: i,
+									type: "file",
+									accept: ".xlsx,.xls,.csv",
+									className: "hidden",
+									onChange: (e) => {
+										let t = e.target.files?.[0];
+										e.target.value = "", c("tpl-port", t);
+									}
+								}),
+								/* @__PURE__ */ (0, C.jsx)("input", {
+									ref: a,
+									type: "file",
+									accept: ".xlsx,.xls,.csv",
+									className: "hidden",
+									onChange: (e) => {
+										let t = e.target.files?.[0];
+										e.target.value = "", c("tpl-released", t);
+									}
+								}),
+								/* @__PURE__ */ (0, C.jsx)("input", {
+									ref: o,
+									type: "file",
+									accept: ".xlsx,.xls,.csv",
+									className: "hidden",
+									onChange: (e) => {
+										let t = e.target.files?.[0];
+										e.target.value = "", c("tpl-arrival", t);
+									}
+								})
+							]
+						})]
+					}),
+					/* @__PURE__ */ (0, C.jsxs)("section", {
+						className: "rounded-xl border border-dashed border-slate-200 p-3",
+						children: [
+							/* @__PURE__ */ (0, C.jsx)("h3", {
+								className: "m-0 text-sm font-bold text-slate-500",
+								children: "進階／舊檔"
+							}),
+							/* @__PURE__ */ (0, C.jsx)("p", {
+								className: "mt-1 text-[0.72rem] text-slate-400",
+								children: "亂格式舊 Excel 或種子比對（可能不準）。"
+							}),
+							/* @__PURE__ */ (0, C.jsx)("div", {
+								className: "mt-2 flex flex-wrap gap-2",
+								children: /* @__PURE__ */ (0, C.jsx)("button", {
+									type: "button",
+									className: pe,
+									disabled: !!n,
+									onClick: async () => {
+										r("seed");
+										try {
+											let e = await _().loadImportSeedJson?.();
+											t?.(), alert(`已載入：進櫃表 ${e?.cabinets || 0}、庫存 ${e?.arrivals || 0}、港口待確認 ${e?.portPending || 0}`);
+										} catch (e) {
+											alert(String(e.message || e));
+										} finally {
+											r("");
+										}
+									},
+									children: n === "seed" ? "載入中…" : "載入115比對種子"
+								})
+							})
+						]
+					})
+				]
+			})
+		]
+	});
+}
+//#endregion
 //#region src/components/ParsePane.jsx
-function pe({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
+function ge({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 	let [i, a] = (0, l.useState)("");
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
@@ -10127,25 +10296,38 @@ function pe({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 }
 //#endregion
 //#region src/components/PortPane.jsx
-var me = "imp-chip flex-shrink-0", he = "imp-chip imp-chip-on flex-shrink-0", ge = "w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[0.8rem] text-slate-800 outline-none focus:border-emerald-400";
-function _e(e) {
+var _e = "imp-chip flex-shrink-0", ve = "imp-chip imp-chip-on flex-shrink-0", ye = "w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[0.8rem] text-slate-800 outline-none focus:border-emerald-400";
+function be(e) {
 	let t = String(e || "");
 	return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t), t.slice(0, 16);
 }
-function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows: a, refresh: o, onAfterRelease: s }) {
-	let [c, u] = (0, l.useState)(() => /* @__PURE__ */ new Set()), d = (e) => {
+var xe = () => ({
+	uha: "",
+	containerNo: "",
+	arriveDay: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+	product: "",
+	inspect: "none",
+	fumigate: "none",
+	dock: "",
+	trailer: "",
+	trailerPhone: "",
+	note: "",
+	released: "否"
+});
+function Se({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows: a, refresh: o, onAfterRelease: s }) {
+	let [c, u] = (0, l.useState)(() => /* @__PURE__ */ new Set()), [d, f] = (0, l.useState)(!1), [p, m] = (0, l.useState)(xe), h = (e) => {
 		u((t) => {
 			let n = new Set(t);
 			return n.has(e) ? n.delete(e) : n.add(e), n;
 		});
-	}, f = () => {
+	}, g = () => {
 		u((e) => e.size === (a?.length || 0) && a?.length ? /* @__PURE__ */ new Set() : new Set((a || []).map((e) => e.uha || e.key)));
-	}, p = (e, t, n) => {
+	}, v = (e, t, n) => {
 		_().patchPortField?.(e, t, n), o?.();
-	}, m = () => {
+	}, y = () => {
 		let e = [...c];
 		e.length && (_().markPortReleasedMany?.(e), u(/* @__PURE__ */ new Set()), o?.(), s?.(e));
-	}, h = (e) => {
+	}, b = (e) => {
 		_().markPortReleased?.(e, { quiet: !0 }), u((t) => {
 			let n = new Set(t);
 			return n.delete(e), n;
@@ -10175,7 +10357,7 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 				]
 			].map(([e, t, i]) => /* @__PURE__ */ (0, C.jsxs)("button", {
 				type: "button",
-				className: n === e ? he : me,
+				className: n === e ? ve : _e,
 				onClick: () => r(e),
 				children: [t, /* @__PURE__ */ (0, C.jsx)(fe, { count: i })]
 			}, e))
@@ -10195,23 +10377,188 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 					children: [
 						/* @__PURE__ */ (0, C.jsx)("button", {
 							type: "button",
+							className: "rounded-md bg-slate-800 px-3 py-1.5 text-[0.78rem] font-bold text-white",
+							onClick: () => f((e) => !e),
+							children: d ? "收起新增" : "手動新增貨櫃"
+						}),
+						/* @__PURE__ */ (0, C.jsx)("button", {
+							type: "button",
 							className: "rounded-md border border-slate-200 px-2.5 py-1.5 text-[0.78rem] font-semibold text-slate-600",
-							onClick: f,
+							onClick: g,
 							children: c.size && c.size === (a?.length || 0) ? "取消全選" : "全選本頁"
 						}),
 						/* @__PURE__ */ (0, C.jsxs)("button", {
 							type: "button",
 							className: "rounded-md bg-emerald-600 px-3 py-1.5 text-[0.78rem] font-bold text-white disabled:opacity-40",
 							disabled: !c.size,
-							onClick: m,
+							onClick: y,
 							children: ["標示已放行", c.size ? `（${c.size}）` : ""]
 						}),
 						/* @__PURE__ */ (0, C.jsx)("span", {
 							className: "text-[0.72rem] text-slate-400",
-							children: "勾選貨櫃 → 標示已放行；藥檢／薰蒸／拖車在列上直接改"
+							children: "勾選→標示已放行；或到「舊資料」下載格式匯入"
 						})
 					]
 				}),
+				d ? /* @__PURE__ */ (0, C.jsxs)("div", {
+					className: "mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3",
+					children: [
+						/* @__PURE__ */ (0, C.jsx)("p", {
+							className: "m-0 text-[0.78rem] font-semibold text-emerald-900",
+							children: "手動新增一筆（編號必填）"
+						}),
+						/* @__PURE__ */ (0, C.jsxs)("div", {
+							className: "mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4",
+							children: [
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "編號 *"
+									}), /* @__PURE__ */ (0, C.jsx)("input", {
+										className: ye,
+										value: p.uha,
+										placeholder: "UHA715",
+										onChange: (e) => m({
+											...p,
+											uha: e.target.value
+										})
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "櫃號"
+									}), /* @__PURE__ */ (0, C.jsx)("input", {
+										className: ye,
+										value: p.containerNo,
+										onChange: (e) => m({
+											...p,
+											containerNo: e.target.value
+										})
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "到港日"
+									}), /* @__PURE__ */ (0, C.jsx)("input", {
+										type: "date",
+										className: ye,
+										value: p.arriveDay,
+										onChange: (e) => m({
+											...p,
+											arriveDay: e.target.value
+										})
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "品名"
+									}), /* @__PURE__ */ (0, C.jsx)("input", {
+										className: ye,
+										value: p.product,
+										onChange: (e) => m({
+											...p,
+											product: e.target.value
+										})
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "藥檢"
+									}), /* @__PURE__ */ (0, C.jsx)("select", {
+										className: ye,
+										value: p.inspect,
+										onChange: (e) => m({
+											...p,
+											inspect: e.target.value
+										}),
+										children: ee.map((e) => /* @__PURE__ */ (0, C.jsx)("option", {
+											value: e.id,
+											children: e.lab
+										}, e.id))
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "薰蒸"
+									}), /* @__PURE__ */ (0, C.jsx)("select", {
+										className: ye,
+										value: p.fumigate,
+										onChange: (e) => m({
+											...p,
+											fumigate: e.target.value
+										}),
+										children: ee.map((e) => /* @__PURE__ */ (0, C.jsx)("option", {
+											value: e.id,
+											children: e.lab
+										}, e.id))
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "拖車"
+									}), /* @__PURE__ */ (0, C.jsx)("input", {
+										className: ye,
+										value: p.trailer,
+										onChange: (e) => m({
+											...p,
+											trailer: e.target.value
+										})
+									})]
+								}),
+								/* @__PURE__ */ (0, C.jsxs)("label", {
+									className: "grid gap-0.5",
+									children: [/* @__PURE__ */ (0, C.jsx)("span", {
+										className: "text-[0.7rem] font-semibold text-slate-500",
+										children: "已放行"
+									}), /* @__PURE__ */ (0, C.jsxs)("select", {
+										className: ye,
+										value: p.released,
+										onChange: (e) => m({
+											...p,
+											released: e.target.value
+										}),
+										children: [/* @__PURE__ */ (0, C.jsx)("option", {
+											value: "否",
+											children: "否（進查驗）"
+										}), /* @__PURE__ */ (0, C.jsx)("option", {
+											value: "是",
+											children: "是（進已放行）"
+										})]
+									})]
+								})
+							]
+						}),
+						/* @__PURE__ */ (0, C.jsx)("div", {
+							className: "mt-2",
+							children: /* @__PURE__ */ (0, C.jsx)("button", {
+								type: "button",
+								className: "rounded-md bg-emerald-600 px-3 py-1.5 text-[0.8rem] font-bold text-white",
+								onClick: () => {
+									if (!_().addManualPortRow?.(p)) {
+										alert("請至少填編號（如 UHA715）。");
+										return;
+									}
+									let e = p.released === "是", t = p.uha;
+									m(xe()), f(!1), o?.(), e && s?.([t]);
+								},
+								children: "儲存新增"
+							})
+						})
+					]
+				}) : null,
 				/* @__PURE__ */ (0, C.jsx)("div", {
 					className: "mt-4",
 					children: a?.length ? /* @__PURE__ */ (0, C.jsx)("ul", {
@@ -10229,7 +10576,7 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												type: "checkbox",
 												className: "h-4 w-4 accent-emerald-600",
 												checked: n,
-												onChange: () => d(t)
+												onChange: () => h(t)
 											}), /* @__PURE__ */ (0, C.jsx)("span", {
 												className: "text-[0.72rem] font-semibold text-slate-500",
 												children: "已放行"
@@ -10266,7 +10613,7 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 										/* @__PURE__ */ (0, C.jsx)("button", {
 											type: "button",
 											className: "rounded-md border border-emerald-600/40 px-2.5 py-1 text-[0.75rem] font-bold text-emerald-700",
-											onClick: () => h(t),
+											onClick: () => b(t),
 											children: "本櫃放行"
 										})
 									]
@@ -10279,9 +10626,9 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												className: "text-[0.7rem] font-semibold text-slate-500",
 												children: "藥檢"
 											}), /* @__PURE__ */ (0, C.jsx)("select", {
-												className: ge,
+												className: ye,
 												value: e.inspect || "none",
-												onChange: (e) => p(t, "inspect", e.target.value),
+												onChange: (e) => v(t, "inspect", e.target.value),
 												children: ee.map((e) => /* @__PURE__ */ (0, C.jsx)("option", {
 													value: e.id,
 													children: e.lab
@@ -10295,9 +10642,9 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												children: "藥檢時間"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
 												type: "datetime-local",
-												className: ge,
-												value: _e(e.inspectAt),
-												onChange: (e) => p(t, "inspectAt", e.target.value)
+												className: ye,
+												value: be(e.inspectAt),
+												onChange: (e) => v(t, "inspectAt", e.target.value)
 											})]
 										}),
 										/* @__PURE__ */ (0, C.jsxs)("label", {
@@ -10306,9 +10653,9 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												className: "text-[0.7rem] font-semibold text-slate-500",
 												children: "薰蒸"
 											}), /* @__PURE__ */ (0, C.jsx)("select", {
-												className: ge,
+												className: ye,
 												value: e.fumigate || "none",
-												onChange: (e) => p(t, "fumigate", e.target.value),
+												onChange: (e) => v(t, "fumigate", e.target.value),
 												children: ee.map((e) => /* @__PURE__ */ (0, C.jsx)("option", {
 													value: e.id,
 													children: e.lab
@@ -10322,9 +10669,9 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												children: "薰蒸時間"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
 												type: "datetime-local",
-												className: ge,
-												value: _e(e.fumigateAt),
-												onChange: (e) => p(t, "fumigateAt", e.target.value)
+												className: ye,
+												value: be(e.fumigateAt),
+												onChange: (e) => v(t, "fumigateAt", e.target.value)
 											})]
 										}),
 										/* @__PURE__ */ (0, C.jsxs)("label", {
@@ -10333,10 +10680,10 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												className: "text-[0.7rem] font-semibold text-slate-500",
 												children: "碼頭"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
-												className: ge,
+												className: ye,
 												value: e.dock || "",
 												placeholder: "碼頭",
-												onChange: (e) => p(t, "dock", e.target.value)
+												onChange: (e) => v(t, "dock", e.target.value)
 											})]
 										}),
 										/* @__PURE__ */ (0, C.jsxs)("label", {
@@ -10345,10 +10692,10 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												className: "text-[0.7rem] font-semibold text-slate-500",
 												children: "拖車／派貨"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
-												className: ge,
+												className: ye,
 												value: e.trailer || "",
 												placeholder: "拖車窗口",
-												onChange: (e) => p(t, "trailer", e.target.value)
+												onChange: (e) => v(t, "trailer", e.target.value)
 											})]
 										}),
 										/* @__PURE__ */ (0, C.jsxs)("label", {
@@ -10358,10 +10705,10 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												children: "拖車電話"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
 												type: "tel",
-												className: ge,
+												className: ye,
 												value: e.trailerPhone || "",
 												placeholder: "電話",
-												onChange: (e) => p(t, "trailerPhone", e.target.value)
+												onChange: (e) => v(t, "trailerPhone", e.target.value)
 											})]
 										}),
 										/* @__PURE__ */ (0, C.jsxs)("label", {
@@ -10370,10 +10717,10 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 												className: "text-[0.7rem] font-semibold text-slate-500",
 												children: "備註"
 											}), /* @__PURE__ */ (0, C.jsx)("input", {
-												className: ge,
+												className: ye,
 												value: e.note || "",
 												placeholder: "備註",
-												onChange: (e) => p(t, "note", e.target.value)
+												onChange: (e) => v(t, "note", e.target.value)
 											})]
 										})
 									]
@@ -10382,7 +10729,7 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 						})
 					}) : /* @__PURE__ */ (0, C.jsx)("p", {
 						className: "m-0 py-10 text-center text-sm text-slate-400",
-						children: "目前沒有到港待驗資料"
+						children: "目前沒有到港待驗資料 — 可按「手動新增」或到舊資料匯入格式"
 					})
 				})
 			]
@@ -10391,7 +10738,7 @@ function ve({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 }
 //#endregion
 //#region src/components/TablePane.jsx
-function ye() {
+function Ce() {
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: "flex flex-col items-center justify-center gap-2 px-4 py-12 text-center",
 		children: [
@@ -10422,7 +10769,7 @@ function ye() {
 		]
 	});
 }
-function be({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
+function D({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
 		children: [
@@ -10455,14 +10802,14 @@ function be({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 							}, t))
 						}, e.key)) })]
 					})
-				}) : /* @__PURE__ */ (0, C.jsx)(ye, {})
+				}) : /* @__PURE__ */ (0, C.jsx)(Ce, {})
 			})
 		]
 	});
 }
 //#endregion
 //#region src/components/UnpackBoardPane.jsx
-function xe({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
+function O({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
 	let a = t.upBoardMeta || {
 		total: 0,
 		missingTrailer: 0
@@ -10491,7 +10838,7 @@ function xe({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 					}) : null
 				]
 			})]
-		}), /* @__PURE__ */ (0, C.jsx)(be, {
+		}), /* @__PURE__ */ (0, C.jsx)(D, {
 			title: e,
 			hint: "補拖車電話、改拆工、拆卸位置。確認電話後可核取並勾選通知拖車／拆工／客戶。",
 			columns: [
@@ -10511,8 +10858,8 @@ function xe({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 		})]
 	});
 }
-var Se = "imp-chip flex-shrink-0", Ce = "imp-chip imp-chip-on flex-shrink-0";
-function D({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
+var we = "imp-chip flex-shrink-0", Te = "imp-chip imp-chip-on flex-shrink-0";
+function Ee({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
 	let a = t.unpackCounts || {
 		pending: 0,
 		reported: 0
@@ -10533,11 +10880,11 @@ function D({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i })
 				a.reported
 			]].map(([e, t, i]) => /* @__PURE__ */ (0, C.jsxs)("button", {
 				type: "button",
-				className: n === e ? Ce : Se,
+				className: n === e ? Te : we,
 				onClick: () => r(e),
 				children: [t, /* @__PURE__ */ (0, C.jsx)(fe, { count: i })]
 			}, e))
-		}), /* @__PURE__ */ (0, C.jsx)(be, {
+		}), /* @__PURE__ */ (0, C.jsx)(D, {
 			title: e,
 			hint: "配合拆工只回報自己被指派的櫃與數量。交客戶自有拆工者不在此回報。",
 			columns: [
@@ -10555,7 +10902,7 @@ function D({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i })
 		})]
 	});
 }
-function O({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
+function De({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
 	let o = t.sumCounts || {
 		open: 0,
 		needQty: 0,
@@ -10593,17 +10940,17 @@ function O({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpor
 					]
 				].map(([e, t, i]) => /* @__PURE__ */ (0, C.jsxs)("button", {
 					type: "button",
-					className: n === e ? Ce : Se,
+					className: n === e ? Te : we,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, C.jsx)(fe, { count: i })]
 				}, e))
 			}), a ? /* @__PURE__ */ (0, C.jsx)("button", {
 				type: "button",
-				className: Ce,
+				className: Te,
 				onClick: a,
 				children: "匯出"
 			}) : null]
-		}), /* @__PURE__ */ (0, C.jsx)(be, {
+		}), /* @__PURE__ */ (0, C.jsx)(D, {
 			title: e,
 			hint: "會計核對拆櫃數量、位置、拆卸點。交客戶／客戶自有拆工可在此補數量。",
 			columns: [
@@ -10624,8 +10971,8 @@ function O({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpor
 }
 //#endregion
 //#region src/components/ImportTabContent.jsx
-var we = "imp-chip flex-shrink-0", Te = "imp-chip imp-chip-on flex-shrink-0";
-function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
+var Oe = "imp-chip flex-shrink-0", k = "imp-chip imp-chip-on flex-shrink-0";
+function ke({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
 	let g = b[e] || "進口", v = t.portCounts || {
 		open: 0,
 		inspect: 0,
@@ -10634,15 +10981,15 @@ function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: `min-h-0 flex-1 overflow-auto ${h}`,
 		children: [
-			e === "parse" ? /* @__PURE__ */ (0, C.jsx)(pe, {
+			e === "parse" ? /* @__PURE__ */ (0, C.jsx)(ge, {
 				title: g,
 				drafts: t.drafts,
 				onParsed: f,
 				onOpenDraft: (e) => p("draft", String(e))
 			}) : null,
-			e === "port" ? /* @__PURE__ */ (0, C.jsx)(ve, {
+			e === "port" ? /* @__PURE__ */ (0, C.jsx)(Se, {
 				title: g,
-				hint: "同畫面勾選已放行；藥檢／薰蒸／拖車派貨直接改，不必進內頁。標示放行後會進「已放行」。",
+				hint: "同畫面勾選已放行；藥檢／薰蒸／拖車派貨直接改。也可手動新增，或到「舊資料」下載格式匯入。",
 				portTab: i,
 				setPortTab: a,
 				portCounts: v,
@@ -10677,14 +11024,14 @@ function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 						]
 					].map(([e, t, i, a]) => /* @__PURE__ */ (0, C.jsxs)("button", {
 						type: "button",
-						className: n === e ? Te : we,
+						className: n === e ? k : Oe,
 						onClick: () => r(e),
 						children: [t, /* @__PURE__ */ (0, C.jsx)(fe, {
 							count: i,
 							warn: a
 						})]
 					}, e))
-				}), /* @__PURE__ */ (0, C.jsx)(be, {
+				}), /* @__PURE__ */ (0, C.jsx)(D, {
 					title: g,
 					hint: "可排拆櫃：與拖車確認拆卸位置與日期時間，拆工可後填；儲存後派送「貨櫃拆卸資料」。",
 					columns: [
@@ -10701,21 +11048,21 @@ function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 					onOpen: (e) => p("release", e)
 				})]
 			}) : null,
-			e === "upBoard" ? /* @__PURE__ */ (0, C.jsx)(xe, {
+			e === "upBoard" ? /* @__PURE__ */ (0, C.jsx)(O, {
 				title: g,
 				lists: t,
 				boardDay: u,
 				setBoardDay: d,
 				openDrawer: p
 			}) : null,
-			e === "unpack" ? /* @__PURE__ */ (0, C.jsx)(D, {
+			e === "unpack" ? /* @__PURE__ */ (0, C.jsx)(Ee, {
 				title: g,
 				lists: t,
 				unpackTab: o,
 				setUnpackTab: s,
 				openDrawer: p
 			}) : null,
-			e === "sum" ? /* @__PURE__ */ (0, C.jsx)(O, {
+			e === "sum" ? /* @__PURE__ */ (0, C.jsx)(De, {
 				title: g,
 				lists: t,
 				sumTab: c,
@@ -10723,7 +11070,7 @@ function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				openDrawer: p,
 				onExport: () => _().exportSumExcel?.()
 			}) : null,
-			e === "stock" ? /* @__PURE__ */ (0, C.jsx)(be, {
+			e === "stock" ? /* @__PURE__ */ (0, C.jsx)(D, {
 				title: g,
 				hint: "已入庫明細。",
 				columns: [
@@ -10737,48 +11084,33 @@ function Ee({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				rows: t.stock,
 				onOpen: (e) => p("stock", e)
 			}) : null,
-			e === "buy" || e === "files" || e === "broker" || e === "vendor" || e === "trailer" || e === "labor" ? /* @__PURE__ */ (0, C.jsxs)("div", {
+			e === "files" ? /* @__PURE__ */ (0, C.jsx)(he, {
+				title: g,
+				refresh: f
+			}) : null,
+			e === "buy" || e === "broker" || e === "vendor" || e === "trailer" || e === "labor" ? /* @__PURE__ */ (0, C.jsxs)("div", {
 				className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
-				children: [
-					/* @__PURE__ */ (0, C.jsx)("h2", {
-						className: "m-0 text-xl font-bold text-slate-800",
-						children: g
-					}),
-					/* @__PURE__ */ (0, C.jsx)("p", {
-						className: "mt-1 text-xs text-slate-400",
-						children: e === "files" ? "比對規則：已拆卸進庫紀錄→庫存；進櫃表有、紀錄沒有→港口查驗待確認。可載入種子或選檔匯入。" : e === "buy" ? "採購單建置中。" : e === "broker" ? "報關行往來與費用對帳建置中。" : e === "vendor" ? "進口廠商資料與對帳建置中。" : e === "trailer" ? "拖車費用與調度對帳建置中。" : "拆櫃工資與工班對帳建置中。"
-					}),
-					e === "files" ? /* @__PURE__ */ (0, C.jsx)("div", {
-						className: "mt-3 flex flex-wrap gap-2",
-						children: /* @__PURE__ */ (0, C.jsx)("button", {
-							type: "button",
-							className: "imp-chip imp-chip-on",
-							onClick: async () => {
-								try {
-									let e = await _().loadImportSeedJson?.();
-									f(), alert(`已載入：進櫃表 ${e?.cabinets || 0}、庫存 ${e?.arrivals || 0}、港口待確認 ${e?.portPending || 0}`);
-								} catch (e) {
-									alert(String(e.message || e));
-								}
-							},
-							children: "載入115比對種子"
-						})
-					}) : null
-				]
+				children: [/* @__PURE__ */ (0, C.jsx)("h2", {
+					className: "m-0 text-xl font-bold text-slate-800",
+					children: g
+				}), /* @__PURE__ */ (0, C.jsx)("p", {
+					className: "mt-1 text-xs text-slate-400",
+					children: e === "buy" ? "採購單建置中。" : e === "broker" ? "報關行往來與費用對帳建置中。" : e === "vendor" ? "進口廠商資料與對帳建置中。" : e === "trailer" ? "拖車費用與調度對帳建置中。" : "拆櫃工資與工班對帳建置中。"
+				})]
 			}) : null
 		]
 	});
 }
 //#endregion
 //#region src/shells/PhoneShell.jsx
-var De = "imp-chip flex-shrink-0", Oe = "imp-chip imp-chip-on flex-shrink-0", k = "imp-chip flex-shrink-0 font-semibold", ke = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
-function Ae(e) {
+var Ae = "imp-chip flex-shrink-0", je = "imp-chip imp-chip-on flex-shrink-0", Me = "imp-chip flex-shrink-0 font-semibold", Ne = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
+function Pe(e) {
 	return !!(!(e instanceof Element) || e.closest(".imp-drawer-host, [role='dialog']") || e.closest("[data-no-tab-swipe]"));
 }
-function je(e, t) {
+function Fe(e, t) {
 	return ie(e).reduce((e, n) => e + (Number(t?.[n.id]) || 0), 0);
 }
-function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+function Ie({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = (0, l.useRef)({
 		on: !1,
 		axis: null,
@@ -10807,14 +11139,14 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				"aria-label": "進口區塊",
 				children: [/* @__PURE__ */ (0, C.jsx)("button", {
 					type: "button",
-					className: De,
+					className: Ae,
 					onClick: h,
 					children: "← 總覽"
 				}), v.map((e) => {
-					let r = e.id === a, i = je(e.id, n);
+					let r = e.id === a, i = Fe(e.id, n);
 					return /* @__PURE__ */ (0, C.jsxs)("button", {
 						type: "button",
-						className: r ? ke : k,
+						className: r ? Ne : Me,
 						onClick: () => {
 							e.id !== a && t(S(e.id));
 						},
@@ -10828,7 +11160,7 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let i = r.id === e;
 					return /* @__PURE__ */ (0, C.jsxs)("button", {
 						type: "button",
-						className: i ? Oe : De,
+						className: i ? je : Ae,
 						onClick: () => t(r.id),
 						children: [r.lab, de.has(r.id) ? /* @__PURE__ */ (0, C.jsx)(fe, { count: n[r.id] }) : null]
 					}, r.id);
@@ -10839,7 +11171,7 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			style: { touchAction: "pan-y" },
 			"data-imp-swipe": "1",
 			onTouchStart: (e) => {
-				if (e.touches.length !== 1 || Ae(e.target)) return;
+				if (e.touches.length !== 1 || Pe(e.target)) return;
 				let t = e.touches[0];
 				i.current = {
 					on: !0,
@@ -10871,7 +11203,7 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				i.current.on = !1, i.current.axis = null;
 			},
 			onPointerDown: (e) => {
-				e.pointerType === "mouse" && e.button === 0 && (Ae(e.target) || (i.current = {
+				e.pointerType === "mouse" && e.button === 0 && (Pe(e.target) || (i.current = {
 					on: !0,
 					axis: null,
 					x0: e.clientX,
@@ -10896,7 +11228,7 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				let n = e.clientX - t.x0, r = e.clientY - t.y0, a = t.axis === "h" || t.axis == null && Math.abs(n) >= 36 && Math.abs(n) > Math.abs(r) * 1.1;
 				t.axis = null, a && s(n);
 			},
-			children: /* @__PURE__ */ (0, C.jsx)(Ee, {
+			children: /* @__PURE__ */ (0, C.jsx)(ke, {
 				activeTab: e,
 				padClass: "p-2.5",
 				...r
@@ -10906,8 +11238,8 @@ function Me({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/shells/WebShell.jsx
-var Ne = "imp-chip flex-shrink-0", Pe = "imp-chip imp-chip-on flex-shrink-0", Fe = "imp-side flex-shrink-0", Ie = "imp-side imp-side-on flex-shrink-0";
-function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+var Le = "imp-chip flex-shrink-0", Re = "imp-chip imp-chip-on flex-shrink-0", ze = "imp-side flex-shrink-0", Be = "imp-side imp-side-on flex-shrink-0";
+function Ve({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = x(e), a = ie(i);
 	return /* @__PURE__ */ (0, C.jsxs)("div", {
 		className: "imp-tw relative flex min-h-[min(78vh,40rem)] max-w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/80 font-imp text-slate-800",
@@ -10915,7 +11247,7 @@ function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			className: "flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/95 px-2 py-2",
 			children: [/* @__PURE__ */ (0, C.jsx)("button", {
 				type: "button",
-				className: `${Ne} shrink-0`,
+				className: `${Le} shrink-0`,
 				onClick: h,
 				children: "← 總覽"
 			}), /* @__PURE__ */ (0, C.jsx)("nav", {
@@ -10925,7 +11257,7 @@ function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let n = e.id === i;
 					return /* @__PURE__ */ (0, C.jsx)("button", {
 						type: "button",
-						className: n ? Pe : Ne,
+						className: n ? Re : Le,
 						onClick: () => {
 							e.id !== i && t(S(e.id));
 						},
@@ -10947,7 +11279,7 @@ function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 						let i = r.id === e;
 						return /* @__PURE__ */ (0, C.jsxs)("button", {
 							type: "button",
-							className: i ? Ie : Fe,
+							className: i ? Be : ze,
 							onClick: () => t(r.id),
 							children: [r.lab, de.has(r.id) ? /* @__PURE__ */ (0, C.jsx)(fe, { count: n[r.id] }) : null]
 						}, r.id);
@@ -10955,7 +11287,7 @@ function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				})]
 			}), /* @__PURE__ */ (0, C.jsx)("section", {
 				className: "flex min-w-0 flex-1 flex-col overflow-hidden",
-				children: /* @__PURE__ */ (0, C.jsx)(Ee, {
+				children: /* @__PURE__ */ (0, C.jsx)(ke, {
 					activeTab: e,
 					padClass: "p-4",
 					...r
@@ -10966,7 +11298,7 @@ function Le({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/ImportApp.jsx
-function Re({ initialPane: e = "parse" }) {
+function He({ initialPane: e = "parse" }) {
 	let t = ue(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => re(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("open"), [te, ne] = (0, l.useState)("open"), [x, ie] = (0, l.useState)("pending"), [S, ae] = (0, l.useState)("open"), [se, w] = (0, l.useState)(() => oe());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
@@ -11104,12 +11436,12 @@ function Re({ initialPane: e = "parse" }) {
 		refresh: i,
 		openDrawer: E,
 		setActiveTab: T
-	}, he = t === "web" ? /* @__PURE__ */ (0, C.jsx)(Le, {
+	}, he = t === "web" ? /* @__PURE__ */ (0, C.jsx)(Ve, {
 		activeTab: a,
 		setActiveTab: T,
 		tabCounts: pe.tabCounts,
 		contentProps: me
-	}) : /* @__PURE__ */ (0, C.jsx)(Me, {
+	}) : /* @__PURE__ */ (0, C.jsx)(Ie, {
 		activeTab: a,
 		setActiveTab: T,
 		tabCounts: pe.tabCounts,
@@ -11166,24 +11498,24 @@ function Re({ initialPane: e = "parse" }) {
 }
 //#endregion
 //#region src/mount.jsx
-var ze = null, Be = null;
-function Ve(e, t = {}) {
+var Ue = null, We = null;
+function Ge(e, t = {}) {
 	if (e) {
-		if (ze && Be === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), ze;
-		if (ze) try {
-			ze.unmount();
+		if (Ue && We === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), Ue;
+		if (Ue) try {
+			Ue.unmount();
 		} catch {}
-		return e.innerHTML = "", Be = e, ze = (0, u.createRoot)(e), ze.render(/* @__PURE__ */ (0, C.jsx)(Re, { initialPane: t.pane || "parse" })), ze;
+		return e.innerHTML = "", We = e, Ue = (0, u.createRoot)(e), Ue.render(/* @__PURE__ */ (0, C.jsx)(He, { initialPane: t.pane || "parse" })), Ue;
 	}
 }
-function He() {
-	if (ze) try {
-		ze.unmount();
+function Ke() {
+	if (Ue) try {
+		Ue.unmount();
 	} catch {}
-	ze = null, Be = null;
+	Ue = null, We = null;
 }
-if (typeof window < "u" && (window.mountImportApp = Ve, window.unmountImportApp = He, window.page === "import" && typeof window.renderImportPage == "function")) try {
+if (typeof window < "u" && (window.mountImportApp = Ge, window.unmountImportApp = Ke, window.page === "import" && typeof window.renderImportPage == "function")) try {
 	window.renderImportPage();
 } catch {}
 //#endregion
-export { Ve as mountImportApp, He as unmountImportApp };
+export { Ge as mountImportApp, Ke as unmountImportApp };

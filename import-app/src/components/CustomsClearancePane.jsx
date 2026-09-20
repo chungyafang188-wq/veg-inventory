@@ -600,7 +600,7 @@ export function CustomsClearancePane({
                 view === "cards"
                   ? SORT_OPTS.port
                   : [
-                      { id: "uha", lab: "編號" },
+                      { id: "uha", lab: "編號後三碼" },
                       { id: "arriveDay", lab: "到港日" },
                       { id: "stage", lab: "階段" },
                       { id: "product", lab: "品名" },
@@ -612,7 +612,7 @@ export function CustomsClearancePane({
             />
           </div>
           <p className="mt-2 m-0 text-[0.7rem] text-slate-400">
-            表格點欄位直輯：Enter 存並往下、Tab 往右；藥檢／薰蒸點徽章切換。空欄顯示「+ 點擊填寫」。UHA 無數字＝待補編碼。
+            表格點欄位直輯：Enter 存並往下、Tab 往右；藥檢／薰蒸點徽章切換。預設依 UHA 後三碼排序；編號待補排最後、再按到港日。
           </p>
         </div>
 

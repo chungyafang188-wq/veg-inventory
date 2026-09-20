@@ -4382,9 +4382,25 @@
       }
 
       rows.sort((a, b) => {
+        const ta = (() => {
+          const s = String(a.uha || "").trim().toUpperCase();
+          if (!s || /^待編-/i.test(s) || /^TMP-/i.test(s) || /^(UHA|NC)\s*$/i.test(s)) return null;
+          const m = s.match(/^(UHA|NC)(\d+)/);
+          return m ? Number(m[2].slice(-3)) : null;
+        })();
+        const tb = (() => {
+          const s = String(b.uha || "").trim().toUpperCase();
+          if (!s || /^待編-/i.test(s) || /^TMP-/i.test(s) || /^(UHA|NC)\s*$/i.test(s)) return null;
+          const m = s.match(/^(UHA|NC)(\d+)/);
+          return m ? Number(m[2].slice(-3)) : null;
+        })();
+        const pa = ta == null;
+        const pb = tb == null;
+        if (pa !== pb) return pa ? 1 : -1;
+        if (!pa && !pb && ta !== tb) return ta - tb;
         const da = String(a.arriveDay || "");
         const db = String(b.arriveDay || "");
-        if (da !== db) return db.localeCompare(da);
+        if (da !== db) return da.localeCompare(db);
         return String(a.uha || "").localeCompare(String(b.uha || ""), "en", { numeric: true });
       });
       return rows;

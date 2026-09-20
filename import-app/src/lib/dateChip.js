@@ -58,8 +58,15 @@ export function addDaysYmd(ymd, delta) {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
-/** FT 剩餘天數（相對今天 0 點）；無 FT 回 null */
-export function ftDaysLeft(ftAt) {
+/** 是否已到指定日（含當天；以本地 0 點比對） */
+export function isDayReached(ymd) {
+  const p = parseDayPart(ymd) || parseDateTimePart(ymd);
+  if (!p) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = new Date(p.y, p.mo - 1, p.d);
+  return day.getTime() <= today.getTime();
+}
   const p = parseDayPart(ftAt) || parseDateTimePart(ftAt);
   if (!p) return null;
   const today = new Date();

@@ -4,7 +4,7 @@ import { api } from "../bridge";
 import { clearLab, clearOptsFor } from "../constants";
 import { DateChip } from "./DateChip";
 import { ListQueryBar } from "./ListQueryBar";
-import { formatMd } from "../lib/dateChip";
+import { formatMd, isDayReached } from "../lib/dateChip";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS, uhaSortKey } from "../lib/listQuery";
 
 const VIEW_KEY = "imp-customs-view-v1";
@@ -362,26 +362,25 @@ function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
   const hasAt = !!String(at || "").trim();
   const showChip = value === "wait" || value === "done" || hasAt;
   const id = value || "none";
+  const reportReady = kind === "inspect" && hasAt && isDayReached(at);
 
   let displayLab = clearLab(id, kind);
   let toneOverride = null;
   if (kind === "inspect") {
-    // 僅在填了出報告日後才顯示「已出報告」；需要藥檢時維持紅標
-    if (hasAt) {
+    if (reportReady) {
       displayLab = "已出報告";
       toneOverride = "bg-sky-100 text-sky-800";
+    } else if (hasAt) {
+      // 已填出報告日，但尚未到當天
+      displayLab = "待藥檢結果";
+      toneOverride = "bg-amber-100 text-amber-800";
     } else if (id === "wait" || id === "done") {
       displayLab = "需要藥檢";
-      toneOverride = null; // 沿用 statusTone(wait/done) 或強制紅
+      toneOverride = "bg-red-100 text-red-700";
     }
   } else if (hasAt) {
     displayLab = "已排薰蒸";
     toneOverride = "bg-emerald-100 text-emerald-800";
-  }
-
-  // 需要藥檢但尚未出報告：強制紅底（含誤標 done 未填日）
-  if (kind === "inspect" && !hasAt && (id === "wait" || id === "done")) {
-    toneOverride = "bg-red-100 text-red-700";
   }
 
   return (
@@ -403,12 +402,15 @@ function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
   );
 }
 
-/** 需要藥檢／薰蒸時須填時間後才可標示已放行 */
+/** 需要藥檢／薰蒸時須填時間；藥檢須等到出報告當日（含）才可標示已放行 */
 function canMarkReleased(r) {
   if (r.released || r.stageId === "release") return false;
   const insp = r.inspect || "none";
   const fume = r.fumigate || "none";
-  if ((insp === "wait" || insp === "done") && !String(r.inspectAt || "").trim()) return false;
+  if (insp === "wait" || insp === "done") {
+    if (!String(r.inspectAt || "").trim()) return false;
+    if (!isDayReached(r.inspectAt)) return false;
+  }
   if (fume === "wait" && !String(r.fumigateAt || "").trim()) return false;
   return true;
 }

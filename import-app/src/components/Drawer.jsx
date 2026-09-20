@@ -1,4 +1,4 @@
-import { DEST_OPTS } from "../constants";
+import { DEST_OPTS, clearOptsFor } from "../constants";
 
 function Field({ label, children }) {
   return (
@@ -59,15 +59,18 @@ export function Drawer({
                 ? `拆卸總清單 ${f.uha || drawer.key}`
                 : `入庫明細 ${drawer.key}`;
 
-  const selectClear = (field, value) => (
-    <select className={inputCls()} value={value || "none"} onChange={(e) => onField(field, e.target.value)}>
-      {clearOpts.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.lab}
-        </option>
-      ))}
-    </select>
-  );
+  const selectClear = (field, value) => {
+    const opts = clearOptsFor(field === "fumigate" ? "fumigate" : "inspect");
+    return (
+      <select className={inputCls()} value={value || "none"} onChange={(e) => onField(field, e.target.value)}>
+        {opts.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.lab}
+          </option>
+        ))}
+      </select>
+    );
+  };
 
   const showFooter = kind !== "stock";
 
@@ -141,7 +144,7 @@ export function Drawer({
               </p>
               <Field label="藥檢">
                 {selectClear("inspect", f.inspect)}
-                <span className="mt-1 block text-[0.72rem] font-semibold text-imp-muted">藥檢報告時間</span>
+                <span className="mt-1 block text-[0.72rem] font-semibold text-imp-muted">藥檢時間（報告時間）</span>
                 <input type="datetime-local" className={`${inputCls()} mt-0.5`} value={(f.inspectAt || "").slice(0, 16)} onChange={(e) => onField("inspectAt", e.target.value)} />
               </Field>
               <Field label="薰蒸">
@@ -153,11 +156,8 @@ export function Drawer({
                 <input className={inputCls()} value={f.dock || ""} onChange={(e) => onField("dock", e.target.value)} placeholder="檢驗／卸貨碼頭" />
               </Field>
               <div className="flex flex-wrap gap-3">
-                <Check
-                  label="缺電放／缺資料（勾選＝需通知廠商）"
-                  checked={!!f.missingDocs}
-                  onChange={(v) => onField("missingDocs", v)}
-                />
+                <Check label="缺電放（通知廠商）" checked={!!f.missingTelex} onChange={(v) => onField("missingTelex", v)} />
+                <Check label="缺資料（通知廠商）" checked={!!f.missingData} onChange={(v) => onField("missingData", v)} />
               </div>
               <Field label="備註">
                 <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />

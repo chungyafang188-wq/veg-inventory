@@ -16,11 +16,20 @@
   let drawerSession = null; // { kind, key, fields, baseUpdatedAt, dirty, remoteNewer }
 
   const CLEAR_OPTS = [
-    { id: "none", lab: "無" },
-    { id: "wait", lab: "進行中" },
+    { id: "none", lab: "待確認" },
+    { id: "wait", lab: "需要" },
     { id: "done", lab: "完成" },
-    { id: "skip", lab: "免辦" },
+    { id: "skip", lab: "無須檢驗" },
   ];
+
+  function clearOptsFor(kind) {
+    return CLEAR_OPTS.map((o) => {
+      if (o.id !== "wait") return o;
+      if (kind === "inspect") return { ...o, lab: "需要藥檢" };
+      if (kind === "fumigate") return { ...o, lab: "需要薰蒸" };
+      return o;
+    });
+  }
 
   const PANE_TITLE = {
     hub: "判讀",
@@ -218,7 +227,8 @@
         fumigate: track.fumigate || "none",
         fumigateAt: track.fumigateAt || "",
         dock: track.dock || "",
-        missingDocs: !!track.missingDocs,
+        missingTelex: !!track.missingTelex,
+        missingData: !!track.missingData,
         trailer: track.trailer || "",
         note: track.note || "",
         updatedAt: Math.max(rowUpdatedAt(cab), rowUpdatedAt(track)),
@@ -436,7 +446,8 @@
       track.fumigate = fields.fumigate || "none";
       track.fumigateAt = fields.fumigateAt || "";
       track.dock = String(fields.dock || "").trim();
-      track.missingDocs = !!fields.missingDocs;
+      track.missingTelex = !!fields.missingTelex;
+      track.missingData = !!fields.missingData;
       track.trailer = String(fields.trailer || "").trim();
       track.note = String(fields.note || "").trim();
       if (kind === "release") {
@@ -1092,8 +1103,13 @@
     if (row.fumigateAt == null) row.fumigateAt = "";
     if (row.customsNo == null) row.customsNo = "";
     if (row.dock == null) row.dock = "";
-    /** 缺電放／缺資料：勾選＝需通知廠商 */
-    if (row.missingDocs == null) row.missingDocs = false;
+    /** 缺電放／缺資料：分開勾選，才知道要通知缺哪個 */
+    if (row.missingTelex == null) row.missingTelex = false;
+    if (row.missingData == null) row.missingData = false;
+    if (row.missingDocs) {
+      if (!row.missingTelex && !row.missingData) row.missingData = true;
+      row.missingDocs = false;
+    }
     if (row.trailer == null) row.trailer = "";
     if (row.trailerPhone == null) row.trailerPhone = "";
     if (row.trailerConfirmed == null) row.trailerConfirmed = false;
@@ -1140,7 +1156,8 @@
   }
 
   function checkSettled(st) {
-    return st === "done" || st === "skip" || st === "none";
+    /** 待確認／需要＝未結清；完成／無須檢驗＝已結清 */
+    return st === "done" || st === "skip";
   }
 
   /** 藥檢／煙燻狀態已結清（進行中不算） */
@@ -1214,7 +1231,8 @@
       fumigate: "none",
       fumigateAt: "",
       dock: "",
-      missingDocs: false,
+      missingTelex: false,
+      missingData: false,
       trailer: "",
       customsNo: "",
       ftConfirmed: false,
@@ -1603,23 +1621,24 @@
         "薰蒸",
         "薰蒸時間",
         "碼頭",
-        "缺電放缺資料",
+        "缺電放",
+        "缺資料",
         "拖車",
         "拖車電話",
         "備註",
         "已放行",
       ],
       sample: [
-        ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "是", "彬", "", "抽中薰蒸", "否"],
-        ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "否", "", "", "", "是"],
+        ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "是", "否", "彬", "", "抽中薰蒸", "否"],
+        ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "否", "否", "", "", "", "是"],
       ],
-      hint: "編號＝UHA 或 NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸：無、進行中、完成、免辦。缺電放缺資料：是＝需通知廠商。已放行：是／否。",
+      hint: "編號＝UHA 或 NC。藥檢／薰蒸：待確認、需要藥檢／需要薰蒸、完成、無須檢驗。缺電放／缺資料：是＝需通知廠商。已放行：是／否。",
     },
     released: {
       name: "已放行_匯入格式",
-      headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "缺電放缺資料", "拖車", "拖車電話", "備註"],
-      sample: [["UHA668", "EMCU5583470", "美生-1664", "無", "", "無", "", "油二", "否", "彬", "", "週六放行"]],
-      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。整表視為已放行（未拆櫃）。缺電放缺資料：是＝需通知廠商。",
+      headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "缺電放", "缺資料", "拖車", "拖車電話", "備註"],
+      sample: [["UHA668", "EMCU5583470", "美生-1664", "待確認", "", "無須檢驗", "", "油二", "否", "否", "彬", "", "週六放行"]],
+      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。整表視為已放行（未拆櫃）。藥檢／薰蒸：待確認、需要、完成、無須檢驗。",
     },
     arrival: {
       name: "進庫_匯入格式",
@@ -1633,10 +1652,20 @@
     const s = String(v || "")
       .trim()
       .toLowerCase();
-    if (!s || s === "無" || s === "none" || s === "-" || s === "—" || s === "n/a") return "none";
-    if (s === "進行中" || s === "wait" || s === "藥檢中" || s === "薰蒸中" || s === "排程中") return "wait";
+    if (!s || s === "無" || s === "none" || s === "-" || s === "—" || s === "n/a" || s === "待確認") return "none";
+    if (
+      s === "進行中" ||
+      s === "wait" ||
+      s === "藥檢中" ||
+      s === "薰蒸中" ||
+      s === "排程中" ||
+      s === "需要" ||
+      s === "需要藥檢" ||
+      s === "需要薰蒸"
+    )
+      return "wait";
     if (s === "完成" || s === "done" || s === "已完成" || s === "結束") return "done";
-    if (s === "免辦" || s === "skip" || s === "免" || s === "不需") return "skip";
+    if (s === "免辦" || s === "skip" || s === "免" || s === "不需" || s === "無須檢驗" || s === "无须检验") return "skip";
     return "none";
   }
 
@@ -1713,7 +1742,12 @@
     if (row.fumigate != null && row.fumigate !== "") track.fumigate = mapClearStatus(row.fumigate);
     if (row.fumigateAt != null) track.fumigateAt = normalizeAtInput(row.fumigateAt);
     if (row.dock != null) track.dock = String(row.dock || "").trim();
-    if (row.missingDocs != null && row.missingDocs !== "") track.missingDocs = mapYes(row.missingDocs);
+    if (row.missingTelex != null && row.missingTelex !== "") track.missingTelex = mapYes(row.missingTelex);
+    if (row.missingData != null && row.missingData !== "") track.missingData = mapYes(row.missingData);
+    if (row.missingDocs != null && row.missingDocs !== "" && mapYes(row.missingDocs)) {
+      track.missingTelex = true;
+      track.missingData = true;
+    }
     if (row.trailer != null) track.trailer = String(row.trailer || "").trim();
     if (row.trailerPhone != null) track.trailerPhone = String(row.trailerPhone || "").trim();
     if (row.note != null) track.note = String(row.note || "").trim();
@@ -1750,11 +1784,13 @@
         qty: cell(row, i(["件數"])),
         seller: cell(row, i(["賣方"])),
         inspect: cell(row, i(["藥檢"])),
-        inspectAt: cell(row, i(["藥檢時間"])),
+        inspectAt: cell(row, i(["藥檢時間", "藥檢報告時間", "報告時間"])),
         fumigate: cell(row, i(["薰蒸"])),
         fumigateAt: cell(row, i(["薰蒸時間"])),
         dock: cell(row, i(["碼頭"])),
-        missingDocs: cell(row, i(["缺電放缺資料", "缺電放", "缺資料"])),
+        missingTelex: cell(row, i(["缺電放"])),
+        missingData: cell(row, i(["缺資料"])),
+        missingDocs: cell(row, i(["缺電放缺資料"])),
         trailer: cell(row, i(["拖車"])),
         trailerPhone: cell(row, i(["拖車電話"])),
         note: cell(row, i(["備註"])),
@@ -1898,10 +1934,11 @@
   }
 
   function portStatusLabel(track) {
-    if (track.inspect === "wait") return "藥檢中";
-    if (track.fumigate === "wait") return "薰蒸排程中";
-    if (track.portConfirm === "pending" || track.released === false) return "查驗待確認";
-    return "查驗待確認";
+    if (track.inspect === "wait") return "需要藥檢";
+    if (track.fumigate === "wait") return "需要薰蒸";
+    if (track.inspect === "skip" && track.fumigate === "skip") return "無須檢驗";
+    if (track.portConfirm === "pending" || track.released === false) return "待確認";
+    return "待確認";
   }
 
   function portTabCounts() {
@@ -2007,9 +2044,10 @@
   }
 
   function clearSelectHtml(field, value) {
-    return `<select class="imp-clear-sel" data-imp-clear-field="${esc(field)}">${CLEAR_OPTS.map(
-      (o) => `<option value="${o.id}"${o.id === value ? " selected" : ""}>${esc(o.lab)}</option>`,
-    ).join("")}</select>`;
+    const opts = clearOptsFor(field === "fumigate" ? "fumigate" : "inspect");
+    return `<select class="imp-clear-sel" data-imp-clear-field="${esc(field)}">${opts
+      .map((o) => `<option value="${o.id}"${o.id === value ? " selected" : ""}>${esc(o.lab)}</option>`)
+      .join("")}</select>`;
   }
 
   function datetimeInputValue(v) {
@@ -2105,7 +2143,14 @@
       row.ftConfirmed = Boolean(value);
       if (row.ftConfirmed) row.ft = true;
     } else if (field === "pickupReady") row.pickupReady = Boolean(value);
-    else if (field === "missingDocs") row.missingDocs = Boolean(value);
+    else if (field === "missingDocs") {
+      row.missingDocs = Boolean(value);
+      if (row.missingDocs) {
+        row.missingTelex = true;
+        row.missingData = true;
+      }
+    } else if (field === "missingTelex") row.missingTelex = Boolean(value);
+    else if (field === "missingData") row.missingData = Boolean(value);
     else if (field === "notifyTrailer") row.notifyTrailer = Boolean(value);
     else if (field === "notifyCustomer") row.notifyCustomer = Boolean(value);
     else if (field === "notifyUnpacker") row.notifyUnpacker = Boolean(value);
@@ -2467,7 +2512,7 @@
       <div class="imp-drawer-form" data-imp-rel-uha="${esc(uha)}">
         <p class="imp-one-hint">${esc(f.product || "—")} · ${esc(f.containerNo || "尚無櫃號")} · 到港日 ${esc(f.arriveDay || "—")}。時間出來後接近 FT 排領櫃。</p>
         <label>藥檢 ${clearSelectHtml("inspect", f.inspect)}
-          <span class="imp-field-sub">藥檢報告時間</span>
+          <span class="imp-field-sub">藥檢時間（報告時間）</span>
           <input type="datetime-local" data-imp-clear-field="inspectAt" value="${esc(datetimeInputValue(f.inspectAt))}" />
         </label>
         <label>薰蒸 ${clearSelectHtml("fumigate", f.fumigate)}
@@ -2477,10 +2522,9 @@
         <label>碼頭
           <input type="text" data-imp-clear-field="dock" value="${esc(f.dock || "")}" placeholder="檢驗／卸貨碼頭" />
         </label>
-        <label class="imp-check">
-          <input type="checkbox" data-imp-clear-field="missingDocs"${f.missingDocs ? " checked" : ""} />
-          缺電放／缺資料（勾選＝需通知廠商）
-        </label>
+        <label class="imp-rel-check"><input type="checkbox" data-imp-clear-field="missingTelex"${f.missingTelex ? " checked" : ""}/> 缺電放</label>
+        <label class="imp-rel-check"><input type="checkbox" data-imp-clear-field="missingData"${f.missingData ? " checked" : ""}/> 缺資料</label>
+        <p class="imp-field-sub">有缺再勾＝需通知廠商</p>
         <label>備註
           <input type="text" data-imp-clear-field="note" value="${esc(f.note || "")}" />
         </label>
@@ -3006,6 +3050,8 @@
         field === "ftConfirmed" ||
         field === "pickupReady" ||
         field === "missingDocs" ||
+        field === "missingTelex" ||
+        field === "missingData" ||
         field === "trailerConfirmed" ||
         field === "notifyTrailer" ||
         field === "notifyUnpacker" ||
@@ -3045,8 +3091,9 @@
   window.importBoardStats = boardStats;
   window.onImportRemoteApplied = onImportRemoteApplied;
 
-  function clearLab(v) {
-    return (CLEAR_OPTS.find((o) => o.id === v) || {}).lab || v || "—";
+  function clearLab(v, kind) {
+    const opts = clearOptsFor(kind);
+    return (opts.find((o) => o.id === v) || {}).lab || v || "待確認";
   }
 
   window.__importApi = {
@@ -3095,7 +3142,8 @@
           fumigate: track.fumigate || "none",
           fumigateAt: track.fumigateAt || "",
           dock: track.dock || "",
-          missingDocs: !!track.missingDocs,
+          missingTelex: !!track.missingTelex,
+          missingData: !!track.missingData,
           trailer: track.trailer || "",
           trailerPhone: track.trailerPhone || "",
           note: track.note || "",
@@ -3147,7 +3195,8 @@
         pickupDay: c.pickupDay || "",
         notifyTrailer: !!c.notifyTrailer,
         notifyCustomer: !!c.notifyCustomer,
-        missingDocs: !!c.missingDocs,
+        missingTelex: !!c.missingTelex,
+        missingData: !!c.missingData,
         dispatched: !!c.dispatched,
         pickup: !!c.pickup,
         ftLabel: formatFtLabel(c),

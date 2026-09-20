@@ -39,11 +39,26 @@ export const PANE_TITLE = {
 };
 
 export const CLEAR_OPTS = [
-  { id: "none", lab: "無" },
-  { id: "wait", lab: "進行中" },
+  { id: "none", lab: "待確認" },
+  { id: "wait", lab: "需要" },
   { id: "done", lab: "完成" },
-  { id: "skip", lab: "免辦" },
+  { id: "skip", lab: "無須檢驗" },
 ];
+
+/** 藥檢／薰蒸下拉：依欄位顯示「需要藥檢」「需要薰蒸」 */
+export function clearOptsFor(kind) {
+  return CLEAR_OPTS.map((o) => {
+    if (o.id !== "wait") return o;
+    if (kind === "inspect") return { ...o, lab: "需要藥檢" };
+    if (kind === "fumigate") return { ...o, lab: "需要薰蒸" };
+    return o;
+  });
+}
+
+export function clearLab(id, kind) {
+  const opts = clearOptsFor(kind);
+  return (opts.find((o) => o.id === id) || {}).lab || "待確認";
+}
 
 export const DEST_OPTS = [
   { id: "coldstore", lab: "自有冰庫販售" },

@@ -2954,8 +2954,10 @@
   }
 
   function portStatusLabel(track) {
-    if (track.inspect === "wait") return "待藥檢";
-    if (track.fumigate === "wait") return "待薰蒸";
+    const bits = [];
+    if (track.inspect === "wait") bits.push("待藥檢");
+    if (track.fumigate === "wait") bits.push("待薰蒸");
+    if (bits.length) return bits.join("＋");
     if (track.inspect === "skip" && track.fumigate === "skip") return "無須檢驗";
     if (track.portConfirm === "pending" || track.released === false) return "待確認";
     return "待確認";
@@ -2964,8 +2966,10 @@
   function clearanceStageLabel(track, released) {
     if (released) return "已放行";
     if (!track) return "待驗";
-    if (track.inspect === "wait") return "待藥檢";
-    if (track.fumigate === "wait") return "待薰蒸";
+    const bits = [];
+    if (track.inspect === "wait") bits.push("待藥檢");
+    if (track.fumigate === "wait") bits.push("待薰蒸");
+    if (bits.length) return bits.join("＋");
     return "待驗";
   }
 

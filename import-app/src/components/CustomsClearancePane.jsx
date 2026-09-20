@@ -282,24 +282,23 @@ function StatusMini({ value, kind, onChange }) {
   );
 }
 
-function cardBadge(r) {
-  if (r.inspect === "wait") return { lab: "需要藥檢", cls: "bg-sky-100 text-sky-800" };
-  if (r.fumigate === "wait") return { lab: "需要薰蒸", cls: "bg-violet-100 text-violet-800" };
-  if (r.inspect === "skip" && r.fumigate === "skip") return { lab: "無須檢驗", cls: "bg-slate-100 text-slate-600" };
-  if (r.inspect === "done" || r.fumigate === "done") return { lab: "查驗完成", cls: "bg-emerald-100 text-emerald-800" };
-  if (r.released || r.stageId === "release") return { lab: "已放行", cls: "bg-emerald-100 text-emerald-800" };
-  return { lab: "待確認", cls: "bg-amber-100 text-amber-700" };
+/** 階段標籤：藥檢／薰蒸可同時並列 */
+function stageTags(r) {
+  const released = r.released || r.stageId === "release" || r.stage === "已放行";
+  if (released) return [{ lab: "已放行", cls: "bg-emerald-100 text-emerald-800" }];
+  const tags = [];
+  if (r.inspect === "wait") tags.push({ lab: "待藥檢", cls: "bg-sky-100 text-sky-800" });
+  if (r.fumigate === "wait") tags.push({ lab: "待薰蒸", cls: "bg-violet-100 text-violet-800" });
+  if (tags.length) return tags;
+  if (r.inspect === "skip" && r.fumigate === "skip") return [{ lab: "待驗", cls: "bg-slate-100 text-slate-600" }];
+  if (r.inspect === "done" || r.fumigate === "done") return [{ lab: "待驗", cls: "bg-emerald-100 text-emerald-800" }];
+  return [{ lab: r.stage || "待驗", cls: "bg-amber-100 text-amber-800" }];
 }
 
-/** 表格「階段」欄：依藥檢／薰蒸同步，不再一律顯示待驗 */
-function stageBadge(r) {
-  const released = r.released || r.stageId === "release" || r.stage === "已放行";
-  if (released) return { lab: "已放行", cls: "bg-emerald-100 text-emerald-800" };
-  if (r.inspect === "wait") return { lab: "待藥檢", cls: "bg-sky-100 text-sky-800" };
-  if (r.fumigate === "wait") return { lab: "待薰蒸", cls: "bg-violet-100 text-violet-800" };
-  if (r.inspect === "skip" && r.fumigate === "skip") return { lab: "待驗", cls: "bg-slate-100 text-slate-600" };
-  if (r.inspect === "done" || r.fumigate === "done") return { lab: "待驗", cls: "bg-emerald-100 text-emerald-800" };
-  return { lab: r.stage || "待驗", cls: "bg-amber-100 text-amber-800" };
+function stageBadgeLabel(r) {
+  return stageTags(r)
+    .map((t) => t.lab)
+    .join("＋");
 }
 
 /**
@@ -454,7 +453,7 @@ export function CustomsClearancePane({
     if (!list.length) return;
     const headers = ["階段", "編號", "櫃號", "到港日", "品名", "賣方", "船公司", "報關行", "藥檢", "薰蒸", "碼頭", "備註"];
     const data = list.map((r) => ({
-      階段: stageBadge(r).lab,
+      階段: stageBadgeLabel(r),
       編號: isRowPendingUha(r) ? "UHA（待補）" : r.uha || "",
       櫃號: r.containerNo || "",
       到港日: r.arriveDay || "",
@@ -682,7 +681,7 @@ export function CustomsClearancePane({
                       const uha = rowKey(r);
                       const released = r.released || r.stageId === "release" || r.stage === "已放行";
                       const on = picked.has(uha);
-                      const stage = stageBadge(r);
+                      const stages = stageTags(r);
                       const cell = (col) => (
                         <InlineText
                           value={r[col] || ""}
@@ -704,8 +703,12 @@ export function CustomsClearancePane({
                             <input type="checkbox" checked={on} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
                           </td>
                           <td className="px-2 py-1.5 text-center align-middle">
-                            <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${stage.cls}`}>
-                              {stage.lab}
+                            <span className="inline-flex flex-wrap items-center justify-center gap-0.5">
+                              {stages.map((s) => (
+                                <span key={s.lab} className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${s.cls}`}>
+                                  {s.lab}
+                                </span>
+                              ))}
                             </span>
                           </td>
                           <td className="px-2 py-1.5 text-left align-middle">
@@ -760,7 +763,7 @@ export function CustomsClearancePane({
                 {cardRows.map((r) => {
                   const uha = r.uha || r.key;
                   const checked = picked.has(uha);
-                  const badge = cardBadge(r);
+                  const stages = stageTags(r);
                   return (
                     <li
                       key={uha}
@@ -769,7 +772,7 @@ export function CustomsClearancePane({
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                           <label className="flex shrink-0 cursor-pointer items-center">
                             <input
                               type="checkbox"
@@ -781,7 +784,11 @@ export function CustomsClearancePane({
                           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold tabular-nums text-slate-800">
                             到港 {shortDay(r.arriveDay)}
                           </span>
-                          <span className={`rounded-md px-2 py-0.5 text-sm font-bold ${badge.cls}`}>{badge.lab}</span>
+                          {stages.map((s) => (
+                            <span key={s.lab} className={`rounded-md px-2 py-0.5 text-sm font-bold ${s.cls}`}>
+                              {s.lab}
+                            </span>
+                          ))}
                           {isRowPendingUha(r) ? (
                             <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-amber-800">編號待補</span>
                           ) : null}

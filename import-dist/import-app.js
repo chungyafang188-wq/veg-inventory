@@ -10664,46 +10664,30 @@ function Ie({ value: e, kind: t, onChange: n }) {
 	});
 }
 function Le(e) {
-	return e.inspect === "wait" ? {
-		lab: "需要藥檢",
-		cls: "bg-sky-100 text-sky-800"
-	} : e.fumigate === "wait" ? {
-		lab: "需要薰蒸",
-		cls: "bg-violet-100 text-violet-800"
-	} : e.inspect === "skip" && e.fumigate === "skip" ? {
-		lab: "無須檢驗",
-		cls: "bg-slate-100 text-slate-600"
-	} : e.inspect === "done" || e.fumigate === "done" ? {
-		lab: "查驗完成",
-		cls: "bg-emerald-100 text-emerald-800"
-	} : e.released || e.stageId === "release" ? {
+	if (e.released || e.stageId === "release" || e.stage === "已放行") return [{
 		lab: "已放行",
 		cls: "bg-emerald-100 text-emerald-800"
-	} : {
-		lab: "待確認",
-		cls: "bg-amber-100 text-amber-700"
-	};
-}
-function Re(e) {
-	return e.released || e.stageId === "release" || e.stage === "已放行" ? {
-		lab: "已放行",
-		cls: "bg-emerald-100 text-emerald-800"
-	} : e.inspect === "wait" ? {
+	}];
+	let t = [];
+	return e.inspect === "wait" && t.push({
 		lab: "待藥檢",
 		cls: "bg-sky-100 text-sky-800"
-	} : e.fumigate === "wait" ? {
+	}), e.fumigate === "wait" && t.push({
 		lab: "待薰蒸",
 		cls: "bg-violet-100 text-violet-800"
-	} : e.inspect === "skip" && e.fumigate === "skip" ? {
+	}), t.length ? t : e.inspect === "skip" && e.fumigate === "skip" ? [{
 		lab: "待驗",
 		cls: "bg-slate-100 text-slate-600"
-	} : e.inspect === "done" || e.fumigate === "done" ? {
+	}] : e.inspect === "done" || e.fumigate === "done" ? [{
 		lab: "待驗",
 		cls: "bg-emerald-100 text-emerald-800"
-	} : {
+	}] : [{
 		lab: e.stage || "待驗",
 		cls: "bg-amber-100 text-amber-800"
-	};
+	}];
+}
+function Re(e) {
+	return Le(e).map((e) => e.lab).join("＋");
 }
 function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCounts: a, refresh: o, onAfterRelease: s, openDrawer: c }) {
 	let [u, d] = (0, l.useState)(() => {
@@ -10809,7 +10793,7 @@ function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 			"碼頭",
 			"備註"
 		], n = e.map((e) => ({
-			階段: Re(e).lab,
+			階段: Re(e),
 			編號: je(e) ? "UHA（待補）" : e.uha || "",
 			櫃號: e.containerNo || "",
 			到港日: e.arriveDay || "",
@@ -11122,7 +11106,7 @@ function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 									]
 								}) }),
 								/* @__PURE__ */ (0, E.jsx)("tbody", { children: ie.map((e, t) => {
-									let n = Ae(e), r = e.released || e.stageId === "release" || e.stage === "已放行", i = y.has(n), a = Re(e), o = (r) => /* @__PURE__ */ (0, E.jsx)(Fe, {
+									let n = Ae(e), r = e.released || e.stageId === "release" || e.stage === "已放行", i = y.has(n), a = Le(e), o = (r) => /* @__PURE__ */ (0, E.jsx)(Fe, {
 										value: e[r] || "",
 										onSave: (e) => D(n, r, e),
 										rowIndex: t,
@@ -11145,8 +11129,11 @@ function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-2 py-1.5 text-center align-middle",
 												children: /* @__PURE__ */ (0, E.jsx)("span", {
-													className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${a.cls}`,
-													children: a.lab
+													className: "inline-flex flex-wrap items-center justify-center gap-0.5",
+													children: a.map((e) => /* @__PURE__ */ (0, E.jsx)("span", {
+														className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${e.cls}`,
+														children: e.lab
+													}, e.lab))
 												})
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
@@ -11240,7 +11227,7 @@ function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 									/* @__PURE__ */ (0, E.jsxs)("div", {
 										className: "flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5",
 										children: [/* @__PURE__ */ (0, E.jsxs)("div", {
-											className: "flex min-w-0 flex-1 items-center gap-2",
+											className: "flex min-w-0 flex-1 flex-wrap items-center gap-2",
 											children: [
 												/* @__PURE__ */ (0, E.jsx)("label", {
 													className: "flex shrink-0 cursor-pointer items-center",
@@ -11255,10 +11242,10 @@ function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 													className: "rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold tabular-nums text-slate-800",
 													children: ["到港 ", Ee(e.arriveDay)]
 												}),
-												/* @__PURE__ */ (0, E.jsx)("span", {
-													className: `rounded-md px-2 py-0.5 text-sm font-bold ${r.cls}`,
-													children: r.lab
-												}),
+												r.map((e) => /* @__PURE__ */ (0, E.jsx)("span", {
+													className: `rounded-md px-2 py-0.5 text-sm font-bold ${e.cls}`,
+													children: e.lab
+												}, e.lab)),
 												je(e) ? /* @__PURE__ */ (0, E.jsx)("span", {
 													className: "rounded-md bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-amber-800",
 													children: "編號待補"

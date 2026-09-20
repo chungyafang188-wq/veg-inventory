@@ -2006,7 +2006,7 @@ function renderHomeHub() {
       </div>
       ${bodyHtml}
     </section>`;
-  /** 銷貨三工作區（權限過濾後可能少於三欄）— buildSalesBlocks 已抽到外層 */
+  /** 銷貨：手機＝進口式雙列頂部＋全寬工作頁；網頁＝上欄＋側欄 */
   const renderSalesShell = () => {
     const blocks = buildSalesBlocks();
     if (!blocks.length) {
@@ -2019,12 +2019,41 @@ function renderHomeHub() {
     if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
     const cur = blocks.find((b) => b.id === hubSalesBlock) || blocks[0];
     if (hubSalesPane && !cur.tabs.some((t) => t.id === hubSalesPane)) hubSalesPane = "";
+    const phone = isSalesPhoneLayout();
+    // 手機工作頁：沒選子頁就進該區第一個（跟進口一樣直接做事）
+    if (phone && !hubSalesPane && cur.tabs[0]) {
+      hubSalesPane = cur.tabs[0].id;
+      applySalesPaneState(hubSalesPane);
+    }
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
 
-    // 殼已存在：只更新上／側欄狀態，不整頁重建（避免亂跳）
     if (box.querySelector(".sales-shell") && syncSalesShellChrome()) {
       if (!hubSalesPane) fillSalesLanding();
+      return;
+    }
+
+    if (phone) {
+      const blockChips = blocks
+        .map((b) => {
+          const on = b.id === cur.id;
+          return `<button type="button" class="sales-phone-chip sales-phone-block${on ? " is-on" : ""}" data-sales-block="${esc(b.id)}">${esc(b.lab)}</button>`;
+        })
+        .join("");
+      const subChips = cur.tabs.map(salesPhoneChipHtml).join("");
+      box.innerHTML = `
+      <section class="sales-shell sales-shell--phone">
+        <header class="sales-phone-chrome">
+          <nav class="sales-phone-row" aria-label="銷貨主模組">
+            <button type="button" class="sales-phone-chip" data-hub-back data-sales-home>← 總覽</button>
+            ${blockChips}
+          </nav>
+          <nav class="sales-phone-row sales-phone-subs" aria-label="銷貨子頁">${subChips}</nav>
+        </header>
+        <section class="sales-shell-main">
+          <div id="sales-shell-mount" class="sales-shell-mount"></div>
+        </section>
+      </section>`;
       return;
     }
 
@@ -2036,7 +2065,7 @@ function renderHomeHub() {
       .join("");
     const sideHtml = cur.tabs.map(salesSideBtnHtml).join("");
     box.innerHTML = `
-      <section class="sales-shell">
+      <section class="sales-shell sales-shell--web">
         <header class="sales-shell-head">
           <button type="button" class="sales-block-chip sales-home-chip" data-hub-back data-sales-home>← 總覽</button>
           <nav class="sales-block-nav" aria-label="銷貨主模組">${blockChips}</nav>
@@ -2236,6 +2265,7 @@ function renderHomeHub() {
   if (hubDept === "sales") {
     document.body.classList.add("sales-workspace");
     renderSalesShell();
+    if (hubSalesPane) embedSalesPaneContent();
     return;
   }
 
@@ -2531,6 +2561,15 @@ function salesSideBtnHtml(t) {
     <em class="sales-side-hint">${esc(t.hint || "")}</em>
   </button>`;
 }
+/** 跟進口一樣：沒勾「網頁」＝手機工作頁 */
+function isSalesPhoneLayout() {
+  return !document.body.classList.contains("layout-web");
+}
+function salesPhoneChipHtml(t) {
+  const on = t.id === hubSalesPane;
+  const badge = t.badge ? `<span class="sales-chip-badge">${esc(String(t.badge))}</span>` : "";
+  return `<button type="button" class="sales-phone-chip${on ? " is-on" : ""}" ${t.attrs}>${esc(t.lab)}${badge}</button>`;
+}
 function salesLandingHtml(cur) {
   const cards = cur.tabs
     .map(
@@ -2547,6 +2586,7 @@ function salesLandingHtml(cur) {
   </div>`;
 }
 function fillSalesLanding() {
+  if (isSalesPhoneLayout()) return;
   const mount = document.getElementById("sales-shell-mount");
   const main = document.querySelector(".sales-shell-main");
   if (!mount) return;
@@ -2558,9 +2598,29 @@ function fillSalesLanding() {
   if (main) main.classList.add("is-landing");
   mount.innerHTML = salesLandingHtml(cur);
 }
+function syncSalesPhoneSubs(shell, cur) {
+  const subNav = shell.querySelector(".sales-phone-subs");
+  if (!subNav) return;
+  const existing = [...subNav.querySelectorAll("[data-sales-pane]")].map((el) => el.dataset.salesPane).join("\0");
+  const wanted = cur.tabs.map((t) => t.id).join("\0");
+  if (existing !== wanted) {
+    subNav.innerHTML = cur.tabs.map(salesPhoneChipHtml).join("");
+  } else {
+    subNav.querySelectorAll("[data-sales-pane]").forEach((b) => {
+      b.classList.toggle("is-on", b.dataset.salesPane === hubSalesPane);
+      const tab = cur.tabs.find((t) => t.id === b.dataset.salesPane);
+      if (!tab) return;
+      const badge = tab.badge ? `<span class="sales-chip-badge">${esc(String(tab.badge))}</span>` : "";
+      b.innerHTML = `${esc(tab.lab)}${badge}`;
+    });
+  }
+}
 function syncSalesShellChrome() {
   const shell = document.querySelector("#home-hub .sales-shell");
   if (!shell) return false;
+  const wantPhone = isSalesPhoneLayout();
+  const isPhone = shell.classList.contains("sales-shell--phone");
+  if (wantPhone !== isPhone) return false;
   const blocks = buildSalesBlocks();
   if (!blocks.length) return false;
   if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
@@ -2570,31 +2630,36 @@ function syncSalesShellChrome() {
   shell.querySelectorAll("[data-sales-block]").forEach((b) => {
     b.classList.toggle("is-on", b.dataset.salesBlock === cur.id);
   });
-  const sideTitle = shell.querySelector(".sales-side-title");
-  if (sideTitle) sideTitle.textContent = cur.lab;
-  const sideNav = shell.querySelector(".sales-side-nav");
-  if (sideNav) {
-    const existing = [...sideNav.querySelectorAll("[data-sales-pane]")].map((el) => el.dataset.salesPane).join("\0");
-    const wanted = cur.tabs.map((t) => t.id).join("\0");
-    if (existing !== wanted) {
-      sideNav.innerHTML = cur.tabs.map(salesSideBtnHtml).join("");
-    } else {
-      sideNav.querySelectorAll("[data-sales-pane]").forEach((b) => {
-        b.classList.toggle("is-on", b.dataset.salesPane === hubSalesPane);
-        const tab = cur.tabs.find((t) => t.id === b.dataset.salesPane);
-        if (tab?.badge) {
-          const lab = b.querySelector(".sales-side-lab");
-          if (lab) {
-            const badge = `<span class="sales-side-badge">${esc(String(tab.badge))}</span>`;
-            lab.innerHTML = `${esc(tab.lab)}${badge}`;
+
+  if (isPhone) {
+    syncSalesPhoneSubs(shell, cur);
+  } else {
+    const sideTitle = shell.querySelector(".sales-side-title");
+    if (sideTitle) sideTitle.textContent = cur.lab;
+    const sideNav = shell.querySelector(".sales-side-nav");
+    if (sideNav) {
+      const existing = [...sideNav.querySelectorAll("[data-sales-pane]")].map((el) => el.dataset.salesPane).join("\0");
+      const wanted = cur.tabs.map((t) => t.id).join("\0");
+      if (existing !== wanted) {
+        sideNav.innerHTML = cur.tabs.map(salesSideBtnHtml).join("");
+      } else {
+        sideNav.querySelectorAll("[data-sales-pane]").forEach((b) => {
+          b.classList.toggle("is-on", b.dataset.salesPane === hubSalesPane);
+          const tab = cur.tabs.find((t) => t.id === b.dataset.salesPane);
+          if (tab?.badge) {
+            const lab = b.querySelector(".sales-side-lab");
+            if (lab) {
+              const badge = `<span class="sales-side-badge">${esc(String(tab.badge))}</span>`;
+              lab.innerHTML = `${esc(tab.lab)}${badge}`;
+            }
           }
-        }
-      });
+        });
+      }
     }
   }
   const main = shell.querySelector(".sales-shell-main");
   if (main) {
-    main.classList.toggle("is-landing", !hubSalesPane);
+    main.classList.toggle("is-landing", !hubSalesPane && !isPhone);
     if (!document.getElementById("sales-shell-mount")) {
       main.innerHTML = `<div id="sales-shell-mount" class="sales-shell-mount"></div>`;
     }
@@ -4353,6 +4418,16 @@ function applyLayoutMode(mode) {
     b.classList.toggle("on", b.dataset.layout === next);
     b.setAttribute("aria-pressed", b.dataset.layout === next ? "true" : "false");
   });
+  // 銷貨殼手機／網頁結構不同，切換時整殼重建
+  if (page === "home" && hubDept === "sales") {
+    const keepPane = hubSalesPane;
+    restoreSalesMount();
+    const hub = document.getElementById("home-hub");
+    const shell = hub?.querySelector(".sales-shell");
+    if (shell) shell.remove();
+    if (keepPane) activateSalesPane(keepPane);
+    else renderHomeHub();
+  }
 }
 function applyRoleUi() {
   const logged = !!currentStaff();

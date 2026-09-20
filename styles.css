@@ -1272,7 +1272,97 @@ body.on-home.layout-web .app {
   background: #f8fafc;
   color: #1e293b;
 }
-/* 銷貨工作區：鎖定上欄＋側欄，只滾中間 */
+/* 手機銷貨殼：對齊進口 PhoneShell — 雙列頂部 chips，全寬工作頁、無側欄 */
+.sales-shell--phone {
+  border-radius: 1rem;
+}
+.sales-phone-chrome {
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.sales-phone-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.45rem 0.5rem;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.sales-phone-subs {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.35rem;
+  padding-bottom: 0.5rem;
+}
+.sales-phone-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0.35rem 0.65rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sales-phone-chip:hover {
+  background: #e2e8f0;
+}
+.sales-phone-chip.is-on,
+.sales-phone-chip.sales-phone-block.is-on {
+  background: #047857;
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(4 120 87 / 0.25);
+}
+.sales-phone-chip.sales-phone-block {
+  font-weight: 700;
+}
+.sales-chip-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+.sales-phone-chip.is-on .sales-chip-badge {
+  background: rgb(255 255 255 / 0.22);
+  color: #fff;
+}
+.sales-shell--phone .sales-shell-main {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  background: #fff;
+}
+.sales-shell--phone .sales-shell-mount {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0.55rem;
+  -webkit-overflow-scrolling: touch;
+}
+body.layout-phone.sales-workspace .sales-shell {
+  border-radius: 0.65rem;
+}
+body.layout-phone.sales-workspace .app-head {
+  padding-bottom: 0.2rem;
+}
+/* 銷貨工作區：鎖定上欄，只滾中間工作頁 */
 body.sales-workspace {
   height: 100dvh;
   overflow: hidden;
@@ -1555,22 +1645,22 @@ body.sales-workspace #flow-tabs {
     flex-shrink: 0;
     max-height: none;
   }
-  /* 銷貨工作區維持：上欄＋左側欄＋中間，不改橫排 */
-  body.sales-workspace .sales-shell-body {
+  /* 網頁銷貨殼在窄螢幕仍可維持側欄；手機殼本身無側欄 */
+  body.layout-web.sales-workspace .sales-shell-body {
     flex-direction: row;
   }
-  body.sales-workspace .sales-shell-side {
+  body.layout-web.sales-workspace .sales-shell-side {
     width: 6.5rem;
     border-right: 1px solid #e2e8f0;
     border-bottom: 0;
     overflow-x: hidden;
     overflow-y: auto;
   }
-  body.sales-workspace .sales-side-nav {
+  body.layout-web.sales-workspace .sales-side-nav {
     flex-direction: column;
     overflow-x: hidden;
   }
-  body.sales-workspace .sales-side {
+  body.layout-web.sales-workspace .sales-side {
     width: 100%;
     min-width: 0;
   }

@@ -9669,17 +9669,48 @@ function se({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 										_.halfPart === "2" ? "半櫃②" : "半櫃／整櫃"
 									]
 								}),
-								!_.trailerPhone || !_.trailer ? /* @__PURE__ */ (0, E.jsx)("p", {
+								_._editUha || !String(_.uha || "").trim() ? /* @__PURE__ */ (0, E.jsx)(D, {
+									label: "UHA／NC 編號",
+									children: /* @__PURE__ */ (0, E.jsxs)("div", {
+										className: "flex gap-2",
+										children: [/* @__PURE__ */ (0, E.jsx)("input", {
+											className: O(),
+											value: _.uha || "",
+											placeholder: "一開始可空白，後補編號",
+											onChange: (e) => c("uha", e.target.value)
+										}), String(_.uha || "").trim() ? /* @__PURE__ */ (0, E.jsx)("button", {
+											type: "button",
+											className: "shrink-0 rounded-md border border-imp-line bg-white px-2 text-[0.78rem] font-bold text-imp-green",
+											onClick: () => c("_editUha", !1),
+											children: "鎖定"
+										}) : null]
+									})
+								}) : /* @__PURE__ */ (0, E.jsxs)("div", { children: [/* @__PURE__ */ (0, E.jsx)("span", {
+									className: "mb-1 block text-[0.78rem] font-bold text-imp-muted",
+									children: "UHA／NC 編號"
+								}), /* @__PURE__ */ (0, E.jsxs)("div", {
+									className: "flex items-center gap-2 rounded-md border border-imp-line bg-slate-50 px-2 py-1.5",
+									children: [/* @__PURE__ */ (0, E.jsx)("strong", {
+										className: "flex-1 text-[0.95rem] text-imp-ink",
+										children: _.uha
+									}), /* @__PURE__ */ (0, E.jsx)("button", {
+										type: "button",
+										className: "text-[0.72rem] font-bold text-imp-green underline",
+										onClick: () => c("_editUha", !0),
+										children: "修正"
+									})]
+								})] }),
+								!_.uha || !_.trailer || !_.trailerPhone ? /* @__PURE__ */ (0, E.jsx)("p", {
 									className: "m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800",
-									children: "缺拖車資料，請補齊拖車與電話。"
+									children: "請補齊編號、拖車與拖車電話。"
 								}) : null,
 								/* @__PURE__ */ (0, E.jsx)(D, {
-									label: "拆卸時間",
+									label: "拆卸日",
 									children: /* @__PURE__ */ (0, E.jsx)("input", {
-										type: "datetime-local",
+										type: "date",
 										className: O(),
-										value: (_.unpackAt || "").slice(0, 16),
-										onChange: (e) => c("unpackAt", e.target.value)
+										value: _.day || (_.unpackAt || "").slice(0, 10) || "",
+										onChange: (e) => c("day", e.target.value)
 									})
 								}),
 								/* @__PURE__ */ (0, E.jsx)(D, {
@@ -9696,7 +9727,8 @@ function se({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 										type: "tel",
 										className: O(),
 										value: _.trailerPhone || "",
-										onChange: (e) => c("trailerPhone", e.target.value)
+										onChange: (e) => c("trailerPhone", e.target.value),
+										placeholder: "點入後再填"
 									})
 								}),
 								/* @__PURE__ */ (0, E.jsxs)("div", {
@@ -11445,7 +11477,7 @@ function ze({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 				children: r?.length ? /* @__PURE__ */ (0, E.jsx)("div", {
 					className: "overflow-x-auto rounded-xl border border-slate-200/80",
 					children: /* @__PURE__ */ (0, E.jsxs)("table", {
-						className: "w-full min-w-[28rem] border-collapse text-left text-sm",
+						className: "w-full min-w-[20rem] border-collapse text-left text-sm",
 						children: [/* @__PURE__ */ (0, E.jsx)("thead", { children: /* @__PURE__ */ (0, E.jsx)("tr", {
 							className: "border-b border-slate-200/80 bg-slate-50/80",
 							children: n.map((e) => /* @__PURE__ */ (0, E.jsx)("th", {
@@ -11453,10 +11485,11 @@ function ze({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 								children: e
 							}, e))
 						}) }), /* @__PURE__ */ (0, E.jsx)("tbody", { children: r.map((e) => /* @__PURE__ */ (0, E.jsx)("tr", {
-							className: "cursor-pointer border-b border-slate-100 transition-colors hover:bg-emerald-50/50",
+							className: `cursor-pointer border-b border-slate-100 transition-colors hover:bg-emerald-50/50 ${e.warn ? "bg-amber-50/90" : "bg-white"}`,
 							onClick: () => i?.(e.key),
+							title: e.warn ? "缺資料，點入補齊" : void 0,
 							children: e.cells.map((e, t) => /* @__PURE__ */ (0, E.jsx)("td", {
-								className: "px-3 py-2.5 align-top text-slate-700",
+								className: `px-3 py-2.5 align-top text-slate-700 ${t === 1 ? "font-bold text-slate-900" : ""}`,
 								children: e || "—"
 							}, t))
 						}, e.key)) })]
@@ -11512,12 +11545,19 @@ function Be({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 						children: [
 							"當日 ",
 							a.total,
-							" 櫃",
+							" 櫃。列表：拆卸日／編號／拆工／拖車。",
+							/* @__PURE__ */ (0, E.jsx)("span", {
+								className: "ml-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-300 align-middle",
+								"aria-hidden": !0
+							}),
+							/* @__PURE__ */ (0, E.jsx)("span", {
+								className: "ml-1",
+								children: "底色＝缺編號／拖車／電話，點入補齊。"
+							}),
 							a.missingTrailer > 0 ? /* @__PURE__ */ (0, E.jsxs)("span", {
 								className: "ml-2 font-bold text-amber-700",
-								children: ["缺拖車資料 ", a.missingTrailer]
-							}) : null,
-							"。補拖車電話、改拆工、拆卸位置。"
+								children: [a.missingTrailer, " 筆缺資料"]
+							}) : null
 						]
 					}),
 					/* @__PURE__ */ (0, E.jsx)("div", {
@@ -11526,7 +11566,7 @@ function Be({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 							type: "button",
 							className: d ? "imp-btn-primary" : "imp-btn-ghost",
 							onClick: () => f((e) => !e),
-							children: d ? "顯示全部" : "只看缺拖車"
+							children: d ? "顯示全部" : "只看缺資料"
 						})
 					}),
 					/* @__PURE__ */ (0, E.jsx)("div", {
@@ -11537,7 +11577,7 @@ function Be({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 							sortBy: c,
 							onSort: u,
 							sortOpts: Te.upBoard,
-							placeholder: "搜尋編號、櫃號、品名、拖車、拆工…",
+							placeholder: "搜尋編號、拆工、拖車…",
 							resultCount: p.length,
 							totalCount: (t.upBoard || []).length
 						})
@@ -11546,16 +11586,10 @@ function Be({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 			}),
 			/* @__PURE__ */ (0, E.jsx)(ze, {
 				columns: [
-					"拆卸時間",
+					"拆卸日",
 					"編號",
-					"櫃號",
-					"品名",
-					"拖車",
-					"電話",
 					"拆工",
-					"位置",
-					"類型",
-					"狀態"
+					"拖車"
 				],
 				rows: p,
 				onOpen: (e) => i("upBoard", e)

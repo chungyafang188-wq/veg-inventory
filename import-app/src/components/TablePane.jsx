@@ -12,6 +12,7 @@ function EmptyState() {
   );
 }
 
+/** warn：缺資料列用色塊標示（不寫狀態文字） */
 export function TablePane({ title, hint, columns, rows, onOpen }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
@@ -22,7 +23,7 @@ export function TablePane({ title, hint, columns, rows, onOpen }) {
           <EmptyState />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-            <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
+            <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200/80 bg-slate-50/80">
                   {columns.map((c) => (
@@ -36,11 +37,17 @@ export function TablePane({ title, hint, columns, rows, onOpen }) {
                 {rows.map((r) => (
                   <tr
                     key={r.key}
-                    className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-emerald-50/50"
+                    className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-emerald-50/50 ${
+                      r.warn ? "bg-amber-50/90" : "bg-white"
+                    }`}
                     onClick={() => onOpen?.(r.key)}
+                    title={r.warn ? "缺資料，點入補齊" : undefined}
                   >
                     {r.cells.map((cell, i) => (
-                      <td key={i} className="px-3 py-2.5 align-top text-slate-700">
+                      <td
+                        key={i}
+                        className={`px-3 py-2.5 align-top text-slate-700 ${i === 1 ? "font-bold text-slate-900" : ""}`}
+                      >
                         {cell || "—"}
                       </td>
                     ))}

@@ -533,6 +533,12 @@
       const j = state.unpackJobs.find((x) => x.id === key);
       if (!j) return false;
       if (kind === "upBoard" || j.status === "pending") {
+        const newUha = normUha(fields.uha || fields.box || "");
+        if (newUha) {
+          j.sourceUha = newUha;
+          j.box = newUha;
+        }
+        if (fields.day) j.day = String(fields.day || "").slice(0, 10);
         j.assignee = String(fields.assignee || "").trim();
         const aq = Number(fields.assignQty);
         j.assignQty = Number.isFinite(aq) ? aq : fields.assignQty === "" ? null : j.assignQty;
@@ -3307,7 +3313,11 @@
       return rows.map((j) => {
         const missPhone = !String(j.trailerPhone || "").trim();
         const missTrailer = !String(j.trailer || "").trim();
-        const warn = missPhone || missTrailer ? "缺拖車資料" : j.trailerConfirmed ? "電話已核" : "待核電話";
+        const missUha = !String(j.sourceUha || j.box || "").trim();
+        const missAssignee = !String(j.assignee || "").trim();
+        const dayOnly =
+          (j.day || (j.unpackAt || "").slice(0, 10) || "").replace(/^(\d{4})-(\d{2})-(\d{2}).*/, (_, y, m, d) => `${Number(m)}/${Number(d)}`) ||
+          "—";
         return {
           key: j.id,
           uha: j.sourceUha || j.box || "",
@@ -3322,19 +3332,12 @@
           location: j.location || j.unloadPoint || "",
           day: j.day || "",
           unpackAt: j.unpackAt || "",
-          warn: missPhone || missTrailer,
-          cells: [
-            (j.unpackAt || "").replace("T", " ").slice(0, 16) || j.day || "—",
-            j.sourceUha || j.box || "—",
-            (j.codes && j.codes[0]) || "—",
-            j.name || "—",
-            j.trailer || "—",
-            j.trailerPhone || "—",
-            j.assignee || "未指派",
-            j.location || "—",
-            j.halfPart === "2" ? "半櫃②" : j.halfPart === "1" && rows.some((x) => x.sourceUha === j.sourceUha && x.halfPart === "2") ? "半櫃①" : "整櫃",
-            warn,
-          ],
+          warn: missPhone || missTrailer || missUha,
+          missPhone,
+          missTrailer,
+          missUha,
+          missAssignee,
+          cells: [dayOnly, j.sourceUha || j.box || "—", j.assignee || "—", j.trailer || "—"],
         };
       });
     },
@@ -3346,7 +3349,12 @@
       return {
         day: d,
         total: rows.length,
-        missingTrailer: rows.filter((j) => !String(j.trailer || "").trim() || !String(j.trailerPhone || "").trim()).length,
+        missingTrailer: rows.filter(
+          (j) =>
+            !String(j.trailer || "").trim() ||
+            !String(j.trailerPhone || "").trim() ||
+            !String(j.sourceUha || j.box || "").trim(),
+        ).length,
       };
     },
     unpackerNames() {

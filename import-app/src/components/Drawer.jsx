@@ -243,17 +243,55 @@ export function Drawer({
               <p className="m-0 text-[0.8rem] text-imp-muted">
                 {f.name || "—"} · {f.containerNo || "—"} · {f.halfPart === "2" ? "半櫃②" : "半櫃／整櫃"}
               </p>
-              {!f.trailerPhone || !f.trailer ? (
-                <p className="m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800">缺拖車資料，請補齊拖車與電話。</p>
+              {f._editUha || !String(f.uha || "").trim() ? (
+                <Field label="UHA／NC 編號">
+                  <div className="flex gap-2">
+                    <input
+                      className={inputCls()}
+                      value={f.uha || ""}
+                      placeholder="一開始可空白，後補編號"
+                      onChange={(e) => onField("uha", e.target.value)}
+                    />
+                    {String(f.uha || "").trim() ? (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md border border-imp-line bg-white px-2 text-[0.78rem] font-bold text-imp-green"
+                        onClick={() => onField("_editUha", false)}
+                      >
+                        鎖定
+                      </button>
+                    ) : null}
+                  </div>
+                </Field>
+              ) : (
+                <div>
+                  <span className="mb-1 block text-[0.78rem] font-bold text-imp-muted">UHA／NC 編號</span>
+                  <div className="flex items-center gap-2 rounded-md border border-imp-line bg-slate-50 px-2 py-1.5">
+                    <strong className="flex-1 text-[0.95rem] text-imp-ink">{f.uha}</strong>
+                    <button type="button" className="text-[0.72rem] font-bold text-imp-green underline" onClick={() => onField("_editUha", true)}>
+                      修正
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!f.uha || !f.trailer || !f.trailerPhone ? (
+                <p className="m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800">
+                  請補齊編號、拖車與拖車電話。
+                </p>
               ) : null}
-              <Field label="拆卸時間">
-                <input type="datetime-local" className={inputCls()} value={(f.unpackAt || "").slice(0, 16)} onChange={(e) => onField("unpackAt", e.target.value)} />
+              <Field label="拆卸日">
+                <input
+                  type="date"
+                  className={inputCls()}
+                  value={f.day || (f.unpackAt || "").slice(0, 10) || ""}
+                  onChange={(e) => onField("day", e.target.value)}
+                />
               </Field>
               <Field label="拖車">
                 <input className={inputCls()} value={f.trailer || ""} onChange={(e) => onField("trailer", e.target.value)} />
               </Field>
               <Field label="拖車電話">
-                <input type="tel" className={inputCls()} value={f.trailerPhone || ""} onChange={(e) => onField("trailerPhone", e.target.value)} />
+                <input type="tel" className={inputCls()} value={f.trailerPhone || ""} onChange={(e) => onField("trailerPhone", e.target.value)} placeholder="點入後再填" />
               </Field>
               <div className="flex flex-wrap gap-3">
                 <Check label="已確認拖車電話" checked={f.trailerConfirmed} onChange={(v) => onField("trailerConfirmed", v)} />

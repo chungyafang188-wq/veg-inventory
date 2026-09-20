@@ -38,11 +38,10 @@ export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawe
           </label>
         </div>
         <p className="mt-1 m-0 text-xs text-slate-400">
-          當日 {meta.total} 櫃
-          {meta.missingTrailer > 0 ? (
-            <span className="ml-2 font-bold text-amber-700">缺拖車資料 {meta.missingTrailer}</span>
-          ) : null}
-          。補拖車電話、改拆工、拆卸位置。
+          當日 {meta.total} 櫃。列表：拆卸日／編號／拆工／拖車。
+          <span className="ml-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-300 align-middle" aria-hidden />
+          <span className="ml-1">底色＝缺編號／拖車／電話，點入補齊。</span>
+          {meta.missingTrailer > 0 ? <span className="ml-2 font-bold text-amber-700">{meta.missingTrailer} 筆缺資料</span> : null}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
@@ -50,7 +49,7 @@ export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawe
             className={onlyMissing ? "imp-btn-primary" : "imp-btn-ghost"}
             onClick={() => setOnlyMissing((v) => !v)}
           >
-            {onlyMissing ? "顯示全部" : "只看缺拖車"}
+            {onlyMissing ? "顯示全部" : "只看缺資料"}
           </button>
         </div>
         <div className="mt-3">
@@ -60,14 +59,14 @@ export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawe
             sortBy={sortBy}
             onSort={setSortBy}
             sortOpts={SORT_OPTS.upBoard}
-            placeholder="搜尋編號、櫃號、品名、拖車、拆工…"
+            placeholder="搜尋編號、拆工、拖車…"
             resultCount={viewed.length}
             totalCount={(lists.upBoard || []).length}
           />
         </div>
       </div>
       <TablePane
-        columns={["拆卸時間", "編號", "櫃號", "品名", "拖車", "電話", "拆工", "位置", "類型", "狀態"]}
+        columns={["拆卸日", "編號", "拆工", "拖車"]}
         rows={viewed}
         onOpen={(key) => openDrawer("upBoard", key)}
       />

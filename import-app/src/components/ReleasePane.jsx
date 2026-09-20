@@ -1,15 +1,10 @@
 import { useMemo, useState } from "react";
 import { api } from "../bridge";
+import { ListQueryBar } from "./ListQueryBar";
+import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS } from "../lib/listQuery";
 
 const chipIdle = "imp-chip flex-shrink-0";
 const chipOn = "imp-chip imp-chip-on flex-shrink-0";
-
-function uhaSortKey(u) {
-  const s = String(u || "").toUpperCase();
-  const m = s.match(/^(UHA|NC)(\d+)/);
-  if (m) return `${m[1]}${String(m[2]).padStart(6, "0")}`;
-  return s;
-}
 
 function Field({ lab, children }) {
   return (
@@ -26,25 +21,19 @@ function Field({ lab, children }) {
  */
 export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, trailers, refresh, onDispatched, onAfterUnmark }) {
   const [sortBy, setSortBy] = useState("uha");
+  const [query, setQuery] = useState("");
   const [picked, setPicked] = useState(() => new Set());
 
-  const sorted = useMemo(() => {
-    const list = [...(rows || [])];
-    list.sort((a, b) => {
-      if (sortBy === "trailer") {
-        const ta = String(a.trailer || "");
-        const tb = String(b.trailer || "");
-        if (ta !== tb) return ta.localeCompare(tb, "zh-Hant");
-      }
-      if (sortBy === "pickupDay") {
-        const da = String(a.pickupDay || "");
-        const db = String(b.pickupDay || "");
-        if (da !== db) return da.localeCompare(db);
-      }
-      return uhaSortKey(a.uha || a.key).localeCompare(uhaSortKey(b.uha || b.key), "en");
-    });
-    return list;
-  }, [rows, sortBy]);
+  const sorted = useMemo(
+    () =>
+      queryRows(rows, {
+        query,
+        sortBy,
+        fields: SEARCH_FIELDS.release,
+        getters: SORT_GETTERS.release,
+      }),
+    [rows, query, sortBy],
+  );
 
   const revertible = useMemo(() => sorted.filter((r) => !r.dispatched), [sorted]);
 
@@ -136,23 +125,26 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
           <button type="button" className="imp-btn-ghost" onClick={toggleAllRevertible} disabled={!revertible.length}>
             {allRevertPicked ? "取消全選" : "全選可退回"}
           </button>
-          <span className="mx-1 hidden h-4 w-px bg-slate-200 sm:inline" />
-          <span className="text-[0.75rem] font-semibold text-slate-500">排序</span>
-          <button type="button" className={sortBy === "uha" ? "imp-btn-primary" : "imp-btn-ghost"} onClick={() => setSortBy("uha")}>
-            編號
-          </button>
-          <button type="button" className={sortBy === "trailer" ? "imp-btn-primary" : "imp-btn-ghost"} onClick={() => setSortBy("trailer")}>
-            拖車
-          </button>
-          <button type="button" className={sortBy === "pickupDay" ? "imp-btn-primary" : "imp-btn-ghost"} onClick={() => setSortBy("pickupDay")}>
-            領櫃日
-          </button>
+        </div>
+        <div className="mt-3">
+          <ListQueryBar
+            query={query}
+            onQuery={setQuery}
+            sortBy={sortBy}
+            onSort={setSortBy}
+            sortOpts={SORT_OPTS.release}
+            placeholder="搜尋編號、櫃號、品名、拖車、碼頭…"
+            resultCount={sorted.length}
+            totalCount={(rows || []).length}
+          />
         </div>
       </div>
 
       <div className="px-2 py-2 sm:px-3">
         {!sorted.length ? (
-          <p className="m-0 py-12 text-center text-sm text-slate-400">目前沒有已放行（未拆櫃）資料</p>
+          <p className="m-0 py-12 text-center text-sm text-slate-400">
+            {(rows || []).length ? "沒有符合搜尋的貨櫃" : "目前沒有已放行（未拆櫃）資料"}
+          </p>
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0">
             {sorted.map((r) => {

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../bridge";
 import { clearLab, clearOptsFor } from "../constants";
+import { ListQueryBar } from "./ListQueryBar";
+import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS } from "../lib/listQuery";
 
 function dtValue(v) {
   const s = String(v || "");
@@ -121,6 +123,19 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
   const [form, setForm] = useState(emptyForm);
   /** key = `${uha}:inspect` | `${uha}:fumigate` | `${uha}:inspectAt` | `${uha}:fumigateAt` */
   const [editKeys, setEditKeys] = useState(() => new Set());
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState("uha");
+
+  const viewed = useMemo(
+    () =>
+      queryRows(rows, {
+        query,
+        sortBy,
+        fields: SEARCH_FIELDS.port,
+        getters: SORT_GETTERS.port,
+      }),
+    [rows, query, sortBy],
+  );
 
   const toggle = (uha) => {
     setPicked((prev) => {
@@ -133,8 +148,8 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
 
   const toggleAll = () => {
     setPicked((prev) => {
-      if (prev.size === (rows?.length || 0) && rows?.length) return new Set();
-      return new Set((rows || []).map((r) => r.uha || r.key));
+      if (prev.size === (viewed?.length || 0) && viewed?.length) return new Set();
+      return new Set((viewed || []).map((r) => r.uha || r.key));
     });
   };
 
@@ -211,7 +226,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
     ["fume", "需要薰蒸", portCounts?.fume ?? 0],
   ];
 
-  const allSelected = !!rows?.length && picked.size === rows.length;
+  const allSelected = !!viewed?.length && picked.size === viewed.length;
 
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
@@ -247,6 +262,18 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
             {showAdd ? "收起新增" : "手動新增貨櫃"}
           </button>
         </div>
+        <div className="mt-3">
+          <ListQueryBar
+            query={query}
+            onQuery={setQuery}
+            sortBy={sortBy}
+            onSort={setSortBy}
+            sortOpts={SORT_OPTS.port}
+            placeholder="搜尋編號、櫃號、品名、碼頭…"
+            resultCount={viewed.length}
+            totalCount={(rows || []).length}
+          />
+        </div>
       </div>
 
       {showAdd ? (
@@ -264,11 +291,13 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
       ) : null}
 
       <div className="px-2 py-2 sm:px-3">
-        {!rows?.length ? (
-          <p className="m-0 py-12 text-center text-sm text-slate-400">目前沒有待驗貨櫃</p>
+        {!viewed?.length ? (
+          <p className="m-0 py-12 text-center text-sm text-slate-400">
+            {(rows || []).length ? "沒有符合搜尋的貨櫃" : "目前沒有待驗貨櫃"}
+          </p>
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0">
-            {rows.map((r) => {
+            {viewed.map((r) => {
               const uha = r.uha || r.key;
               const checked = picked.has(uha);
               const missTelex = !!r.missingTelex;

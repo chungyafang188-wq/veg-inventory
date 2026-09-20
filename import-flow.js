@@ -3274,6 +3274,18 @@
         const warn = missPhone || missTrailer ? "缺拖車資料" : j.trailerConfirmed ? "電話已核" : "待核電話";
         return {
           key: j.id,
+          uha: j.sourceUha || j.box || "",
+          sourceUha: j.sourceUha || j.box || "",
+          box: j.box || "",
+          containerNo: (j.codes && j.codes[0]) || "",
+          product: j.name || "",
+          name: j.name || "",
+          trailer: j.trailer || "",
+          trailerPhone: j.trailerPhone || "",
+          assignee: j.assignee || "",
+          location: j.location || j.unloadPoint || "",
+          day: j.day || "",
+          unpackAt: j.unpackAt || "",
           warn: missPhone || missTrailer,
           cells: [
             (j.unpackAt || "").replace("T", " ").slice(0, 16) || j.day || "—",

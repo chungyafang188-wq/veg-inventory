@@ -2473,7 +2473,9 @@ function syncOpsFlowTabs() {
   }
   const onOps = page === "orders" || page === "plan";
   const logged = !!currentStaff();
-  flow.hidden = !logged || !onOps;
+  // 銷貨殼用左側子選單切換，不要露出全域流程橫排（否則一點就整頁跳走、側欄消失）
+  const inSalesShell = hubDept === "sales";
+  flow.hidden = !logged || !onOps || inSalesShell;
   const step = currentOpsStep();
   const role = currentRole();
   flow.querySelectorAll("[data-ops]").forEach((b) => {
@@ -2722,6 +2724,7 @@ function embedSalesPaneContent() {
   mount.appendChild(el);
   el.hidden = false;
   runSalesPaneRenderers(hubSalesPane);
+  syncOpsFlowTabs();
 }
 function activateSalesPane(paneId) {
   const id = String(paneId || "").trim();
@@ -11188,12 +11191,19 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   }
   const salesBlockBtn = e.target.closest("[data-sales-block]");
   if (salesBlockBtn) {
+    const nextBlock = salesBlockBtn.dataset.salesBlock || "orders";
     restoreSalesMount();
-    hubSalesBlock = salesBlockBtn.dataset.salesBlock || "orders";
-    hubSalesPane = "";
+    hubSalesBlock = nextBlock;
     hubDept = "sales";
     hubOpen = "";
+    // 切上方工作區時保留側欄：自動進該區第一個功能（同頁）
+    hubSalesPane = "";
+    page = "home";
     renderHomeHub();
+    const firstSide = document.querySelector(".sales-shell-side [data-sales-pane]");
+    if (firstSide) {
+      activateSalesPane(firstSide.dataset.salesPane || "");
+    }
     return;
   }
   const salesPaneBtn = e.target.closest("[data-sales-pane]");
@@ -11397,7 +11407,12 @@ document.getElementById("help-freight-tools")?.addEventListener("click", (e) => 
 });
 document.querySelectorAll("#flow-tabs [data-ops]").forEach((btn) => {
   btn.onclick = () => {
-    goOpsStep(btn.dataset.ops || "");
+    const ops = btn.dataset.ops || "";
+    if (hubDept === "sales") {
+      activateSalesPane(ops === "short" || ops === "ship" ? ops : normalizeOrdersPane(ops));
+      return;
+    }
+    goOpsStep(ops);
   };
 });
 document.querySelectorAll("[data-orders-pane]").forEach((btn) => {

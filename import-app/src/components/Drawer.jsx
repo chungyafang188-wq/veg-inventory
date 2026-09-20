@@ -152,9 +152,13 @@ export function Drawer({
               <Field label="碼頭">
                 <input className={inputCls()} value={f.dock || ""} onChange={(e) => onField("dock", e.target.value)} placeholder="檢驗／卸貨碼頭" />
               </Field>
-              <Field label="拖車">
-                <input className={inputCls()} value={f.trailer || ""} onChange={(e) => onField("trailer", e.target.value)} placeholder="拖車窗口" />
-              </Field>
+              <div className="flex flex-wrap gap-3">
+                <Check
+                  label="缺電放／缺資料（勾選＝需通知廠商）"
+                  checked={!!f.missingDocs}
+                  onChange={(v) => onField("missingDocs", v)}
+                />
+              </div>
               <Field label="備註">
                 <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />
               </Field>

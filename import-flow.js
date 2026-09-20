@@ -218,6 +218,7 @@
         fumigate: track.fumigate || "none",
         fumigateAt: track.fumigateAt || "",
         dock: track.dock || "",
+        missingDocs: !!track.missingDocs,
         trailer: track.trailer || "",
         note: track.note || "",
         updatedAt: Math.max(rowUpdatedAt(cab), rowUpdatedAt(track)),
@@ -435,6 +436,7 @@
       track.fumigate = fields.fumigate || "none";
       track.fumigateAt = fields.fumigateAt || "";
       track.dock = String(fields.dock || "").trim();
+      track.missingDocs = !!fields.missingDocs;
       track.trailer = String(fields.trailer || "").trim();
       track.note = String(fields.note || "").trim();
       if (kind === "release") {
@@ -1090,11 +1092,14 @@
     if (row.fumigateAt == null) row.fumigateAt = "";
     if (row.customsNo == null) row.customsNo = "";
     if (row.dock == null) row.dock = "";
+    /** 缺電放／缺資料：勾選＝需通知廠商 */
+    if (row.missingDocs == null) row.missingDocs = false;
     if (row.trailer == null) row.trailer = "";
     if (row.trailerPhone == null) row.trailerPhone = "";
     if (row.trailerConfirmed == null) row.trailerConfirmed = false;
     if (row.trailerNote == null) row.trailerNote = "";
     if (row.unpackAt == null) row.unpackAt = "";
+    if (row.pickupDay == null) row.pickupDay = "";
     if (row.unpackSite == null) row.unpackSite = "";
     if (row.assignee == null) row.assignee = "";
     if (row.assignQty == null) row.assignQty = "";
@@ -1209,6 +1214,7 @@
       fumigate: "none",
       fumigateAt: "",
       dock: "",
+      missingDocs: false,
       trailer: "",
       customsNo: "",
       ftConfirmed: false,
@@ -1597,22 +1603,23 @@
         "薰蒸",
         "薰蒸時間",
         "碼頭",
+        "缺電放缺資料",
         "拖車",
         "拖車電話",
         "備註",
         "已放行",
       ],
       sample: [
-        ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "彬", "", "抽中薰蒸", "否"],
-        ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "", "", "", "是"],
+        ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "是", "彬", "", "抽中薰蒸", "否"],
+        ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "否", "", "", "", "是"],
       ],
-      hint: "編號＝UHA 或 NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸：無、進行中、完成、免辦。已放行：是／否。",
+      hint: "編號＝UHA 或 NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸：無、進行中、完成、免辦。缺電放缺資料：是＝需通知廠商。已放行：是／否。",
     },
     released: {
       name: "已放行_匯入格式",
-      headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "拖車", "拖車電話", "備註"],
-      sample: [["UHA668", "EMCU5583470", "美生-1664", "無", "", "無", "", "油二", "彬", "", "週六放行"]],
-      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。整表視為已放行（未拆櫃）。",
+      headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "缺電放缺資料", "拖車", "拖車電話", "備註"],
+      sample: [["UHA668", "EMCU5583470", "美生-1664", "無", "", "無", "", "油二", "否", "彬", "", "週六放行"]],
+      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。整表視為已放行（未拆櫃）。缺電放缺資料：是＝需通知廠商。",
     },
     arrival: {
       name: "進庫_匯入格式",
@@ -1706,6 +1713,7 @@
     if (row.fumigate != null && row.fumigate !== "") track.fumigate = mapClearStatus(row.fumigate);
     if (row.fumigateAt != null) track.fumigateAt = normalizeAtInput(row.fumigateAt);
     if (row.dock != null) track.dock = String(row.dock || "").trim();
+    if (row.missingDocs != null && row.missingDocs !== "") track.missingDocs = mapYes(row.missingDocs);
     if (row.trailer != null) track.trailer = String(row.trailer || "").trim();
     if (row.trailerPhone != null) track.trailerPhone = String(row.trailerPhone || "").trim();
     if (row.note != null) track.note = String(row.note || "").trim();
@@ -1746,6 +1754,7 @@
         fumigate: cell(row, i(["薰蒸"])),
         fumigateAt: cell(row, i(["薰蒸時間"])),
         dock: cell(row, i(["碼頭"])),
+        missingDocs: cell(row, i(["缺電放缺資料", "缺電放", "缺資料"])),
         trailer: cell(row, i(["拖車"])),
         trailerPhone: cell(row, i(["拖車電話"])),
         note: cell(row, i(["備註"])),
@@ -2096,18 +2105,27 @@
       row.ftConfirmed = Boolean(value);
       if (row.ftConfirmed) row.ft = true;
     } else if (field === "pickupReady") row.pickupReady = Boolean(value);
+    else if (field === "missingDocs") row.missingDocs = Boolean(value);
+    else if (field === "notifyTrailer") row.notifyTrailer = Boolean(value);
+    else if (field === "notifyCustomer") row.notifyCustomer = Boolean(value);
+    else if (field === "notifyUnpacker") row.notifyUnpacker = Boolean(value);
     else if (field === "inspect" || field === "fumigate") {
       row[field] = value || "none";
       if (field === "inspect") row.inspectManual = true;
       else row.fumigateManual = true;
-    } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt") row[field] = value || "";
-    else if (
+    } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt" || field === "unpackAt") row[field] = value || "";
+    else if (field === "pickupDay") {
+      const d = String(value || "").trim();
+      row.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "";
+    } else if (
       field === "customsNo" ||
       field === "note" ||
       field === "trailer" ||
       field === "dock" ||
       field === "trailerPhone" ||
-      field === "trailerNote"
+      field === "trailerNote" ||
+      field === "product" ||
+      field === "containerNo"
     )
       row[field] = String(value || "").trim();
     if (field === "ftAt" && row.ftAt) {
@@ -2130,6 +2148,17 @@
     if (!row || !row.uha) return false;
     if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
     ensureClearanceShape(row);
+    if (!String(row.trailer || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先確認放行拖車再派送。", true);
+      return false;
+    }
+    if (!row.unpackAt) {
+      try {
+        row.unpackAt = new Date().toISOString().slice(0, 16);
+      } catch (_) {
+        row.unpackAt = typeof today === "function" ? `${today()}T08:00` : "";
+      }
+    }
     const day = unpackDayFromAt(row.unpackAt) || (typeof today === "function" ? today() : "");
     if (!day) {
       if (typeof setStatus === "function") setStatus("請先填拆卸日期時間再派送。", true);
@@ -2142,10 +2171,13 @@
       codes: row.containerNo ? [row.containerNo] : [],
       trailer: row.trailer || "",
       trailerPhone: row.trailerPhone || "",
-      trailerConfirmed: !!row.trailerConfirmed,
+      /** 電話可到拆櫃時再核；此處僅記拖車窗口已確認 */
+      trailerConfirmed: false,
       trailerNote: row.trailerNote || "",
       unpackAt: row.unpackAt || "",
       destType: row.destType || "coldstore",
+      location: row.dock || row.unpackSite || "",
+      unloadPoint: row.dock || row.unpackSite || "",
       sourceUha: row.uha,
       fromRelease: true,
       status: "pending",
@@ -2178,14 +2210,47 @@
 
     upsertPart("1", row.assignee, row.assignQty, row.unpackSite || row.dock || "");
     if (row.halfSplit) {
-      upsertPart("2", row.assignee2, row.assignQty2, row.unpackSite2 || "");
+      upsertPart("2", row.assignee2, row.assignQty2, row.unpackSite2 || row.dock || "");
     } else {
       state.unpackJobs = state.unpackJobs.filter((x) => !(x.sourceUha === row.uha && x.halfPart === "2"));
     }
     row.dispatched = true;
+    row.pickupReady = true;
     stampRow(row);
-    if (typeof setStatus === "function") setStatus(`${row.uha} 已派送至貨櫃拆卸資料。`);
+    if (typeof setStatus === "function") setStatus(`${row.uha} 已派送至貨櫃拆卸資料（電話可於拆櫃時再確認）。`);
     return true;
+  }
+
+  /** 已放行：確認領櫃（需先有拖車）→ 派送拆卸資料 */
+  function confirmReleasePickup(uha) {
+    ensureState();
+    const row = findReleased(uha);
+    if (!row) {
+      if (typeof setStatus === "function") setStatus("找不到此櫃。", true);
+      return false;
+    }
+    ensureClearanceShape(row);
+    if (!String(row.trailer || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先確認放行拖車再領櫃派送。", true);
+      return false;
+    }
+    const ok = dispatchToUnpackBoard(row);
+    if (ok && typeof save === "function") save();
+    return ok;
+  }
+
+  function trailerNames() {
+    ensureState();
+    const set = new Set();
+    for (const r of state.importReleased || []) {
+      const t = String(r.trailer || "").trim();
+      if (t) set.add(t);
+    }
+    for (const a of state.importArrivals || []) {
+      // no trailer usually
+    }
+    ["彬", "旭", "瑋", "瑋菘", "偉菘", "尚鴻", "旭興", "斌"].forEach((n) => set.add(n));
+    return [...set].sort((a, b) => a.localeCompare(b, "zh-Hant"));
   }
 
   function blankUnpackJob() {
@@ -2253,6 +2318,64 @@
     }
     if (typeof setStatus === "function") setStatus(`已標示放行 ${n} 櫃。`);
     return n;
+  }
+
+  /**
+   * 誤標放行修正：退回海關查驗。
+   * 已派送拆卸者不改（需先處理拆卸資料）。
+   */
+  function unmarkPortReleased(uha, opts) {
+    ensureState();
+    const quiet = !!(opts && opts.quiet);
+    const row = findReleased(uha);
+    if (!row) {
+      if (!quiet && typeof setStatus === "function") setStatus("找不到此櫃。", true);
+      return false;
+    }
+    ensureClearanceShape(row);
+    if (row.dispatched) {
+      if (!quiet && typeof setStatus === "function") setStatus(`${uha} 已派送拆卸，無法直接退回。`, true);
+      return false;
+    }
+    row.released = false;
+    row.portConfirm = "pending";
+    row.askPickup = false;
+    row.arrangeMonday = false;
+    row.fromReleasedExcel = false;
+    row.pickupReady = false;
+    row.releasedAt = "";
+    stampRow(row);
+    if (typeof save === "function") save();
+    if (!quiet && typeof setStatus === "function") setStatus(`${uha} 已退回海關查驗。`);
+    return true;
+  }
+
+  function unmarkPortReleasedMany(uhas) {
+    const list = Array.isArray(uhas) ? [...new Set(uhas.filter(Boolean))] : [];
+    if (!list.length) return 0;
+    let n = 0;
+    let blocked = 0;
+    for (const u of list) {
+      const row = findReleased(u);
+      if (row && row.dispatched) {
+        blocked += 1;
+        continue;
+      }
+      if (unmarkPortReleased(u, { quiet: true })) n += 1;
+    }
+    if (typeof setStatus === "function") {
+      const extra = blocked ? `（${blocked} 櫃已派送未改）` : "";
+      setStatus(`已退回海關查驗 ${n} 櫃${extra}。`);
+    }
+    return n;
+  }
+
+  function patchReleaseField(uha, field, value) {
+    ensureState();
+    const row = findReleased(uha);
+    if (!row) return false;
+    patchReleased(uha, field, value);
+    return true;
   }
 
   function renderStock(body) {
@@ -2354,8 +2477,9 @@
         <label>碼頭
           <input type="text" data-imp-clear-field="dock" value="${esc(f.dock || "")}" placeholder="檢驗／卸貨碼頭" />
         </label>
-        <label>拖車
-          <input type="text" data-imp-clear-field="trailer" value="${esc(f.trailer || "")}" placeholder="拖車窗口" />
+        <label class="imp-check">
+          <input type="checkbox" data-imp-clear-field="missingDocs"${f.missingDocs ? " checked" : ""} />
+          缺電放／缺資料（勾選＝需通知廠商）
         </label>
         <label>備註
           <input type="text" data-imp-clear-field="note" value="${esc(f.note || "")}" />
@@ -2877,7 +3001,18 @@
     if (clearField) {
       const field = clearField.dataset.impClearField;
       let val = clearField.value;
-      if (field === "released" || field === "ftConfirmed" || field === "pickupReady") val = clearField.checked;
+      if (
+        field === "released" ||
+        field === "ftConfirmed" ||
+        field === "pickupReady" ||
+        field === "missingDocs" ||
+        field === "trailerConfirmed" ||
+        field === "notifyTrailer" ||
+        field === "notifyUnpacker" ||
+        field === "notifyCustomer" ||
+        field === "halfSplit"
+      )
+        val = clearField.checked;
       setDraftField(field, val);
       const saveBtn = document.querySelector("#imp-drawer-host [data-imp-draft-save]");
       if (saveBtn) saveBtn.disabled = false;
@@ -2921,6 +3056,11 @@
     confirmParseDraft,
     markPortReleased,
     markPortReleasedMany,
+    unmarkPortReleased,
+    unmarkPortReleasedMany,
+    patchReleaseField,
+    confirmReleasePickup,
+    trailerNames,
     exportSumExcel,
     loadImportSeedJson,
     downloadImportTemplate,
@@ -2955,6 +3095,7 @@
           fumigate: track.fumigate || "none",
           fumigateAt: track.fumigateAt || "",
           dock: track.dock || "",
+          missingDocs: !!track.missingDocs,
           trailer: track.trailer || "",
           trailerPhone: track.trailerPhone || "",
           note: track.note || "",
@@ -2997,7 +3138,20 @@
       else if (t === "arrange") list = all.filter((x) => !x.pickup);
       return list.map((c) => ({
         key: c.uha,
-        cells: [c.uha, c.containerNo || "—", formatFtLabel(c)],
+        uha: c.uha,
+        containerNo: c.containerNo || "",
+        product: c.product || "",
+        dock: c.dock || "",
+        trailer: c.trailer || "",
+        trailerPhone: c.trailerPhone || "",
+        pickupDay: c.pickupDay || "",
+        notifyTrailer: !!c.notifyTrailer,
+        notifyCustomer: !!c.notifyCustomer,
+        missingDocs: !!c.missingDocs,
+        dispatched: !!c.dispatched,
+        pickup: !!c.pickup,
+        ftLabel: formatFtLabel(c),
+        cells: [c.uha, c.containerNo || "—", c.product || "—", c.dock || "—", c.trailer || "—", c.pickupDay || "—"],
       }));
     },
     releaseTabCounts() {

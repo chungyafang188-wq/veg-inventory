@@ -58,7 +58,10 @@ export function ImportTabContent({
           setReleaseTab={setReleaseTab}
           counts={lists.releaseCounts}
           rows={lists.release}
-          openDrawer={openDrawer}
+          trailers={lists.trailers}
+          refresh={refresh}
+          onDispatched={() => setActiveTab?.("upBoard")}
+          onAfterUnmark={() => setActiveTab?.("port")}
         />
       ) : null}
 

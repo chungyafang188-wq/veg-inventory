@@ -145,6 +145,7 @@ export default function ImportApp({ initialPane = "parse" }) {
       sum,
       sumCounts,
       unpackers: a.unpackerNames?.() || [],
+      trailers: a.trailerNames?.() || [],
       tabCounts: {
         parse: drafts.length,
         port: portCounts.open,

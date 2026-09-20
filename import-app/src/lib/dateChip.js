@@ -67,6 +67,9 @@ export function isDayReached(ymd) {
   const day = new Date(p.y, p.mo - 1, p.d);
   return day.getTime() <= today.getTime();
 }
+
+/** FT 剩餘天數（相對今天 0 點）；無 FT 回 null */
+export function ftDaysLeft(ftAt) {
   const p = parseDayPart(ftAt) || parseDateTimePart(ftAt);
   if (!p) return null;
   const today = new Date();

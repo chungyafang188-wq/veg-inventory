@@ -775,26 +775,50 @@
           .replace(/"/g, "&quot;");
   }
 
-  /** 只取 UHA＋數字；清掉 Excel 殘留 NC002、換行等 */
-  function normUha(v) {
-    const m = String(v || "")
+  /**
+   * 編號：UHA… 或 NC…（可同格，如 UHA697 + NC002）
+   * 櫃號：EMCU／FBIU／FSCU／OTPU…（四碼英文＋6～7碼數字），絕不是 UHA／NC
+   */
+  function parseRefNos(v) {
+    const s = String(v || "")
       .toUpperCase()
-      .match(/UHA\s*(\d{1,6})/);
-    if (m) return "UHA" + m[1];
-    return String(v || "")
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, "")
-      .replace(/\(.*$/, "")
-      .trim();
+      .replace(/\r/g, "\n");
+    const uhaM = s.match(/UHA\s*(\d{1,6})/);
+    const ncM = s.match(/(?:^|[^A-Z])NC\s*(\d{1,6})\b/) || s.match(/\bNC\s*(\d{1,6})\b/);
+    return {
+      uha: uhaM ? "UHA" + uhaM[1] : "",
+      nc: ncM ? "NC" + ncM[1] : "",
+    };
   }
 
-  function normContainer(v) {
-    return String(v || "")
+  /** 主編號：優先 UHA，否則 NC */
+  function normUha(v) {
+    const refs = parseRefNos(v);
+    if (refs.uha) return refs.uha;
+    if (refs.nc) return refs.nc;
+    return "";
+  }
+
+  function isContainerNo(v) {
+    const t = String(v || "")
       .trim()
       .toUpperCase()
       .replace(/\s+/g, "")
       .replace(/\.$/, "");
+    if (!t) return false;
+    if (/^(UHA|NC)\d/i.test(t)) return false;
+    return /^[A-Z]{4}\d{6,7}$/.test(t);
+  }
+
+  function normContainer(v) {
+    const t = String(v || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "")
+      .replace(/\.$/, "");
+    if (!t || /^(UHA|NC)\d/i.test(t)) return "";
+    if (isContainerNo(t)) return t;
+    return "";
   }
 
   function pad2(n) {
@@ -814,7 +838,7 @@
   function parseDay(v) {
     if (v == null || v === "") return "";
     if (v instanceof Date && !Number.isNaN(v.getTime())) {
-      return fixCenturyDay(`${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`);
+      return fixCenturyDay(`${v.getUTCFullYear()}-${pad2(v.getUTCMonth() + 1)}-${pad2(v.getUTCDate())}`);
     }
     if (typeof v === "number" && v > 20000 && v < 80000) {
       const ms = Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000;
@@ -848,10 +872,68 @@
     return s;
   }
 
+  /** 修正已匯入：到港日 1926→2026；誤當櫃號的 UHA／NC 清掉 */
+  function sanitizeImportIds() {
+    ensureState();
+    let n = 0;
+    for (const c of state.importCabinets || []) {
+      if (!c) continue;
+      const refs = parseRefNos(c.uha);
+      const uha = refs.uha || refs.nc || normUha(c.uha);
+      if (uha && uha !== c.uha) {
+        c.uha = uha;
+        n++;
+      }
+      if (refs.uha && refs.nc && c.nc !== refs.nc) {
+        c.nc = refs.nc;
+        n++;
+      }
+      const cont = normContainer(c.containerNo);
+      if ((c.containerNo || "") && cont !== (c.containerNo || "")) {
+        c.containerNo = cont;
+        n++;
+      }
+    }
+    for (const a of state.importArrivals || []) {
+      if (!a) continue;
+      const uha = normUha(a.uha);
+      if (uha && uha !== a.uha) {
+        a.uha = uha;
+        n++;
+      }
+      const cont = normContainer(a.containerNo);
+      if ((a.containerNo || "") && cont !== (a.containerNo || "")) {
+        a.containerNo = cont;
+        n++;
+      }
+      if (a.day) {
+        const fixed = fixCenturyDay(parseDay(a.day) || a.day);
+        if (fixed && fixed !== a.day) {
+          a.day = fixed;
+          n++;
+        }
+      }
+    }
+    for (const r of state.importReleased || []) {
+      if (!r) continue;
+      const uha = normUha(r.uha);
+      if (uha && uha !== r.uha) {
+        r.uha = uha;
+        n++;
+      }
+      const cont = normContainer(r.containerNo);
+      if ((r.containerNo || "") && cont !== (r.containerNo || "")) {
+        r.containerNo = cont;
+        n++;
+      }
+    }
+    return n;
+  }
+
   /** 修正已匯入的到港日 1926 → 2026 */
   function fixArriveDaysInState() {
     ensureState();
-    let n = 0;
+    let n = sanitizeImportIds();
     for (const c of state.importCabinets || []) {
       if (!c.arriveDay) continue;
       const fixed = fixCenturyDay(parseDay(c.arriveDay) || c.arriveDay);
@@ -909,12 +991,14 @@
     const out = [];
     for (let r = hi + 1; r < rows.length; r++) {
       const row = rows[r] || [];
-      const uha = normUha(cell(row, iUha));
+      const refs = parseRefNos(cell(row, iUha));
+      const uha = refs.uha || refs.nc;
       if (!uha) continue;
-      if (!/^[A-Z]{2,4}\d+/i.test(uha)) continue;
+      if (!/^(UHA|NC)\d+/i.test(uha)) continue;
       out.push({
         id: uid("cab"),
         uha,
+        nc: refs.uha && refs.nc ? refs.nc : "",
         containerNo: normContainer(cell(row, iCont)),
         arriveDay: parseDay(cell(row, iDay)),
         product: String(cell(row, iProd) || "").trim(),
@@ -1151,7 +1235,7 @@
         let containerNo = "";
         for (let k = c + 1; k < Math.min(c + 4, row.length); k++) {
           const t = normContainer(row[k]);
-          if (/^[A-Z]{3,4}U?\d{6,}$/i.test(t) || /^[A-Z]{4}\d{7}$/i.test(t)) {
+          if (t) {
             containerNo = t;
             break;
           }
@@ -1520,19 +1604,19 @@
         ["UHA715", "EMCU5743731", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "進行中", "2026-09-22 09:00", "油二", "彬", "", "抽中薰蒸", "否"],
         ["UHA716", "EMCU5701119", "2026-09-20", "泰國青花", "1206", "龍德-辛", "無", "", "無", "", "", "", "", "", "是"],
       ],
-      hint: "藥檢／薰蒸填：無、進行中、完成、免辦。已放行填：是／否。時間可用 2026-09-22 09:00 或 2026-09-22T09:00。",
+      hint: "編號＝UHA 或 NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸：無、進行中、完成、免辦。已放行：是／否。",
     },
     released: {
       name: "已放行_匯入格式",
       headers: ["編號", "櫃號", "品名", "藥檢", "藥檢時間", "薰蒸", "薰蒸時間", "碼頭", "拖車", "拖車電話", "備註"],
       sample: [["UHA668", "EMCU5583470", "美生-1664", "無", "", "無", "", "油二", "彬", "", "週六放行"]],
-      hint: "整表視為已放行（未拆櫃）。藥檢／薰蒸：無、進行中、完成、免辦。",
+      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。整表視為已放行（未拆櫃）。",
     },
     arrival: {
       name: "進庫_匯入格式",
       headers: ["拆櫃日", "編號", "櫃號", "產品", "賣方", "買方", "報關數量", "拆櫃數量", "卸貨點"],
       sample: [["2026-09-18", "UHA668", "EMCU5583470", "越南美生", "龍鏻-同同", "鴻安", "1664", "1664", "冰庫"]],
-      hint: "進庫＝已拆卸入庫存。編號必填。",
+      hint: "編號＝UHA／NC；櫃號＝EMCU／FBIU…。拆櫃日＝實際拆卸入庫日（不是到港日）。",
     },
   };
 

@@ -59,8 +59,8 @@ export function FilesPane({ title, refresh }) {
         <section className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3">
           <h3 className="m-0 text-sm font-bold text-slate-700">① 下載格式（建議）</h3>
           <p className="mt-1 text-[0.72rem] text-slate-500">
-            藥檢／薰蒸填：無、進行中、完成、免辦。已放行填：是／否。時間例：2026-09-22 09:00
-          </p>
+        編號＝UHA／NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸填：無、進行中、完成、免辦。已放行：是／否。時間例：2026-09-22 09:00
+      </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className={btn} onClick={() => download("port")}>
               港口查驗格式

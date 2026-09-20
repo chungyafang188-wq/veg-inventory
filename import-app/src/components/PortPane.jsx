@@ -80,7 +80,7 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
   const submitAdd = () => {
     const ok = api().addManualPortRow?.(form);
     if (!ok) {
-      alert("請至少填編號（如 UHA715）。");
+      alert("請至少填編號（UHA 或 NC，如 UHA715）。");
       return;
     }
     const wasReleased = form.released === "是";
@@ -133,12 +133,12 @@ export function PortPane({ title, hint, portTab, setPortTab, portCounts, rows, r
             <p className="m-0 text-[0.78rem] font-semibold text-emerald-900">手動新增一筆（編號必填）</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <label className="grid gap-0.5">
-                <span className="text-[0.7rem] font-semibold text-slate-500">編號 *</span>
-                <input className={fieldCls} value={form.uha} placeholder="UHA715" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
+                <span className="text-[0.7rem] font-semibold text-slate-500">編號（UHA／NC）*</span>
+                <input className={fieldCls} value={form.uha} placeholder="UHA715 或 NC002" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
               </label>
               <label className="grid gap-0.5">
-                <span className="text-[0.7rem] font-semibold text-slate-500">櫃號</span>
-                <input className={fieldCls} value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
+                <span className="text-[0.7rem] font-semibold text-slate-500">櫃號（EMCU／FBIU…）</span>
+                <input className={fieldCls} value={form.containerNo} placeholder="EMCU5743731" onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
               </label>
               <label className="grid gap-0.5">
                 <span className="text-[0.7rem] font-semibold text-slate-500">到港日</span>

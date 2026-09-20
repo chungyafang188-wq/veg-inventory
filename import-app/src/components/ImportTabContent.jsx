@@ -72,7 +72,7 @@ export function ImportTabContent({
           <TablePane
             title={title}
             hint="可排拆櫃：與拖車確認拆卸位置與日期時間，拆工可後填；儲存後派送「貨櫃拆卸資料」。"
-            columns={["到港日", "編號", "櫃號", "品名", "藥檢", "薰蒸", "結束時間", "狀態"]}
+            columns={["到港日", "編號(UHA/NC)", "櫃號", "品名", "藥檢", "薰蒸", "結束時間", "狀態"]}
             rows={lists.release}
             onOpen={(key) => openDrawer("release", key)}
           />
@@ -108,7 +108,7 @@ export function ImportTabContent({
         <TablePane
           title={title}
           hint="已入庫明細。"
-          columns={["拆櫃日", "編號", "櫃號", "產品", "報關數量", "拆櫃數量"]}
+          columns={["拆櫃日", "編號(UHA/NC)", "櫃號", "產品", "報關數量", "拆櫃數量"]}
           rows={lists.stock}
           onOpen={(key) => openDrawer("stock", key)}
         />

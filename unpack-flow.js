@@ -1129,7 +1129,7 @@
             <label>負責拆工
               <select id="up-new-who"><option value="">請選擇</option>${staffOpts}</select>
             </label>
-            <label>貨櫃編號（標籤號） <input id="up-new-box" type="text" placeholder="例如 UHA223" autocomplete="off" /></label>
+            <label>編號（UHA／NC） <input id="up-new-box" type="text" placeholder="例如 UHA223 或 NC002" autocomplete="off" /></label>
             <label>品名 <input id="up-new-name" type="text" placeholder="例如 高麗菜" autocomplete="off" /></label>
             <label>交櫃客戶
               <input id="up-new-customer" type="text" list="up-cust-list" placeholder="姓名，選填" autocomplete="off" spellcheck="false" lang="zh-Hant" />

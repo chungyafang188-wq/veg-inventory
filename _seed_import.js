@@ -14,46 +14,75 @@ const OUT_PUBLIC = path.join(__dirname, "public-import-seed.json");
 function uid(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
-/** 只取 UHA＋數字；清掉 Excel 殘留 NC002、換行等 */
-function normUha(v) {
-  const m = String(v || "")
+/** 編號：UHA… 或 NC…；櫃號：EMCU／FBIU…（絕不是 UHA／NC） */
+function parseRefNos(v) {
+  const s = String(v || "")
     .toUpperCase()
-    .match(/UHA\s*(\d{1,6})/);
-  return m ? "UHA" + m[1] : "";
+    .replace(/\r/g, "\n");
+  const uhaM = s.match(/UHA\s*(\d{1,6})/);
+  const ncM = s.match(/(?:^|[^A-Z])NC\s*(\d{1,6})\b/) || s.match(/\bNC\s*(\d{1,6})\b/);
+  return {
+    uha: uhaM ? "UHA" + uhaM[1] : "",
+    nc: ncM ? "NC" + ncM[1] : "",
+  };
 }
-function normContainer(v) {
-  return String(v || "")
+function normUha(v) {
+  const refs = parseRefNos(v);
+  return refs.uha || refs.nc || "";
+}
+function isContainerNo(v) {
+  const t = String(v || "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "")
     .replace(/\.$/, "");
+  if (!t) return false;
+  if (/^(UHA|NC)\d/i.test(t)) return false;
+  return /^[A-Z]{4}\d{6,7}$/.test(t);
+}
+function normContainer(v) {
+  const t = String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/\.$/, "");
+  if (!t || /^(UHA|NC)\d/i.test(t)) return "";
+  return isContainerNo(t) ? t : "";
 }
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
+function fixCenturyDay(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso || "";
+  let y = Number(m[1]);
+  if (y >= 1924 && y <= 1927) y += 100;
+  return `${y}-${m[2]}-${m[3]}`;
+}
 function parseDay(v) {
   if (v == null || v === "") return "";
   if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    return v.toISOString().slice(0, 10);
+    // Excel 常存 UTC 午夜±；用 UTC 日避免變前一天／後一天
+    return fixCenturyDay(`${v.getUTCFullYear()}-${pad2(v.getUTCMonth() + 1)}-${pad2(v.getUTCDate())}`);
   }
   if (typeof v === "number" && v > 20000 && v < 80000) {
     const ms = Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000;
     try {
-      return new Date(ms).toISOString().slice(0, 10);
+      return fixCenturyDay(new Date(ms).toISOString().slice(0, 10));
     } catch (_) {
       return "";
     }
   }
   const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // Date string from sheet_to_json
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return fixCenturyDay(s.slice(0, 10));
   const asDate = Date.parse(s);
   if (Number.isFinite(asDate) && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(s)) {
     try {
-      return new Date(asDate).toISOString().slice(0, 10);
+      const d = new Date(asDate);
+      return fixCenturyDay(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`);
     } catch (_) {}
   }
-  const roc = s.match(/^1(1[3-5])(\d{2})(\d{2})$/);
+  const roc = s.match(/^(1\d{2})(\d{2})(\d{2})$/);
   if (roc) {
     const y = 1911 + Number(roc[1]);
     return `${y}-${roc[2]}-${roc[3]}`;
@@ -99,11 +128,13 @@ function parseCabinetSheet(rows) {
   const now = Date.now();
   for (let r = hi + 1; r < rows.length; r++) {
     const row = rows[r] || [];
-    const uha = normUha(cell(row, iUha));
-    if (!uha || !/^[A-Z]{2,4}\d+/i.test(uha)) continue;
+    const refs = parseRefNos(cell(row, iUha));
+    const uha = refs.uha || refs.nc;
+    if (!uha || !/^(UHA|NC)\d+/i.test(uha)) continue;
     out.push({
       id: uid("cab"),
       uha,
+      nc: refs.uha && refs.nc ? refs.nc : "",
       containerNo: normContainer(cell(row, iCont)),
       arriveDay: parseDay(cell(row, iDay)),
       product: String(cell(row, iProd) || "").trim(),

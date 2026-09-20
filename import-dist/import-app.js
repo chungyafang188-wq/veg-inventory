@@ -9332,19 +9332,21 @@ function ce({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 							className: "grid gap-2.5",
 							children: [
 								/* @__PURE__ */ (0, C.jsx)(w, {
-									label: "編號 UHA",
+									label: "編號（UHA／NC）",
 									children: /* @__PURE__ */ (0, C.jsx)("input", {
 										className: T(),
 										value: _.uha || "",
-										onChange: (e) => c("uha", e.target.value)
+										onChange: (e) => c("uha", e.target.value),
+										placeholder: "UHA715 或 NC002"
 									})
 								}),
 								/* @__PURE__ */ (0, C.jsx)(w, {
-									label: "櫃號",
+									label: "櫃號（EMCU／FBIU…）",
 									children: /* @__PURE__ */ (0, C.jsx)("input", {
 										className: T(),
 										value: _.containerNo || "",
-										onChange: (e) => c("containerNo", e.target.value)
+										onChange: (e) => c("containerNo", e.target.value),
+										placeholder: "EMCU5743731"
 									})
 								}),
 								/* @__PURE__ */ (0, C.jsx)(w, {
@@ -10041,7 +10043,7 @@ function he({ title: e, refresh: t }) {
 							}),
 							/* @__PURE__ */ (0, C.jsx)("p", {
 								className: "mt-1 text-[0.72rem] text-slate-500",
-								children: "藥檢／薰蒸填：無、進行中、完成、免辦。已放行填：是／否。時間例：2026-09-22 09:00"
+								children: "編號＝UHA／NC（不是櫃號）。櫃號＝EMCU／FBIU／FSCU／OTPU 等。藥檢／薰蒸填：無、進行中、完成、免辦。已放行：是／否。時間例：2026-09-22 09:00"
 							}),
 							/* @__PURE__ */ (0, C.jsxs)("div", {
 								className: "mt-2 flex flex-wrap gap-2",
@@ -10414,11 +10416,11 @@ function Se({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 									className: "grid gap-0.5",
 									children: [/* @__PURE__ */ (0, C.jsx)("span", {
 										className: "text-[0.7rem] font-semibold text-slate-500",
-										children: "編號 *"
+										children: "編號（UHA／NC）*"
 									}), /* @__PURE__ */ (0, C.jsx)("input", {
 										className: ye,
 										value: p.uha,
-										placeholder: "UHA715",
+										placeholder: "UHA715 或 NC002",
 										onChange: (e) => m({
 											...p,
 											uha: e.target.value
@@ -10429,10 +10431,11 @@ function Se({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 									className: "grid gap-0.5",
 									children: [/* @__PURE__ */ (0, C.jsx)("span", {
 										className: "text-[0.7rem] font-semibold text-slate-500",
-										children: "櫃號"
+										children: "櫃號（EMCU／FBIU…）"
 									}), /* @__PURE__ */ (0, C.jsx)("input", {
 										className: ye,
 										value: p.containerNo,
+										placeholder: "EMCU5743731",
 										onChange: (e) => m({
 											...p,
 											containerNo: e.target.value
@@ -10548,7 +10551,7 @@ function Se({ title: e, hint: t, portTab: n, setPortTab: r, portCounts: i, rows:
 								className: "rounded-md bg-emerald-600 px-3 py-1.5 text-[0.8rem] font-bold text-white",
 								onClick: () => {
 									if (!_().addManualPortRow?.(p)) {
-										alert("請至少填編號（如 UHA715）。");
+										alert("請至少填編號（UHA 或 NC，如 UHA715）。");
 										return;
 									}
 									let e = p.released === "是", t = p.uha;
@@ -11036,7 +11039,7 @@ function ke({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 					hint: "可排拆櫃：與拖車確認拆卸位置與日期時間，拆工可後填；儲存後派送「貨櫃拆卸資料」。",
 					columns: [
 						"到港日",
-						"編號",
+						"編號(UHA/NC)",
 						"櫃號",
 						"品名",
 						"藥檢",
@@ -11075,7 +11078,7 @@ function ke({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				hint: "已入庫明細。",
 				columns: [
 					"拆櫃日",
-					"編號",
+					"編號(UHA/NC)",
 					"櫃號",
 					"產品",
 					"報關數量",

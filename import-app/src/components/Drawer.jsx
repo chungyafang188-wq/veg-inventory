@@ -113,11 +113,11 @@ export function Drawer({
 
           {kind === "draft" ? (
             <div className="grid gap-2.5">
-              <Field label="編號 UHA">
-                <input className={inputCls()} value={f.uha || ""} onChange={(e) => onField("uha", e.target.value)} />
+              <Field label="編號（UHA／NC）">
+                <input className={inputCls()} value={f.uha || ""} onChange={(e) => onField("uha", e.target.value)} placeholder="UHA715 或 NC002" />
               </Field>
-              <Field label="櫃號">
-                <input className={inputCls()} value={f.containerNo || ""} onChange={(e) => onField("containerNo", e.target.value)} />
+              <Field label="櫃號（EMCU／FBIU…）">
+                <input className={inputCls()} value={f.containerNo || ""} onChange={(e) => onField("containerNo", e.target.value)} placeholder="EMCU5743731" />
               </Field>
               <Field label="報關單號">
                 <input className={inputCls()} value={f.customsNo || ""} onChange={(e) => onField("customsNo", e.target.value)} />

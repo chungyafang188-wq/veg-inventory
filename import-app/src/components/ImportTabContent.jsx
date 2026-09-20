@@ -37,7 +37,7 @@ export function ImportTabContent({
   return (
     <div className={`min-h-0 flex-1 overflow-auto ${padClass}`}>
       {activeTab === "parse" ? (
-        <ParsePane title={title} drafts={lists.drafts} onParsed={refresh} onOpenDraft={(i) => openDrawer("draft", String(i))} />
+        <ParsePane title={title} drafts={lists.drafts} onParsed={refresh} onOpenDraft={(key) => openDrawer("draft", String(key))} />
       ) : null}
 
       {activeTab === "port" ? (

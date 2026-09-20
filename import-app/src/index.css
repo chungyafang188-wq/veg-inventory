@@ -319,7 +319,19 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.05rem;
+  gap: 0.1rem;
+  margin: 0;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.imp-tw .imp-id-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
   margin: 0;
   width: auto;
   padding: 0;
@@ -328,16 +340,59 @@
   cursor: pointer;
   text-align: left;
 }
-.imp-tw .imp-id-stack strong {
+.imp-tw .imp-id-stack strong,
+.imp-tw .imp-id-main strong {
   font-size: 0.88rem;
   font-weight: 800;
   color: #0f172a;
 }
-.imp-tw .imp-id-stack span {
+.imp-tw .imp-id-stack.is-pending strong,
+.imp-tw .imp-id-stack.is-pending .imp-id-main strong {
+  color: #b45309;
+}
+.imp-tw .imp-uha-pending-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+}
+.imp-tw .imp-id-cont {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.68rem;
   font-weight: 600;
   color: #94a3b8;
+}
+.imp-tw .imp-uha-fix {
+  margin: 0.1rem 0 0;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #047857;
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.imp-tw .imp-uha-edit {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 7.5rem;
+}
+.imp-tw .imp-uha-input {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.imp-tw .imp-uha-hint {
+  font-size: 0.62rem;
+  font-weight: 650;
+  color: #b45309;
 }
 .imp-tw .imp-st-wrap {
   position: relative;
@@ -404,5 +459,18 @@
 }
 .imp-tw .imp-inline-table td {
   vertical-align: middle;
+}
+.imp-tw .imp-inline-table.table-fixed {
+  min-width: 64rem;
+  table-layout: fixed;
+}
+.imp-tw .imp-inline-table th,
+.imp-tw .imp-inline-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.imp-tw .imp-inline-table .imp-inline-btn,
+.imp-tw .imp-inline-table .imp-inline-input {
+  max-width: 100%;
 }
 

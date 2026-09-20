@@ -100,16 +100,20 @@ export default function ImportApp({ initialPane = "parse" }) {
   const commitDraft = (extra = {}) => {
     if (!draft?.fields) return;
     const payload = { ...draft, fields: { ...draft.fields, ...extra } };
-    const ok = api().commitDrawerSession?.(payload);
-    if (ok === false) return;
+    const result = api().commitDrawerSession?.(payload);
+    if (result === false) return;
+    const newKey = result && typeof result === "object" && result.key ? String(result.key) : draft.key;
+    const nextFields = api().loadDrawerFields?.(draft.kind, newKey) || { ...draft.fields, ...extra };
+    setDrawer((d) => (d ? { ...d, key: newKey } : d));
     setDraft((d) =>
       d
         ? {
             ...d,
+            key: newKey,
             dirty: false,
             remoteNewer: false,
             baseUpdatedAt: Date.now(),
-            fields: api().loadDrawerFields?.(d.kind, d.key) || { ...d.fields, ...extra },
+            fields: nextFields,
           }
         : d,
     );

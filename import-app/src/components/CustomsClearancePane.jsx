@@ -42,6 +42,113 @@ function rowKey(r) {
   return String(r.uha || r.key || "");
 }
 
+function isRowPendingUha(r) {
+  if (r?.pendingUha != null) return !!r.pendingUha;
+  const s = String(r?.uha || "").trim();
+  if (!s) return true;
+  if (/^待編-/i.test(s) || /^TMP-/i.test(s)) return true;
+  if (/^(UHA|NC)\s*$/i.test(s)) return true;
+  return !/^(UHA|NC)\d+/i.test(s);
+}
+
+/** 編號欄：待補顯示 UHA＋修正；已完成可按修正改號 */
+function UhaCodeCell({ row, onAssigned, openDrawer }) {
+  const uha = rowKey(row);
+  const pending = isRowPendingUha(row);
+  const [editing, setEditing] = useState(pending);
+  const [draft, setDraft] = useState(pending ? "UHA" : uha);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(pending ? "UHA" : uha);
+  }, [uha, pending, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      const el = ref.current;
+      if (el && pending) {
+        // 游標放在 UHA 後面，方便直接打數字
+        const n = String(el.value || "").length;
+        try {
+          el.setSelectionRange(n, n);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        el?.select?.();
+      }
+    }
+  }, [editing, pending]);
+
+  const commit = () => {
+    const raw = String(draft || "").trim();
+    if (!raw || /^(UHA|NC)\s*$/i.test(raw)) {
+      setEditing(pending);
+      setDraft(pending ? "UHA" : uha);
+      return;
+    }
+    if (!/^(UHA|NC)\d+/i.test(raw.toUpperCase().replace(/\s+/g, ""))) {
+      alert("請填完整編號，例如 UHA715 或 NC002（UHA 後面要有數字）");
+      ref.current?.focus();
+      return;
+    }
+    const res = api().assignPortUha?.(uha, raw);
+    if (!res?.ok) {
+      alert(res?.error || "編號更新失敗");
+      return;
+    }
+    setEditing(false);
+    onAssigned?.(uha, res.uha);
+  };
+
+  if (editing) {
+    return (
+      <div className="imp-uha-edit">
+        <input
+          ref={ref}
+          className="imp-inline-input imp-uha-input"
+          value={draft}
+          placeholder="UHA715"
+          aria-label="補編號"
+          onChange={(e) => setDraft(e.target.value.toUpperCase())}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+              setDraft(pending ? "UHA" : uha);
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+        />
+        <span className="imp-uha-hint">{pending ? "補上數字後 Enter" : "Enter 確認"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`imp-id-stack${pending ? " is-pending" : ""}`}>
+      <button
+        type="button"
+        className="imp-id-main"
+        onClick={() => (pending ? setEditing(true) : openDrawer?.(row.released || row.stageId === "release" ? "release" : "port", uha))}
+      >
+        <strong>{pending ? (/^NC/i.test(uha) ? "NC" : "UHA") : uha || "—"}</strong>
+        {pending ? <em className="imp-uha-pending-tag">待補編碼</em> : null}
+      </button>
+      <span className="imp-id-cont">{row.containerNo || "無櫃號"}</span>
+      <button type="button" className="imp-uha-fix" onClick={() => setEditing(true)}>
+        {pending ? "補編號" : "修正編號"}
+      </button>
+    </div>
+  );
+}
+
 const emptyForm = () => ({
   uha: "",
   containerNo: "",
@@ -277,6 +384,19 @@ export function CustomsClearancePane({
     refresh?.();
   };
 
+  const onUhaAssigned = (oldKey, newKey) => {
+    if (oldKey && newKey && oldKey !== newKey) {
+      setPicked((prev) => {
+        if (!prev.has(oldKey)) return prev;
+        const next = new Set(prev);
+        next.delete(oldKey);
+        next.add(newKey);
+        return next;
+      });
+    }
+    refresh?.();
+  };
+
   const markSelected = () => {
     const list = [...picked].filter((u) => {
       const row = sheet.find((r) => rowKey(r) === u);
@@ -291,7 +411,9 @@ export function CustomsClearancePane({
   };
 
   const markOne = (uha) => {
-    if (!confirm(`確定將 ${uha} 標示為已放行？`)) return;
+    const row = sheet.find((r) => rowKey(r) === uha);
+    const lab = row && isRowPendingUha(row) ? `UHA（待補）${row.containerNo ? " · " + row.containerNo : ""}` : uha;
+    if (!confirm(`確定將 ${lab} 標示為已放行？`)) return;
     api().markPortReleased?.(uha, { quiet: true });
     setPicked((prev) => {
       const next = new Set(prev);
@@ -322,7 +444,7 @@ export function CustomsClearancePane({
     const headers = ["階段", "編號", "櫃號", "到港日", "品名", "賣方", "船公司", "報關行", "藥檢", "薰蒸", "碼頭", "備註"];
     const data = list.map((r) => ({
       階段: r.stage || (r.released ? "已放行" : "待驗"),
-      編號: r.uha || "",
+      編號: isRowPendingUha(r) ? "UHA（待補）" : r.uha || "",
       櫃號: r.containerNo || "",
       到港日: r.arriveDay || "",
       品名: r.product || "",
@@ -400,291 +522,315 @@ export function CustomsClearancePane({
       : FILTERS.map((f) => [f.id, f.lab, counts[f.id] ?? 0]);
 
   return (
-    <div className="imp-customs rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-4 pb-3 pt-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="m-0 text-xl font-bold tracking-tight text-slate-800">{title || "海關查驗"}</h2>
-          <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <div className="imp-view-toggle" role="group" aria-label="檢視模式">
-              <button type="button" className={view === "table" ? "imp-view-btn is-on" : "imp-view-btn"} onClick={() => setViewMode("table")}>
-                ☰ 表格
-              </button>
-              <button type="button" className={view === "cards" ? "imp-view-btn is-on" : "imp-view-btn"} onClick={() => setViewMode("cards")}>
-                ▦ 卡片
+    <div className="imp-customs grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm lg:col-span-12">
+        <div className="border-b border-slate-100 px-4 pb-3 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h2 className="m-0 text-xl font-bold tracking-tight text-slate-800">{title || "海關查驗"}</h2>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="imp-view-toggle" role="group" aria-label="檢視模式">
+                <button type="button" className={view === "table" ? "imp-view-btn is-on" : "imp-view-btn"} onClick={() => setViewMode("table")}>
+                  ☰ 表格
+                </button>
+                <button type="button" className={view === "cards" ? "imp-view-btn is-on" : "imp-view-btn"} onClick={() => setViewMode("cards")}>
+                  ▦ 卡片
+                </button>
+              </div>
+              <button type="button" className="imp-btn-ghost text-xs" onClick={exportExcel} disabled={!viewed.length}>
+                匯出 Excel
               </button>
             </div>
-            <button type="button" className="imp-btn-ghost text-xs" onClick={exportExcel} disabled={!viewed.length}>
-              匯出 Excel
-            </button>
           </div>
-        </div>
 
-        <div className="mt-2.5 flex flex-wrap gap-1.5" role="tablist" aria-label="狀態篩選">
-          {filterChips.map(([id, lab, count]) => {
-            const on =
-              view === "cards" ? portTab === id || (id === "open" && (!portTab || portTab === "open")) : filter === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                className={on ? "imp-chip imp-chip-on" : "imp-chip"}
-                onClick={() => {
-                  if (view === "cards") setPortTab?.(id === "open" ? "open" : id);
-                  else setFilter(id);
-                }}
-              >
-                {lab}
-                <span className="ml-1 tabular-nums opacity-80">{count}</span>
+          <div className="mt-2.5 flex flex-wrap gap-1.5" role="tablist" aria-label="狀態篩選">
+            {filterChips.map(([id, lab, count]) => {
+              const on =
+                view === "cards" ? portTab === id || (id === "open" && (!portTab || portTab === "open")) : filter === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={on ? "imp-chip imp-chip-on" : "imp-chip"}
+                  onClick={() => {
+                    if (view === "cards") setPortTab?.(id === "open" ? "open" : id);
+                    else setFilter(id);
+                  }}
+                >
+                  {lab}
+                  <span className="ml-1 tabular-nums opacity-80">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" className="imp-btn-primary" disabled={!pendingPicked} onClick={markSelected}>
+              標示已放行{pendingPicked ? ` ${pendingPicked}` : ""}
+            </button>
+            <button type="button" className="imp-btn-ghost" onClick={toggleAll}>
+              {allSelected ? "取消全選" : "全選本頁"}
+            </button>
+            <button type="button" className="imp-btn-ghost" onClick={() => setShowAdd((v) => !v)}>
+              {showAdd ? "收起新增" : "手動新增貨櫃"}
+            </button>
+            {typeof refresh === "function" ? (
+              <button type="button" className="imp-btn-ghost text-xs" onClick={refresh}>
+                重新整理
               </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" className="imp-btn-primary" disabled={!pendingPicked} onClick={markSelected}>
-            標示已放行{pendingPicked ? ` ${pendingPicked}` : ""}
-          </button>
-          <button type="button" className="imp-btn-ghost" onClick={toggleAll}>
-            {allSelected ? "取消全選" : "全選本頁"}
-          </button>
-          <button type="button" className="imp-btn-ghost" onClick={() => setShowAdd((v) => !v)}>
-            {showAdd ? "收起新增" : "手動新增貨櫃"}
-          </button>
-          {typeof refresh === "function" ? (
-            <button type="button" className="imp-btn-ghost text-xs" onClick={refresh}>
-              重新整理
-            </button>
-          ) : null}
-        </div>
-
-        <div className="mt-3">
-          <ListQueryBar
-            query={query}
-            onQuery={setQuery}
-            sortBy={sortBy}
-            onSort={setSortBy}
-            sortOpts={
-              view === "cards"
-                ? SORT_OPTS.port
-                : [
-                    { id: "uha", lab: "編號" },
-                    { id: "arriveDay", lab: "到港日" },
-                    { id: "stage", lab: "階段" },
-                    { id: "product", lab: "品名" },
-                  ]
-            }
-            placeholder="搜尋編號、櫃號、品名、賣方、碼頭、備註…"
-            resultCount={view === "cards" ? cardRows.length : viewed.length}
-            totalCount={view === "cards" ? (portRows || []).length || counts.port : filtered.length}
-          />
-        </div>
-        <p className="mt-2 m-0 text-[0.7rem] text-slate-400">
-          表格點欄位直輯：Enter 存並往下、Tab 往右；藥檢／薰蒸點徽章切換。空欄顯示「+ 點擊填寫」。
-        </p>
-      </div>
-
-      {showAdd ? (
-        <div className="border-b border-emerald-100 bg-emerald-50/50 px-4 py-3">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <input className="imp-field" value={form.uha} placeholder="編號可空白後補" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
-            <input className="imp-field" value={form.containerNo} placeholder="櫃號" onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
-            <input type="date" className="imp-field" value={form.arriveDay} onChange={(e) => setForm({ ...form, arriveDay: e.target.value })} />
-            <input className="imp-field" value={form.product} placeholder="品名" onChange={(e) => setForm({ ...form, product: e.target.value })} />
+            ) : null}
           </div>
-          <button type="button" className="imp-btn-primary mt-2" onClick={submitAdd}>
-            儲存新增
-          </button>
-        </div>
-      ) : null}
 
-      {view === "table" ? (
-        <div className="overflow-auto p-2 sm:p-3">
-          {!viewed.length ? (
-            <p className="m-0 py-12 text-center text-sm text-slate-400">{sheet.length ? "沒有符合條件的資料" : "尚無查驗紀錄"}</p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-              <table className="imp-inline-table w-full min-w-[68rem] border-collapse text-left text-sm">
-                <thead>
-                  <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100">
-                    <th className="w-9 px-2 py-2">
-                      <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="全選" />
-                    </th>
-                    {["階段", "編號／櫃號", "到港", "品名", "賣方", "船公司", "報關行", "藥檢", "薰蒸", "碼頭", "備註", "操作"].map(
-                      (lab) => (
-                        <th key={lab} className="whitespace-nowrap px-2 py-2 text-[0.7rem] font-bold text-slate-600">
-                          {lab}
-                        </th>
-                      ),
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewed.map((r, rowIndex) => {
-                    const uha = rowKey(r);
-                    const released = r.released || r.stageId === "release" || r.stage === "已放行";
-                    const on = picked.has(uha);
-                    const cell = (col) => (
-                      <InlineText
-                        value={r[col] || ""}
-                        onSave={(v) => patch(uha, col, v)}
-                        rowIndex={rowIndex}
-                        colId={col}
-                        onNav={navCell}
-                        registerFocus={registerFocus}
-                      />
-                    );
-                    return (
-                      <tr
-                        key={uha}
-                        className={`border-b border-slate-100 odd:bg-white even:bg-slate-50/50 hover:bg-emerald-50/30 ${
-                          on ? "bg-emerald-50/60" : ""
-                        }`}
-                      >
-                        <td className="px-2 py-1.5 align-middle">
-                          <input type="checkbox" checked={on} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
-                        </td>
-                        <td className="px-2 py-1.5 align-middle">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
-                              released ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            {released ? "已放行" : "待驗"}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 align-middle">
-                          <button
-                            type="button"
-                            className="imp-id-stack"
-                            onClick={() => openDrawer?.(released ? "release" : "port", uha)}
-                          >
-                            <strong>{uha || "—"}</strong>
-                            <span>{r.containerNo || "無櫃號"}</span>
-                          </button>
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 align-middle tabular-nums text-slate-700">
-                          {shortDay(r.arriveDay) || "—"}
-                        </td>
-                        <td className="max-w-[8rem] truncate px-2 py-1.5 align-middle font-semibold text-slate-800">
-                          {r.product || "—"}
-                        </td>
-                        <td className="min-w-[5.5rem] px-1.5 py-1 align-middle">{cell("seller")}</td>
-                        <td className="min-w-[5.5rem] px-1.5 py-1 align-middle">{cell("shipCo")}</td>
-                        <td className="min-w-[5.5rem] px-1.5 py-1 align-middle">{cell("broker")}</td>
-                        <td className="px-1.5 py-1 align-middle">
-                          <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
-                        </td>
-                        <td className="px-1.5 py-1 align-middle">
-                          <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
-                        </td>
-                        <td className="min-w-[4.5rem] px-1.5 py-1 align-middle">{cell("dock")}</td>
-                        <td className="min-w-[6rem] px-1.5 py-1 align-middle">{cell("note")}</td>
-                        <td className="px-2 py-1.5 align-middle">
-                          {!released ? (
-                            <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => markOne(uha)}>
-                              放行
-                            </button>
-                          ) : (
-                            <span className="text-[0.7rem] text-slate-400">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="mt-3">
+            <ListQueryBar
+              query={query}
+              onQuery={setQuery}
+              sortBy={sortBy}
+              onSort={setSortBy}
+              sortOpts={
+                view === "cards"
+                  ? SORT_OPTS.port
+                  : [
+                      { id: "uha", lab: "編號" },
+                      { id: "arriveDay", lab: "到港日" },
+                      { id: "stage", lab: "階段" },
+                      { id: "product", lab: "品名" },
+                    ]
+              }
+              placeholder="搜尋編號、櫃號、品名、賣方、碼頭、備註…"
+              resultCount={view === "cards" ? cardRows.length : viewed.length}
+              totalCount={view === "cards" ? (portRows || []).length || counts.port : filtered.length}
+            />
+          </div>
+          <p className="mt-2 m-0 text-[0.7rem] text-slate-400">
+            表格點欄位直輯：Enter 存並往下、Tab 往右；藥檢／薰蒸點徽章切換。空欄顯示「+ 點擊填寫」。UHA 無數字＝待補編碼。
+          </p>
         </div>
-      ) : (
-        <div className="px-2 py-2 sm:px-3">
-          {!cardRows.length ? (
-            <p className="m-0 py-12 text-center text-sm text-slate-400">
-              {(portRows || []).length ? "沒有符合搜尋的貨櫃" : "目前沒有待驗貨櫃"}
-            </p>
-          ) : (
-            <ul className="m-0 grid list-none gap-2 p-0">
-              {cardRows.map((r) => {
-                const uha = r.uha || r.key;
-                const checked = picked.has(uha);
-                const badge = cardBadge(r);
-                return (
-                  <li
-                    key={uha}
-                    className={`overflow-hidden rounded-xl border ${
-                      checked ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200/90 bg-white"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-start gap-2 px-3 py-2.5">
-                      <label className="mt-1 flex shrink-0 cursor-pointer items-center">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-emerald-600"
-                          checked={checked}
-                          onChange={() => toggle(uha)}
+
+        {showAdd ? (
+          <div className="border-b border-emerald-100 bg-emerald-50/50 px-4 py-3">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div>
+                <input className="imp-field" value={form.uha} placeholder="可空白或先填 UHA（後補數字）" onChange={(e) => setForm({ ...form, uha: e.target.value.toUpperCase() })} />
+                {form.uha && !/^(UHA|NC)\d+/i.test(String(form.uha).trim()) ? (
+                  <p className="m-0 mt-1 text-[0.65rem] font-semibold text-amber-700">無數字＝待補編碼</p>
+                ) : null}
+              </div>
+              <input className="imp-field" value={form.containerNo} placeholder="櫃號" onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
+              <input type="date" className="imp-field" value={form.arriveDay} onChange={(e) => setForm({ ...form, arriveDay: e.target.value })} />
+              <input className="imp-field" value={form.product} placeholder="品名" onChange={(e) => setForm({ ...form, product: e.target.value })} />
+            </div>
+            <button type="button" className="imp-btn-primary mt-2" onClick={submitAdd}>
+              儲存新增
+            </button>
+          </div>
+        ) : null}
+
+        {view === "table" ? (
+          <div className="overflow-auto p-2 sm:p-3">
+            {!viewed.length ? (
+              <p className="m-0 py-12 text-center text-sm text-slate-400">{sheet.length ? "沒有符合條件的資料" : "尚無查驗紀錄"}</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+                <table className="imp-inline-table w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[3%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[6%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100">
+                      <th className="px-2 py-2 text-center">
+                        <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="全選" />
+                      </th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">階段</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">編號／櫃號</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">到港</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">品名</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">賣方</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">船公司</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">報關行</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">薰蒸</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">碼頭</th>
+                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">備註</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewed.map((r, rowIndex) => {
+                      const uha = rowKey(r);
+                      const released = r.released || r.stageId === "release" || r.stage === "已放行";
+                      const on = picked.has(uha);
+                      const cell = (col) => (
+                        <InlineText
+                          value={r[col] || ""}
+                          onSave={(v) => patch(uha, col, v)}
+                          rowIndex={rowIndex}
+                          colId={col}
+                          onNav={navCell}
+                          registerFocus={registerFocus}
                         />
-                      </label>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                      );
+                      return (
+                        <tr
+                          key={uha}
+                          className={`border-b border-slate-100 odd:bg-white even:bg-slate-50/50 hover:bg-emerald-50/30 ${
+                            on ? "bg-emerald-50/60" : ""
+                          }`}
+                        >
+                          <td className="px-2 py-1.5 text-center align-middle">
+                            <input type="checkbox" checked={on} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
+                          </td>
+                          <td className="px-2 py-1.5 text-center align-middle">
+                            <span
+                              className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
+                                released ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {released ? "已放行" : "待驗"}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1.5 text-left align-middle">
+                            <UhaCodeCell row={r} onAssigned={onUhaAssigned} openDrawer={openDrawer} />
+                          </td>
+                          <td className="px-2 py-1.5 text-center align-middle tabular-nums text-slate-700">
+                            {shortDay(r.arriveDay) || "—"}
+                          </td>
+                          <td className="truncate px-2 py-1.5 text-left align-middle font-semibold text-slate-800">
+                            {r.product || "—"}
+                          </td>
+                          <td className="px-1.5 py-1 text-left align-middle">{cell("seller")}</td>
+                          <td className="px-1.5 py-1 text-left align-middle">{cell("shipCo")}</td>
+                          <td className="px-1.5 py-1 text-left align-middle">{cell("broker")}</td>
+                          <td className="px-1.5 py-1 text-center align-middle">
+                            <div className="inline-flex justify-center">
+                              <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
+                            </div>
+                          </td>
+                          <td className="px-1.5 py-1 text-center align-middle">
+                            <div className="inline-flex justify-center">
+                              <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
+                            </div>
+                          </td>
+                          <td className="px-1.5 py-1 text-center align-middle">{cell("dock")}</td>
+                          <td className="px-1.5 py-1 text-left align-middle">{cell("note")}</td>
+                          <td className="px-2 py-1.5 text-center align-middle">
+                            {!released ? (
+                              <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => markOne(uha)}>
+                                放行
+                              </button>
+                            ) : (
+                              <span className="text-[0.7rem] text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-2 sm:p-3">
+            {!cardRows.length ? (
+              <p className="m-0 py-12 text-center text-sm text-slate-400">
+                {(portRows || []).length ? "沒有符合搜尋的貨櫃" : "目前沒有待驗貨櫃"}
+              </p>
+            ) : (
+              <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2 xl:grid-cols-3">
+                {cardRows.map((r) => {
+                  const uha = r.uha || r.key;
+                  const checked = picked.has(uha);
+                  const badge = cardBadge(r);
+                  return (
+                    <li
+                      key={uha}
+                      className={`overflow-hidden rounded-xl border ${
+                        checked ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200/90 bg-white"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <label className="flex shrink-0 cursor-pointer items-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-emerald-600"
+                              checked={checked}
+                              onChange={() => toggle(uha)}
+                            />
+                          </label>
                           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold tabular-nums text-slate-800">
                             到港 {shortDay(r.arriveDay)}
                           </span>
                           <span className={`rounded-md px-2 py-0.5 text-sm font-bold ${badge.cls}`}>{badge.lab}</span>
+                          {isRowPendingUha(r) ? (
+                            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-amber-800">編號待補</span>
+                          ) : null}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                          <strong className="text-lg font-bold text-slate-900">{uha}</strong>
-                          <span className="font-mono text-sm font-semibold text-slate-700">{r.containerNo || "無櫃號"}</span>
+                        <button type="button" className="imp-btn-primary shrink-0" onClick={() => markOne(uha)}>
+                          本櫃放行
+                        </button>
+                      </div>
+                      <div className="px-3 py-2">
+                        <UhaCodeCell row={r} onAssigned={onUhaAssigned} openDrawer={openDrawer} />
+                        <p className="m-0 mt-1 text-base font-semibold text-slate-800">{r.product || "—"}</p>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2">
+                        <label className="min-w-0 flex-1 basis-[7rem]">
+                          <span className="imp-field-lab">賣方</span>
+                          <input
+                            className="imp-field"
+                            defaultValue={r.seller || ""}
+                            placeholder="+ 點擊填寫"
+                            onBlur={(e) => patch(uha, "seller", e.target.value)}
+                          />
+                        </label>
+                        <label className="min-w-0 flex-1 basis-[7rem]">
+                          <span className="imp-field-lab">船公司</span>
+                          <input
+                            className="imp-field"
+                            defaultValue={r.shipCo || ""}
+                            placeholder="+ 點擊填寫"
+                            onBlur={(e) => patch(uha, "shipCo", e.target.value)}
+                          />
+                        </label>
+                        <label className="min-w-0 flex-1 basis-[6rem]">
+                          <span className="imp-field-lab">碼頭</span>
+                          <input
+                            className="imp-field"
+                            defaultValue={r.dock || ""}
+                            placeholder="+ 點擊填寫"
+                            onBlur={(e) => patch(uha, "dock", e.target.value)}
+                          />
+                        </label>
+                        <div className="min-w-0 flex-1 basis-[7rem]">
+                          <span className="imp-field-lab">藥檢</span>
+                          <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
                         </div>
-                        <p className="m-0 mt-0.5 text-base font-semibold text-slate-800">{r.product || "—"}</p>
+                        <div className="min-w-0 flex-1 basis-[7rem]">
+                          <span className="imp-field-lab">薰蒸</span>
+                          <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
+                        </div>
                       </div>
-                      <button type="button" className="imp-btn-primary" onClick={() => markOne(uha)}>
-                        本櫃放行
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2">
-                      <label className="min-w-0 flex-1 basis-[7rem]">
-                        <span className="imp-field-lab">賣方</span>
-                        <input
-                          className="imp-field"
-                          defaultValue={r.seller || ""}
-                          placeholder="+ 點擊填寫"
-                          onBlur={(e) => patch(uha, "seller", e.target.value)}
-                        />
-                      </label>
-                      <label className="min-w-0 flex-1 basis-[7rem]">
-                        <span className="imp-field-lab">船公司</span>
-                        <input
-                          className="imp-field"
-                          defaultValue={r.shipCo || ""}
-                          placeholder="+ 點擊填寫"
-                          onBlur={(e) => patch(uha, "shipCo", e.target.value)}
-                        />
-                      </label>
-                      <label className="min-w-0 flex-1 basis-[6rem]">
-                        <span className="imp-field-lab">碼頭</span>
-                        <input
-                          className="imp-field"
-                          defaultValue={r.dock || ""}
-                          placeholder="+ 點擊填寫"
-                          onBlur={(e) => patch(uha, "dock", e.target.value)}
-                        />
-                      </label>
-                      <div className="min-w-0 flex-1 basis-[7rem]">
-                        <span className="imp-field-lab">藥檢</span>
-                        <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
-                      </div>
-                      <div className="min-w-0 flex-1 basis-[7rem]">
-                        <span className="imp-field-lab">薰蒸</span>
-                        <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

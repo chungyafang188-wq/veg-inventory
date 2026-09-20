@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=392" />
+    <link rel="stylesheet" href="./styles.css?v=393" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
     <link rel="stylesheet" href="./unpack-flow.css?v=10" />
     <link rel="stylesheet" href="./import-flow.css?v=25" />
@@ -231,7 +231,7 @@
                 <h3 class="order-block-title" id="order-items-title">全品項快打</h3>
                 <label class="field sku-search-field" for="sku-quick-search">
                   <span class="sku-search-lab">搜尋</span>
-                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="搜尋或輸入簡碼（Enter 加入 1 件）" autocomplete="off" spellcheck="false" />
+                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="🔍 輸入品項名稱或簡碼...（按 Enter 加入）" autocomplete="off" spellcheck="false" />
                   <datalist id="sku-quick-list"></datalist>
                 </label>
                 <div class="sku-hot" id="sku-hot-chips" role="group" aria-label="常用品項">
@@ -249,10 +249,11 @@
               <h3 class="order-block-title" id="order-cart-title">待確認清單</h3>
               <div id="ticket" class="ticket"></div>
               <div class="order-cart-foot">
-                <label class="field order-cart-note" for="order-note">整單備註
-                  <input id="order-note" type="text" placeholder="可不填…" autocomplete="off" spellcheck="false" />
+                <label class="field order-cart-note" for="order-note">訂單備註
+                  <input id="order-note" type="text" placeholder="可填寫送貨時間等…" autocomplete="off" spellcheck="false" />
                 </label>
                 <div class="btn-row order-submit-row">
+                  <p class="ticket-total" id="ticket-foot-total" hidden>總件數 <strong>0</strong> 件</p>
                   <button type="submit" class="primary" id="order-submit">送出訂單</button>
                   <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
                   <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
@@ -610,12 +611,12 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=392"></script>
+    <script src="./app.js?v=393"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=15"></script>
-    <script src="./import-flow.js?v=63"></script>
-    <link rel="stylesheet" href="./import-dist/import-app.css?v=49" />
-    <script type="module" src="./import-dist/import-app.js?v=54"></script>
+    <script src="./import-flow.js?v=65"></script>
+    <link rel="stylesheet" href="./import-dist/import-app.css?v=51" />
+    <script type="module" src="./import-dist/import-app.js?v=56"></script>
     <script src="./site-work.js?v=3"></script>
     <script src="./boss-stats.js?v=13"></script>
   </body>

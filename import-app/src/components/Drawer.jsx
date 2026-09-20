@@ -22,6 +22,55 @@ function Check({ label, checked, onChange }) {
   );
 }
 
+/** UHA／NC：無數字＝待補；已完成可按「修正」改號 */
+function isCompleteUha(v) {
+  return /^(UHA|NC)\d+/i.test(String(v || "").trim());
+}
+
+function UhaCodeField({ value, pending, editing, onChange, onToggleEdit, allowBlank = false }) {
+  const incomplete = !isCompleteUha(value);
+  const showEdit = editing || pending || incomplete;
+  if (showEdit) {
+    return (
+      <Field label="編號（UHA／NC）">
+        <div className="flex gap-2">
+          <input
+            className={inputCls()}
+            value={value || ""}
+            placeholder={allowBlank ? "可空白或先填 UHA，後補數字" : "UHA715（後面要有數字；可先 UHA 後補）"}
+            onChange={(e) => onChange(String(e.target.value || "").toUpperCase())}
+          />
+          {isCompleteUha(value) ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-imp-line bg-white px-2 text-[0.78rem] font-bold text-imp-green"
+              onClick={() => onToggleEdit(false)}
+            >
+              鎖定
+            </button>
+          ) : null}
+        </div>
+        {incomplete ? (
+          <p className="m-0 mt-1 text-[0.72rem] font-semibold text-amber-700">
+            UHA／NC 後面還沒有數字＝待補編碼{allowBlank ? "（可先存，稍後補）" : "，請補齊後再完成流程"}。
+          </p>
+        ) : null}
+      </Field>
+    );
+  }
+  return (
+    <div>
+      <span className="mb-1 block text-[0.78rem] font-bold text-imp-muted">UHA／NC 編號</span>
+      <div className="flex items-center gap-2 rounded-md border border-imp-line bg-slate-50 px-2 py-1.5">
+        <strong className="flex-1 text-[0.95rem] text-imp-ink">{value}</strong>
+        <button type="button" className="text-[0.72rem] font-bold text-imp-green underline" onClick={() => onToggleEdit(true)}>
+          修正
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Drawer({
   drawer,
   draft,
@@ -137,9 +186,14 @@ export function Drawer({
                   尚缺：{f.missing.join("、")}（可後補）
                 </p>
               ) : null}
-              <Field label="編號（UHA／NC，可後補）">
-                <input className={inputCls()} value={f.uha || ""} onChange={(e) => onField("uha", e.target.value)} placeholder="UHA715 或 NC002，可空白後補" />
-              </Field>
+              <UhaCodeField
+                value={f.uha || ""}
+                pending={!!f.pendingUha}
+                editing={!!f._editUha || !!f.pendingUha}
+                allowBlank
+                onChange={(v) => onField("uha", v)}
+                onToggleEdit={(on) => onField("_editUha", on)}
+              />
               <Field label="櫃號（EMCU／FBIU…）">
                 <input className={inputCls()} value={f.containerNo || ""} onChange={(e) => onField("containerNo", e.target.value)} placeholder="EMCU5743731" />
               </Field>
@@ -198,6 +252,13 @@ export function Drawer({
               <p className="m-0 text-[0.8rem] text-imp-muted">
                 {`${f.product || "—"} · ${f.containerNo || "尚無櫃號"} · 到港日 ${f.arriveDay || "—"}。時間出來後接近 FT 排領櫃。`}
               </p>
+              <UhaCodeField
+                value={f.uha || ""}
+                pending={!!f.pendingUha}
+                editing={!!f._editUha || !!f.pendingUha}
+                onChange={(v) => onField("uha", v)}
+                onToggleEdit={(on) => onField("_editUha", on)}
+              />
               <Field label="藥檢">
                 {selectClear("inspect", f.inspect)}
                 <span className="mt-1 block text-[0.72rem] font-semibold text-imp-muted">藥檢時間（報告時間）</span>
@@ -224,6 +285,13 @@ export function Drawer({
           {kind === "release" ? (
             <div className="grid gap-2.5">
               <p className="m-0 text-[0.8rem] text-imp-muted">與拖車確認拆卸位置、日期時間後派送貨櫃拆卸資料；拆工可後填。</p>
+              <UhaCodeField
+                value={f.uha || ""}
+                pending={!!f.pendingUha}
+                editing={!!f._editUha || !!f.pendingUha}
+                onChange={(v) => onField("uha", v)}
+                onToggleEdit={(on) => onField("_editUha", on)}
+              />
               <div className="flex flex-wrap gap-3">
                 <Check label="確認 FT" checked={f.ftConfirmed} onChange={(v) => onField("ftConfirmed", v)} />
                 <Check label="已排拆櫃" checked={f.pickupReady} onChange={(v) => onField("pickupReady", v)} />
@@ -299,40 +367,16 @@ export function Drawer({
               <p className="m-0 text-[0.8rem] text-imp-muted">
                 {f.name || "—"} · {f.containerNo || "—"} · {f.halfPart === "2" ? "半櫃②" : "半櫃／整櫃"}
               </p>
-              {f._editUha || !String(f.uha || "").trim() ? (
-                <Field label="UHA／NC 編號">
-                  <div className="flex gap-2">
-                    <input
-                      className={inputCls()}
-                      value={f.uha || ""}
-                      placeholder="一開始可空白，後補編號"
-                      onChange={(e) => onField("uha", e.target.value)}
-                    />
-                    {String(f.uha || "").trim() ? (
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-md border border-imp-line bg-white px-2 text-[0.78rem] font-bold text-imp-green"
-                        onClick={() => onField("_editUha", false)}
-                      >
-                        鎖定
-                      </button>
-                    ) : null}
-                  </div>
-                </Field>
-              ) : (
-                <div>
-                  <span className="mb-1 block text-[0.78rem] font-bold text-imp-muted">UHA／NC 編號</span>
-                  <div className="flex items-center gap-2 rounded-md border border-imp-line bg-slate-50 px-2 py-1.5">
-                    <strong className="flex-1 text-[0.95rem] text-imp-ink">{f.uha}</strong>
-                    <button type="button" className="text-[0.72rem] font-bold text-imp-green underline" onClick={() => onField("_editUha", true)}>
-                      修正
-                    </button>
-                  </div>
-                </div>
-              )}
-              {!f.uha || !f.trailer || !f.trailerPhone ? (
+              <UhaCodeField
+                value={f.uha || ""}
+                pending={!isCompleteUha(f.uha)}
+                editing={!!f._editUha || !isCompleteUha(f.uha)}
+                onChange={(v) => onField("uha", v)}
+                onToggleEdit={(on) => onField("_editUha", on)}
+              />
+              {!f.uha || !isCompleteUha(f.uha) || !f.trailer || !f.trailerPhone ? (
                 <p className="m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800">
-                  請補齊編號、拖車與拖車電話。
+                  請補齊編號（含數字）、拖車與拖車電話。
                 </p>
               ) : null}
               <Field label="拆卸日">

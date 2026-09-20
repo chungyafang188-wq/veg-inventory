@@ -234,12 +234,18 @@
       };
     }
     if (kind === "port") {
-      const cab = (state.importCabinets || []).find((c) => c.uha === key);
+      const cab =
+        (state.importCabinets || []).find((c) => c.uha === key || c.id === key) || null;
       if (!cab) return null;
       const track = ensureTrackFromCabinet(cab);
       ensureClearanceShape(track);
+      const realUha = String(cab.uha || key);
+      const pending = isPendingUha(realUha);
+      const shown = displayUhaParts(realUha);
       return {
-        uha: key,
+        uha: pending ? shown.main : realUha,
+        pendingUha: pending,
+        storageKey: realUha,
         product: cab.product || "",
         containerNo: cab.containerNo || "",
         arriveDay: cab.arriveDay || "",
@@ -259,9 +265,16 @@
       const row = findReleased(key);
       if (!row) return null;
       ensureClearanceShape(row);
-      const cab = (state.importCabinets || []).find((c) => c.uha === key);
+      const realUha = String(row.uha || key);
+      const cab =
+        (state.importCabinets || []).find((c) => c.uha === realUha || c.uha === key || c.id === key) ||
+        null;
+      const pending = isPendingUha(realUha);
+      const shown = displayUhaParts(realUha);
       return {
-        uha: key,
+        uha: pending ? shown.main : realUha,
+        pendingUha: pending,
+        storageKey: realUha,
         product: row.product || (cab && cab.product) || "",
         containerNo: row.containerNo || (cab && cab.containerNo) || "",
         arriveDay: (cab && cab.arriveDay) || row.arriveDay || "",
@@ -471,8 +484,22 @@
       });
       stampRow(d);
     } else if (kind === "port" || kind === "release") {
-      const cab = (state.importCabinets || []).find((c) => c.uha === key);
-      const track = cab ? ensureTrackFromCabinet(cab) : findReleased(key);
+      const storageKey = String(fields.storageKey || key || "").trim() || key;
+      const newUha = normUha(fields.uha);
+      let cabKey = storageKey;
+      if (newUha && newUha !== storageKey) {
+        const renamed = assignPortUha(storageKey, newUha);
+        if (!renamed.ok) {
+          if (typeof setStatus === "function") setStatus(renamed.error || "編號更新失敗", true);
+          return false;
+        }
+        cabKey = renamed.uha || newUha;
+      }
+      sess.key = cabKey;
+      if (drawerSession) drawerSession.key = cabKey;
+      if (drawer && (drawer.kind === "port" || drawer.kind === "release")) drawer.key = cabKey;
+      const cab = (state.importCabinets || []).find((c) => c.uha === cabKey || c.id === cabKey);
+      const track = cab ? ensureTrackFromCabinet(cab) : findReleased(cabKey);
       if (!track) return false;
       ensureClearanceShape(track);
       track.inspect = fields.inspect || "none";
@@ -624,18 +651,20 @@
       return false;
     }
     if (typeof save === "function") save();
+    const liveKey = String(sess.key || key);
     if (!sessionOverride) {
       drawerSession.dirty = false;
       drawerSession.baseUpdatedAt = Date.now();
       drawerSession.remoteNewer = false;
-      drawerSession.fields = loadDrawerFields(kind, key);
+      drawerSession.key = liveKey;
+      drawerSession.fields = loadDrawerFields(kind, liveKey);
       if (typeof setStatus === "function") setStatus("已儲存。");
       renderMainBody();
       renderDrawer();
     } else if (typeof setStatus === "function") {
       setStatus("已儲存。");
     }
-    return true;
+    return { ok: true, key: liveKey };
   }
 
   function refreshMainAndDrawer() {
@@ -1686,12 +1715,23 @@
     return "";
   }
 
-  /** 尚未補正式 UHA／NC（含暫編號） */
+  /** 尚未補正式 UHA／NC（含暫編號、裸寫 UHA／NC 無數字） */
   function isPendingUha(v) {
     const s = String(v || "").trim();
     if (!s) return true;
     if (/^待編-/i.test(s) || /^TMP-/i.test(s)) return true;
+    // 只有前綴、後面沒有數字 → 未編碼完成
+    if (/^(UHA|NC)\s*$/i.test(s)) return true;
+    if (/^(UHA|NC)[-–—_\s.]*$/i.test(s)) return true;
     return !/^(UHA|NC)\d+/i.test(s);
+  }
+
+  /** 畫面顯示：待補時固定顯示 UHA／NC 前綴，不秀暫編號雜訊 */
+  function displayUhaParts(v) {
+    const s = String(v || "").trim();
+    if (!isPendingUha(s)) return { main: s, sub: "", pending: false };
+    if (/^NC/i.test(s)) return { main: "NC", sub: "待補編碼", pending: true };
+    return { main: "UHA", sub: "待補編碼", pending: true };
   }
 
   function makePendingUha() {
@@ -4098,6 +4138,8 @@
     findTrackByContainer,
     discardParseDraft,
     assignPortUha,
+    isPendingUha,
+    displayUhaParts,
     markPortReleased,
     markPortReleasedMany,
     unmarkPortReleased,
@@ -4143,6 +4185,7 @@
         return {
           key: c.uha,
           uha: c.uha,
+          pendingUha: isPendingUha(c.uha),
           arriveDay: c.arriveDay || "",
           containerNo: c.containerNo || "",
           product: c.product || "",
@@ -4161,7 +4204,7 @@
           status: portStatusLabel(track),
           cells: [
             c.arriveDay || "—",
-            c.uha,
+            isPendingUha(c.uha) ? "UHA（待補）" : c.uha,
             c.containerNo || "（尚無櫃號）",
             c.product || "—",
             c.seller || "—",
@@ -4263,6 +4306,7 @@
           stageId: "port",
           released: false,
           uha: c.uha || "",
+          pendingUha: isPendingUha(c.uha),
           containerNo: c.containerNo || "",
           arriveDay: c.arriveDay || "",
           product: c.product || "",
@@ -4298,6 +4342,7 @@
           stageId: "release",
           released: true,
           uha: r.uha || "",
+          pendingUha: isPendingUha(r.uha),
           containerNo: r.containerNo || cab.containerNo || "",
           arriveDay: r.arriveDay || cab.arriveDay || "",
           product: r.product || cab.product || "",

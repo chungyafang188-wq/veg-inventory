@@ -241,6 +241,7 @@
         trailer: row.trailer || "",
         note: row.note || "",
         ftConfirmed: !!(row.ftConfirmed || row.ft),
+        ftAt: row.ftAt || "",
         pickupReady: !!row.pickupReady,
         unpackAt: row.unpackAt || "",
         unpackSite: row.unpackSite || "",
@@ -1107,6 +1108,7 @@
     if (row.assignQty2 == null) row.assignQty2 = "";
     if (row.unpackSite2 == null) row.unpackSite2 = "";
     if (row.ftConfirmed == null) row.ftConfirmed = false;
+    if (row.ftAt == null) row.ftAt = "";
     if (row.pickupReady == null) row.pickupReady = false;
     if (row.portConfirm == null) row.portConfirm = row.released ? "done" : "pending";
     if (row.askPickup == null) row.askPickup = false;
@@ -2014,30 +2016,48 @@
     return "待排拆櫃";
   }
 
+  function formatFtLabel(c) {
+    const at = String((c && c.ftAt) || "").trim();
+    if (at) {
+      if (/^\d{4}-\d{2}-\d{2}/.test(at)) return at.slice(0, 10).replace(/^(\d{4})-(\d{2})-(\d{2})/, "$1/$2/$3");
+      return at;
+    }
+    if (c && (c.ftConfirmed || c.ft)) return "已確認";
+    return "—";
+  }
+
+  let releaseSortBy = "uha"; // uha | ft
+
+  function sortReleaseList(list) {
+    const arr = (list || []).slice();
+    arr.sort((a, b) => {
+      if (releaseSortBy === "ft") {
+        const fa = formatFtLabel(a);
+        const fb = formatFtLabel(b);
+        const ka = !fa || fa === "—" ? "9999" : fa === "已確認" ? "0000" : fa;
+        const kb = !fb || fb === "—" ? "9999" : fb === "已確認" ? "0000" : fb;
+        if (ka !== kb) return ka < kb ? -1 : 1;
+      }
+      return String(a.uha || "").localeCompare(String(b.uha || ""), "en", { numeric: true });
+    });
+    return arr;
+  }
+
   function renderRelease(body) {
     ensureState();
     fixArriveDaysInState();
     const all = releaseWorkList();
     const s = releaseStats(all);
     let list = all;
-    // 已放行未拆：全部／待排（含藥檢煙燻進行中）／可排
     if (releaseListTab === "pickup") list = all.filter((x) => x.pickup);
     else if (releaseListTab === "arrange" || releaseListTab === "check") {
       releaseListTab = "arrange";
       list = all.filter((x) => !x.pickup);
     } else releaseListTab = "open";
+    list = sortReleaseList(list);
 
     const rows = list.map((c) => ({
-      cells: [
-        c.arriveDay || "—",
-        c.uha,
-        c.containerNo || "—",
-        c.product || c.note || "—",
-        clearLab(c.inspect),
-        clearLab(c.fumigate),
-        c.endAt ? String(c.endAt).replace("T", " ").slice(0, 16) : "—",
-        releaseStatusLabel(c),
-      ],
+      cells: [c.uha, c.containerNo || "—", formatFtLabel(c)],
       attrs: `data-imp-open="release" data-imp-key="${esc(c.uha)}" class="imp-row-click${c.pickup ? " is-ready" : ""}"`,
     }));
 
@@ -2053,8 +2073,13 @@
         <button type="button" class="imp-filter${releaseListTab === "arrange" ? " is-on" : ""}" data-imp-rel-tab="arrange">待排拆櫃 ${s.arrange}</button>
         <button type="button" class="imp-filter${releaseListTab === "pickup" ? " is-on" : ""}" data-imp-rel-tab="pickup">可排拆櫃 ${s.pickup}</button>
       </div>
-      <p class="imp-one-hint">已放行未拆櫃。待排／可排依 FT 與結束時間；藥檢／薰蒸主登錄在「海關查驗」。</p>
-      ${emptyHint || tableHtml(["到港日", "編號", "櫃號", "品名", "藥檢", "薰蒸", "結束時間", "狀態"], rows)}`;
+      <div class="imp-filter-row" role="group" aria-label="排序">
+        <span class="imp-one-hint" style="margin:0">排序</span>
+        <button type="button" class="imp-filter${releaseSortBy === "uha" ? " is-on" : ""}" data-imp-rel-sort="uha">編號</button>
+        <button type="button" class="imp-filter${releaseSortBy === "ft" ? " is-on" : ""}" data-imp-rel-sort="ft">FT</button>
+      </div>
+      <p class="imp-one-hint">已放行未拆櫃：編號、貨櫃號碼、FT（不顯示到港日）。</p>
+      ${emptyHint || tableHtml(["編號", "貨櫃號碼", "FT"], rows)}`;
   }
 
   function findReleased(uha) {
@@ -2075,7 +2100,7 @@
       row[field] = value || "none";
       if (field === "inspect") row.inspectManual = true;
       else row.fumigateManual = true;
-    } else if (field === "inspectAt" || field === "fumigateAt") row[field] = value || "";
+    } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt") row[field] = value || "";
     else if (
       field === "customsNo" ||
       field === "note" ||
@@ -2085,6 +2110,10 @@
       field === "trailerNote"
     )
       row[field] = String(value || "").trim();
+    if (field === "ftAt" && row.ftAt) {
+      row.ft = true;
+      row.ftConfirmed = true;
+    }
     stampRow(row);
     if (typeof save === "function") save();
   }
@@ -2780,6 +2809,14 @@
       syncShellChrome(importPane);
       return;
     }
+    const relSort = e.target.closest("[data-imp-rel-sort]");
+    if (relSort) {
+      releaseSortBy = relSort.dataset.impRelSort || "uha";
+      importPane = "release";
+      refreshMainAndDrawer();
+      syncShellChrome(importPane);
+      return;
+    }
     const pane = e.target.closest("[data-imp-pane]");
     if (pane) {
       setImportPane(pane.dataset.impPane);
@@ -2960,16 +2997,7 @@
       else if (t === "arrange") list = all.filter((x) => !x.pickup);
       return list.map((c) => ({
         key: c.uha,
-        cells: [
-          c.arriveDay || "—",
-          c.uha,
-          c.containerNo || "—",
-          c.product || c.note || "—",
-          clearLab(c.inspect),
-          clearLab(c.fumigate),
-          c.endAt ? String(c.endAt).replace("T", " ").slice(0, 16) : "—",
-          releaseStatusLabel(c),
-        ],
+        cells: [c.uha, c.containerNo || "—", formatFtLabel(c)],
       }));
     },
     releaseTabCounts() {

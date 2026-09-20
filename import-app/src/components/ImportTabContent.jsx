@@ -4,6 +4,7 @@ import { CountBadge } from "./CountBadge";
 import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
 import { PortPane } from "./PortPane";
+import { ReleasePane } from "./ReleasePane";
 import { TablePane } from "./TablePane";
 import { UnpackBoardPane, UnpackReportPane, UnpackSumPane } from "./UnpackBoardPane";
 
@@ -41,7 +42,6 @@ export function ImportTabContent({
       {activeTab === "port" ? (
         <PortPane
           title={title}
-          hint="同畫面勾選已放行；藥檢／薰蒸／拖車派貨直接改。也可手動新增，或到「舊資料」下載格式匯入。"
           portTab={portTab}
           setPortTab={setPortTab}
           portCounts={portCounts}
@@ -52,31 +52,14 @@ export function ImportTabContent({
       ) : null}
 
       {activeTab === "release" ? (
-        <div className="grid gap-2.5">
-          <div
-            className="flex w-full flex-row gap-2 overflow-x-auto whitespace-nowrap p-0.5 touch-pan-x"
-            role="tablist"
-            aria-label="已放行狀態"
-          >
-            {[
-              ["open", "全部", lists.releaseCounts.open, false],
-              ["arrange", "待排拆櫃", lists.releaseCounts.arrange, false],
-              ["pickup", "可排拆櫃", lists.releaseCounts.pickup, false],
-            ].map(([id, lab, count, warn]) => (
-              <button key={id} type="button" className={releaseTab === id ? chipOn : chipIdle} onClick={() => setReleaseTab(id)}>
-                {lab}
-                <CountBadge count={count} warn={warn} />
-              </button>
-            ))}
-          </div>
-          <TablePane
-            title={title}
-            hint="可排拆櫃：與拖車確認拆卸位置與日期時間，拆工可後填；儲存後派送「貨櫃拆卸資料」。"
-            columns={["到港日", "編號(UHA/NC)", "櫃號", "品名", "藥檢", "薰蒸", "結束時間", "狀態"]}
-            rows={lists.release}
-            onOpen={(key) => openDrawer("release", key)}
-          />
-        </div>
+        <ReleasePane
+          title={title}
+          releaseTab={releaseTab}
+          setReleaseTab={setReleaseTab}
+          counts={lists.releaseCounts}
+          rows={lists.release}
+          openDrawer={openDrawer}
+        />
       ) : null}
 
       {activeTab === "upBoard" ? (

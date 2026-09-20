@@ -10,7 +10,6 @@ export const TABS = [
   { id: "parse", lab: "判讀", block: "port" },
   { id: "port", lab: "海關查驗", block: "port" },
   { id: "release", lab: "已放行", block: "port" },
-  { id: "checklist", lab: "查驗清單", block: "port" },
   { id: "files", lab: "舊資料", block: "port" },
   { id: "upBoard", lab: "拆卸貨櫃總資料", block: "unpack" },
   { id: "unpack", lab: "拆櫃回報", block: "unpack" },
@@ -27,7 +26,7 @@ export const PANE_TITLE = {
   parse: "判讀",
   port: "海關查驗",
   release: "已放行",
-  checklist: "查驗清單",
+  checklist: "海關查驗",
   stock: "進口庫存",
   sum: "拆卸總清單",
   upBoard: "拆卸貨櫃總資料",
@@ -50,9 +49,14 @@ export const CLEAR_OPTS = [
 /** 藥檢／薰蒸下拉：依欄位顯示「需要藥檢」「需要薰蒸」 */
 export function clearOptsFor(kind) {
   return CLEAR_OPTS.map((o) => {
-    if (o.id !== "wait") return o;
-    if (kind === "inspect") return { ...o, lab: "需要藥檢" };
-    if (kind === "fumigate") return { ...o, lab: "需要薰蒸" };
+    if (o.id === "wait") {
+      if (kind === "inspect") return { ...o, lab: "需要藥檢" };
+      if (kind === "fumigate") return { ...o, lab: "需要薰蒸" };
+    }
+    if (o.id === "skip") {
+      if (kind === "inspect") return { ...o, lab: "無須檢驗" };
+      if (kind === "fumigate") return { ...o, lab: "無須薰蒸" };
+    }
     return o;
   });
 }
@@ -72,7 +76,7 @@ const TAB_BY_ID = Object.fromEntries(TABS.map((t) => [t.id, t]));
 export function normalizePane(pane) {
   let p = pane || "parse";
   if (p === "board" || p === "hub") p = "parse";
-  if (p === "status") p = "port";
+  if (p === "status" || p === "checklist") p = "port";
   if (p === "現場作業") p = "upBoard";
   if (!TAB_BY_ID[p]) p = "parse";
   return p;

@@ -152,7 +152,6 @@ export default function ImportApp({ initialPane = "parse" }) {
         parse: drafts.length,
         port: portCounts.open,
         release: releaseCounts.open,
-        checklist: checklist.length,
         upBoard: upBoardMeta.total,
         unpack: unpackCounts.pending,
         sum: sumCounts.open,

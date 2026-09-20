@@ -39,7 +39,7 @@
     buy: "進口採購",
     port: "海關查驗",
     release: "已放行",
-    checklist: "查驗清單",
+    checklist: "海關查驗",
     stock: "進口庫存",
     sum: "拆卸總清單",
     upBoard: "拆卸貨櫃總資料",
@@ -61,7 +61,6 @@
     { id: "parse", lab: "判讀", block: "port" },
     { id: "port", lab: "海關查驗", block: "port" },
     { id: "release", lab: "已放行", block: "port" },
-    { id: "checklist", lab: "查驗清單", block: "port" },
     { id: "files", lab: "舊資料", block: "port" },
     { id: "upBoard", lab: "拆卸貨櫃總資料", block: "unpack" },
     { id: "unpack", lab: "拆櫃回報", block: "unpack" },
@@ -76,7 +75,7 @@
 
   function activeTabId(pane) {
     if (pane === "board" || pane === "hub") return "parse";
-    if (pane === "status") return "port";
+    if (pane === "status" || pane === "checklist") return "port";
     return pane || "parse";
   }
 
@@ -93,7 +92,7 @@
   function normalizePane(pane) {
     let p = pane || "parse";
     if (p === "board" || p === "hub") p = "parse";
-    if (p === "status") p = "port";
+    if (p === "status" || p === "checklist") p = "port";
     if (!IMP_TABS.some((x) => x.id === p)) p = "parse";
     return p;
   }
@@ -1619,7 +1618,7 @@
     if (typeof setStatus === "function") {
       setStatus(`已匯入貨櫃追蹤 ${n} 筆（海關查驗 ${port} · 已放行 ${release}）。`);
     }
-    importPane = release && !port ? "release" : release && port ? "checklist" : "port";
+    importPane = release && !port ? "release" : "port";
     closeDrawer({ force: true });
     renderImportPage();
     return { n, port, release };

@@ -1,16 +1,11 @@
 import { api } from "../bridge";
 import { PANE_TITLE } from "../constants";
-import { ClearanceListPane } from "./ClearanceListPane";
-import { CountBadge } from "./CountBadge";
+import { CustomsClearancePane } from "./CustomsClearancePane";
 import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
-import { PortPane } from "./PortPane";
 import { ReleasePane } from "./ReleasePane";
 import { TablePane } from "./TablePane";
 import { UnpackBoardPane, UnpackReportPane, UnpackSumPane } from "./UnpackBoardPane";
-
-const chipIdle = "imp-chip flex-shrink-0";
-const chipOn = "imp-chip imp-chip-on flex-shrink-0";
 
 /** 共用內容區：只依 activeTab 條件渲染，不改 DOM display */
 export function ImportTabContent({
@@ -40,14 +35,16 @@ export function ImportTabContent({
         <ParsePane title={title} drafts={lists.drafts} onParsed={refresh} onOpenDraft={(key) => openDrawer("draft", String(key))} />
       ) : null}
 
-      {activeTab === "port" ? (
-        <PortPane
-          title={title}
+      {activeTab === "port" || activeTab === "checklist" ? (
+        <CustomsClearancePane
+          title={PANE_TITLE.port}
           portTab={portTab}
           setPortTab={setPortTab}
           portCounts={portCounts}
-          rows={lists.port}
+          rows={lists.checklist}
+          portRows={lists.port}
           refresh={refresh}
+          openDrawer={openDrawer}
           onAfterRelease={() => setActiveTab?.("release")}
         />
       ) : null}
@@ -64,15 +61,6 @@ export function ImportTabContent({
           refresh={refresh}
           onDispatched={() => setActiveTab?.("upBoard")}
           onAfterUnmark={() => setActiveTab?.("port")}
-        />
-      ) : null}
-
-      {activeTab === "checklist" ? (
-        <ClearanceListPane
-          title={title}
-          rows={lists.checklist}
-          refresh={refresh}
-          openDrawer={openDrawer}
         />
       ) : null}
 

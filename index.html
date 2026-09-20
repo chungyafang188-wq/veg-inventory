@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=378" />
+    <link rel="stylesheet" href="./styles.css?v=379" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
     <link rel="stylesheet" href="./unpack-flow.css?v=10" />
     <link rel="stylesheet" href="./import-flow.css?v=25" />
@@ -146,8 +146,8 @@
         </nav>
         <div class="orders-swipe" id="orders-swipe">
           <div class="orders-pane" data-orders-pane-page="form">
-        <p class="form-line-entry">
-          <button type="button" class="ghost" data-orders-pane="line" id="form-line-entry-btn">LINE文字轉單</button>
+        <p class="form-line-entry" hidden>
+          <button type="button" class="ghost" data-orders-pane="line">LINE文字轉單</button>
           <span class="muted">貼客人叫貨文字，確認後進已填單</span>
         </p>
         <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單"></nav>
@@ -167,42 +167,95 @@
             <button type="button" id="nq-cancel-edit" class="ghost" hidden>取消編輯</button>
           </div>
         </section>
-        <form id="order-form" class="card">
-          <div class="head">
-            <h2 id="form-title">下單</h2>
-            <details class="ship-more" id="ship-more">
-              <summary id="ship-more-sum">當日</summary>
+        <form id="order-form" class="order-desk">
+          <header class="order-desk-top">
+            <div class="order-desk-top-lead">
+              <h2 id="form-title">下單</h2>
+              <button type="button" class="ghost order-line-jump" data-orders-pane="line" id="form-line-entry-btn">LINE文字轉單</button>
+            </div>
+            <div class="order-desk-top-fields">
+              <label class="field order-who-field" for="customer">叫貨對象
+                <span class="cust-wrap">
+                  <input id="customer" type="text" required placeholder="姓名、注音ㄉ，或拼音 dong" autocomplete="off" spellcheck="false" lang="zh-Hant" />
+                  <div id="cust-suggest" class="cust-suggest" hidden></div>
+                </span>
+              </label>
+              <label class="field order-date-field" for="ship-date">出貨日
+                <input id="ship-date" type="date" required />
+              </label>
+              <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
+                <span class="urgent-toggle-ico" aria-hidden="true">!</span>
+                <span class="urgent-toggle-lab">急單</span>
+              </button>
+              <input id="order-urgent" type="checkbox" hidden />
+            </div>
+            <p class="hint order-desk-dayhint" id="ship-more-sum">當日</p>
+            <details class="ship-more" id="ship-more" hidden>
+              <summary>出貨日進階</summary>
               <p class="ship-more-note">預設今天。改成明天以後會當成預訂單，當天再出貨。</p>
-              <label class="ship-more-field">出貨日 <input id="ship-date" type="date" required /></label>
             </details>
-          </div>
+          </header>
           <p class="hint" id="form-hint" hidden></p>
           <input id="edit-id" type="hidden" />
-          <div class="order-who-row">
-            <label class="field order-who-field" for="customer">出貨對象
-              <span class="cust-wrap">
-                <input id="customer" type="text" required placeholder="姓名、注音ㄉ，或拼音 dong" autocomplete="off" spellcheck="false" lang="zh-Hant" />
-                <div id="cust-suggest" class="cust-suggest" hidden></div>
-              </span>
-            </label>
-            <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
-              <span class="urgent-toggle-ico" aria-hidden="true">!</span>
-              <span class="urgent-toggle-lab">急單</span>
-            </button>
-            <input id="order-urgent" type="checkbox" hidden />
-          </div>
           <input id="ship-addr" type="hidden" />
-          <div id="sheet"></div>
-          <div id="ticket" class="ticket">
-            <p class="ticket-empty">本單還沒有品項</p>
-          </div>
-          <label class="field" for="order-note">備註
-            <input id="order-note" type="text" placeholder="可不填" autocomplete="off" spellcheck="false" />
-          </label>
-          <div class="btn-row order-submit-row">
-            <button type="submit" class="primary" id="order-submit">確認送出</button>
-            <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
-            <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
+
+          <div class="order-desk-grid">
+            <div class="order-desk-main">
+              <section class="order-block order-route" aria-labelledby="order-route-title">
+                <h3 class="order-block-title" id="order-route-title">物流路線</h3>
+                <div class="route-pair">
+                  <div class="route-leg">
+                    <p class="route-leg-lab"><span class="route-ico" aria-hidden="true">起</span>我方出貨倉（起點）</p>
+                    <select id="form-ship-wh" class="route-wh" aria-label="我方出貨倉">
+                      <option value="">（未選／預設）</option>
+                      <option value="穠全(A倉)">穠全(A倉)</option>
+                      <option value="二崙(B倉)">二崙(B倉)</option>
+                      <option value="大庄">大庄</option>
+                      <option value="油一">油一</option>
+                      <option value="油二">油二</option>
+                      <option value="油三">油三</option>
+                      <option value="周">周</option>
+                    </select>
+                  </div>
+                  <div class="route-leg">
+                    <p class="route-leg-lab"><span class="route-ico is-end" aria-hidden="true">迄</span>客戶下貨點（終點）</p>
+                    <div class="route-dest-picks" id="form-dest-picks" role="group" aria-label="客戶下貨點"></div>
+                    <input id="form-dest-other" class="dest-other route-dest-other" type="text" placeholder="貨運名稱或其他位置" hidden autocomplete="off" />
+                    <p class="route-dest-hint muted" id="form-dest-hint" hidden></p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="order-block order-items" aria-labelledby="order-items-title">
+                <h3 class="order-block-title" id="order-items-title">品項／件數</h3>
+                <label class="field sku-search-field" for="sku-quick-search">快速搜尋
+                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="搜尋或輸入品項名稱…" autocomplete="off" spellcheck="false" />
+                  <datalist id="sku-quick-list"></datalist>
+                </label>
+                <div class="sku-hot" id="sku-hot-chips" role="group" aria-label="常用品項">
+                  <button type="button" class="sku-hot-chip" data-hot-big="leaf">地瓜葉</button>
+                  <button type="button" class="sku-hot-chip" data-hot-big="basil">九層塔</button>
+                  <button type="button" class="sku-hot-chip" data-hot-big="on">洋蔥</button>
+                  <button type="button" class="sku-hot-chip" data-hot-big="on-p">紫洋蔥</button>
+                  <button type="button" class="sku-hot-chip" data-hot-big="cab">高麗菜</button>
+                  <button type="button" class="sku-hot-chip" data-hot-big="pk">南瓜</button>
+                </div>
+                <div id="sheet"></div>
+              </section>
+            </div>
+
+            <aside class="order-desk-cart order-block" aria-labelledby="order-cart-title">
+              <h3 class="order-block-title" id="order-cart-title">待確認清單</h3>
+              <div id="ticket" class="ticket"></div>
+              <label class="field order-cart-note" for="order-note">整單備註
+                <input id="order-note" type="text" placeholder="可不填" autocomplete="off" spellcheck="false" />
+              </label>
+              <div class="btn-row order-submit-row">
+                <button type="submit" class="primary" id="order-submit">確認送出</button>
+                <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
+                <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
+              </div>
+            </aside>
           </div>
         </form>
           </div>
@@ -554,7 +607,7 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=388"></script>
+    <script src="./app.js?v=389"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=15"></script>
     <script src="./import-flow.js?v=62"></script>

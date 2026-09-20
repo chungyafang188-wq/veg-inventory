@@ -3635,6 +3635,242 @@ body.on-home .home-open .hub-mark.has-pic {
   padding: 0.25rem 0.7rem;
   font-size: 0.85rem;
 }
+/* —— 網頁下單桌面：雙欄＋降噪卡片 —— */
+#order-form.order-desk {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.order-desk-top {
+  margin-bottom: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.order-desk-top-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.order-desk-top-lead h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.order-desk-top-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem 0.75rem;
+}
+.order-desk-top-fields .order-who-field {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+}
+.order-desk-top-fields .order-date-field {
+  flex: 0 0 auto;
+  margin: 0;
+  min-width: 9.5rem;
+}
+.order-desk-dayhint {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.order-desk-grid {
+  display: grid;
+  gap: 0.85rem;
+  align-items: start;
+}
+body.layout-web .order-desk-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(17rem, 0.9fr);
+}
+.order-desk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.order-block {
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.order-block-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+.route-pair {
+  display: grid;
+  gap: 0.85rem;
+}
+@media (min-width: 720px) {
+  body.layout-web .route-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.route-leg-lab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+}
+.route-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+.route-ico.is-end {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.route-wh {
+  width: 100%;
+  margin: 0;
+  min-height: 2.5rem;
+}
+.route-dest-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.route-dest-picks .dest-chip {
+  margin: 0;
+  width: auto;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+.route-dest-other {
+  margin-top: 0.45rem;
+  width: 100%;
+}
+.route-dest-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+}
+.sku-search-field {
+  margin: 0 0 0.55rem;
+}
+.sku-hot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+.sku-hot-chip {
+  margin: 0;
+  width: auto;
+  min-height: 2.15rem;
+  padding: 0.3rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sku-hot-chip.is-on,
+.sku-hot-chip:hover {
+  background: #047857;
+  color: #fff;
+}
+body.layout-web .order-desk .item-line .line-ship-meta,
+.order-desk .item-line .line-ship-meta {
+  display: none;
+}
+body.layout-web .order-desk-cart {
+  position: sticky;
+  top: 0.6rem;
+  max-height: calc(100dvh - 5.5rem);
+  overflow: auto;
+}
+body.layout-web .order-desk-cart .ticket {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ticket-route {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+}
+.ticket-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.ticket-item-meta {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.75rem;
+}
+.ticket-total {
+  margin: 0.65rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+.ticket-total strong {
+  font-size: 1.15rem;
+  color: #047857;
+}
+.order-cart-note {
+  margin-top: 0.65rem;
+}
+body.layout-web .order-desk .pick-block {
+  padding: 0.55rem 0 0;
+  border: 0;
+  background: transparent;
+}
+body.layout-web .order-desk .line-metric-card {
+  border: 0;
+  box-shadow: inset 0 0 0 1px #e8eef2;
+  background: #f8fafc;
+}
+body.layout-web .order-desk .item-add-bar .primary {
+  width: 100%;
+}
+@media (max-width: 899px) {
+  body.layout-web .order-desk-grid {
+    grid-template-columns: 1fr;
+  }
+  body.layout-web .order-desk-cart {
+    position: static;
+    max-height: none;
+  }
+}
+
 .ticket {
   margin-top: 0.5rem;
   padding: 0.55rem 0.65rem 0.6rem;

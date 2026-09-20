@@ -5017,8 +5017,23 @@ function applyDestToLine(line) {
     applyFreightToLine(line, lastTicketDest());
     return line;
   }
+  const mode = formDestMode();
+  if (mode === "寄貨運") {
+    applyFreightToLine(line, formDestExtraValue() || freightCarrierDefault());
+    return line;
+  }
+  if (mode && SHIP_PRESETS.includes(mode)) {
+    line.dest = mode;
+    delete line.destOther;
+    delete line.destFreight;
+    return line;
+  }
   const dest = rememberedDest();
   if (dest) {
+    if (dest === "寄貨運") {
+      applyFreightToLine(line, freightCarrierDefault());
+      return line;
+    }
     if (!SHIP_PRESETS.includes(dest)) {
       const who = document.getElementById("customer")?.value;
       const freight = freightCarrierDefault(who);
@@ -5109,6 +5124,7 @@ function fillAddrForCustomer(name) {
   if (!ticketLines.length) setShipAddr(lastShipAddr(name));
   else syncHiddenShipAddr();
   renderTicket();
+  syncFormRouteUi();
 }
 function removeAllCustomer(name) {
   removeHaCustomer(name);
@@ -5284,9 +5300,138 @@ function syncShipMore() {
     if (!pre) box.open = false;
   }
   if (submit) {
-    if (editing) submit.textContent = "確認改單";
-    else submit.textContent = pre ? "確認預訂單" : "確認送出";
+    const n = ticketLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+    const nTxt = n > 0 ? `（${fmt(n)}件）` : "";
+    if (editing) submit.textContent = `確認改單${nTxt}`;
+    else submit.textContent = pre ? `確認預訂單${nTxt}` : `送出訂單${nTxt}`;
   }
+}
+function formDestMode() {
+  if (ticketLines.length) {
+    const modes = ticketLines.map((l) => lineDestMode(l)).filter(Boolean);
+    if (modes.length && modes.every((m) => m === modes[0])) return modes[0];
+    if (modes.length) return "";
+  }
+  const addr = String(document.getElementById("ship-addr")?.value || "").trim();
+  const first = destFromRemembered(addr) || addr;
+  if (SHIP_PRESETS.includes(first)) return first;
+  if (first === "寄貨運") return "寄貨運";
+  if (first) {
+    const who = document.getElementById("customer")?.value;
+    const freight = freightCarrierDefault(who);
+    if (first.includes("貨運") || (freight && (first === freight || first.includes(freight) || freight.includes(first)))) {
+      return "寄貨運";
+    }
+    if (freightRunMeta(first).ord < 800) return "寄貨運";
+    return "其他";
+  }
+  return "";
+}
+function formDestExtraValue() {
+  const mode = formDestMode();
+  if (mode !== "寄貨運" && mode !== "其他") return "";
+  if (ticketLines.length) return String(ticketLines[0]?.dest || "").trim();
+  return destFromRemembered(document.getElementById("ship-addr")?.value) || "";
+}
+function syncFormRouteUi() {
+  const picks = document.getElementById("form-dest-picks");
+  if (!picks) return;
+  const mode = formDestMode();
+  picks.innerHTML = destPicksHtml(mode, (v) => `data-form-dest="${v}"`);
+  const other = document.getElementById("form-dest-other");
+  if (other) {
+    const show = mode === "寄貨運" || mode === "其他";
+    other.hidden = !show;
+    other.placeholder = mode === "寄貨運" ? "貨運名稱，可改（帶入客戶常用）" : "其他下貨位置";
+    if (show) other.value = formDestExtraValue();
+  }
+  const hint = document.getElementById("form-dest-hint");
+  const who = String(document.getElementById("customer")?.value || "").trim();
+  if (hint) {
+    if (mode === "寄貨運" && who) {
+      const carrier = freightCarrierDefault(who);
+      hint.hidden = !carrier;
+      hint.textContent = carrier ? `已帶入「${who}」常用：${carrier}` : "";
+    } else {
+      hint.hidden = true;
+      hint.textContent = "";
+    }
+  }
+}
+function applyFormDestToTicket(mode) {
+  const v = String(mode || "").trim();
+  if (!ticketLines.length) {
+    if (v === "寄貨運") {
+      const carrier = freightCarrierDefault() || "";
+      setShipAddr(carrier || "寄貨運");
+    } else if (v === "其他") {
+      setShipAddr("");
+    } else {
+      setShipAddr(v);
+    }
+    syncFormRouteUi();
+    return;
+  }
+  for (const line of ticketLines) {
+    if (v === "其他") {
+      if (SHIP_PRESETS.includes(String(line.dest || "").trim()) || line.destFreight || String(line.dest || "").trim() === "寄貨運")
+        line.dest = "";
+      line.destOther = true;
+      delete line.destFreight;
+    } else if (v === "寄貨運") {
+      applyFreightToLine(line, freightCarrierDefault());
+    } else {
+      line.dest = v;
+      delete line.destOther;
+      delete line.destFreight;
+    }
+  }
+  syncHiddenShipAddr();
+  renderTicket();
+  syncFormRouteUi();
+}
+function formShipWhValue() {
+  return shipWhOf(document.getElementById("form-ship-wh")?.value || "");
+}
+function applyFormShipWhToLine(line) {
+  if (!line) return line;
+  const wh = formShipWhValue();
+  if (wh && !lineShipWh(line)) applyShipMeta(line, lineContainerNo(line), wh);
+  return line;
+}
+function fillSkuQuickList() {
+  const list = document.getElementById("sku-quick-list");
+  if (!list || list.dataset.ready === "1") return;
+  const pairs = [
+    ["leaf", "地瓜葉"],
+    ["basil", "九層塔"],
+    ["basil-kg", "九層塔散賣"],
+    ["on", "洋蔥"],
+    ["on-p", "紫洋蔥"],
+    ["on-b", "洋蔥B"],
+    ["pk", "南瓜"],
+    ...Object.entries(HA_VEG).map(([id, def]) => [id, def.label]),
+  ];
+  list.innerHTML = pairs.map(([, lab]) => `<option value="${esc(lab)}"></option>`).join("");
+  list.dataset.ready = "1";
+}
+function pickBigFromSearchLabel(lab) {
+  const name = String(lab || "").trim();
+  if (!name) return "";
+  const map = {
+    地瓜葉: "leaf",
+    九層塔: "basil",
+    九層塔散賣: "basil-kg",
+    洋蔥: "on",
+    紫洋蔥: "on-p",
+    洋蔥B: "on-b",
+    南瓜: "pk",
+  };
+  if (map[name]) return map[name];
+  for (const [id, def] of Object.entries(HA_VEG)) {
+    if (def.label === name) return id;
+  }
+  return "";
 }
 function ticketDestHtml(l, i) {
   const mode = lineDestMode(l);
@@ -5303,30 +5448,21 @@ function renderTicket() {
   if (!box) return;
   const kind = shipKindLabel();
   const who = ticketWhoText();
+  syncFormRouteUi();
   if (!ticketLines.length) {
     box.classList.add("is-empty");
     box.innerHTML = `<p class="ticket-empty">本單還沒有品項<span class="ticket-kind">${esc(kind)}</span></p>`;
+    syncShipMore();
     syncOrderEntering();
     return;
   }
   box.classList.remove("is-empty");
   const drops = uniqueTicketDrops();
-  const sharedMode = (() => {
-    const modes = ticketLines.map((l) => lineDestMode(l)).filter(Boolean);
-    if (!modes.length) return "";
-    const first = modes[0];
-    return modes.every((m) => m === first) ? first : "";
-  })();
-  const sharedExtra =
-    sharedMode === "寄貨運" || sharedMode === "其他" ? String(ticketLines[0]?.dest || "").trim() : "";
-  const sharedPh = sharedMode === "寄貨運" ? "貨運名稱，可改" : "其他位置";
-  box.innerHTML = `<p class="ticket-head">${editing ? "改單品項" : "待確認"} <span>${esc(who)}</span><span class="ticket-kind">${esc(kind)}</span></p>
-    ${drops.length ? `<p class="ticket-addr">${esc(drops.join("／"))}</p>` : ""}
-    <div class="ticket-dest-all" role="group" aria-labelledby="ticket-dest-lab">
-      <p class="pick-lab ticket-dest-lab" id="ticket-dest-lab">出貨位置</p>
-      <div class="ticket-dest-picks">${destPicksHtml(sharedMode, (v) => `data-ticket-dest-all="${v}"`)}</div>
-      <input class="dest-other ticket-dest-other" data-ticket-dest-all-other type="text" placeholder="${esc(sharedPh)}" value="${esc(sharedExtra)}" ${sharedMode === "寄貨運" || sharedMode === "其他" ? "" : "hidden"} autocomplete="off" />
-    </div>
+  const wh = formShipWhValue();
+  const routeTxt = [wh || "出貨倉未選", drops.join("／") || "下貨點未選"].join(" → ");
+  const totalQty = ticketLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+  box.innerHTML = `<p class="ticket-head"><span class="ticket-who-name">${esc(who || "未填客戶")}</span><span class="ticket-kind">${esc(kind)}</span></p>
+    <p class="ticket-route muted">${esc(routeTxt)}</p>
     <ul class="ticket-list">${ticketLines
       .map((l, i) => {
         const sku = skuById(l.skuId);
@@ -5335,8 +5471,15 @@ function renderTicket() {
         const qtyVal = qtyFieldValue(l.qty);
         const qtyPh = qtyFieldPlaceholder(banVal);
         const quick = banQuickHtml(banVal, `data-ticket-ban-quick="${i}"`);
+        const dest = String(l.dest || "").trim();
+        const lineWh = lineShipWh(l);
+        const metaBits = [lineWh, dest].filter(Boolean).join(" → ");
         return `<li class="ticket-item">
-          <span class="ticket-name">${esc(ticketLineName(l))}</span>
+          <div class="ticket-item-top">
+            <strong class="ticket-name">${esc(ticketLineName(l))}</strong>
+            <button type="button" class="tiny-btn ghost" data-ticket-del="${i}" aria-label="刪除">刪除</button>
+          </div>
+          ${metaBits ? `<p class="ticket-item-meta muted">${esc(metaBits)}</p>` : ""}
           <div class="metric-pair ticket-metric-pair">
             <div class="ticket-metric ticket-metric-ban">
               <span class="metric-lab">版數</span>
@@ -5359,10 +5502,11 @@ function renderTicket() {
               : ""
           }
           <label class="ticket-line-note-field"><span class="metric-lab">備註</span><input data-ticket-note="${i}" type="text" value="${esc(l.note || "")}" placeholder="品項備註" autocomplete="off" spellcheck="false" /></label>
-          <button type="button" class="tiny-btn ghost" data-ticket-del="${i}">刪</button>
         </li>`;
       })
-      .join("")}</ul>`;
+      .join("")}</ul>
+    <p class="ticket-total">總件數 <strong>${esc(fmt(totalQty))}</strong> 件</p>`;
+  syncShipMore();
   syncOrderEntering();
 }
 function selectPickerBig(big) {
@@ -5402,7 +5546,7 @@ function pushPickerToTicket(nextBig) {
     openLotModal({ skuId: needLot.skuId, qty: needLot.qty, selectedUha: formLot?.uha, addAfter: true });
     return false;
   }
-  for (const l of extra) ticketLines.push(applyDestToLine({ ...l }));
+  for (const l of extra) ticketLines.push(applyFormShipWhToLine(applyDestToLine({ ...l })));
   formLot = null;
   renderItemSheet();
   if (nextBig) selectPickerBig(nextBig);
@@ -5499,7 +5643,7 @@ function isCustomFam(fam) {
   return fam === "custom-nq" || fam === "custom-ha";
 }
 function workingLines() {
-  const extra = unifiedLinesFromForm().map((l) => applyDestToLine({ ...l }));
+  const extra = unifiedLinesFromForm().map((l) => applyFormShipWhToLine(applyDestToLine({ ...l })));
   return [...ticketLines, ...extra].map(cleanLine);
 }
 
@@ -5845,8 +5989,8 @@ function handleItemLineEnter(e) {
   }
   if (t.closest?.("[data-line-qty]")) {
     e.preventDefault();
-    // Enter only moves focus; add via 加入本單 click (or Enter on that button).
-    row.querySelector("[data-ticket-add]")?.focus();
+    const ok = pushPickerToTicket();
+    if (ok) requestAnimationFrame(() => focusItemLineStart());
     return true;
   }
   if (t.closest?.("[data-custom-name]")) {
@@ -6075,8 +6219,7 @@ function unifiedLineHtml(rec = {}) {
       <input id="line-note" data-line-note type="text" value="${esc(rec.note || "")}" placeholder="可不填" autocomplete="off" spellcheck="false" />
     </label>
     <div class="item-add-bar">
-      <button type="button" class="primary" data-ticket-add>加入本單</button>
-      <span class="muted item-add-hint">選好也可直接按送出。</span>
+      <button type="button" class="primary" data-ticket-add>＋ 加入本單（按 Enter 即可）</button>
     </div>
   </div>`;
 }
@@ -6089,6 +6232,8 @@ function itemLineHtml(rec = {}) {
 function renderItemSheet() {
   document.getElementById("sheet").innerHTML = `<div id="ha-lines">${itemLineHtml({})}</div>`;
   syncFormLotRow();
+  fillSkuQuickList();
+  syncFormRouteUi();
 }
 function draftSkuFromFormRow() {
   const extra = unifiedLinesFromForm();
@@ -12948,7 +13093,18 @@ document.getElementById("cust-suggest")?.addEventListener("mousedown", (e) => {
   e.preventDefault();
   document.getElementById("customer").value = btn.dataset.cust;
   fillAddrForCustomer(btn.dataset.cust);
-  const whoEl = document.querySelector("#ticket .ticket-who span");
+  // 有常用下貨點時，優先切到「寄貨運」並帶入名稱
+  {
+    const remembered = destFromRemembered(lastShipAddr(btn.dataset.cust));
+    if (remembered && !SHIP_PRESETS.includes(remembered)) {
+      applyFormDestToTicket("寄貨運");
+      const other = document.getElementById("form-dest-other");
+      if (other) other.value = remembered;
+      setShipAddr(remembered);
+      syncFormRouteUi();
+    }
+  }
+  const whoEl = document.querySelector("#ticket .ticket-who-name, #ticket .ticket-who span, #ticket .ticket-head span");
   if (whoEl) whoEl.textContent = ticketWhoText();
   const box = document.getElementById("cust-suggest");
   if (box) {
@@ -13012,6 +13168,64 @@ document.getElementById("order-note")?.addEventListener("input", syncOrderEnteri
 document.getElementById("order-urgent-btn")?.addEventListener("click", () => {
   toggleOrderUrgent();
   syncOrderEntering();
+});
+document.getElementById("order-form")?.addEventListener("click", (e) => {
+  const dest = e.target.closest("[data-form-dest]");
+  if (dest) {
+    applyFormDestToTicket(dest.dataset.formDest);
+    return;
+  }
+  const hot = e.target.closest("[data-hot-big]");
+  if (hot) {
+    selectPickerBig(hot.dataset.hotBig);
+    document.querySelectorAll("#sku-hot-chips .sku-hot-chip").forEach((b) => {
+      b.classList.toggle("is-on", b === hot);
+    });
+    syncOrderEntering();
+    return;
+  }
+});
+document.getElementById("form-dest-other")?.addEventListener("input", () => {
+  const mode = formDestMode();
+  const v = String(document.getElementById("form-dest-other")?.value || "").trim();
+  if (!ticketLines.length) {
+    if (mode === "寄貨運" || mode === "其他") setShipAddr(v || (mode === "寄貨運" ? "寄貨運" : ""));
+    return;
+  }
+  for (const line of ticketLines) {
+    if (mode === "寄貨運") applyFreightToLine(line, v || freightCarrierDefault());
+    else if (mode === "其他") {
+      line.dest = v;
+      line.destOther = true;
+      delete line.destFreight;
+    }
+  }
+  syncHiddenShipAddr();
+  renderTicket();
+});
+document.getElementById("form-ship-wh")?.addEventListener("change", () => {
+  renderTicket();
+});
+document.getElementById("sku-quick-search")?.addEventListener("change", () => {
+  const el = document.getElementById("sku-quick-search");
+  const big = pickBigFromSearchLabel(el?.value);
+  if (!big) return;
+  selectPickerBig(big);
+  document.querySelectorAll("#sku-hot-chips .sku-hot-chip").forEach((b) => {
+    b.classList.toggle("is-on", b.dataset.hotBig === big);
+  });
+  if (el) el.value = "";
+  syncOrderEntering();
+});
+document.getElementById("sku-quick-search")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const el = document.getElementById("sku-quick-search");
+  const big = pickBigFromSearchLabel(el?.value);
+  if (!big) return;
+  selectPickerBig(big);
+  if (el) el.value = "";
+  focusItemLineStart();
 });
 document.getElementById("lot-cancel")?.addEventListener("click", closeLotModal);
 document.getElementById("lot-gate")?.addEventListener("click", (e) => {

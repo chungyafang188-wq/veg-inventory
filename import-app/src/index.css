@@ -540,7 +540,7 @@
   line-height: 1.2;
 }
 .imp-tw .imp-inline-table.table-fixed {
-  min-width: 64rem;
+  min-width: 52rem;
   table-layout: fixed;
 }
 .imp-tw .imp-inline-table th,

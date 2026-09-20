@@ -379,16 +379,42 @@ function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
     </div>
   );
 }
+function hasFt(r) {
+  return !!(r?.ftAt || r?.ftConfirmed || r?.ft || (r?.ftLabel && r.ftLabel !== "—"));
+}
+
 function stageTags(r) {
   const released = r.released || r.stageId === "release" || r.stage === "已放行";
   if (released) return [{ lab: "已放行", cls: "bg-emerald-100 text-emerald-800" }];
   const tags = [];
+  if (hasFt(r)) tags.push({ lab: "已FT", cls: "bg-indigo-100 text-indigo-800" });
   if (r.inspect === "wait") tags.push({ lab: "待藥檢", cls: "bg-sky-100 text-sky-800" });
   if (r.fumigate === "wait") tags.push({ lab: "待薰蒸", cls: "bg-violet-100 text-violet-800" });
   if (tags.length) return tags;
   if (r.inspect === "skip" && r.fumigate === "skip") return [{ lab: "待驗", cls: "bg-slate-100 text-slate-600" }];
   if (r.inspect === "done" || r.fumigate === "done") return [{ lab: "待驗", cls: "bg-emerald-100 text-emerald-800" }];
   return [{ lab: r.stage || "待驗", cls: "bg-amber-100 text-amber-800" }];
+}
+
+function ArriveFtCell({ arriveDay, ftAt, onArrive, onFt }) {
+  const day = String(arriveDay || "").slice(0, 10);
+  const ft = String(ftAt || "").slice(0, 10);
+  return (
+    <div className="imp-clear-stack items-stretch">
+      <label className="imp-clear-at">
+        <span className="imp-clear-at-lab">到港日</span>
+        <input type="date" className="imp-field imp-field-at" value={day} onChange={(e) => onArrive?.(e.target.value)} aria-label="到港日" />
+      </label>
+      {day ? (
+        <label className="imp-clear-at">
+          <span className="imp-clear-at-lab">FT 日</span>
+          <input type="date" className="imp-field imp-field-at" value={ft} onChange={(e) => onFt?.(e.target.value)} aria-label="FT日期" />
+        </label>
+      ) : (
+        <span className="text-center text-[0.62rem] text-slate-400">填到港後可填 FT</span>
+      )}
+    </div>
+  );
 }
 
 function stageBadgeLabel(r) {
@@ -708,7 +734,7 @@ export function CustomsClearancePane({
             />
           </div>
           <p className="mt-2 m-0 text-[0.7rem] text-slate-400">
-            表格點欄位直輯：Enter 存並往下、Tab 往右；藥檢／薰蒸點徽章切換。預設依 UHA 後三碼排序；編號待補排最後、再按到港日。
+            表格為 6 欄雙層緊湊：到港可改、有到港後可填 FT（填了階段以已FT為主）；藥檢／薰蒸需填時顯示時間。
           </p>
         </div>
 
@@ -737,39 +763,25 @@ export function CustomsClearancePane({
               <p className="m-0 py-12 text-center text-sm text-slate-400">{sheet.length ? "沒有符合條件的資料" : "尚無查驗紀錄"}</p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-                <table className="imp-inline-table w-full table-fixed border-collapse text-sm">
+                <table className="imp-inline-table w-full min-w-[52rem] table-fixed border-collapse text-sm">
                   <colgroup>
-                    <col className="w-[3%]" />
-                    <col className="w-[6%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[5%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[6%]" />
-                    <col className="w-[7%]" />
-                    <col className="w-[7%]" />
+                    <col className="w-[3.5%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[24%]" />
+                    <col className="w-[20.5%]" />
                   </colgroup>
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100">
-                      <th className="px-2 py-2 text-center">
+                      <th className="px-1.5 py-2 text-center">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="全選" />
                       </th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">階段</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">編號／櫃號</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">到港</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">品名</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">賣方</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">船公司</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">報關行</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢／時間</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">薰蒸／時間</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">碼頭</th>
-                      <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">備註</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">操作</th>
+                      <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">階段／編號與櫃號</th>
+                      <th className="px-1.5 py-2 text-center text-[0.7rem] font-bold text-slate-600">到港／FT</th>
+                      <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">品名／往來</th>
+                      <th className="px-1.5 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢／薰蒸</th>
+                      <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">碼頭／備註／操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -795,57 +807,77 @@ export function CustomsClearancePane({
                             on ? "bg-emerald-50/60" : ""
                           }`}
                         >
-                          <td className="px-2 py-1.5 text-center align-middle">
+                          <td className="px-1.5 py-1.5 text-center align-middle">
                             <input type="checkbox" checked={on} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
                           </td>
-                          <td className="px-2 py-1.5 text-center align-middle">
-                            <span className="inline-flex flex-wrap items-center justify-center gap-0.5">
+                          <td className="px-1.5 py-1.5 text-left align-middle">
+                            <div className="mb-1 flex flex-wrap gap-0.5">
                               {stages.map((s) => (
                                 <span key={s.lab} className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${s.cls}`}>
                                   {s.lab}
                                 </span>
                               ))}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 text-left align-middle">
+                            </div>
                             <UhaCodeCell row={r} onAssigned={onUhaAssigned} openDrawer={openDrawer} />
                           </td>
-                          <td className="px-2 py-1.5 text-center align-middle tabular-nums text-slate-700">
-                            {shortDay(r.arriveDay) || "—"}
-                          </td>
-                          <td className="truncate px-2 py-1.5 text-left align-middle font-semibold text-slate-800">
-                            {r.product || "—"}
-                          </td>
-                          <td className="px-1.5 py-1 text-left align-middle">{cell("seller")}</td>
-                          <td className="px-1.5 py-1 text-left align-middle">{cell("shipCo")}</td>
-                          <td className="px-1.5 py-1 text-left align-middle">{cell("broker")}</td>
-                          <td className="px-1.5 py-1 text-center align-middle">
-                            <ClearanceStatusCell
-                              value={r.inspect || "none"}
-                              at={r.inspectAt}
-                              kind="inspect"
-                              onStatus={(v) => patch(uha, "inspect", v)}
-                              onAt={(v) => patch(uha, "inspectAt", v)}
+                          <td className="px-1.5 py-1.5 text-center align-middle">
+                            <ArriveFtCell
+                              arriveDay={r.arriveDay}
+                              ftAt={r.ftAt}
+                              onArrive={(v) => patch(uha, "arriveDay", v)}
+                              onFt={(v) => patch(uha, "ftAt", v)}
                             />
                           </td>
-                          <td className="px-1.5 py-1 text-center align-middle">
-                            <ClearanceStatusCell
-                              value={r.fumigate || "none"}
-                              at={r.fumigateAt}
-                              kind="fumigate"
-                              onStatus={(v) => patch(uha, "fumigate", v)}
-                              onAt={(v) => patch(uha, "fumigateAt", v)}
-                            />
+                          <td className="px-1.5 py-1.5 text-left align-middle">
+                            <p className="m-0 mb-1 truncate font-semibold text-slate-800">{r.product || "—"}</p>
+                            <div className="grid gap-0.5">
+                              <div className="grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                                <span className="text-[0.58rem] font-bold text-slate-400">賣方</span>
+                                {cell("seller")}
+                              </div>
+                              <div className="grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                                <span className="text-[0.58rem] font-bold text-slate-400">船司</span>
+                                {cell("shipCo")}
+                              </div>
+                              <div className="grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                                <span className="text-[0.58rem] font-bold text-slate-400">報關</span>
+                                {cell("broker")}
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-1.5 py-1 text-center align-middle">{cell("dock")}</td>
-                          <td className="px-1.5 py-1 text-left align-middle">{cell("note")}</td>
-                          <td className="px-2 py-1.5 text-center align-middle">
+                          <td className="px-1.5 py-1.5 text-center align-middle">
+                            <div className="grid grid-cols-2 gap-1">
+                              <ClearanceStatusCell
+                                value={r.inspect || "none"}
+                                at={r.inspectAt}
+                                kind="inspect"
+                                onStatus={(v) => patch(uha, "inspect", v)}
+                                onAt={(v) => patch(uha, "inspectAt", v)}
+                              />
+                              <ClearanceStatusCell
+                                value={r.fumigate || "none"}
+                                at={r.fumigateAt}
+                                kind="fumigate"
+                                onStatus={(v) => patch(uha, "fumigate", v)}
+                                onAt={(v) => patch(uha, "fumigateAt", v)}
+                              />
+                            </div>
+                          </td>
+                          <td className="px-1.5 py-1.5 text-left align-middle">
+                            <div className="mb-1 grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                              <span className="text-[0.58rem] font-bold text-slate-400">碼頭</span>
+                              {cell("dock")}
+                            </div>
+                            <div className="mb-1.5 grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                              <span className="text-[0.58rem] font-bold text-slate-400">備註</span>
+                              {cell("note")}
+                            </div>
                             {!released ? (
                               <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => markOne(uha)}>
                                 放行
                               </button>
                             ) : (
-                              <span className="text-[0.7rem] text-slate-400">—</span>
+                              <span className="text-[0.7rem] text-slate-400">已放行</span>
                             )}
                           </td>
                         </tr>
@@ -886,7 +918,7 @@ export function CustomsClearancePane({
                             />
                           </label>
                           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold tabular-nums text-slate-800">
-                            到港 {shortDay(r.arriveDay)}
+                            {hasFt(r) ? `FT ${String(r.ftAt || "").slice(5, 10) || "已確認"}` : `到港 ${shortDay(r.arriveDay) || "—"}`}
                           </span>
                           {stages.map((s) => (
                             <span key={s.lab} className={`rounded-md px-2 py-0.5 text-sm font-bold ${s.cls}`}>
@@ -904,6 +936,14 @@ export function CustomsClearancePane({
                       <div className="px-3 py-2">
                         <UhaCodeCell row={r} onAssigned={onUhaAssigned} openDrawer={openDrawer} />
                         <p className="m-0 mt-1 text-base font-semibold text-slate-800">{r.product || "—"}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <ArriveFtCell
+                            arriveDay={r.arriveDay}
+                            ftAt={r.ftAt}
+                            onArrive={(v) => patch(uha, "arriveDay", v)}
+                            onFt={(v) => patch(uha, "ftAt", v)}
+                          />
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2">
                         <label className="min-w-0 flex-1 basis-[7rem]">

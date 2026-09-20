@@ -2970,6 +2970,12 @@
   function clearanceStageLabel(track, released) {
     if (released) return "已放行";
     if (!track) return "待驗";
+    if (track.ftAt || track.ftConfirmed || track.ft) {
+      const bits = ["已FT"];
+      if (track.inspect === "wait") bits.push("待藥檢");
+      if (track.fumigate === "wait") bits.push("待薰蒸");
+      return bits.join("＋");
+    }
     const bits = [];
     if (track.inspect === "wait") bits.push("待藥檢");
     if (track.fumigate === "wait") bits.push("待薰蒸");
@@ -3212,6 +3218,9 @@
     if (field === "ftAt" && row.ftAt) {
       row.ft = true;
       row.ftConfirmed = true;
+    } else if (field === "ftAt" && !row.ftAt) {
+      row.ft = false;
+      row.ftConfirmed = false;
     }
     stampRow(row);
     if (typeof save === "function") save();
@@ -4302,6 +4311,18 @@
         if (typeof save === "function") save();
         return true;
       }
+      if (field === "arriveDay") {
+        const day = parseDay(value) || String(value || "").trim().slice(0, 10);
+        cab.arriveDay = /^\d{4}-\d{2}-\d{2}/.test(day) ? day.slice(0, 10) : "";
+        stampRow(cab);
+        const track = findReleased(uha) || ensureTrackFromCabinet(cab);
+        if (track) {
+          track.arriveDay = cab.arriveDay;
+          stampRow(track);
+        }
+        if (typeof save === "function") save();
+        return true;
+      }
       patchReleased(uha, field, value);
       return true;
     },
@@ -4393,7 +4414,9 @@
           pickupDay: "",
           unpackSite: "",
           assignee: "",
-          ftLabel: "",
+          ftAt: t.ftAt || "",
+          ftConfirmed: !!(t.ftConfirmed || t.ft),
+          ftLabel: formatFtLabel(t),
           status: portStatusLabel(t),
         });
       }
@@ -4429,6 +4452,8 @@
           pickupDay: r.pickupDay || "",
           unpackSite: r.unpackSite || "",
           assignee: r.assignee || "",
+          ftAt: r.ftAt || "",
+          ftConfirmed: !!(r.ftConfirmed || r.ft),
           ftLabel: formatFtLabel(r),
           status: releaseStatusLabel(r),
         });

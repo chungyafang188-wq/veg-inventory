@@ -16,10 +16,20 @@ function Field({ lab, children }) {
 }
 
 /**
- * 已放行：編號、櫃號、品名、碼頭、拖車、領櫃日；通知拖車／通知客戶。
- * 誤標可單筆／批次退回海關查驗（已派送拆卸者除外）。
+ * 已放行：拖車／交貨點／拆工（填拆工且有拖車＝順便派工）。
  */
-export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, trailers, refresh, onDispatched, onAfterUnmark }) {
+export function ReleasePane({
+  title,
+  releaseTab,
+  setReleaseTab,
+  counts,
+  rows,
+  trailers,
+  unpackers,
+  refresh,
+  onDispatched,
+  onAfterUnmark,
+}) {
   const [sortBy, setSortBy] = useState("uha");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState(() => new Set());
@@ -54,14 +64,15 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
   };
 
   const patch = (uha, field, value) => {
-    api().patchReleaseField?.(uha, field, value);
+    const result = api().patchReleaseField?.(uha, field, value);
     refresh?.();
+    if (result === "dispatched") onDispatched?.(uha);
   };
 
   const confirmPickup = (uha) => {
     const row = (rows || []).find((r) => (r.uha || r.key) === uha);
     if (!String(row?.trailer || "").trim()) {
-      alert("請先選擇／填寫放行拖車，再確認領櫃。");
+      alert("請先填寫拖車，再確認領櫃／派工。");
       return;
     }
     const ok = api().confirmReleasePickup?.(uha);
@@ -97,6 +108,7 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
   };
 
   const trailerOpts = trailers?.length ? trailers : [];
+  const unpackerOpts = unpackers?.length ? unpackers : [];
   const allRevertPicked = !!revertible.length && picked.size === revertible.length;
 
   return (
@@ -104,7 +116,7 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
       <div className="border-b border-slate-100 px-4 pb-3 pt-4">
         <h2 className="m-0 text-xl font-bold text-slate-800">{title || "已放行"}</h2>
         <p className="mt-1 m-0 text-xs text-slate-400">
-          編號／櫃號／品名／碼頭／拖車／領櫃日。可勾選通知拖車、通知客戶。誤標可退回查驗。
+          填拖車、交貨點、拆工。有拖車且填拆工會順便派工到現場拆櫃。
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
@@ -133,7 +145,7 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
             sortBy={sortBy}
             onSort={setSortBy}
             sortOpts={SORT_OPTS.release}
-            placeholder="搜尋編號、櫃號、品名、拖車、碼頭…"
+            placeholder="搜尋編號、櫃號、品名、拖車、交貨點、拆工…"
             resultCount={sorted.length}
             totalCount={(rows || []).length}
           />
@@ -176,16 +188,12 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
                         <span className="font-mono text-xs text-slate-500">{r.containerNo || "無櫃號"}</span>
                         <span className="truncate text-sm text-slate-600">{r.product || "—"}</span>
                       </div>
-                      {(r.notifyTrailer || r.notifyCustomer) && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {r.notifyTrailer ? (
-                            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-sky-800">通知拖車</span>
-                          ) : null}
-                          {r.notifyCustomer ? (
-                            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-violet-800">通知客戶</span>
-                          ) : null}
-                        </div>
-                      )}
+                      <p className="m-0 mt-0.5 text-xs text-slate-500">
+                        {r.trailer ? `拖車 ${r.trailer}` : "未填拖車"}
+                        {r.unpackSite ? ` · 交貨 ${r.unpackSite}` : ""}
+                        {r.assignee ? ` · 拆工 ${r.assignee}` : ""}
+                        {r.dispatched ? " · 已派工" : ""}
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button type="button" className="imp-btn-ghost" disabled={!canRevert} onClick={() => unmarkOne(uha)}>
@@ -196,74 +204,81 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
                         className="imp-btn-primary"
                         disabled={!hasTrailer || !!r.dispatched}
                         onClick={() => confirmPickup(uha)}
-                        title={!hasTrailer ? "請先填拖車" : r.dispatched ? "已派送" : "確認領櫃並派送拆卸"}
+                        title={!hasTrailer ? "請先填拖車" : r.dispatched ? "已派送" : "確認領櫃並派工"}
                       >
-                        {r.dispatched ? "已派送" : "確認領櫃"}
+                        {r.dispatched ? "已派工" : "確認派工"}
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 border-t border-slate-100/80 bg-slate-50/50 p-3 md:grid-cols-3">
-                    <Field lab="編號">
-                      <input className="imp-field" value={uha} readOnly disabled />
-                    </Field>
-                    <Field lab="櫃號">
-                      <input
-                        className="imp-field"
-                        value={r.containerNo || ""}
-                        placeholder="EMCU…"
-                        onChange={(e) => patch(uha, "containerNo", e.target.value)}
-                      />
-                    </Field>
-                    <Field lab="品名">
-                      <input
-                        className="imp-field"
-                        value={r.product || ""}
-                        placeholder="品名"
-                        onChange={(e) => patch(uha, "product", e.target.value)}
-                      />
-                    </Field>
-                    <Field lab="碼頭">
-                      <input className="imp-field" value={r.dock || ""} placeholder="碼頭" onChange={(e) => patch(uha, "dock", e.target.value)} />
-                    </Field>
-                    <Field lab="拖車">
+                  <div className="grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/50 p-3 sm:grid-cols-3">
+                    <Field lab="拖車（必填）">
                       <input
                         className="imp-field"
                         list="imp-trailer-list"
                         value={r.trailer || ""}
                         placeholder="選或輸入拖車"
+                        disabled={!!r.dispatched}
                         onChange={(e) => patch(uha, "trailer", e.target.value)}
                       />
+                    </Field>
+                    <Field lab="交貨點">
+                      <input
+                        className="imp-field"
+                        value={r.unpackSite || ""}
+                        placeholder="冰庫／客戶點／碼頭"
+                        disabled={!!r.dispatched}
+                        onChange={(e) => patch(uha, "unpackSite", e.target.value)}
+                      />
+                    </Field>
+                    <Field lab="拆工（填了順便派工）">
+                      <input
+                        className="imp-field"
+                        list="imp-unpacker-list"
+                        value={r.assignee || ""}
+                        placeholder="選或輸入拆工"
+                        disabled={!!r.dispatched}
+                        onChange={(e) => patch(uha, "assignee", e.target.value)}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v && !r.dispatched) patch(uha, "assignee", v);
+                        }}
+                      />
+                    </Field>
+                    <Field lab="碼頭">
+                      <input className="imp-field" value={r.dock || ""} placeholder="碼頭" onChange={(e) => patch(uha, "dock", e.target.value)} disabled={!!r.dispatched} />
                     </Field>
                     <Field lab="領櫃日">
                       <input
                         type="date"
                         className="imp-field"
                         value={r.pickupDay || ""}
+                        disabled={!!r.dispatched}
                         onChange={(e) => patch(uha, "pickupDay", e.target.value)}
                       />
                     </Field>
-                    <label className="col-span-2 flex cursor-pointer items-center gap-2 self-end rounded-lg border border-slate-200/80 bg-white px-2.5 py-1.5 md:col-span-3 md:min-h-[2.25rem]">
-                      <span className="mr-1 text-[0.7rem] font-bold text-slate-500">通知</span>
+                    <div className="flex flex-wrap items-center gap-3 self-end rounded-lg border border-slate-200/80 bg-white px-2.5 py-2">
                       <label className="inline-flex cursor-pointer items-center gap-1.5">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-sky-600"
                           checked={!!r.notifyTrailer}
+                          disabled={!!r.dispatched}
                           onChange={(e) => patch(uha, "notifyTrailer", e.target.checked)}
                         />
                         <span className="text-xs font-semibold text-slate-800">通知拖車</span>
                       </label>
-                      <label className="ml-3 inline-flex cursor-pointer items-center gap-1.5">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-violet-600"
                           checked={!!r.notifyCustomer}
+                          disabled={!!r.dispatched}
                           onChange={(e) => patch(uha, "notifyCustomer", e.target.checked)}
                         />
                         <span className="text-xs font-semibold text-slate-800">通知客戶</span>
                       </label>
-                    </label>
+                    </div>
                   </div>
                 </li>
               );
@@ -273,6 +288,11 @@ export function ReleasePane({ title, releaseTab, setReleaseTab, counts, rows, tr
       </div>
       <datalist id="imp-trailer-list">
         {trailerOpts.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
+      <datalist id="imp-unpacker-list">
+        {unpackerOpts.map((t) => (
           <option key={t} value={t} />
         ))}
       </datalist>

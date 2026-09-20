@@ -99,7 +99,7 @@ export function queryRows(rows, { query, sortBy, fields, getters } = {}) {
 /** 各模組預設搜尋欄位 */
 export const SEARCH_FIELDS = {
   port: ["uha", "containerNo", "product", "seller", "shipCo", "dock", "note", "status", "arriveDay", (r) => (r.missingTelex ? "缺電放" : ""), (r) => (r.missingData ? "缺資料" : "")],
-  release: ["uha", "containerNo", "product", "dock", "trailer", "trailerPhone", "pickupDay"],
+  release: ["uha", "containerNo", "product", "dock", "trailer", "trailerPhone", "pickupDay", "unpackSite", "assignee"],
   upBoard: ["uha", "box", "sourceUha", "containerNo", "product", "name", "trailer", "trailerPhone", "assignee", "location", "day", "unpackAt"],
 };
 

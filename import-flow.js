@@ -2224,8 +2224,8 @@
       trailerNote: row.trailerNote || "",
       unpackAt: row.unpackAt || "",
       destType: row.destType || "coldstore",
-      location: row.dock || row.unpackSite || "",
-      unloadPoint: row.dock || row.unpackSite || "",
+      location: row.unpackSite || row.dock || "",
+      unloadPoint: row.unpackSite || row.dock || "",
       sourceUha: row.uha,
       fromRelease: true,
       status: "pending",
@@ -2423,6 +2423,16 @@
     const row = findReleased(uha);
     if (!row) return false;
     patchReleased(uha, field, value);
+    /** 填拆工且有拖車 → 順便派工到拆卸資料 */
+    if (field === "assignee" && String(value || "").trim() && !row.dispatched) {
+      if (String(row.trailer || "").trim()) {
+        if (!row.unpackSite && row.dock) row.unpackSite = row.dock;
+        const ok = dispatchToUnpackBoard(row);
+        if (ok && typeof save === "function") save();
+        return ok ? "dispatched" : true;
+      }
+      if (typeof setStatus === "function") setStatus("已記拆工；請再填拖車後派送。", true);
+    }
     return true;
   }
 
@@ -3217,6 +3227,8 @@
         trailer: c.trailer || "",
         trailerPhone: c.trailerPhone || "",
         pickupDay: c.pickupDay || "",
+        unpackSite: c.unpackSite || "",
+        assignee: c.assignee || "",
         notifyTrailer: !!c.notifyTrailer,
         notifyCustomer: !!c.notifyCustomer,
         missingTelex: !!c.missingTelex,
@@ -3224,7 +3236,7 @@
         dispatched: !!c.dispatched,
         pickup: !!c.pickup,
         ftLabel: formatFtLabel(c),
-        cells: [c.uha, c.containerNo || "—", c.product || "—", c.dock || "—", c.trailer || "—", c.pickupDay || "—"],
+        cells: [c.uha, c.containerNo || "—", c.product || "—", c.dock || "—", c.trailer || "—", c.unpackSite || "—", c.assignee || "—", c.pickupDay || "—"],
       }));
     },
     releaseTabCounts() {

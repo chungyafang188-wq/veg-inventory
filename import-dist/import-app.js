@@ -12258,35 +12258,40 @@ function it(e) {
 	let r = (e) => String(e).padStart(2, "0");
 	return `${n.getFullYear()}-${r(n.getMonth() + 1)}-${r(n.getDate())} ${r(n.getHours())}:${r(n.getMinutes())}`;
 }
-function at({ row: e }) {
-	let t = [];
-	if (e.notifyTrailer) {
-		let n = it(e.notifyTrailerAt), r = e.notifyTrailerBy || "操作員";
-		t.push(`拖車已通知${n ? ` · ${n}` : ""}${r ? ` · ${r}` : ""}`);
-	}
-	if (e.notifyCustomer) {
-		let n = it(e.notifyCustomerAt), r = e.notifyCustomerBy || "操作員";
-		t.push(`客戶已通知${n ? ` · ${n}` : ""}${r ? ` · ${r}` : ""}`);
-	}
-	return !e.notifyTrailer && !e.notifyCustomer ? null : /* @__PURE__ */ (0, E.jsxs)("span", {
+function at(e) {
+	return !!(e?.notifyTrailer || e?.notified_trucker || e?.notifiedTrailer);
+}
+function ot(e) {
+	return !!(e?.notifyCustomer || e?.notified_customer || e?.notifiedCustomer);
+}
+function st({ row: e }) {
+	let t = at(e), n = ot(e);
+	if (!t && !n) return null;
+	let r = t ? `拖車已通知${e.notifyTrailerAt ? ` · ${it(e.notifyTrailerAt)}` : ""}${e.notifyTrailerBy ? ` · ${e.notifyTrailerBy}` : ""}` : "", i = n ? `客戶已通知${e.notifyCustomerAt ? ` · ${it(e.notifyCustomerAt)}` : ""}${e.notifyCustomerBy ? ` · ${e.notifyCustomerBy}` : ""}` : "";
+	return /* @__PURE__ */ (0, E.jsxs)("span", {
 		className: "mt-0.5 flex flex-wrap gap-1",
-		title: t.join("\n"),
-		children: [e.notifyTrailer ? /* @__PURE__ */ (0, E.jsx)("button", {
+		children: [t ? /* @__PURE__ */ (0, E.jsxs)("button", {
 			type: "button",
-			className: "rounded bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800",
-			title: t[0] || "拖車已通知",
-			onClick: () => alert(t.find((e) => e.startsWith("拖車")) || "拖車已通知"),
-			children: "拖車已通知"
-		}) : null, e.notifyCustomer ? /* @__PURE__ */ (0, E.jsx)("button", {
+			className: "inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800",
+			title: r,
+			onClick: () => alert(r || "拖車已通知"),
+			children: [/* @__PURE__ */ (0, E.jsx)("span", {
+				className: "inline-block h-1.5 w-1.5 rounded-full bg-emerald-500",
+				"aria-hidden": "true"
+			}), "拖車已通知"]
+		}) : null, n ? /* @__PURE__ */ (0, E.jsxs)("button", {
 			type: "button",
-			className: "rounded bg-sky-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-sky-800",
-			title: t.find((e) => e.startsWith("客戶")) || "客戶已通知",
-			onClick: () => alert(t.find((e) => e.startsWith("客戶")) || "客戶已通知"),
-			children: "客戶已通知"
+			className: "inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-sky-800",
+			title: i,
+			onClick: () => alert(i || "客戶已通知"),
+			children: [/* @__PURE__ */ (0, E.jsx)("span", {
+				className: "inline-block h-1.5 w-1.5 rounded-full bg-sky-500",
+				"aria-hidden": "true"
+			}), "客戶已通知"]
 		}) : null]
 	});
 }
-function ot(e) {
+function ct(e) {
 	return e.dispatched ? {
 		lab: "已派工",
 		cls: "bg-slate-200 text-slate-700"
@@ -12298,7 +12303,7 @@ function ot(e) {
 		cls: "bg-amber-100 text-amber-800"
 	};
 }
-function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, trailers: a, unpackers: o, refresh: s, onDispatched: c, onAfterUnmark: u }) {
+function lt({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, trailers: a, unpackers: o, refresh: s, onDispatched: c, onAfterUnmark: u }) {
 	let [d, f] = (0, l.useState)("uha"), [p, m] = (0, l.useState)(""), [h, g] = (0, l.useState)(() => /* @__PURE__ */ new Set()), v = (0, l.useMemo)(() => we(i, {
 		query: p,
 		sortBy: d,
@@ -12347,7 +12352,9 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 			s?.();
 		}
 	}, T = a?.length ? a : [], re = o?.length ? o : [], ie = (e) => /* @__PURE__ */ (0, E.jsxs)("div", {
-		className: e ? "fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden" : "mt-3 hidden flex-wrap items-center gap-2 md:flex",
+		className: e ? "fixed bottom-0 left-0 right-0 z-50 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden" : "mt-3 hidden flex-wrap items-center gap-2 md:flex",
+		role: "toolbar",
+		"aria-label": "批量操作",
 		children: [
 			/* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
@@ -12361,14 +12368,14 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 				className: "imp-btn-primary",
 				disabled: !b,
 				onClick: () => w("trailer"),
-				children: ["通知拖車", b ? ` ${b}` : ""]
+				children: ["通知拖車", b ? `（已選 ${b} 筆）` : ""]
 			}),
 			/* @__PURE__ */ (0, E.jsxs)("button", {
 				type: "button",
 				className: "imp-btn-primary",
 				disabled: !b,
 				onClick: () => w("customer"),
-				children: ["通知客戶", b ? ` ${b}` : ""]
+				children: ["通知客戶", b ? `（已選 ${b} 筆）` : ""]
 			}),
 			/* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
@@ -12378,7 +12385,27 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 				children: "退回查驗"
 			})
 		]
-	}), ae = (e, t) => /* @__PURE__ */ (0, E.jsx)("input", {
+	}), ae = (e, t) => T.length ? /* @__PURE__ */ (0, E.jsxs)("select", {
+		className: "imp-field",
+		value: e.trailer || "",
+		disabled: !!e.dispatched,
+		onChange: (e) => S(t, "trailer", e.target.value),
+		"aria-label": "拖車",
+		children: [
+			/* @__PURE__ */ (0, E.jsx)("option", {
+				value: "",
+				children: "選拖車"
+			}),
+			T.map((e) => /* @__PURE__ */ (0, E.jsx)("option", {
+				value: e,
+				children: e
+			}, e)),
+			e.trailer && !T.includes(e.trailer) ? /* @__PURE__ */ (0, E.jsx)("option", {
+				value: e.trailer,
+				children: e.trailer
+			}) : null
+		]
+	}) : /* @__PURE__ */ (0, E.jsx)("input", {
 		className: "imp-field",
 		list: "imp-trailer-list",
 		value: e.trailer || "",
@@ -12418,7 +12445,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 					}),
 					/* @__PURE__ */ (0, E.jsx)("p", {
 						className: "mt-1 m-0 text-xs text-slate-400",
-						children: "填碼頭、拖車、交貨點、拆工；勾選後可批量通知拖車／客戶。"
+						children: "桌面為雙層緊湊表、手機為卡片；勾選後可批量通知拖車／客戶。"
 					}),
 					/* @__PURE__ */ (0, E.jsx)("div", {
 						className: "mt-3 flex flex-wrap gap-1.5",
@@ -12466,11 +12493,11 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 				]
 			}),
 			/* @__PURE__ */ (0, E.jsx)("div", {
-				className: "px-2 py-2 sm:px-3 md:pb-3 pb-24",
+				className: "px-2 py-2 pb-24 sm:px-3 md:pb-3",
 				children: v.length ? /* @__PURE__ */ (0, E.jsxs)(E.Fragment, { children: [/* @__PURE__ */ (0, E.jsx)("div", {
 					className: "hidden overflow-x-auto rounded-xl border border-slate-200/80 md:block",
 					children: /* @__PURE__ */ (0, E.jsxs)("table", {
-						className: "w-full table-fixed border-collapse text-sm",
+						className: "w-full min-w-[48rem] table-fixed border-collapse text-sm",
 						children: [
 							/* @__PURE__ */ (0, E.jsxs)("colgroup", { children: [
 								/* @__PURE__ */ (0, E.jsx)("col", { className: "w-[4%]" }),
@@ -12515,7 +12542,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 								]
 							}) }),
 							/* @__PURE__ */ (0, E.jsx)("tbody", { children: v.map((e) => {
-								let t = e.uha || e.key, n = h.has(t), r = ot(e);
+								let t = e.uha || e.key, n = h.has(t), r = ct(e);
 								return /* @__PURE__ */ (0, E.jsxs)("tr", {
 									className: `border-b border-slate-100 align-top odd:bg-white even:bg-slate-50/40 ${n ? "bg-amber-50/50" : ""}`,
 									children: [
@@ -12546,7 +12573,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 													className: "mt-0.5 font-mono text-[0.72rem] text-slate-400",
 													children: e.containerNo || "無櫃號"
 												}),
-												/* @__PURE__ */ (0, E.jsx)(at, { row: e })
+												/* @__PURE__ */ (0, E.jsx)(st, { row: e })
 											]
 										}),
 										/* @__PURE__ */ (0, E.jsx)("td", {
@@ -12555,13 +12582,21 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 										}),
 										/* @__PURE__ */ (0, E.jsxs)("td", {
 											className: "px-2 py-2 text-left",
-											children: [/* @__PURE__ */ (0, E.jsx)("input", {
-												className: "imp-field mb-1",
-												value: e.dock || "",
-												placeholder: "碼頭",
-												disabled: !!e.dispatched,
-												onChange: (e) => S(t, "dock", e.target.value)
-											}), ae(e, t)]
+											children: [
+												/* @__PURE__ */ (0, E.jsx)("div", {
+													className: "mb-1 text-sm font-semibold text-slate-700",
+													children: e.dock ? `${e.dock}` : "—"
+												}),
+												/* @__PURE__ */ (0, E.jsx)("input", {
+													className: "imp-field mb-1",
+													value: e.dock || "",
+													placeholder: "碼頭",
+													disabled: !!e.dispatched,
+													onChange: (e) => S(t, "dock", e.target.value),
+													"aria-label": "碼頭"
+												}),
+												ae(e, t)
+											]
 										}),
 										/* @__PURE__ */ (0, E.jsxs)("td", {
 											className: "px-2 py-2 text-left",
@@ -12570,7 +12605,8 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 												className: "imp-field mb-1",
 												value: e.pickupDay || "",
 												disabled: !!e.dispatched,
-												onChange: (e) => S(t, "pickupDay", e.target.value)
+												onChange: (e) => S(t, "pickupDay", e.target.value),
+												"aria-label": "領櫃日"
 											}), oe(e, t)]
 										}),
 										/* @__PURE__ */ (0, E.jsx)("td", {
@@ -12597,7 +12633,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 				}), /* @__PURE__ */ (0, E.jsx)("ul", {
 					className: "m-0 grid list-none gap-2 p-0 md:hidden",
 					children: v.map((e) => {
-						let t = e.uha || e.key, n = h.has(t), r = ot(e);
+						let t = e.uha || e.key, n = h.has(t), r = ct(e);
 						return /* @__PURE__ */ (0, E.jsxs)("li", {
 							className: `rounded-xl border ${n ? "border-amber-300 bg-amber-50/40" : "border-slate-200/90 bg-white"}`,
 							children: [/* @__PURE__ */ (0, E.jsxs)("div", {
@@ -12634,7 +12670,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 												className: "m-0 mt-1 text-sm font-semibold text-slate-800",
 												children: e.product || "—"
 											}),
-											/* @__PURE__ */ (0, E.jsx)(at, { row: e })
+											/* @__PURE__ */ (0, E.jsx)(st, { row: e })
 										]
 									}),
 									/* @__PURE__ */ (0, E.jsx)("button", {
@@ -12718,7 +12754,7 @@ function st({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 }
 //#endregion
 //#region src/components/TablePane.jsx
-function ct() {
+function ut() {
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "flex flex-col items-center justify-center gap-2 px-4 py-12 text-center",
 		children: [
@@ -12749,7 +12785,7 @@ function ct() {
 		]
 	});
 }
-function lt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
+function dt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
 		children: [
@@ -12783,14 +12819,14 @@ function lt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 							}, t))
 						}, e.key)) })]
 					})
-				}) : /* @__PURE__ */ (0, E.jsx)(ct, {})
+				}) : /* @__PURE__ */ (0, E.jsx)(ut, {})
 			})
 		]
 	});
 }
 //#endregion
 //#region src/components/UnpackBoardPane.jsx
-function ut({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
+function ft({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
 	let a = t.upBoardMeta || {
 		total: 0,
 		missingTrailer: 0
@@ -12873,7 +12909,7 @@ function ut({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 					})
 				]
 			}),
-			/* @__PURE__ */ (0, E.jsx)(lt, {
+			/* @__PURE__ */ (0, E.jsx)(dt, {
 				columns: [
 					"拆卸日",
 					"編號",
@@ -12890,8 +12926,8 @@ function ut({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 		]
 	});
 }
-var dt = "imp-chip flex-shrink-0", ft = "imp-chip imp-chip-on flex-shrink-0";
-function pt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
+var pt = "imp-chip flex-shrink-0", mt = "imp-chip imp-chip-on flex-shrink-0";
+function ht({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
 	let a = t.unpackCounts || {
 		pending: 0,
 		reported: 0
@@ -12922,7 +12958,7 @@ function pt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 					a.reported
 				]].map(([e, t, i]) => /* @__PURE__ */ (0, E.jsxs)("button", {
 					type: "button",
-					className: n === e ? ft : dt,
+					className: n === e ? mt : pt,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, E.jsx)(pe, { count: i })]
 				}, e))
@@ -12950,7 +12986,7 @@ function pt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 				resultCount: d.length,
 				totalCount: (t.unpack || []).length
 			}),
-			/* @__PURE__ */ (0, E.jsx)(lt, {
+			/* @__PURE__ */ (0, E.jsx)(dt, {
 				title: e,
 				hint: "配合拆工只回報自己被指派的櫃與數量。交客戶自有拆工者不在此回報。",
 				columns: [
@@ -12969,7 +13005,7 @@ function pt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 		]
 	});
 }
-function mt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
+function gt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
 	let o = t.sumCounts || {
 		open: 0,
 		needQty: 0,
@@ -13007,17 +13043,17 @@ function mt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 					]
 				].map(([e, t, i]) => /* @__PURE__ */ (0, E.jsxs)("button", {
 					type: "button",
-					className: n === e ? ft : dt,
+					className: n === e ? mt : pt,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, E.jsx)(pe, { count: i })]
 				}, e))
 			}), a ? /* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
-				className: ft,
+				className: mt,
 				onClick: a,
 				children: "匯出"
 			}) : null]
-		}), /* @__PURE__ */ (0, E.jsx)(lt, {
+		}), /* @__PURE__ */ (0, E.jsx)(dt, {
 			title: e,
 			hint: "會計核對拆櫃數量、位置、拆卸點。交客戶／客戶自有拆工可在此補數量。",
 			columns: [
@@ -13038,7 +13074,7 @@ function mt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 }
 //#endregion
 //#region src/components/ImportTabContent.jsx
-function ht({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
+function _t({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
 	let g = b[e] || "進口", v = t.portCounts || {
 		open: 0,
 		inspect: 0,
@@ -13064,7 +13100,7 @@ function ht({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				openDrawer: p,
 				onAfterRelease: () => m?.("release")
 			}) : null,
-			e === "release" ? /* @__PURE__ */ (0, E.jsx)(st, {
+			e === "release" ? /* @__PURE__ */ (0, E.jsx)(lt, {
 				title: g,
 				releaseTab: n,
 				setReleaseTab: r,
@@ -13076,21 +13112,21 @@ function ht({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				onDispatched: () => m?.("upBoard"),
 				onAfterUnmark: () => m?.("port")
 			}) : null,
-			e === "upBoard" ? /* @__PURE__ */ (0, E.jsx)(ut, {
+			e === "upBoard" ? /* @__PURE__ */ (0, E.jsx)(ft, {
 				title: g,
 				lists: t,
 				boardDay: u,
 				setBoardDay: d,
 				openDrawer: p
 			}) : null,
-			e === "unpack" ? /* @__PURE__ */ (0, E.jsx)(pt, {
+			e === "unpack" ? /* @__PURE__ */ (0, E.jsx)(ht, {
 				title: g,
 				lists: t,
 				unpackTab: o,
 				setUnpackTab: s,
 				openDrawer: p
 			}) : null,
-			e === "sum" ? /* @__PURE__ */ (0, E.jsx)(mt, {
+			e === "sum" ? /* @__PURE__ */ (0, E.jsx)(gt, {
 				title: g,
 				lists: t,
 				sumTab: c,
@@ -13098,7 +13134,7 @@ function ht({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				openDrawer: p,
 				onExport: () => _().exportSumExcel?.()
 			}) : null,
-			e === "stock" ? /* @__PURE__ */ (0, E.jsx)(lt, {
+			e === "stock" ? /* @__PURE__ */ (0, E.jsx)(dt, {
 				title: g,
 				hint: "已入庫明細。",
 				columns: [
@@ -13131,14 +13167,14 @@ function ht({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 }
 //#endregion
 //#region src/shells/PhoneShell.jsx
-var gt = "imp-chip flex-shrink-0", _t = "imp-chip imp-chip-on flex-shrink-0", vt = "imp-chip flex-shrink-0 font-semibold", yt = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
-function bt(e) {
+var vt = "imp-chip flex-shrink-0", yt = "imp-chip imp-chip-on flex-shrink-0", bt = "imp-chip flex-shrink-0 font-semibold", xt = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
+function St(e) {
 	return !!(!(e instanceof Element) || e.closest(".imp-drawer-host, [role='dialog']") || e.closest("[data-no-tab-swipe]"));
 }
-function xt(e, t) {
+function Ct(e, t) {
 	return T(e).reduce((e, n) => e + (Number(t?.[n.id]) || 0), 0);
 }
-function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+function wt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = (0, l.useRef)({
 		on: !1,
 		axis: null,
@@ -13167,14 +13203,14 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				"aria-label": "進口區塊",
 				children: [/* @__PURE__ */ (0, E.jsx)("button", {
 					type: "button",
-					className: gt,
+					className: vt,
 					onClick: h,
 					children: "← 總覽"
 				}), v.map((e) => {
-					let r = e.id === a, i = xt(e.id, n);
+					let r = e.id === a, i = Ct(e.id, n);
 					return /* @__PURE__ */ (0, E.jsxs)("button", {
 						type: "button",
-						className: r ? yt : vt,
+						className: r ? xt : bt,
 						onClick: () => {
 							e.id !== a && t(re(e.id));
 						},
@@ -13188,7 +13224,7 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let i = r.id === e;
 					return /* @__PURE__ */ (0, E.jsxs)("button", {
 						type: "button",
-						className: i ? _t : gt,
+						className: i ? yt : vt,
 						onClick: () => t(r.id),
 						children: [r.lab, fe.has(r.id) ? /* @__PURE__ */ (0, E.jsx)(pe, { count: n[r.id] }) : null]
 					}, r.id);
@@ -13199,7 +13235,7 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			style: { touchAction: "pan-y" },
 			"data-imp-swipe": "1",
 			onTouchStart: (e) => {
-				if (e.touches.length !== 1 || bt(e.target)) return;
+				if (e.touches.length !== 1 || St(e.target)) return;
 				let t = e.touches[0];
 				i.current = {
 					on: !0,
@@ -13231,7 +13267,7 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				i.current.on = !1, i.current.axis = null;
 			},
 			onPointerDown: (e) => {
-				e.pointerType === "mouse" && e.button === 0 && (bt(e.target) || (i.current = {
+				e.pointerType === "mouse" && e.button === 0 && (St(e.target) || (i.current = {
 					on: !0,
 					axis: null,
 					x0: e.clientX,
@@ -13256,7 +13292,7 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				let n = e.clientX - t.x0, r = e.clientY - t.y0, a = t.axis === "h" || t.axis == null && Math.abs(n) >= 36 && Math.abs(n) > Math.abs(r) * 1.1;
 				t.axis = null, a && s(n);
 			},
-			children: /* @__PURE__ */ (0, E.jsx)(ht, {
+			children: /* @__PURE__ */ (0, E.jsx)(_t, {
 				activeTab: e,
 				padClass: "p-2.5",
 				...r
@@ -13266,8 +13302,8 @@ function St({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/shells/WebShell.jsx
-var Ct = "imp-chip flex-shrink-0", wt = "imp-chip imp-chip-on flex-shrink-0", Tt = "imp-side flex-shrink-0", Et = "imp-side imp-side-on flex-shrink-0";
-function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+var Tt = "imp-chip flex-shrink-0", Et = "imp-chip imp-chip-on flex-shrink-0", Dt = "imp-side flex-shrink-0", Ot = "imp-side imp-side-on flex-shrink-0";
+function kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = w(e), a = T(i);
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "imp-tw relative flex min-h-[min(78vh,40rem)] max-w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/80 font-imp text-slate-800",
@@ -13275,7 +13311,7 @@ function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			className: "flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/95 px-2 py-2",
 			children: [/* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
-				className: `${Ct} shrink-0`,
+				className: `${Tt} shrink-0`,
 				onClick: h,
 				children: "← 總覽"
 			}), /* @__PURE__ */ (0, E.jsx)("nav", {
@@ -13285,7 +13321,7 @@ function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let n = e.id === i;
 					return /* @__PURE__ */ (0, E.jsx)("button", {
 						type: "button",
-						className: n ? wt : Ct,
+						className: n ? Et : Tt,
 						onClick: () => {
 							e.id !== i && t(re(e.id));
 						},
@@ -13307,7 +13343,7 @@ function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 						let i = r.id === e;
 						return /* @__PURE__ */ (0, E.jsxs)("button", {
 							type: "button",
-							className: i ? Et : Tt,
+							className: i ? Ot : Dt,
 							onClick: () => t(r.id),
 							children: [r.lab, fe.has(r.id) ? /* @__PURE__ */ (0, E.jsx)(pe, { count: n[r.id] }) : null]
 						}, r.id);
@@ -13315,7 +13351,7 @@ function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				})]
 			}), /* @__PURE__ */ (0, E.jsx)("section", {
 				className: "flex min-w-0 flex-1 flex-col overflow-hidden",
-				children: /* @__PURE__ */ (0, E.jsx)(ht, {
+				children: /* @__PURE__ */ (0, E.jsx)(_t, {
 					activeTab: e,
 					padClass: "p-4",
 					...r
@@ -13326,7 +13362,7 @@ function Dt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/ImportApp.jsx
-function Ot({ initialPane: e = "parse" }) {
+function At({ initialPane: e = "parse" }) {
 	let t = de(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("open"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [re, ie] = (0, l.useState)(() => ae());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
@@ -13472,12 +13508,12 @@ function Ot({ initialPane: e = "parse" }) {
 		refresh: i,
 		openDrawer: D,
 		setActiveTab: oe
-	}, fe = t === "web" ? /* @__PURE__ */ (0, E.jsx)(Dt, {
+	}, fe = t === "web" ? /* @__PURE__ */ (0, E.jsx)(kt, {
 		activeTab: a,
 		setActiveTab: oe,
 		tabCounts: ce.tabCounts,
 		contentProps: ue
-	}) : /* @__PURE__ */ (0, E.jsx)(St, {
+	}) : /* @__PURE__ */ (0, E.jsx)(wt, {
 		activeTab: a,
 		setActiveTab: oe,
 		tabCounts: ce.tabCounts,
@@ -13540,24 +13576,24 @@ function Ot({ initialPane: e = "parse" }) {
 }
 //#endregion
 //#region src/mount.jsx
-var kt = null, At = null;
-function jt(e, t = {}) {
+var jt = null, Mt = null;
+function Nt(e, t = {}) {
 	if (e) {
-		if (kt && At === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), kt;
-		if (kt) try {
-			kt.unmount();
+		if (jt && Mt === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), jt;
+		if (jt) try {
+			jt.unmount();
 		} catch {}
-		return e.innerHTML = "", At = e, kt = (0, u.createRoot)(e), kt.render(/* @__PURE__ */ (0, E.jsx)(Ot, { initialPane: t.pane || "parse" })), kt;
+		return e.innerHTML = "", Mt = e, jt = (0, u.createRoot)(e), jt.render(/* @__PURE__ */ (0, E.jsx)(At, { initialPane: t.pane || "parse" })), jt;
 	}
 }
-function Mt() {
-	if (kt) try {
-		kt.unmount();
+function Pt() {
+	if (jt) try {
+		jt.unmount();
 	} catch {}
-	kt = null, At = null;
+	jt = null, Mt = null;
 }
-if (typeof window < "u" && (window.mountImportApp = jt, window.unmountImportApp = Mt, window.page === "import" && typeof window.renderImportPage == "function")) try {
+if (typeof window < "u" && (window.mountImportApp = Nt, window.unmountImportApp = Pt, window.page === "import" && typeof window.renderImportPage == "function")) try {
 	window.renderImportPage();
 } catch {}
 //#endregion
-export { jt as mountImportApp, Mt as unmountImportApp };
+export { Nt as mountImportApp, Pt as unmountImportApp };

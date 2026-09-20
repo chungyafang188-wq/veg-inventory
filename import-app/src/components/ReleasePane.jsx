@@ -15,38 +15,51 @@ function formatNotifyAt(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function isTrailerNotified(row) {
+  return !!(row?.notifyTrailer || row?.notified_trucker || row?.notifiedTrailer);
+}
+
+function isCustomerNotified(row) {
+  return !!(row?.notifyCustomer || row?.notified_customer || row?.notifiedCustomer);
+}
+
 function NotifyBadges({ row }) {
-  const tips = [];
-  if (row.notifyTrailer) {
-    const when = formatNotifyAt(row.notifyTrailerAt);
-    const who = row.notifyTrailerBy || "操作員";
-    tips.push(`拖車已通知${when ? ` · ${when}` : ""}${who ? ` · ${who}` : ""}`);
-  }
-  if (row.notifyCustomer) {
-    const when = formatNotifyAt(row.notifyCustomerAt);
-    const who = row.notifyCustomerBy || "操作員";
-    tips.push(`客戶已通知${when ? ` · ${when}` : ""}${who ? ` · ${who}` : ""}`);
-  }
-  if (!row.notifyTrailer && !row.notifyCustomer) return null;
+  const trailerOn = isTrailerNotified(row);
+  const customerOn = isCustomerNotified(row);
+  if (!trailerOn && !customerOn) return null;
+
+  const trailerTip = trailerOn
+    ? `拖車已通知${row.notifyTrailerAt ? ` · ${formatNotifyAt(row.notifyTrailerAt)}` : ""}${
+        row.notifyTrailerBy ? ` · ${row.notifyTrailerBy}` : ""
+      }`
+    : "";
+  const customerTip = customerOn
+    ? `客戶已通知${row.notifyCustomerAt ? ` · ${formatNotifyAt(row.notifyCustomerAt)}` : ""}${
+        row.notifyCustomerBy ? ` · ${row.notifyCustomerBy}` : ""
+      }`
+    : "";
+
   return (
-    <span className="mt-0.5 flex flex-wrap gap-1" title={tips.join("\n")}>
-      {row.notifyTrailer ? (
+    <span className="mt-0.5 flex flex-wrap gap-1">
+      {trailerOn ? (
         <button
           type="button"
-          className="rounded bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800"
-          title={tips[0] || "拖車已通知"}
-          onClick={() => alert(tips.find((t) => t.startsWith("拖車")) || "拖車已通知")}
+          className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800"
+          title={trailerTip}
+          onClick={() => alert(trailerTip || "拖車已通知")}
         >
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
           拖車已通知
         </button>
       ) : null}
-      {row.notifyCustomer ? (
+      {customerOn ? (
         <button
           type="button"
-          className="rounded bg-sky-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-sky-800"
-          title={tips.find((t) => t.startsWith("客戶")) || "客戶已通知"}
-          onClick={() => alert(tips.find((t) => t.startsWith("客戶")) || "客戶已通知")}
+          className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-sky-800"
+          title={customerTip}
+          onClick={() => alert(customerTip || "客戶已通知")}
         >
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-500" aria-hidden="true" />
           客戶已通知
         </button>
       ) : null}
@@ -61,7 +74,7 @@ function stageLab(r) {
 }
 
 /**
- * 已放行：桌面雙層緊湊表 + 手機卡片 + 批量通知工具列。
+ * 已放行：桌面 6 欄雙層緊湊表 + 手機直式卡片 + 批量通知工具列。
  */
 export function ReleasePane({
   title,
@@ -168,35 +181,59 @@ export function ReleasePane({
     <div
       className={
         fixed
-          ? "fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+          ? "fixed bottom-0 left-0 right-0 z-50 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
           : "mt-3 hidden flex-wrap items-center gap-2 md:flex"
       }
+      role="toolbar"
+      aria-label="批量操作"
     >
       <button type="button" className="imp-btn-ghost" onClick={toggleAll} disabled={!sorted.length}>
         {allPicked ? "取消全選" : "全選"}
       </button>
       <button type="button" className="imp-btn-primary" disabled={!pickedCount} onClick={() => notifySelected("trailer")}>
-        通知拖車{pickedCount ? ` ${pickedCount}` : ""}
+        通知拖車{pickedCount ? `（已選 ${pickedCount} 筆）` : ""}
       </button>
       <button type="button" className="imp-btn-primary" disabled={!pickedCount} onClick={() => notifySelected("customer")}>
-        通知客戶{pickedCount ? ` ${pickedCount}` : ""}
+        通知客戶{pickedCount ? `（已選 ${pickedCount} 筆）` : ""}
       </button>
-      <button type="button" className="imp-btn-ghost" disabled={!pickedCount || !revertible.some((r) => picked.has(r.uha || r.key))} onClick={unmarkSelected}>
+      <button
+        type="button"
+        className="imp-btn-ghost"
+        disabled={!pickedCount || !revertible.some((r) => picked.has(r.uha || r.key))}
+        onClick={unmarkSelected}
+      >
         退回查驗
       </button>
     </div>
   );
 
-  const trailerControl = (r, uha) => (
-    <input
-      className="imp-field"
-      list="imp-trailer-list"
-      value={r.trailer || ""}
-      placeholder="選或輸入拖車"
-      disabled={!!r.dispatched}
-      onChange={(e) => patch(uha, "trailer", e.target.value)}
-    />
-  );
+  const trailerControl = (r, uha) =>
+    trailerOpts.length ? (
+      <select
+        className="imp-field"
+        value={r.trailer || ""}
+        disabled={!!r.dispatched}
+        onChange={(e) => patch(uha, "trailer", e.target.value)}
+        aria-label="拖車"
+      >
+        <option value="">選拖車</option>
+        {trailerOpts.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+        {r.trailer && !trailerOpts.includes(r.trailer) ? <option value={r.trailer}>{r.trailer}</option> : null}
+      </select>
+    ) : (
+      <input
+        className="imp-field"
+        list="imp-trailer-list"
+        value={r.trailer || ""}
+        placeholder="選或輸入拖車"
+        disabled={!!r.dispatched}
+        onChange={(e) => patch(uha, "trailer", e.target.value)}
+      />
+    );
 
   const siteControl = (r, uha) => (
     <input
@@ -229,7 +266,7 @@ export function ReleasePane({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 text-xl font-bold text-slate-800">{title || "已放行"}</h2>
         </div>
-        <p className="mt-1 m-0 text-xs text-slate-400">填碼頭、拖車、交貨點、拆工；勾選後可批量通知拖車／客戶。</p>
+        <p className="mt-1 m-0 text-xs text-slate-400">桌面為雙層緊湊表、手機為卡片；勾選後可批量通知拖車／客戶。</p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
             ["open", "待派送", counts?.open],
@@ -257,16 +294,16 @@ export function ReleasePane({
         </div>
       </div>
 
-      <div className="px-2 py-2 sm:px-3 md:pb-3 pb-24">
+      <div className="px-2 py-2 pb-24 sm:px-3 md:pb-3">
         {!sorted.length ? (
           <p className="m-0 py-12 text-center text-sm text-slate-400">
             {(rows || []).length ? "沒有符合搜尋的貨櫃" : "目前沒有已放行（未拆櫃）資料"}
           </p>
         ) : (
           <>
-            {/* Desktop: dual-layer compact table */}
+            {/* Desktop: 6-column dual-layer table */}
             <div className="hidden overflow-x-auto rounded-xl border border-slate-200/80 md:block">
-              <table className="w-full table-fixed border-collapse text-sm">
+              <table className="w-full min-w-[48rem] table-fixed border-collapse text-sm">
                 <colgroup>
                   <col className="w-[4%]" />
                   <col className="w-[22%]" />
@@ -318,12 +355,14 @@ export function ReleasePane({
                         </td>
                         <td className="px-2 py-2 text-left font-semibold text-slate-800">{r.product || "—"}</td>
                         <td className="px-2 py-2 text-left">
+                          <div className="mb-1 text-sm font-semibold text-slate-700">{r.dock ? `${r.dock}` : "—"}</div>
                           <input
                             className="imp-field mb-1"
                             value={r.dock || ""}
                             placeholder="碼頭"
                             disabled={!!r.dispatched}
                             onChange={(e) => patch(uha, "dock", e.target.value)}
+                            aria-label="碼頭"
                           />
                           {trailerControl(r, uha)}
                         </td>
@@ -334,13 +373,19 @@ export function ReleasePane({
                             value={r.pickupDay || ""}
                             disabled={!!r.dispatched}
                             onChange={(e) => patch(uha, "pickupDay", e.target.value)}
+                            aria-label="領櫃日"
                           />
                           {siteControl(r, uha)}
                         </td>
                         <td className="px-2 py-2 text-left">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <div className="min-w-0 flex-1">{assigneeControl(r, uha)}</div>
-                            <button type="button" className="imp-btn-ghost shrink-0 px-2 py-1 text-xs" disabled={!!r.dispatched} onClick={() => unmarkOne(uha)}>
+                            <button
+                              type="button"
+                              className="imp-btn-ghost shrink-0 px-2 py-1 text-xs"
+                              disabled={!!r.dispatched}
+                              onClick={() => unmarkOne(uha)}
+                            >
                               退回查驗
                             </button>
                           </div>
@@ -382,7 +427,12 @@ export function ReleasePane({
                         <p className="m-0 mt-1 text-sm font-semibold text-slate-800">{r.product || "—"}</p>
                         <NotifyBadges row={r} />
                       </div>
-                      <button type="button" className="imp-btn-ghost shrink-0 px-2 py-1 text-xs" disabled={!!r.dispatched} onClick={() => unmarkOne(uha)}>
+                      <button
+                        type="button"
+                        className="imp-btn-ghost shrink-0 px-2 py-1 text-xs"
+                        disabled={!!r.dispatched}
+                        onClick={() => unmarkOne(uha)}
+                      >
                         退回查驗
                       </button>
                     </div>

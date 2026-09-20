@@ -13,6 +13,14 @@ function shortDay(d) {
   return m ? `${Number(m[1])}/${Number(m[2])}` : s || "—";
 }
 
+function shortAt(v) {
+  const s = dtValue(v);
+  if (!s) return "";
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return s.replace("T", " ");
+  return `${Number(m[2])}/${Number(m[3])} ${m[4]}:${m[5]}`;
+}
+
 const emptyForm = () => ({
   uha: "",
   containerNo: "",
@@ -22,15 +30,6 @@ const emptyForm = () => ({
   fumigate: "none",
   released: "否",
 });
-
-function Field({ lab, children, className = "" }) {
-  return (
-    <label className={`min-w-0 ${className}`}>
-      <span className="imp-field-lab">{lab}</span>
-      {children}
-    </label>
-  );
-}
 
 function statusBadge(r) {
   if (r.inspect === "wait") return { lab: "需要藥檢", cls: "bg-sky-100 text-sky-800" };
@@ -48,7 +47,7 @@ function LockedSelect({ lab, kind, value, unlocked, onUnlock, onChange }) {
     return (
       <div className="min-w-0 flex-1 basis-[7.5rem]">
         <span className="imp-field-lab">{lab}</span>
-        <div className="flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2">
+        <div className="flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2">
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{clearLab(value, kind)}</span>
           <button type="button" className="shrink-0 text-[0.65rem] font-bold text-emerald-700 underline" onClick={onUnlock}>
             修正
@@ -72,14 +71,55 @@ function LockedSelect({ lab, kind, value, unlocked, onUnlock, onChange }) {
 }
 
 /**
- * 海關查驗：到港日／櫃號／品名／狀態為主。
- * 藥檢／薰蒸選定後鎖定可修正；僅「需要」時顯示排定時間。
+ * 排定時間：有值＝鎖定進清單；無值＝一個「填時間」鈕；按修正才開輸入框。
+ */
+function ScheduleSlot({ lab, value, unlocked, onUnlock, onChange, onLock }) {
+  const has = !!dtValue(value);
+  const editing = unlocked || !has;
+
+  if (!editing && has) {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+        <span className="text-[0.7rem] font-bold text-slate-500">{lab}</span>
+        <span className="text-sm font-semibold tabular-nums text-slate-800">{shortAt(value)}</span>
+        <button type="button" className="text-[0.65rem] font-bold text-emerald-700 underline" onClick={onUnlock}>
+          修正
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <label className="min-w-0 flex-1 basis-[12rem]">
+      <span className="imp-field-lab">{lab}</span>
+      <div className="flex gap-1.5">
+        <input
+          type="datetime-local"
+          className="imp-field flex-1"
+          value={dtValue(value)}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => {
+            if (e.target.value) onLock?.();
+          }}
+        />
+        {has ? (
+          <button type="button" className="imp-btn-ghost shrink-0 self-stretch px-2 text-xs" onClick={onLock}>
+            鎖定
+          </button>
+        ) : null}
+      </div>
+    </label>
+  );
+}
+
+/**
+ * 海關查驗：第一排確認；需要藥檢／薰蒸才出現時間；時間填完鎖定進清單。
  */
 export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh, onAfterRelease }) {
   const [picked, setPicked] = useState(() => new Set());
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  /** key = `${uha}:inspect` | `${uha}:fumigate` */
+  /** key = `${uha}:inspect` | `${uha}:fumigate` | `${uha}:inspectAt` | `${uha}:fumigateAt` */
   const [editKeys, setEditKeys] = useState(() => new Set());
 
   const toggle = (uha) => {
@@ -98,24 +138,35 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
     });
   };
 
+  const unlock = (uha, field) => {
+    setEditKeys((prev) => new Set(prev).add(`${uha}:${field}`));
+  };
+
+  const lock = (uha, field) => {
+    setEditKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(`${uha}:${field}`);
+      return next;
+    });
+  };
+
   const patch = (uha, field, value) => {
     api().patchPortField?.(uha, field, value);
     if (field === "inspect" || field === "fumigate") {
-      setEditKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(`${uha}:${field}`);
-        return next;
-      });
+      lock(uha, field);
       if (value !== "wait") {
         const atField = field === "inspect" ? "inspectAt" : "fumigateAt";
         api().patchPortField?.(uha, atField, "");
+        lock(uha, atField);
+      } else {
+        const atField = field === "inspect" ? "inspectAt" : "fumigateAt";
+        unlock(uha, atField);
       }
     }
+    if (field === "inspectAt" || field === "fumigateAt") {
+      if (value) lock(uha, field);
+    }
     refresh?.();
-  };
-
-  const unlock = (uha, field) => {
-    setEditKeys((prev) => new Set(prev).add(`${uha}:${field}`));
   };
 
   const markSelected = () => {
@@ -182,7 +233,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
           </div>
         </div>
         <p className="mt-1.5 m-0 text-xs text-slate-400">
-          重點：到港日、櫃號、品名、查驗狀態。藥檢／薰蒸選定後鎖定（可按修正）；需要時才填排定時間。
+          選定藥檢／薰蒸與排定時間後會鎖定進清單；要改再按「修正」。
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -226,6 +277,12 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
               const badge = statusBadge(r);
               const needInspect = r.inspect === "wait";
               const needFume = r.fumigate === "wait";
+              const inspectAt = dtValue(r.inspectAt);
+              const fumeAt = dtValue(r.fumigateAt);
+              const editInspectAt = editKeys.has(`${uha}:inspectAt`);
+              const editFumeAt = editKeys.has(`${uha}:fumigateAt`);
+              const showTimeRow =
+                (needInspect && (!inspectAt || editInspectAt)) || (needFume && (!fumeAt || editFumeAt));
               return (
                 <li
                   key={uha}
@@ -237,7 +294,6 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                         : "border-slate-200/90 bg-white"
                   }`}
                 >
-                  {/* 主視覺：到港日、櫃號、品名、查驗狀態 */}
                   <div className="flex flex-wrap items-start gap-2 px-3 py-2.5">
                     <label className="mt-1 flex shrink-0 cursor-pointer items-center">
                       <input
@@ -255,6 +311,22 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                           到港 {shortDay(r.arriveDay)}
                         </span>
                         <span className={`rounded-md px-2 py-0.5 text-sm font-bold ${badge.cls}`}>{badge.lab}</span>
+                        {needInspect && inspectAt && !editInspectAt ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[0.7rem] font-bold text-sky-800">
+                            藥檢 {shortAt(inspectAt)}
+                            <button type="button" className="underline" onClick={() => unlock(uha, "inspectAt")}>
+                              修正
+                            </button>
+                          </span>
+                        ) : null}
+                        {needFume && fumeAt && !editFumeAt ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-[0.7rem] font-bold text-violet-800">
+                            薰蒸 {shortAt(fumeAt)}
+                            <button type="button" className="underline" onClick={() => unlock(uha, "fumigateAt")}>
+                              修正
+                            </button>
+                          </span>
+                        ) : null}
                         {missTelex ? (
                           <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-700">缺電放</span>
                         ) : null}
@@ -274,7 +346,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                     </button>
                   </div>
 
-                  {/* 第一排：確認資料壓縮橫排 */}
+                  {/* 第一排：確認橫排 */}
                   <div className="flex flex-wrap items-end gap-2 border-t border-slate-100/80 bg-slate-50/50 px-3 py-2">
                     <LockedSelect
                       lab="藥檢"
@@ -321,30 +393,28 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                     </label>
                   </div>
 
-                  {/* 第二排：僅在需要藥檢／薰蒸時顯示排定時間 */}
-                  {needInspect || needFume ? (
+                  {/* 第二排：只在尚未填時間、或按修正時才出現輸入框 */}
+                  {showTimeRow ? (
                     <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 bg-white px-3 py-2">
-                      {needInspect ? (
-                        <label className="min-w-0 flex-1 basis-[12rem]">
-                          <span className="imp-field-lab">藥檢排定／報告時間</span>
-                          <input
-                            type="datetime-local"
-                            className="imp-field"
-                            value={dtValue(r.inspectAt)}
-                            onChange={(e) => patch(uha, "inspectAt", e.target.value)}
-                          />
-                        </label>
+                      {needInspect && (!inspectAt || editInspectAt) ? (
+                        <ScheduleSlot
+                          lab="藥檢排定／報告時間"
+                          value={r.inspectAt}
+                          unlocked={editInspectAt}
+                          onUnlock={() => unlock(uha, "inspectAt")}
+                          onChange={(v) => patch(uha, "inspectAt", v)}
+                          onLock={() => lock(uha, "inspectAt")}
+                        />
                       ) : null}
-                      {needFume ? (
-                        <label className="min-w-0 flex-1 basis-[12rem]">
-                          <span className="imp-field-lab">薰蒸排定時間</span>
-                          <input
-                            type="datetime-local"
-                            className="imp-field"
-                            value={dtValue(r.fumigateAt)}
-                            onChange={(e) => patch(uha, "fumigateAt", e.target.value)}
-                          />
-                        </label>
+                      {needFume && (!fumeAt || editFumeAt) ? (
+                        <ScheduleSlot
+                          lab="薰蒸排定時間"
+                          value={r.fumigateAt}
+                          unlocked={editFumeAt}
+                          onUnlock={() => unlock(uha, "fumigateAt")}
+                          onChange={(v) => patch(uha, "fumigateAt", v)}
+                          onLock={() => lock(uha, "fumigateAt")}
+                        />
                       ) : null}
                     </div>
                   ) : null}

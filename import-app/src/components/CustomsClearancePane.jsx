@@ -358,7 +358,27 @@ function StatusMini({ value, kind, onChange }) {
   );
 }
 
-/** 階段標籤：藥檢／薰蒸可同時並列 */
+function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
+  const needAt = value === "wait" || value === "done";
+  const atLab = kind === "inspect" ? (value === "done" ? "報告時間" : "藥檢時間") : value === "done" ? "完成時間" : "薰蒸時間";
+  return (
+    <div className="imp-clear-stack">
+      <StatusMini value={value || "none"} kind={kind} onChange={onStatus} />
+      {needAt ? (
+        <label className="imp-clear-at">
+          <span className="imp-clear-at-lab">{atLab}</span>
+          <input
+            type="datetime-local"
+            className="imp-field imp-field-at"
+            value={String(at || "").slice(0, 16)}
+            onChange={(e) => onAt?.(e.target.value)}
+            aria-label={atLab}
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
 function stageTags(r) {
   const released = r.released || r.stageId === "release" || r.stage === "已放行";
   if (released) return [{ lab: "已放行", cls: "bg-emerald-100 text-emerald-800" }];
@@ -722,16 +742,16 @@ export function CustomsClearancePane({
                     <col className="w-[3%]" />
                     <col className="w-[6%]" />
                     <col className="w-[11%]" />
+                    <col className="w-[5%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
                     <col className="w-[6%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[8%]" />
                     <col className="w-[7%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[6%]" />
+                    <col className="w-[7%]" />
                   </colgroup>
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100">
@@ -745,8 +765,8 @@ export function CustomsClearancePane({
                       <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">賣方</th>
                       <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">船公司</th>
                       <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">報關行</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢</th>
-                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">薰蒸</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢／時間</th>
+                      <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">薰蒸／時間</th>
                       <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">碼頭</th>
                       <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">備註</th>
                       <th className="px-2 py-2 text-center text-[0.7rem] font-bold text-slate-600">操作</th>
@@ -800,14 +820,22 @@ export function CustomsClearancePane({
                           <td className="px-1.5 py-1 text-left align-middle">{cell("shipCo")}</td>
                           <td className="px-1.5 py-1 text-left align-middle">{cell("broker")}</td>
                           <td className="px-1.5 py-1 text-center align-middle">
-                            <div className="inline-flex justify-center">
-                              <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
-                            </div>
+                            <ClearanceStatusCell
+                              value={r.inspect || "none"}
+                              at={r.inspectAt}
+                              kind="inspect"
+                              onStatus={(v) => patch(uha, "inspect", v)}
+                              onAt={(v) => patch(uha, "inspectAt", v)}
+                            />
                           </td>
                           <td className="px-1.5 py-1 text-center align-middle">
-                            <div className="inline-flex justify-center">
-                              <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
-                            </div>
+                            <ClearanceStatusCell
+                              value={r.fumigate || "none"}
+                              at={r.fumigateAt}
+                              kind="fumigate"
+                              onStatus={(v) => patch(uha, "fumigate", v)}
+                              onAt={(v) => patch(uha, "fumigateAt", v)}
+                            />
                           </td>
                           <td className="px-1.5 py-1 text-center align-middle">{cell("dock")}</td>
                           <td className="px-1.5 py-1 text-left align-middle">{cell("note")}</td>
@@ -905,13 +933,25 @@ export function CustomsClearancePane({
                             onBlur={(e) => patch(uha, "dock", e.target.value)}
                           />
                         </label>
-                        <div className="min-w-0 flex-1 basis-[7rem]">
+                        <div className="min-w-0 flex-1 basis-[8.5rem]">
                           <span className="imp-field-lab">藥檢</span>
-                          <StatusMini value={r.inspect || "none"} kind="inspect" onChange={(v) => patch(uha, "inspect", v)} />
+                          <ClearanceStatusCell
+                            value={r.inspect || "none"}
+                            at={r.inspectAt}
+                            kind="inspect"
+                            onStatus={(v) => patch(uha, "inspect", v)}
+                            onAt={(v) => patch(uha, "inspectAt", v)}
+                          />
                         </div>
-                        <div className="min-w-0 flex-1 basis-[7rem]">
+                        <div className="min-w-0 flex-1 basis-[8.5rem]">
                           <span className="imp-field-lab">薰蒸</span>
-                          <StatusMini value={r.fumigate || "none"} kind="fumigate" onChange={(v) => patch(uha, "fumigate", v)} />
+                          <ClearanceStatusCell
+                            value={r.fumigate || "none"}
+                            at={r.fumigateAt}
+                            kind="fumigate"
+                            onStatus={(v) => patch(uha, "fumigate", v)}
+                            onAt={(v) => patch(uha, "fumigateAt", v)}
+                          />
                         </div>
                       </div>
                     </li>

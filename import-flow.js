@@ -201,15 +201,22 @@
   function loadDrawerFields(kind, key) {
     ensureState();
     if (kind === "draft") {
-      const i = Number(key);
-      const d = state.importParseDrafts[i] || {};
+      const i = findDraftIndex(key);
+      const d = i >= 0 ? state.importParseDrafts[i] : null;
+      if (!d) return null;
       return {
+        id: d.id || "",
         uha: d.uha || "",
         containerNo: d.containerNo || "",
         customsNo: d.customsNo || "",
         arriveDay: d.arriveDay || "",
         product: d.product || "",
         broker: d.broker || "",
+        seller: d.seller || "",
+        shipCo: d.shipCo || "",
+        raw: d.raw || "",
+        photoName: d.photoName || "",
+        missing: Array.isArray(d.missing) ? d.missing.slice() : [],
         _index: i,
         updatedAt: rowUpdatedAt(d),
       };
@@ -426,8 +433,8 @@
     ensureState();
     const { kind, key, fields } = sess;
     if (kind === "draft") {
-      const i = Number(key);
-      const d = state.importParseDrafts[i];
+      const i = findDraftIndex(key);
+      const d = i >= 0 ? state.importParseDrafts[i] : null;
       if (!d) return false;
       Object.assign(d, {
         uha: fields.uha,
@@ -436,6 +443,8 @@
         arriveDay: fields.arriveDay,
         product: fields.product,
         broker: fields.broker,
+        seller: fields.seller,
+        shipCo: fields.shipCo,
       });
       stampRow(d);
     } else if (kind === "port" || kind === "release") {
@@ -707,31 +716,142 @@
     body.innerHTML = `<p class="imp-one-hint">${esc(hints[pane] || "建置中。")}</p>`;
   }
 
-  /** 從報關／進口文件文字抽出欄位 */
-  function parseImportDocText(raw) {
-    const text = String(raw || "");
-    const uhaM = text.match(/\b(UHA\s*\d+)\b/i);
-    const contM = text.match(/\b([A-Z]{4}\d{7})\b/i) || text.match(/櫃號\s*[:：]?\s*([A-Z0-9]+)/i);
-    const custM = text.match(/報關單(?:號碼)?\s*[:：]?\s*([A-Z0-9\-]+)/i) || text.match(/\b([A-Z]{1,3}\d{8,})\b/);
-    const dayM = text.match(/到港日\s*[:：]?\s*([0-9./\-]+)/) || text.match(/\b(20\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\b/);
-    const prodM = text.match(/品名\s*[:：]?\s*([^\n\r]+)/);
-    const brokerM = text.match(/報關行\s*[:：]?\s*([^\n\r]+)/);
+  /** 從報關／進口文件文字抽出欄位（單筆） */
+  function parseOneImportChunk(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return null;
+
+    const refs = parseRefNos(text);
+    let uha = refs.uha || refs.nc || "";
+    if (!uha) {
+      const loose = text.match(/\b((?:UHA|NC)\s*\d{1,6})\b/i);
+      if (loose) uha = normUha(loose[1]);
+    }
+
+    let containerNo = "";
+    const contLabeled = text.match(/(?:櫃號|貨櫃|Container)\s*[:：#]?\s*([A-Z]{4}\s*\d{6,7})/i);
+    const contBare = text.match(/\b([A-Z]{4}\s*\d{6,7})\b/i);
+    if (contLabeled) containerNo = normContainer(contLabeled[1]);
+    else if (contBare) containerNo = normContainer(contBare[1]);
+
+    let customsNo = "";
+    const custM =
+      text.match(/(?:報關單(?:號碼|號)?|報單)\s*[:：]?\s*([A-Z0-9][\w\-]{5,})/i) ||
+      text.match(/\b([A-Z]{1,4}\d{8,})\b/);
+    if (custM) customsNo = String(custM[1]).trim().toUpperCase();
+
+    let arriveDay = "";
+    const dayM =
+      text.match(/(?:到港日|抵達|到港|ETB|ETA)\s*[:：]?\s*([0-9./\-]+)/i) ||
+      text.match(/\b(20\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\b/) ||
+      text.match(/\b(1[01]\d{5})\b/); // 民國 YYYMMDD
+    if (dayM) arriveDay = parseDay(dayM[1]);
+
+    let product = "";
+    const prodM = text.match(/(?:品名|貨名|品項|貨物)\s*[:：]?\s*([^\n\r]+)/i);
+    if (prodM) product = String(prodM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 80);
+
+    let broker = "";
+    const brokerM = text.match(/(?:報關行|報關)\s*[:：]?\s*([^\n\r]+)/i);
+    if (brokerM) broker = String(brokerM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
+
+    let seller = "";
+    const sellerM = text.match(/(?:賣方|出口人|Shipper|Seller)\s*[:：]?\s*([^\n\r]+)/i);
+    if (sellerM) seller = String(sellerM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 60);
+
+    let shipCo = "";
+    const shipM = text.match(/(?:船公司|船名|航商|Carrier)\s*[:：]?\s*([^\n\r]+)/i);
+    if (shipM) shipCo = String(shipM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
+
+    const missing = [];
+    if (!uha) missing.push("編號");
+    if (!containerNo) missing.push("櫃號");
+    if (!arriveDay) missing.push("到港日");
+    if (!product) missing.push("品名");
+
     return {
       id: uid("draft"),
-      uha: uhaM ? normUha(uhaM[1]) : "",
-      containerNo: contM ? normContainer(contM[1]) : "",
-      customsNo: custM ? String(custM[1]).trim() : "",
-      arriveDay: dayM ? parseDay(dayM[1]) : "",
-      product: prodM ? String(prodM[1]).trim() : "",
-      broker: brokerM ? String(brokerM[1]).trim() : "",
-      raw: text.slice(0, 2000),
+      uha,
+      containerNo,
+      customsNo,
+      arriveDay,
+      product,
+      broker,
+      seller,
+      shipCo,
+      raw: text.slice(0, 4000),
+      missing,
+      parseOk: missing.length <= 2,
     };
   }
 
-  function confirmParseDraft(i) {
+  /**
+   * 解析文件文字 → 一筆或多筆草稿。
+   * 多櫃：以空行、或連續 UHA／NC 編號切開。
+   * 回傳最後一筆（相容舊呼叫）；全部草稿由呼叫端用 parseImportDocTexts 取得。
+   */
+  function parseImportDocTexts(raw) {
+    const text = String(raw || "").replace(/\r\n/g, "\n").trim();
+    if (!text) return [];
+
+    // 依「編號行」切開多櫃
+    const parts = [];
+    const markers = [];
+    let m;
+    const finder = /(?:^|\n)((?:編號\s*[:：]?\s*)?(?:UHA|NC)\s*\d{1,6})/gi;
+    while ((m = finder.exec(text)) !== null) {
+      markers.push(m.index + (m[0].startsWith("\n") ? 1 : 0));
+    }
+    if (markers.length > 1) {
+      for (let i = 0; i < markers.length; i++) {
+        const start = markers[i];
+        const end = i + 1 < markers.length ? markers[i + 1] : text.length;
+        const chunk = text.slice(start, end).trim();
+        if (chunk) parts.push(chunk);
+      }
+    } else {
+      // 空行分段
+      const blanks = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+      if (blanks.length > 1 && blanks.every((b) => /\b(?:UHA|NC)\s*\d/i.test(b) || /櫃號/i.test(b))) {
+        parts.push(...blanks);
+      } else {
+        parts.push(text);
+      }
+    }
+
+    const drafts = [];
+    for (const chunk of parts) {
+      const d = parseOneImportChunk(chunk);
+      if (d && (d.uha || d.containerNo || d.product || d.customsNo || d.arriveDay)) drafts.push(d);
+    }
+    if (!drafts.length) {
+      const fallback = parseOneImportChunk(text);
+      if (fallback) drafts.push(fallback);
+    }
+    return drafts;
+  }
+
+  function parseImportDocText(raw) {
+    const list = parseImportDocTexts(raw);
+    return list[0] || null;
+  }
+
+  function findDraftIndex(key) {
     ensureState();
-    const d = state.importParseDrafts[i];
-    if (!d) return;
+    const drafts = state.importParseDrafts || [];
+    const k = String(key ?? "");
+    let i = drafts.findIndex((d) => d && String(d.id) === k);
+    if (i >= 0) return i;
+    const n = Number(k);
+    if (Number.isInteger(n) && n >= 0 && n < drafts.length) return n;
+    return -1;
+  }
+
+  function confirmParseDraft(key) {
+    ensureState();
+    const i = findDraftIndex(key);
+    const d = i >= 0 ? state.importParseDrafts[i] : null;
+    if (!d) return false;
     let uha = normUha(d.uha);
     if (!uha) uha = makePendingUha();
     const cab = {
@@ -741,8 +861,8 @@
       arriveDay: parseDay(d.arriveDay) || "",
       product: String(d.product || "").trim(),
       qty: "",
-      seller: "",
-      shipCo: "",
+      seller: String(d.seller || "").trim(),
+      shipCo: String(d.shipCo || "").trim(),
       broker: String(d.broker || "").trim(),
       docRef: "",
       amount: "",
@@ -769,6 +889,16 @@
     importPane = "port";
     closeDrawer({ force: true });
     renderImportPage();
+    return true;
+  }
+
+  function discardParseDraft(key) {
+    ensureState();
+    const i = findDraftIndex(key);
+    if (i < 0) return false;
+    state.importParseDrafts.splice(i, 1);
+    if (typeof save === "function") save();
+    return true;
   }
 
   function ensureState() {
@@ -1783,7 +1913,8 @@
 
   function upsertCabinetFromTpl(row) {
     ensureState();
-    const uha = normUha(row.uha);
+    let uha = normUha(row.uha);
+    if (!uha && (row.containerNo || row.product || row.arriveDay)) uha = makePendingUha();
     if (!uha) return null;
     let cab = (state.importCabinets || []).find((c) => c.uha === uha);
     if (!cab) {
@@ -1805,6 +1936,8 @@
     if (row.product) cab.product = String(row.product).trim();
     if (row.qty != null && row.qty !== "") cab.qty = Number(row.qty) || cab.qty || 0;
     if (row.seller) cab.seller = String(row.seller).trim();
+    if (row.shipCo) cab.shipCo = String(row.shipCo).trim();
+    if (row.broker) cab.broker = String(row.broker).trim();
     stampRow(cab);
     return cab;
   }
@@ -1843,22 +1976,27 @@
   }
 
   function parseTplPortRows(rows) {
-    const hi = findHeaderRow(rows, ["編號"]);
+    const hi = findHeaderRow(rows, ["編號", "櫃號"]);
     if (hi < 0) return [];
     const h = rows[hi];
     const i = (names) => colIndex(h, names);
     const out = [];
     for (let r = hi + 1; r < rows.length; r++) {
       const row = rows[r] || [];
-      const uha = normUha(cell(row, i(["編號"])));
-      if (!uha) continue;
+      let uha = normUha(cell(row, i(["編號"])));
+      const containerNo = cell(row, i(["櫃號"]));
+      const product = cell(row, i(["品名", "產品"]));
+      const arriveDay = cell(row, i(["到港日", "日期"]));
+      if (!uha && !normContainer(containerNo) && !String(product || "").trim()) continue;
       out.push({
-        uha,
-        containerNo: cell(row, i(["櫃號"])),
-        arriveDay: cell(row, i(["到港日", "日期"])),
-        product: cell(row, i(["品名", "產品"])),
+        uha: uha || "",
+        containerNo,
+        arriveDay,
+        product,
         qty: cell(row, i(["件數"])),
         seller: cell(row, i(["賣方"])),
+        shipCo: cell(row, i(["船公司"])),
+        broker: cell(row, i(["報關行"])),
         inspect: cell(row, i(["藥檢"])),
         inspectAt: cell(row, i(["藥檢時間", "藥檢報告時間", "報告時間"])),
         fumigate: cell(row, i(["薰蒸"])),
@@ -1882,22 +2020,36 @@
     if (!sh) throw new Error("找不到工作表");
     const rows = sh.rows || [];
     ensureState();
-    let n = 0;
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
     if (kind === "port" || kind === "tpl-port") {
       const list = parseTplPortRows(rows);
-      if (!list.length) throw new Error("港口查驗格式沒有讀到編號（請用下載的表頭）");
+      if (!list.length) throw new Error("港口查驗格式沒有讀到資料（請用下載的表頭：編號／櫃號）");
       for (const row of list) {
-        upsertCabinetFromTpl(row);
-        applyTrackFromTpl(row.uha, row, false);
-        n += 1;
+        const existed = normUha(row.uha) && (state.importCabinets || []).some((c) => c.uha === normUha(row.uha));
+        const cab = upsertCabinetFromTpl(row);
+        if (!cab) {
+          skipped += 1;
+          continue;
+        }
+        applyTrackFromTpl(cab.uha, row, false);
+        if (existed) updated += 1;
+        else added += 1;
       }
     } else if (kind === "released" || kind === "tpl-released") {
       const list = parseTplPortRows(rows);
-      if (!list.length) throw new Error("已放行格式沒有讀到編號");
+      if (!list.length) throw new Error("已放行格式沒有讀到資料");
       for (const row of list) {
-        upsertCabinetFromTpl(row);
-        applyTrackFromTpl(row.uha, row, true);
-        n += 1;
+        const existed = normUha(row.uha) && (state.importCabinets || []).some((c) => c.uha === normUha(row.uha));
+        const cab = upsertCabinetFromTpl(row);
+        if (!cab) {
+          skipped += 1;
+          continue;
+        }
+        applyTrackFromTpl(cab.uha, row, true);
+        if (existed) updated += 1;
+        else added += 1;
       }
     } else if (kind === "arrival" || kind === "tpl-arrival") {
       const hi = findHeaderRow(rows, ["編號"]);
@@ -1916,7 +2068,10 @@
       for (let r = hi + 1; r < rows.length; r++) {
         const row = rows[r] || [];
         const uha = normUha(cell(row, iUha));
-        if (!uha) continue;
+        if (!uha) {
+          skipped += 1;
+          continue;
+        }
         list.push({
           id: uid("arr"),
           uha,
@@ -1934,20 +2089,24 @@
       const by = new Map((state.importArrivals || []).map((a) => [a.uha, a]));
       for (const row of list) {
         const prev = by.get(row.uha);
-        if (prev) Object.assign(prev, { ...row, id: prev.id });
-        else {
+        if (prev) {
+          Object.assign(prev, { ...row, id: prev.id });
+          stampRow(prev);
+          updated += 1;
+        } else {
           by.set(row.uha, row);
           state.importArrivals.push(row);
+          stampRow(row);
+          added += 1;
         }
-        stampRow(by.get(row.uha));
-        n += 1;
       }
       syncPortPendingAfterArrival();
     } else {
       throw new Error("未知匯入類型");
     }
     if (typeof save === "function") save();
-    return n;
+    const total = added + updated;
+    return { added, updated, skipped, total, n: total };
   }
 
   /** 海關查驗：手動新增一筆（編號可後補） */
@@ -3161,7 +3320,8 @@
       else if (kind === "arrival") n = await importArrivalFile(file);
       else if (kind === "released") n = await importReleasedFile(file);
       else if (kind === "tpl-port" || kind === "tpl-released" || kind === "tpl-arrival") n = await importTemplateFile(file, kind);
-      if (typeof setStatus === "function") setStatus(`已匯入 ${n} 筆。`);
+      const count = typeof n === "object" && n ? n.total ?? n.n ?? 0 : n;
+      if (typeof setStatus === "function") setStatus(`已匯入 ${count} 筆。`);
       renderImportPage();
       if (typeof renderHomeHub === "function" && page === "home") renderHomeHub();
     } catch (err) {
@@ -3185,7 +3345,10 @@
     loadDrawerFields,
     commitDrawerSession,
     parseImportDocText,
+    parseImportDocTexts,
     confirmParseDraft,
+    discardParseDraft,
+    assignPortUha,
     markPortReleased,
     markPortReleasedMany,
     unmarkPortReleased,
@@ -3204,7 +3367,10 @@
     },
     listDrafts() {
       ensureState();
-      return (state.importParseDrafts || []).map((d, i) => ({ ...d, _index: i }));
+      return (state.importParseDrafts || []).map((d, i) => {
+        if (!d.id) d.id = uid("draft");
+        return { ...d, _index: i };
+      });
     },
     listPort(tab) {
       ensureState();

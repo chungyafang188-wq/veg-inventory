@@ -9353,13 +9353,35 @@ function se({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 						v === "draft" ? /* @__PURE__ */ (0, E.jsxs)("div", {
 							className: "grid gap-2.5",
 							children: [
+								_.raw ? /* @__PURE__ */ (0, E.jsxs)("details", {
+									className: "rounded-md border border-imp-line bg-slate-50 px-2.5 py-2",
+									children: [/* @__PURE__ */ (0, E.jsx)("summary", {
+										className: "cursor-pointer text-[0.78rem] font-bold text-imp-muted",
+										children: "原文（核對用）"
+									}), /* @__PURE__ */ (0, E.jsx)("pre", {
+										className: "m-0 mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[0.75rem] text-imp-ink",
+										children: _.raw
+									})]
+								}) : null,
+								_.photoName ? /* @__PURE__ */ (0, E.jsxs)("p", {
+									className: "m-0 text-[0.75rem] text-imp-muted",
+									children: ["附圖：", _.photoName]
+								}) : null,
+								Array.isArray(_.missing) && _.missing.length ? /* @__PURE__ */ (0, E.jsxs)("p", {
+									className: "m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800",
+									children: [
+										"尚缺：",
+										_.missing.join("、"),
+										"（可後補）"
+									]
+								}) : null,
 								/* @__PURE__ */ (0, E.jsx)(D, {
-									label: "編號（UHA／NC）",
+									label: "編號（UHA／NC，可後補）",
 									children: /* @__PURE__ */ (0, E.jsx)("input", {
 										className: O(),
 										value: _.uha || "",
 										onChange: (e) => c("uha", e.target.value),
-										placeholder: "UHA715 或 NC002"
+										placeholder: "UHA715 或 NC002，可空白後補"
 									})
 								}),
 								/* @__PURE__ */ (0, E.jsx)(D, {
@@ -9394,6 +9416,22 @@ function se({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 										className: O(),
 										value: _.product || "",
 										onChange: (e) => c("product", e.target.value)
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "賣方",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.seller || "",
+										onChange: (e) => c("seller", e.target.value)
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "船公司",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.shipCo || "",
+										onChange: (e) => c("shipCo", e.target.value)
 									})
 								}),
 								/* @__PURE__ */ (0, E.jsx)(D, {
@@ -10663,7 +10701,9 @@ function Fe({ title: e, refresh: t }) {
 			r(e);
 			try {
 				let r = await _().importTemplateFile?.(n, e);
-				t?.(), m?.(`已匯入 ${r} 筆。`), alert(`已匯入 ${r} 筆。`);
+				t?.();
+				let i = r?.added ?? 0, a = r?.updated ?? 0, o = r?.skipped ?? 0, s = r?.total ?? r?.n ?? (typeof r == "number" ? r : 0), c = o > 0 ? `已匯入 ${s} 筆（新增 ${i}、更新 ${a}、略過 ${o}）。` : `已匯入 ${s} 筆（新增 ${i}、更新 ${a}）。`;
+				m?.(c), alert(c);
 			} catch (e) {
 				alert(String(e.message || e));
 			} finally {
@@ -10680,7 +10720,7 @@ function Fe({ title: e, refresh: t }) {
 			}),
 			/* @__PURE__ */ (0, E.jsx)("p", {
 				className: "mt-1 text-xs text-slate-400",
-				children: "比對舊表不準時，請下載空白 CSV（Excel 可開），照表頭填好再匯入。海關查驗也可直接手動新增。"
+				children: "下載空白 CSV（Excel 可開）照表頭填好再匯入。編號可空白（後補）；也可在海關查驗手動新增。"
 			}),
 			/* @__PURE__ */ (0, E.jsxs)("div", {
 				className: "mt-4 grid gap-3",
@@ -10834,7 +10874,7 @@ function Ie({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 			}),
 			/* @__PURE__ */ (0, E.jsx)("p", {
 				className: "mt-1 text-xs text-slate-400",
-				children: "貼上文件文字或截圖，解析後點草稿開啟編輯。"
+				children: "貼上報關／進口文件文字（可一次多櫃）。解析後核對草稿，確認後列入海關查驗。編號可後補。"
 			}),
 			/* @__PURE__ */ (0, E.jsxs)("div", {
 				className: "mt-4 grid gap-3",
@@ -10843,7 +10883,7 @@ function Ie({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 						className: "grid gap-1.5 text-xs font-semibold text-slate-500",
 						children: ["文件文字", /* @__PURE__ */ (0, E.jsx)("textarea", {
 							className: "min-h-36 w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm font-normal text-slate-800 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20",
-							placeholder: "例：UHA720\n櫃號 YMLU1234567\n報關單 AB123456789\n品名 韓白\n到港日 2026-01-15",
+							placeholder: "例：\nUHA720\n櫃號 YMLU1234567\n報關單 AB123456789\n品名 韓白\n到港日 2026-01-15\n報關行 東農\n賣方 月亮GB",
 							value: i,
 							onChange: (e) => a(e.target.value)
 						})]
@@ -10856,18 +10896,24 @@ function Ie({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 								m("請先貼上文件文字。", !0);
 								return;
 							}
-							let e = _().parseImportDocText?.(i), t = f();
-							if (!e || !t) {
-								m("解析失敗。", !0);
+							let e = _(), t = typeof e.parseImportDocTexts == "function" ? e.parseImportDocTexts(i) : (() => {
+								let t = e.parseImportDocText?.(i);
+								return t ? [t] : [];
+							})(), o = f();
+							if (!t?.length || !o) {
+								m("解析不到欄位，請檢查文字或改手動填。", !0);
 								return;
 							}
-							t.importParseDrafts.unshift(e), t.importParseDrafts.length > 40 && (t.importParseDrafts.length = 40), a(""), p(), m("已解析，請核對後確認。"), n?.(), r?.(0);
+							for (let e = t.length - 1; e >= 0; e--) o.importParseDrafts.unshift(t[e]);
+							o.importParseDrafts.length > 40 && (o.importParseDrafts.length = 40), a(""), p();
+							let s = t[0], c = (s.missing || []).join("、");
+							m(t.length > 1 ? `已解析 ${t.length} 櫃，請逐筆核對後確認。` : c ? `已解析（尚缺：${c}），請核對後確認。` : "已解析，請核對後確認。"), n?.(), r?.(s.id || 0);
 						},
 						children: "解析文字"
 					}),
 					/* @__PURE__ */ (0, E.jsxs)("label", {
 						className: "inline-flex w-fit cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:bg-slate-50",
-						children: ["截圖／拍照", /* @__PURE__ */ (0, E.jsx)("input", {
+						children: ["截圖／拍照（先建草稿，OCR 稍後）", /* @__PURE__ */ (0, E.jsx)("input", {
 							type: "file",
 							accept: "image/*,.png,.jpg,.jpeg,.webp",
 							className: "hidden",
@@ -10875,17 +10921,27 @@ function Ie({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 								let t = e.target.files?.[0];
 								if (e.target.value = "", !t) return;
 								let i = f();
-								i && (i.importParseDrafts.unshift({
-									id: `draft_${Date.now()}`,
+								if (!i) return;
+								let a = `draft_${Date.now()}`;
+								i.importParseDrafts.unshift({
+									id: a,
 									uha: "",
 									containerNo: "",
 									customsNo: "",
 									arriveDay: "",
 									product: "",
 									broker: "",
+									seller: "",
+									shipCo: "",
 									raw: `（截圖／拍照：${t.name}，請手動核對欄位）`,
-									photoName: t.name
-								}), p(), m("已附上圖片，請填寫欄位後確認。（圖片 OCR 下一步接）"), n?.(), r?.(0));
+									photoName: t.name,
+									missing: [
+										"編號",
+										"櫃號",
+										"到港日",
+										"品名"
+									]
+								}), p(), m("已建立草稿，請手動填欄位後確認。（圖片 OCR 下一步）"), n?.(), r?.(a);
 							}
 						})]
 					}),
@@ -10896,22 +10952,25 @@ function Ie({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 							children: "待確認草稿（點列開啟編輯）"
 						}), t?.length ? /* @__PURE__ */ (0, E.jsx)("ul", {
 							className: "m-0 grid list-none gap-1.5 p-0",
-							children: t.map((e, t) => /* @__PURE__ */ (0, E.jsx)("li", { children: /* @__PURE__ */ (0, E.jsxs)("button", {
-								type: "button",
-								className: "flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-left text-sm transition-all hover:bg-emerald-50/50",
-								onClick: () => r?.(t),
-								children: [/* @__PURE__ */ (0, E.jsx)("span", {
-									className: "font-semibold text-slate-800",
-									children: e.uha || "（未填編號）"
-								}), /* @__PURE__ */ (0, E.jsx)("span", {
-									className: "truncate text-xs text-slate-400",
-									children: [
-										e.containerNo,
-										e.product,
-										e.arriveDay
-									].filter(Boolean).join(" · ") || "點此編輯"
-								})]
-							}) }, e.id || t))
+							children: t.map((e, t) => {
+								let n = e.id || String(t), i = !String(e.uha || "").trim();
+								return /* @__PURE__ */ (0, E.jsx)("li", { children: /* @__PURE__ */ (0, E.jsxs)("button", {
+									type: "button",
+									className: `flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-all hover:bg-emerald-50/50 ${i ? "border-amber-200 bg-amber-50/40" : "border-slate-200/80 bg-white"}`,
+									onClick: () => r?.(n),
+									children: [/* @__PURE__ */ (0, E.jsx)("span", {
+										className: "font-semibold text-slate-800",
+										children: e.uha || "缺編號（可後補）"
+									}), /* @__PURE__ */ (0, E.jsx)("span", {
+										className: "truncate text-xs text-slate-400",
+										children: [
+											e.containerNo,
+											e.product,
+											e.arriveDay
+										].filter(Boolean).join(" · ") || "點此編輯"
+									})]
+								}) }, n);
+							})
 						}) : /* @__PURE__ */ (0, E.jsxs)("div", {
 							className: "flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50/80 px-4 py-10 text-center",
 							children: [
@@ -11096,7 +11155,7 @@ function We({ title: e, portTab: t, setPortTab: n, portCounts: r, rows: i, refre
 		}), a?.(), o?.([e]));
 	}, ie = () => {
 		if (!_().addManualPortRow?.(f)) {
-			alert("請至少填編號（UHA 或 NC）。");
+			alert("新增失敗，請再試一次。");
 			return;
 		}
 		let e = f.released === "是", t = f.uha;
@@ -11195,7 +11254,7 @@ function We({ title: e, portTab: t, setPortTab: n, portCounts: r, rows: i, refre
 						/* @__PURE__ */ (0, E.jsx)("input", {
 							className: "imp-field",
 							value: f.uha,
-							placeholder: "編號 UHA／NC",
+							placeholder: "編號可空白後補",
 							onChange: (e) => p({
 								...f,
 								uha: e.target.value
@@ -12582,11 +12641,17 @@ function ht({ initialPane: e = "parse" }) {
 				h.dirty && ce(), _().markPortReleased?.(h.key), o("release"), D("release", h.key), i();
 			},
 			onConfirmDraft: () => {
-				h.dirty && ce(), _().confirmParseDraft?.(Number(h.key)), o("port"), O(!0), i();
+				h.dirty && ce(), _().confirmParseDraft?.(h.key), o("port"), O(!0), i();
 			},
 			onDropDraft: () => {
-				let e = f();
-				e && (e.importParseDrafts.splice(Number(h.key), 1), p(), O(!0), i());
+				if (typeof _().discardParseDraft == "function") _().discardParseDraft(h.key);
+				else {
+					let e = f();
+					if (!e) return;
+					let t = e.importParseDrafts.findIndex((e) => String(e.id) === String(h.key));
+					t >= 0 ? e.importParseDrafts.splice(t, 1) : e.importParseDrafts.splice(Number(h.key), 1), p();
+				}
+				O(!0), i();
 			}
 		}) : null]
 	});

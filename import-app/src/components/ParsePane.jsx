@@ -9,32 +9,51 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
       setStatus("請先貼上文件文字。", true);
       return;
     }
-    const draft = api().parseImportDocText?.(text);
+    const a = api();
+    const list =
+      typeof a.parseImportDocTexts === "function"
+        ? a.parseImportDocTexts(text)
+        : (() => {
+            const d = a.parseImportDocText?.(text);
+            return d ? [d] : [];
+          })();
     const state = ensureImportState();
-    if (!draft || !state) {
-      setStatus("解析失敗。", true);
+    if (!list?.length || !state) {
+      setStatus("解析不到欄位，請檢查文字或改手動填。", true);
       return;
     }
-    state.importParseDrafts.unshift(draft);
+    for (let i = list.length - 1; i >= 0; i--) {
+      state.importParseDrafts.unshift(list[i]);
+    }
     if (state.importParseDrafts.length > 40) state.importParseDrafts.length = 40;
     setText("");
     saveState();
-    setStatus("已解析，請核對後確認。");
+    const first = list[0];
+    const miss = (first.missing || []).join("、");
+    setStatus(
+      list.length > 1
+        ? `已解析 ${list.length} 櫃，請逐筆核對後確認。`
+        : miss
+          ? `已解析（尚缺：${miss}），請核對後確認。`
+          : "已解析，請核對後確認。",
+    );
     onParsed?.();
-    onOpenDraft?.(0);
+    onOpenDraft?.(first.id || 0);
   };
 
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
       <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2>
-      <p className="mt-1 text-xs text-slate-400">貼上文件文字或截圖，解析後點草稿開啟編輯。</p>
+      <p className="mt-1 text-xs text-slate-400">
+        貼上報關／進口文件文字（可一次多櫃）。解析後核對草稿，確認後列入海關查驗。編號可後補。
+      </p>
 
       <div className="mt-4 grid gap-3">
         <label className="grid gap-1.5 text-xs font-semibold text-slate-500">
           文件文字
           <textarea
             className="min-h-36 w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm font-normal text-slate-800 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
-            placeholder={"例：UHA720\n櫃號 YMLU1234567\n報關單 AB123456789\n品名 韓白\n到港日 2026-01-15"}
+            placeholder={"例：\nUHA720\n櫃號 YMLU1234567\n報關單 AB123456789\n品名 韓白\n到港日 2026-01-15\n報關行 東農\n賣方 月亮GB"}
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -47,7 +66,7 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
           解析文字
         </button>
         <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:bg-slate-50">
-          截圖／拍照
+          截圖／拍照（先建草稿，OCR 稍後）
           <input
             type="file"
             accept="image/*,.png,.jpg,.jpeg,.webp"
@@ -58,21 +77,25 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
               if (!file) return;
               const state = ensureImportState();
               if (!state) return;
+              const id = `draft_${Date.now()}`;
               state.importParseDrafts.unshift({
-                id: `draft_${Date.now()}`,
+                id,
                 uha: "",
                 containerNo: "",
                 customsNo: "",
                 arriveDay: "",
                 product: "",
                 broker: "",
+                seller: "",
+                shipCo: "",
                 raw: `（截圖／拍照：${file.name}，請手動核對欄位）`,
                 photoName: file.name,
+                missing: ["編號", "櫃號", "到港日", "品名"],
               });
               saveState();
-              setStatus("已附上圖片，請填寫欄位後確認。（圖片 OCR 下一步接）");
+              setStatus("已建立草稿，請手動填欄位後確認。（圖片 OCR 下一步）");
               onParsed?.();
-              onOpenDraft?.(0);
+              onOpenDraft?.(id);
             }}
           />
         </label>
@@ -91,20 +114,26 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             </div>
           ) : (
             <ul className="m-0 grid list-none gap-1.5 p-0">
-              {drafts.map((d, i) => (
-                <li key={d.id || i}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-left text-sm transition-all hover:bg-emerald-50/50"
-                    onClick={() => onOpenDraft?.(i)}
-                  >
-                    <span className="font-semibold text-slate-800">{d.uha || "（未填編號）"}</span>
-                    <span className="truncate text-xs text-slate-400">
-                      {[d.containerNo, d.product, d.arriveDay].filter(Boolean).join(" · ") || "點此編輯"}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {drafts.map((d, i) => {
+                const key = d.id || String(i);
+                const missUha = !String(d.uha || "").trim();
+                return (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-all hover:bg-emerald-50/50 ${
+                        missUha ? "border-amber-200 bg-amber-50/40" : "border-slate-200/80 bg-white"
+                      }`}
+                      onClick={() => onOpenDraft?.(key)}
+                    >
+                      <span className="font-semibold text-slate-800">{d.uha || "缺編號（可後補）"}</span>
+                      <span className="truncate text-xs text-slate-400">
+                        {[d.containerNo, d.product, d.arriveDay].filter(Boolean).join(" · ") || "點此編輯"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

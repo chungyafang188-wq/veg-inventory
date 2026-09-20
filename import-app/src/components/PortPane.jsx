@@ -205,7 +205,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
   const submitAdd = () => {
     const ok = api().addManualPortRow?.(form);
     if (!ok) {
-      alert("請至少填編號（UHA 或 NC）。");
+      alert("新增失敗，請再試一次。");
       return;
     }
     const wasReleased = form.released === "是";
@@ -275,7 +275,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
       {showAdd ? (
         <div className="border-b border-emerald-100 bg-emerald-50/50 px-4 py-3">
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <input className="imp-field" value={form.uha} placeholder="編號 UHA／NC" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
+            <input className="imp-field" value={form.uha} placeholder="編號可空白後補" onChange={(e) => setForm({ ...form, uha: e.target.value })} />
             <input className="imp-field" value={form.containerNo} placeholder="櫃號" onChange={(e) => setForm({ ...form, containerNo: e.target.value })} />
             <input type="date" className="imp-field" value={form.arriveDay} onChange={(e) => setForm({ ...form, arriveDay: e.target.value })} />
             <input className="imp-field" value={form.product} placeholder="品名" onChange={(e) => setForm({ ...form, product: e.target.value })} />

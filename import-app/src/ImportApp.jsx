@@ -235,16 +235,22 @@ export default function ImportApp({ initialPane = "parse" }) {
           }}
           onConfirmDraft={() => {
             if (draft.dirty) commitDraft();
-            api().confirmParseDraft?.(Number(draft.key));
+            api().confirmParseDraft?.(draft.key);
             setActiveTabState("port");
             closeDrawer(true);
             refresh();
           }}
           onDropDraft={() => {
-            const state = ensureImportState();
-            if (!state) return;
-            state.importParseDrafts.splice(Number(draft.key), 1);
-            saveState();
+            if (typeof api().discardParseDraft === "function") {
+              api().discardParseDraft(draft.key);
+            } else {
+              const state = ensureImportState();
+              if (!state) return;
+              const i = state.importParseDrafts.findIndex((d) => String(d.id) === String(draft.key));
+              if (i >= 0) state.importParseDrafts.splice(i, 1);
+              else state.importParseDrafts.splice(Number(draft.key), 1);
+              saveState();
+            }
             closeDrawer(true);
             refresh();
           }}

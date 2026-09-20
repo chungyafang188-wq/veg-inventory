@@ -116,8 +116,22 @@ export function Drawer({
 
           {kind === "draft" ? (
             <div className="grid gap-2.5">
-              <Field label="編號（UHA／NC）">
-                <input className={inputCls()} value={f.uha || ""} onChange={(e) => onField("uha", e.target.value)} placeholder="UHA715 或 NC002" />
+              {f.raw ? (
+                <details className="rounded-md border border-imp-line bg-slate-50 px-2.5 py-2">
+                  <summary className="cursor-pointer text-[0.78rem] font-bold text-imp-muted">原文（核對用）</summary>
+                  <pre className="m-0 mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[0.75rem] text-imp-ink">
+                    {f.raw}
+                  </pre>
+                </details>
+              ) : null}
+              {f.photoName ? <p className="m-0 text-[0.75rem] text-imp-muted">附圖：{f.photoName}</p> : null}
+              {Array.isArray(f.missing) && f.missing.length ? (
+                <p className="m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800">
+                  尚缺：{f.missing.join("、")}（可後補）
+                </p>
+              ) : null}
+              <Field label="編號（UHA／NC，可後補）">
+                <input className={inputCls()} value={f.uha || ""} onChange={(e) => onField("uha", e.target.value)} placeholder="UHA715 或 NC002，可空白後補" />
               </Field>
               <Field label="櫃號（EMCU／FBIU…）">
                 <input className={inputCls()} value={f.containerNo || ""} onChange={(e) => onField("containerNo", e.target.value)} placeholder="EMCU5743731" />
@@ -130,6 +144,12 @@ export function Drawer({
               </Field>
               <Field label="品名">
                 <input className={inputCls()} value={f.product || ""} onChange={(e) => onField("product", e.target.value)} />
+              </Field>
+              <Field label="賣方">
+                <input className={inputCls()} value={f.seller || ""} onChange={(e) => onField("seller", e.target.value)} />
+              </Field>
+              <Field label="船公司">
+                <input className={inputCls()} value={f.shipCo || ""} onChange={(e) => onField("shipCo", e.target.value)} />
               </Field>
               <Field label="報關行">
                 <input className={inputCls()} value={f.broker || ""} onChange={(e) => onField("broker", e.target.value)} />

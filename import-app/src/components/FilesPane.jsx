@@ -22,10 +22,18 @@ export function FilesPane({ title, refresh }) {
     if (!file) return;
     setBusy(kind);
     try {
-      const n = await api().importTemplateFile?.(file, kind);
+      const result = await api().importTemplateFile?.(file, kind);
       refresh?.();
-      setStatus?.(`已匯入 ${n} 筆。`);
-      alert(`已匯入 ${n} 筆。`);
+      const added = result?.added ?? 0;
+      const updated = result?.updated ?? 0;
+      const skipped = result?.skipped ?? 0;
+      const total = result?.total ?? result?.n ?? (typeof result === "number" ? result : 0);
+      const msg =
+        skipped > 0
+          ? `已匯入 ${total} 筆（新增 ${added}、更新 ${updated}、略過 ${skipped}）。`
+          : `已匯入 ${total} 筆（新增 ${added}、更新 ${updated}）。`;
+      setStatus?.(msg);
+      alert(msg);
     } catch (err) {
       alert(String(err.message || err));
     } finally {
@@ -52,7 +60,7 @@ export function FilesPane({ title, refresh }) {
     <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
       <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2>
       <p className="mt-1 text-xs text-slate-400">
-        比對舊表不準時，請下載空白 CSV（Excel 可開），照表頭填好再匯入。海關查驗也可直接手動新增。
+        下載空白 CSV（Excel 可開）照表頭填好再匯入。編號可空白（後補）；也可在海關查驗手動新增。
       </p>
 
       <div className="mt-4 grid gap-3">

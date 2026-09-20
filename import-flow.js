@@ -214,6 +214,8 @@
         broker: d.broker || "",
         seller: d.seller || "",
         shipCo: d.shipCo || "",
+        trailer: d.trailer || "",
+        note: d.note || "",
         raw: d.raw || "",
         photoName: d.photoName || "",
         photoData: d.photoData || "",
@@ -446,6 +448,8 @@
         broker: fields.broker,
         seller: fields.seller,
         shipCo: fields.shipCo,
+        trailer: fields.trailer,
+        note: fields.note,
       });
       stampRow(d);
     } else if (kind === "port" || kind === "release") {
@@ -717,10 +721,24 @@
     body.innerHTML = `<p class="imp-one-hint">${esc(hints[pane] || "建置中。")}</p>`;
   }
 
-  /** 從報關／進口文件文字抽出欄位（單筆） */
+  /** 從報關／進口／LINE 訊息抽出欄位（單筆） */
   function parseOneImportChunk(raw) {
-    const text = String(raw || "").trim();
+    // 全形英數→半形，方便貼 LINE 訊息
+    const text = String(raw || "")
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (ch) => {
+        const c = ch.charCodeAt(0);
+        if (c >= 0xff21 && c <= 0xff3a) return String.fromCharCode(c - 0xfee0); // Ａ-Ｚ
+        if (c >= 0xff41 && c <= 0xff5a) return String.fromCharCode(c - 0xfee0); // ａ-ｚ
+        if (c >= 0xff10 && c <= 0xff19) return String.fromCharCode(c - 0xfee0); // ０-９
+        return ch;
+      })
+      .replace(/\u00a0/g, " ")
+      .trim();
     if (!text) return null;
+    const lines = text
+      .split(/\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
 
     const refs = parseRefNos(text);
     let uha = refs.uha || refs.nc || "";
@@ -729,31 +747,70 @@
       if (loose) uha = normUha(loose[1]);
     }
 
-    let containerNo = "";
+    const containers = [];
+    const contRe = /\b([A-Z]{4}\s*\d{6,7})\b/gi;
+    let cm;
+    while ((cm = contRe.exec(text)) !== null) {
+      const c = normContainer(cm[1]);
+      if (c && !containers.includes(c)) containers.push(c);
+    }
     const contLabeled = text.match(/(?:櫃號|貨櫃|Container)\s*[:：#]?\s*([A-Z]{4}\s*\d{6,7})/i);
-    const contBare = text.match(/\b([A-Z]{4}\s*\d{6,7})\b/i);
-    if (contLabeled) containerNo = normContainer(contLabeled[1]);
-    else if (contBare) containerNo = normContainer(contBare[1]);
+    if (contLabeled) {
+      const c = normContainer(contLabeled[1]);
+      if (c && !containers.includes(c)) containers.unshift(c);
+    }
+    const containerNo = containers[0] || "";
 
     let customsNo = "";
     const custM =
       text.match(/(?:報關單(?:號碼|號)?|報單)\s*[:：]?\s*([A-Z0-9][\w\-]{5,})/i) ||
-      text.match(/\b([A-Z]{1,4}\d{8,})\b/);
-    if (custM) customsNo = String(custM[1]).trim().toUpperCase();
+      text.match(/\b([A-Z]{2,3}\d{9,})\b/);
+    if (custM) {
+      const cand = String(custM[1]).trim().toUpperCase();
+      if (!isContainerNo(cand)) customsNo = cand;
+    }
 
     let arriveDay = "";
     const dayM =
       text.match(/(?:到港日|抵達|到港|ETB|ETA)\s*[:：]?\s*([0-9./\-]+)/i) ||
       text.match(/\b(20\d{2}[./\-]\d{1,2}[./\-]\d{1,2})\b/) ||
-      text.match(/\b(1[01]\d{5})\b/); // 民國 YYYMMDD
+      text.match(/\b(1[01]\d{5})\b/);
     if (dayM) arriveDay = parseDay(dayM[1]);
+    // F/T 9/23、FT 9/23（領櫃／FT 日）
+    if (!arriveDay) {
+      const ft = text.match(/F\s*\/?\s*T\s*[:：]?\s*(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})/i);
+      if (ft) {
+        const mo = Number(ft[1]);
+        const da = Number(ft[2]);
+        if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) {
+          const now = new Date();
+          let y = now.getFullYear();
+          const cand = new Date(y, mo - 1, da);
+          if (cand.getTime() < now.getTime() - 45 * 86400000) y += 1;
+          arriveDay = `${y}-${pad2(mo)}-${pad2(da)}`;
+        }
+      }
+    }
 
     let product = "";
     const prodM = text.match(/(?:品名|貨名|品項|貨物)\s*[:：]?\s*([^\n\r]+)/i);
     if (prodM) product = String(prodM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 80);
+    if (!product) {
+      for (const line of lines) {
+        const compact = line.replace(/\s+/g, "");
+        if (isContainerNo(compact) || /^(?:UHA|NC)\d/i.test(compact)) continue;
+        if (/F\s*\/?\s*T/i.test(line)) continue;
+        if (/報關|拖車|賣方|船公司|碼頭|已報/.test(line)) continue;
+        const zh = line.replace(/[^\u4e00-\u9fff]/g, "");
+        if (zh.length >= 2 && zh.length >= Math.ceil(line.length * 0.45)) {
+          product = line.slice(0, 80);
+          break;
+        }
+      }
+    }
 
     let broker = "";
-    const brokerM = text.match(/(?:報關行|報關)\s*[:：]?\s*([^\n\r]+)/i);
+    const brokerM = text.match(/(?:報關行)\s*[:：]?\s*([^\n\r]+)/i);
     if (brokerM) broker = String(brokerM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
 
     let seller = "";
@@ -764,38 +821,52 @@
     const shipM = text.match(/(?:船公司|船名|航商|Carrier)\s*[:：]?\s*([^\n\r]+)/i);
     if (shipM) shipCo = String(shipM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
 
+    let trailer = "";
+    const trailerM = text.match(/(?:報給)?拖車\s*[:：]?\s*([^\s，,。；;]+)/i);
+    if (trailerM) trailer = String(trailerM[1]).trim().slice(0, 40);
+
+    const noteBits = [];
+    for (const line of lines) {
+      const compact = line.replace(/\s+/g, "").toUpperCase();
+      if (containers.some((c) => compact.includes(c))) continue;
+      if (product && line === product) continue;
+      if (/^(?:UHA|NC)\d/i.test(compact)) continue;
+      noteBits.push(line);
+    }
+    const note = noteBits.length ? noteBits.join(" · ").slice(0, 200) : "";
+
     const missing = [];
     if (!uha) missing.push("編號");
     if (!containerNo) missing.push("櫃號");
-    if (!arriveDay) missing.push("到港日");
+    if (!arriveDay) missing.push("到港日／FT日");
     if (!product) missing.push("品名");
 
     return {
       id: uid("draft"),
       uha,
       containerNo,
+      containers,
       customsNo,
       arriveDay,
       product,
       broker,
       seller,
       shipCo,
+      trailer,
+      note,
       raw: text.slice(0, 4000),
       missing,
-      parseOk: missing.length <= 2,
+      parseOk: !!(containerNo || product || uha || note),
     };
   }
 
   /**
-   * 解析文件文字 → 一筆或多筆草稿。
-   * 多櫃：以空行、或連續 UHA／NC 編號切開。
-   * 回傳最後一筆（相容舊呼叫）；全部草稿由呼叫端用 parseImportDocTexts 取得。
+   * 解析 → 多筆草稿。多櫃號共用品名時拆成一櫃一筆。
    */
   function parseImportDocTexts(raw) {
     const text = String(raw || "").replace(/\r\n/g, "\n").trim();
     if (!text) return [];
 
-    // 依「編號行」切開多櫃
     const parts = [];
     const markers = [];
     let m;
@@ -811,9 +882,11 @@
         if (chunk) parts.push(chunk);
       }
     } else {
-      // 空行分段
       const blanks = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-      if (blanks.length > 1 && blanks.every((b) => /\b(?:UHA|NC)\s*\d/i.test(b) || /櫃號/i.test(b))) {
+      if (
+        blanks.length > 1 &&
+        blanks.every((b) => /\b(?:UHA|NC)\s*\d/i.test(b) || /櫃號/i.test(b) || /\b[A-Z]{4}\s*\d{6,7}\b/i.test(b))
+      ) {
         parts.push(...blanks);
       } else {
         parts.push(text);
@@ -823,7 +896,22 @@
     const drafts = [];
     for (const chunk of parts) {
       const d = parseOneImportChunk(chunk);
-      if (d && (d.uha || d.containerNo || d.product || d.customsNo || d.arriveDay)) drafts.push(d);
+      if (!d) continue;
+      const cons = Array.isArray(d.containers) && d.containers.length ? d.containers : d.containerNo ? [d.containerNo] : [];
+      if (cons.length > 1) {
+        for (const c of cons) {
+          drafts.push({
+            ...d,
+            id: uid("draft"),
+            containerNo: c,
+            containers: [c],
+            missing: (d.missing || []).filter((x) => x !== "櫃號"),
+            parseOk: true,
+          });
+        }
+      } else if (d.uha || d.containerNo || d.product || d.customsNo || d.arriveDay || d.note) {
+        drafts.push(d);
+      }
     }
     if (!drafts.length) {
       const fallback = parseOneImportChunk(text);
@@ -876,6 +964,8 @@
     stampRow(savedCab);
     const track = ensureTrackFromCabinet(savedCab);
     if (d.customsNo) track.customsNo = String(d.customsNo).trim();
+    if (d.trailer) track.trailer = String(d.trailer).trim();
+    if (d.note) track.note = String(d.note).trim();
     track.released = false;
     stampRow(track);
     state.importParseDrafts.splice(i, 1);

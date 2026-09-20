@@ -9451,6 +9451,23 @@ function ce({ drawer: e, draft: t, full: n, clearOpts: r, unpackers: i = [], onC
 										value: _.broker || "",
 										onChange: (e) => c("broker", e.target.value)
 									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "拖車",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.trailer || "",
+										onChange: (e) => c("trailer", e.target.value),
+										placeholder: "例：旭興"
+									})
+								}),
+								/* @__PURE__ */ (0, E.jsx)(D, {
+									label: "備註",
+									children: /* @__PURE__ */ (0, E.jsx)("input", {
+										className: O(),
+										value: _.note || "",
+										onChange: (e) => c("note", e.target.value)
+									})
 								})
 							]
 						}) : null,

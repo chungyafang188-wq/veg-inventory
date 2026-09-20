@@ -161,6 +161,12 @@ export function Drawer({
               <Field label="報關行">
                 <input className={inputCls()} value={f.broker || ""} onChange={(e) => onField("broker", e.target.value)} />
               </Field>
+              <Field label="拖車">
+                <input className={inputCls()} value={f.trailer || ""} onChange={(e) => onField("trailer", e.target.value)} placeholder="例：旭興" />
+              </Field>
+              <Field label="備註">
+                <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />
+              </Field>
             </div>
           ) : null}
 

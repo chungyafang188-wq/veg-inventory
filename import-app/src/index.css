@@ -36,6 +36,83 @@
   max-width: none;
 }
 
+/* 主站 input/select 的大 padding 會把 h-8 文字裁掉；這裡強制可見 */
+.imp-tw .imp-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 2.15rem;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.45rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-appearance: none;
+  appearance: auto;
+}
+.imp-tw select.imp-field {
+  padding-right: 1.5rem;
+}
+.imp-tw .imp-field:focus {
+  outline: 2px solid rgba(4, 120, 87, 0.28);
+  border-color: #059669;
+}
+.imp-tw .imp-field-lab {
+  display: block;
+  margin: 0 0 0.15rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.imp-tw .imp-btn-primary {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  margin: 0;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  background: #059669;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.2;
+  box-shadow: 0 1px 2px rgb(4 120 87 / 0.28);
+}
+.imp-tw .imp-btn-primary:hover {
+  background: #047857;
+  color: #fff;
+}
+.imp-tw .imp-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.imp-tw .imp-btn-ghost {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 /* 膠囊：內容寬，單行不折 */
 .imp-chip {
   display: inline-flex;

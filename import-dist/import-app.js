@@ -10684,7 +10684,28 @@ function Le(e) {
 		cls: "bg-amber-100 text-amber-700"
 	};
 }
-function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCounts: a, refresh: o, onAfterRelease: s, openDrawer: c }) {
+function Re(e) {
+	return e.released || e.stageId === "release" || e.stage === "已放行" ? {
+		lab: "已放行",
+		cls: "bg-emerald-100 text-emerald-800"
+	} : e.inspect === "wait" ? {
+		lab: "待藥檢",
+		cls: "bg-sky-100 text-sky-800"
+	} : e.fumigate === "wait" ? {
+		lab: "待薰蒸",
+		cls: "bg-violet-100 text-violet-800"
+	} : e.inspect === "skip" && e.fumigate === "skip" ? {
+		lab: "待驗",
+		cls: "bg-slate-100 text-slate-600"
+	} : e.inspect === "done" || e.fumigate === "done" ? {
+		lab: "待驗",
+		cls: "bg-emerald-100 text-emerald-800"
+	} : {
+		lab: e.stage || "待驗",
+		cls: "bg-amber-100 text-amber-800"
+	};
+}
+function ze({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCounts: a, refresh: o, onAfterRelease: s, openDrawer: c }) {
 	let [u, d] = (0, l.useState)(() => {
 		try {
 			return localStorage.getItem(Te) === "cards" ? "cards" : "table";
@@ -10788,7 +10809,7 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 			"碼頭",
 			"備註"
 		], n = e.map((e) => ({
-			階段: e.stage || (e.released ? "已放行" : "待驗"),
+			階段: Re(e).lab,
 			編號: je(e) ? "UHA（待補）" : e.uha || "",
 			櫃號: e.containerNo || "",
 			到港日: e.arriveDay || "",
@@ -11101,7 +11122,7 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 									]
 								}) }),
 								/* @__PURE__ */ (0, E.jsx)("tbody", { children: ie.map((e, t) => {
-									let n = Ae(e), r = e.released || e.stageId === "release" || e.stage === "已放行", i = y.has(n), a = (r) => /* @__PURE__ */ (0, E.jsx)(Fe, {
+									let n = Ae(e), r = e.released || e.stageId === "release" || e.stage === "已放行", i = y.has(n), a = Re(e), o = (r) => /* @__PURE__ */ (0, E.jsx)(Fe, {
 										value: e[r] || "",
 										onSave: (e) => D(n, r, e),
 										rowIndex: t,
@@ -11124,8 +11145,8 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-2 py-1.5 text-center align-middle",
 												children: /* @__PURE__ */ (0, E.jsx)("span", {
-													className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${r ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`,
-													children: r ? "已放行" : "待驗"
+													className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${a.cls}`,
+													children: a.lab
 												})
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
@@ -11146,15 +11167,15 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-left align-middle",
-												children: a("seller")
+												children: o("seller")
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-left align-middle",
-												children: a("shipCo")
+												children: o("shipCo")
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-left align-middle",
-												children: a("broker")
+												children: o("broker")
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-center align-middle",
@@ -11180,11 +11201,11 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-center align-middle",
-												children: a("dock")
+												children: o("dock")
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-1.5 py-1 text-left align-middle",
-												children: a("note")
+												children: o("note")
 											}),
 											/* @__PURE__ */ (0, E.jsx)("td", {
 												className: "px-2 py-1.5 text-center align-middle",
@@ -11338,8 +11359,8 @@ function Re({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 }
 //#endregion
 //#region src/components/FilesPane.jsx
-var ze = "inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-[0.8rem] font-semibold text-slate-700 hover:bg-slate-50", Be = "inline-flex cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-[0.8rem] font-bold text-white hover:bg-emerald-700";
-function Ve({ title: e, refresh: t }) {
+var Be = "inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-[0.8rem] font-semibold text-slate-700 hover:bg-slate-50", Ve = "inline-flex cursor-pointer items-center justify-center rounded-md border border-emerald-600 bg-emerald-600 px-3 py-2 text-[0.8rem] font-bold text-white hover:bg-emerald-700";
+function He({ title: e, refresh: t }) {
 	let [n, r] = (0, l.useState)(""), i = (0, l.useRef)(null), a = (0, l.useRef)(null), o = (0, l.useRef)(null), s = (e) => {
 		_().downloadImportTemplate?.(e);
 	}, c = async (e, n) => {
@@ -11387,19 +11408,19 @@ function Ve({ title: e, refresh: t }) {
 								children: [
 									/* @__PURE__ */ (0, E.jsx)("button", {
 										type: "button",
-										className: ze,
+										className: Be,
 										onClick: () => s("port"),
 										children: "港口查驗格式"
 									}),
 									/* @__PURE__ */ (0, E.jsx)("button", {
 										type: "button",
-										className: ze,
+										className: Be,
 										onClick: () => s("released"),
 										children: "已放行格式"
 									}),
 									/* @__PURE__ */ (0, E.jsx)("button", {
 										type: "button",
-										className: ze,
+										className: Be,
 										onClick: () => s("arrival"),
 										children: "進庫格式"
 									})
@@ -11417,21 +11438,21 @@ function Ve({ title: e, refresh: t }) {
 							children: [
 								/* @__PURE__ */ (0, E.jsx)("button", {
 									type: "button",
-									className: Be,
+									className: Ve,
 									disabled: !!n,
 									onClick: () => i.current?.click(),
 									children: n === "tpl-port" ? "匯入中…" : "匯入港口查驗"
 								}),
 								/* @__PURE__ */ (0, E.jsx)("button", {
 									type: "button",
-									className: Be,
+									className: Ve,
 									disabled: !!n,
 									onClick: () => a.current?.click(),
 									children: n === "tpl-released" ? "匯入中…" : "匯入已放行"
 								}),
 								/* @__PURE__ */ (0, E.jsx)("button", {
 									type: "button",
-									className: Be,
+									className: Ve,
 									disabled: !!n,
 									onClick: () => o.current?.click(),
 									children: n === "tpl-arrival" ? "匯入中…" : "匯入進庫"
@@ -11484,7 +11505,7 @@ function Ve({ title: e, refresh: t }) {
 								className: "mt-2 flex flex-wrap gap-2",
 								children: /* @__PURE__ */ (0, E.jsx)("button", {
 									type: "button",
-									className: ze,
+									className: Be,
 									disabled: !!n,
 									onClick: async () => {
 										r("seed");
@@ -11509,7 +11530,7 @@ function Ve({ title: e, refresh: t }) {
 }
 //#endregion
 //#region src/lib/imagePaste.js
-function He(e, { maxSide: t = 1280, quality: n = .72, name: r } = {}) {
+function Ue(e, { maxSide: t = 1280, quality: n = .72, name: r } = {}) {
 	return new Promise((i, a) => {
 		let o = new Image();
 		o.onload = () => {
@@ -11538,7 +11559,7 @@ function He(e, { maxSide: t = 1280, quality: n = .72, name: r } = {}) {
 		}, o.onerror = () => a(/* @__PURE__ */ Error("圖片讀取失敗")), o.src = e;
 	});
 }
-function Ue(e, t = {}) {
+function We(e, t = {}) {
 	return new Promise((n, r) => {
 		if (!e || !String(e.type || "").startsWith("image/")) {
 			r(/* @__PURE__ */ Error("不是圖片檔"));
@@ -11567,7 +11588,7 @@ function Ue(e, t = {}) {
 		}, a.src = i;
 	});
 }
-async function We() {
+async function Ge() {
 	if (!window.isSecureContext) throw Error("需要 https 安全連線才能擷取畫面");
 	if (!navigator.mediaDevices?.getDisplayMedia) throw Error("此瀏覽器不支援畫面擷取");
 	let e = await navigator.mediaDevices.getDisplayMedia({
@@ -11594,7 +11615,7 @@ async function We() {
 		e.getTracks().forEach((e) => e.stop()), t.srcObject = null;
 	}
 }
-function Ge(e, t) {
+function Ke(e, t) {
 	return new Promise((n, r) => {
 		let i = new Image();
 		i.onload = () => {
@@ -11607,7 +11628,7 @@ function Ge(e, t) {
 		}, i.onerror = () => r(/* @__PURE__ */ Error("裁切失敗")), i.src = e;
 	});
 }
-function Ke(e) {
+function qe(e) {
 	let t = e?.clipboardData?.items;
 	if (!t) return null;
 	for (let e of t) if (e.type && e.type.startsWith("image/")) return e.getAsFile();
@@ -11617,12 +11638,12 @@ function Ke(e) {
 	}
 	return null;
 }
-function qe(e) {
+function Je(e) {
 	return String(e?.clipboardData?.getData("text/plain") || "").trim();
 }
 //#endregion
 //#region src/components/RegionCropOverlay.jsx
-function Je({ sourceDataUrl: e, onConfirm: t, onCancel: n, title: r = "拖曳框選要截的範圍" }) {
+function Ye({ sourceDataUrl: e, onConfirm: t, onCancel: n, title: r = "拖曳框選要截的範圍" }) {
 	let i = (0, l.useRef)(null), a = (0, l.useRef)(null), o = (0, l.useRef)(null), [s, c] = (0, l.useState)({
 		w: 0,
 		h: 0
@@ -11696,7 +11717,7 @@ function Je({ sourceDataUrl: e, onConfirm: t, onCancel: n, title: r = "拖曳框
 							if (!(!u || u.w < 8 || u.h < 8)) {
 								p(!0);
 								try {
-									let n = await Ge(e, u);
+									let n = await Ke(e, u);
 									t?.(n);
 								} catch (e) {
 									console.error(e), n?.();
@@ -11755,7 +11776,7 @@ function Je({ sourceDataUrl: e, onConfirm: t, onCancel: n, title: r = "拖曳框
 }
 //#endregion
 //#region src/components/ParsePane.jsx
-function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
+function Xe({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 	let [i, a] = (0, l.useState)(""), [o, s] = (0, l.useState)(null), [c, u] = (0, l.useState)(!1), [d, h] = (0, l.useState)(!1), [g, v] = (0, l.useState)(null), y = (0, l.useRef)(null), b = (0, l.useRef)(null), ee = () => {
 		if (!String(i).trim()) {
 			m("請先貼上文件文字。", !0);
@@ -11774,7 +11795,7 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 		let s = t[0], c = (s.missing || []).join("、");
 		m(t.length > 1 ? `已解析 ${t.length} 櫃，請逐筆核對後確認。` : c ? `已解析（尚缺：${c}），請核對後確認。` : "已解析，請核對後確認。"), n?.(), r?.(s.id || 0);
 	}, x = (0, l.useCallback)(async (e, t) => {
-		let n = await He(e, { name: t || `crop-${Date.now()}.jpg` });
+		let n = await Ue(e, { name: t || `crop-${Date.now()}.jpg` });
 		s({
 			dataUrl: n.dataUrl,
 			name: n.name
@@ -11783,7 +11804,7 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 		if (e) {
 			u(!0);
 			try {
-				let r = await Ue(e, {
+				let r = await We(e, {
 					maxSide: n ? 2400 : 1280,
 					quality: n ? .92 : .72
 				});
@@ -11809,7 +11830,7 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 		u(!0);
 		try {
 			m("請在「分享畫面」視窗選螢幕或視窗（不是電腦資料夾）…");
-			let e = await We();
+			let e = await Ge();
 			v(e), m("請在畫面上拖曳框選要截的範圍，再按確認框選。");
 		} catch (e) {
 			let t = e?.name || "", n = String(e?.message || e || "");
@@ -11873,14 +11894,14 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
 		onPaste: (e) => {
-			let t = Ke(e);
+			let t = qe(e);
 			if (!t) return;
 			e.preventDefault();
-			let n = qe(e);
+			let n = Je(e);
 			te(t, n, { goCrop: !0 });
 		},
 		children: [
-			g ? /* @__PURE__ */ (0, E.jsx)(Je, {
+			g ? /* @__PURE__ */ (0, E.jsx)(Ye, {
 				sourceDataUrl: g,
 				title: "拖曳框選要截的範圍",
 				onCancel: () => v(null),
@@ -12038,8 +12059,8 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 							value: i,
 							onChange: (e) => a(e.target.value),
 							onPaste: (e) => {
-								let t = Ke(e);
-								t && (e.preventDefault(), te(t, qe(e), { goCrop: !0 }));
+								let t = qe(e);
+								t && (e.preventDefault(), te(t, Je(e), { goCrop: !0 }));
 							}
 						})]
 					}),
@@ -12128,8 +12149,8 @@ function Ye({ title: e = "判讀", drafts: t, onParsed: n, onOpenDraft: r }) {
 }
 //#endregion
 //#region src/components/ReleasePane.jsx
-var Xe = "imp-chip flex-shrink-0", Ze = "imp-chip imp-chip-on flex-shrink-0";
-function Qe({ lab: e, children: t }) {
+var Ze = "imp-chip flex-shrink-0", Qe = "imp-chip imp-chip-on flex-shrink-0";
+function $e({ lab: e, children: t }) {
 	return /* @__PURE__ */ (0, E.jsxs)("label", {
 		className: "min-w-0",
 		children: [/* @__PURE__ */ (0, E.jsx)("span", {
@@ -12138,7 +12159,7 @@ function Qe({ lab: e, children: t }) {
 		}), t]
 	});
 }
-function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, trailers: a, unpackers: o, refresh: s, onDispatched: c, onAfterUnmark: u }) {
+function et({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, trailers: a, unpackers: o, refresh: s, onDispatched: c, onAfterUnmark: u }) {
 	let [d, f] = (0, l.useState)("uha"), [p, m] = (0, l.useState)(""), [h, g] = (0, l.useState)(() => /* @__PURE__ */ new Set()), v = (0, l.useMemo)(() => xe(i, {
 		query: p,
 		sortBy: d,
@@ -12212,7 +12233,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 							]
 						].map(([e, r, i]) => /* @__PURE__ */ (0, E.jsxs)("button", {
 							type: "button",
-							className: t === e ? Ze : Xe,
+							className: t === e ? Qe : Ze,
 							onClick: () => n(e),
 							children: [r, /* @__PURE__ */ (0, E.jsx)("span", {
 								className: "ml-1 tabular-nums opacity-80",
@@ -12322,7 +12343,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 							}), /* @__PURE__ */ (0, E.jsxs)("div", {
 								className: "grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/50 p-3 sm:grid-cols-3",
 								children: [
-									/* @__PURE__ */ (0, E.jsx)(Qe, {
+									/* @__PURE__ */ (0, E.jsx)($e, {
 										lab: "拖車（必填）",
 										children: /* @__PURE__ */ (0, E.jsx)("input", {
 											className: "imp-field",
@@ -12333,7 +12354,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 											onChange: (e) => x(t, "trailer", e.target.value)
 										})
 									}),
-									/* @__PURE__ */ (0, E.jsx)(Qe, {
+									/* @__PURE__ */ (0, E.jsx)($e, {
 										lab: "交貨點",
 										children: /* @__PURE__ */ (0, E.jsx)("input", {
 											className: "imp-field",
@@ -12343,7 +12364,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 											onChange: (e) => x(t, "unpackSite", e.target.value)
 										})
 									}),
-									/* @__PURE__ */ (0, E.jsx)(Qe, {
+									/* @__PURE__ */ (0, E.jsx)($e, {
 										lab: "拆工（填了順便派工）",
 										children: /* @__PURE__ */ (0, E.jsx)("input", {
 											className: "imp-field",
@@ -12358,7 +12379,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 											}
 										})
 									}),
-									/* @__PURE__ */ (0, E.jsx)(Qe, {
+									/* @__PURE__ */ (0, E.jsx)($e, {
 										lab: "碼頭",
 										children: /* @__PURE__ */ (0, E.jsx)("input", {
 											className: "imp-field",
@@ -12368,7 +12389,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 											disabled: !!e.dispatched
 										})
 									}),
-									/* @__PURE__ */ (0, E.jsx)(Qe, {
+									/* @__PURE__ */ (0, E.jsx)($e, {
 										lab: "領櫃日",
 										children: /* @__PURE__ */ (0, E.jsx)("input", {
 											type: "date",
@@ -12428,7 +12449,7 @@ function $e({ title: e, releaseTab: t, setReleaseTab: n, counts: r, rows: i, tra
 }
 //#endregion
 //#region src/components/TablePane.jsx
-function et() {
+function tt() {
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "flex flex-col items-center justify-center gap-2 px-4 py-12 text-center",
 		children: [
@@ -12459,7 +12480,7 @@ function et() {
 		]
 	});
 }
-function tt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
+function nt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm",
 		children: [
@@ -12493,14 +12514,14 @@ function tt({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 							}, t))
 						}, e.key)) })]
 					})
-				}) : /* @__PURE__ */ (0, E.jsx)(et, {})
+				}) : /* @__PURE__ */ (0, E.jsx)(tt, {})
 			})
 		]
 	});
 }
 //#endregion
 //#region src/components/UnpackBoardPane.jsx
-function nt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
+function rt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
 	let a = t.upBoardMeta || {
 		total: 0,
 		missingTrailer: 0
@@ -12583,7 +12604,7 @@ function nt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 					})
 				]
 			}),
-			/* @__PURE__ */ (0, E.jsx)(tt, {
+			/* @__PURE__ */ (0, E.jsx)(nt, {
 				columns: [
 					"拆卸日",
 					"編號",
@@ -12600,8 +12621,8 @@ function nt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 		]
 	});
 }
-var rt = "imp-chip flex-shrink-0", it = "imp-chip imp-chip-on flex-shrink-0";
-function at({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
+var it = "imp-chip flex-shrink-0", at = "imp-chip imp-chip-on flex-shrink-0";
+function ot({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
 	let a = t.unpackCounts || {
 		pending: 0,
 		reported: 0
@@ -12632,7 +12653,7 @@ function at({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 					a.reported
 				]].map(([e, t, i]) => /* @__PURE__ */ (0, E.jsxs)("button", {
 					type: "button",
-					className: n === e ? it : rt,
+					className: n === e ? at : it,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, E.jsx)(pe, { count: i })]
 				}, e))
@@ -12660,7 +12681,7 @@ function at({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 				resultCount: d.length,
 				totalCount: (t.unpack || []).length
 			}),
-			/* @__PURE__ */ (0, E.jsx)(tt, {
+			/* @__PURE__ */ (0, E.jsx)(nt, {
 				title: e,
 				hint: "配合拆工只回報自己被指派的櫃與數量。交客戶自有拆工者不在此回報。",
 				columns: [
@@ -12679,7 +12700,7 @@ function at({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 		]
 	});
 }
-function ot({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
+function st({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
 	let o = t.sumCounts || {
 		open: 0,
 		needQty: 0,
@@ -12717,17 +12738,17 @@ function ot({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 					]
 				].map(([e, t, i]) => /* @__PURE__ */ (0, E.jsxs)("button", {
 					type: "button",
-					className: n === e ? it : rt,
+					className: n === e ? at : it,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, E.jsx)(pe, { count: i })]
 				}, e))
 			}), a ? /* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
-				className: it,
+				className: at,
 				onClick: a,
 				children: "匯出"
 			}) : null]
-		}), /* @__PURE__ */ (0, E.jsx)(tt, {
+		}), /* @__PURE__ */ (0, E.jsx)(nt, {
 			title: e,
 			hint: "會計核對拆櫃數量、位置、拆卸點。交客戶／客戶自有拆工可在此補數量。",
 			columns: [
@@ -12748,7 +12769,7 @@ function ot({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 }
 //#endregion
 //#region src/components/ImportTabContent.jsx
-function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
+function ct({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
 	let g = b[e] || "進口", v = t.portCounts || {
 		open: 0,
 		inspect: 0,
@@ -12757,13 +12778,13 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: `min-h-0 flex-1 overflow-auto ${h}`,
 		children: [
-			e === "parse" ? /* @__PURE__ */ (0, E.jsx)(Ye, {
+			e === "parse" ? /* @__PURE__ */ (0, E.jsx)(Xe, {
 				title: g,
 				drafts: t.drafts,
 				onParsed: f,
 				onOpenDraft: (e) => p("draft", String(e))
 			}) : null,
-			e === "port" || e === "checklist" ? /* @__PURE__ */ (0, E.jsx)(Re, {
+			e === "port" || e === "checklist" ? /* @__PURE__ */ (0, E.jsx)(ze, {
 				title: b.port,
 				portTab: i,
 				setPortTab: a,
@@ -12774,7 +12795,7 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				openDrawer: p,
 				onAfterRelease: () => m?.("release")
 			}) : null,
-			e === "release" ? /* @__PURE__ */ (0, E.jsx)($e, {
+			e === "release" ? /* @__PURE__ */ (0, E.jsx)(et, {
 				title: g,
 				releaseTab: n,
 				setReleaseTab: r,
@@ -12786,21 +12807,21 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				onDispatched: () => m?.("upBoard"),
 				onAfterUnmark: () => m?.("port")
 			}) : null,
-			e === "upBoard" ? /* @__PURE__ */ (0, E.jsx)(nt, {
+			e === "upBoard" ? /* @__PURE__ */ (0, E.jsx)(rt, {
 				title: g,
 				lists: t,
 				boardDay: u,
 				setBoardDay: d,
 				openDrawer: p
 			}) : null,
-			e === "unpack" ? /* @__PURE__ */ (0, E.jsx)(at, {
+			e === "unpack" ? /* @__PURE__ */ (0, E.jsx)(ot, {
 				title: g,
 				lists: t,
 				unpackTab: o,
 				setUnpackTab: s,
 				openDrawer: p
 			}) : null,
-			e === "sum" ? /* @__PURE__ */ (0, E.jsx)(ot, {
+			e === "sum" ? /* @__PURE__ */ (0, E.jsx)(st, {
 				title: g,
 				lists: t,
 				sumTab: c,
@@ -12808,7 +12829,7 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				openDrawer: p,
 				onExport: () => _().exportSumExcel?.()
 			}) : null,
-			e === "stock" ? /* @__PURE__ */ (0, E.jsx)(tt, {
+			e === "stock" ? /* @__PURE__ */ (0, E.jsx)(nt, {
 				title: g,
 				hint: "已入庫明細。",
 				columns: [
@@ -12822,7 +12843,7 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				rows: t.stock,
 				onOpen: (e) => p("stock", e)
 			}) : null,
-			e === "files" ? /* @__PURE__ */ (0, E.jsx)(Ve, {
+			e === "files" ? /* @__PURE__ */ (0, E.jsx)(He, {
 				title: g,
 				refresh: f
 			}) : null,
@@ -12841,14 +12862,14 @@ function st({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 }
 //#endregion
 //#region src/shells/PhoneShell.jsx
-var ct = "imp-chip flex-shrink-0", lt = "imp-chip imp-chip-on flex-shrink-0", ut = "imp-chip flex-shrink-0 font-semibold", dt = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
-function ft(e) {
+var lt = "imp-chip flex-shrink-0", ut = "imp-chip imp-chip-on flex-shrink-0", dt = "imp-chip flex-shrink-0 font-semibold", ft = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
+function pt(e) {
 	return !!(!(e instanceof Element) || e.closest(".imp-drawer-host, [role='dialog']") || e.closest("[data-no-tab-swipe]"));
 }
-function pt(e, t) {
+function mt(e, t) {
 	return T(e).reduce((e, n) => e + (Number(t?.[n.id]) || 0), 0);
 }
-function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+function ht({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = (0, l.useRef)({
 		on: !1,
 		axis: null,
@@ -12877,14 +12898,14 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				"aria-label": "進口區塊",
 				children: [/* @__PURE__ */ (0, E.jsx)("button", {
 					type: "button",
-					className: ct,
+					className: lt,
 					onClick: h,
 					children: "← 總覽"
 				}), v.map((e) => {
-					let r = e.id === a, i = pt(e.id, n);
+					let r = e.id === a, i = mt(e.id, n);
 					return /* @__PURE__ */ (0, E.jsxs)("button", {
 						type: "button",
-						className: r ? dt : ut,
+						className: r ? ft : dt,
 						onClick: () => {
 							e.id !== a && t(re(e.id));
 						},
@@ -12898,7 +12919,7 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let i = r.id === e;
 					return /* @__PURE__ */ (0, E.jsxs)("button", {
 						type: "button",
-						className: i ? lt : ct,
+						className: i ? ut : lt,
 						onClick: () => t(r.id),
 						children: [r.lab, fe.has(r.id) ? /* @__PURE__ */ (0, E.jsx)(pe, { count: n[r.id] }) : null]
 					}, r.id);
@@ -12909,7 +12930,7 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			style: { touchAction: "pan-y" },
 			"data-imp-swipe": "1",
 			onTouchStart: (e) => {
-				if (e.touches.length !== 1 || ft(e.target)) return;
+				if (e.touches.length !== 1 || pt(e.target)) return;
 				let t = e.touches[0];
 				i.current = {
 					on: !0,
@@ -12941,7 +12962,7 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				i.current.on = !1, i.current.axis = null;
 			},
 			onPointerDown: (e) => {
-				e.pointerType === "mouse" && e.button === 0 && (ft(e.target) || (i.current = {
+				e.pointerType === "mouse" && e.button === 0 && (pt(e.target) || (i.current = {
 					on: !0,
 					axis: null,
 					x0: e.clientX,
@@ -12966,7 +12987,7 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				let n = e.clientX - t.x0, r = e.clientY - t.y0, a = t.axis === "h" || t.axis == null && Math.abs(n) >= 36 && Math.abs(n) > Math.abs(r) * 1.1;
 				t.axis = null, a && s(n);
 			},
-			children: /* @__PURE__ */ (0, E.jsx)(st, {
+			children: /* @__PURE__ */ (0, E.jsx)(ct, {
 				activeTab: e,
 				padClass: "p-2.5",
 				...r
@@ -12976,8 +12997,8 @@ function mt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/shells/WebShell.jsx
-var ht = "imp-chip flex-shrink-0", gt = "imp-chip imp-chip-on flex-shrink-0", _t = "imp-side flex-shrink-0", vt = "imp-side imp-side-on flex-shrink-0";
-function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+var gt = "imp-chip flex-shrink-0", _t = "imp-chip imp-chip-on flex-shrink-0", vt = "imp-side flex-shrink-0", yt = "imp-side imp-side-on flex-shrink-0";
+function bt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = w(e), a = T(i);
 	return /* @__PURE__ */ (0, E.jsxs)("div", {
 		className: "imp-tw relative flex min-h-[min(78vh,40rem)] max-w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/80 font-imp text-slate-800",
@@ -12985,7 +13006,7 @@ function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			className: "flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/95 px-2 py-2",
 			children: [/* @__PURE__ */ (0, E.jsx)("button", {
 				type: "button",
-				className: `${ht} shrink-0`,
+				className: `${gt} shrink-0`,
 				onClick: h,
 				children: "← 總覽"
 			}), /* @__PURE__ */ (0, E.jsx)("nav", {
@@ -12995,7 +13016,7 @@ function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let n = e.id === i;
 					return /* @__PURE__ */ (0, E.jsx)("button", {
 						type: "button",
-						className: n ? gt : ht,
+						className: n ? _t : gt,
 						onClick: () => {
 							e.id !== i && t(re(e.id));
 						},
@@ -13017,7 +13038,7 @@ function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 						let i = r.id === e;
 						return /* @__PURE__ */ (0, E.jsxs)("button", {
 							type: "button",
-							className: i ? vt : _t,
+							className: i ? yt : vt,
 							onClick: () => t(r.id),
 							children: [r.lab, fe.has(r.id) ? /* @__PURE__ */ (0, E.jsx)(pe, { count: n[r.id] }) : null]
 						}, r.id);
@@ -13025,7 +13046,7 @@ function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				})]
 			}), /* @__PURE__ */ (0, E.jsx)("section", {
 				className: "flex min-w-0 flex-1 flex-col overflow-hidden",
-				children: /* @__PURE__ */ (0, E.jsx)(st, {
+				children: /* @__PURE__ */ (0, E.jsx)(ct, {
 					activeTab: e,
 					padClass: "p-4",
 					...r
@@ -13036,7 +13057,7 @@ function yt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/ImportApp.jsx
-function bt({ initialPane: e = "parse" }) {
+function xt({ initialPane: e = "parse" }) {
 	let t = de(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("open"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [re, ie] = (0, l.useState)(() => ae());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
@@ -13182,12 +13203,12 @@ function bt({ initialPane: e = "parse" }) {
 		refresh: i,
 		openDrawer: D,
 		setActiveTab: oe
-	}, fe = t === "web" ? /* @__PURE__ */ (0, E.jsx)(yt, {
+	}, fe = t === "web" ? /* @__PURE__ */ (0, E.jsx)(bt, {
 		activeTab: a,
 		setActiveTab: oe,
 		tabCounts: ce.tabCounts,
 		contentProps: ue
-	}) : /* @__PURE__ */ (0, E.jsx)(mt, {
+	}) : /* @__PURE__ */ (0, E.jsx)(ht, {
 		activeTab: a,
 		setActiveTab: oe,
 		tabCounts: ce.tabCounts,
@@ -13250,24 +13271,24 @@ function bt({ initialPane: e = "parse" }) {
 }
 //#endregion
 //#region src/mount.jsx
-var xt = null, St = null;
-function Ct(e, t = {}) {
+var St = null, Ct = null;
+function wt(e, t = {}) {
 	if (e) {
-		if (xt && St === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), xt;
-		if (xt) try {
-			xt.unmount();
+		if (St && Ct === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), St;
+		if (St) try {
+			St.unmount();
 		} catch {}
-		return e.innerHTML = "", St = e, xt = (0, u.createRoot)(e), xt.render(/* @__PURE__ */ (0, E.jsx)(bt, { initialPane: t.pane || "parse" })), xt;
+		return e.innerHTML = "", Ct = e, St = (0, u.createRoot)(e), St.render(/* @__PURE__ */ (0, E.jsx)(xt, { initialPane: t.pane || "parse" })), St;
 	}
 }
-function wt() {
-	if (xt) try {
-		xt.unmount();
+function Tt() {
+	if (St) try {
+		St.unmount();
 	} catch {}
-	xt = null, St = null;
+	St = null, Ct = null;
 }
-if (typeof window < "u" && (window.mountImportApp = Ct, window.unmountImportApp = wt, window.page === "import" && typeof window.renderImportPage == "function")) try {
+if (typeof window < "u" && (window.mountImportApp = wt, window.unmountImportApp = Tt, window.page === "import" && typeof window.renderImportPage == "function")) try {
 	window.renderImportPage();
 } catch {}
 //#endregion
-export { Ct as mountImportApp, wt as unmountImportApp };
+export { wt as mountImportApp, Tt as unmountImportApp };

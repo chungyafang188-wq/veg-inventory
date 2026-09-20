@@ -2954,11 +2954,19 @@
   }
 
   function portStatusLabel(track) {
-    if (track.inspect === "wait") return "需要藥檢";
-    if (track.fumigate === "wait") return "需要薰蒸";
+    if (track.inspect === "wait") return "待藥檢";
+    if (track.fumigate === "wait") return "待薰蒸";
     if (track.inspect === "skip" && track.fumigate === "skip") return "無須檢驗";
     if (track.portConfirm === "pending" || track.released === false) return "待確認";
     return "待確認";
+  }
+
+  function clearanceStageLabel(track, released) {
+    if (released) return "已放行";
+    if (!track) return "待驗";
+    if (track.inspect === "wait") return "待藥檢";
+    if (track.fumigate === "wait") return "待薰蒸";
+    return "待驗";
   }
 
   function portTabCounts() {
@@ -4302,7 +4310,7 @@
         ensureClearanceShape(t);
         rows.push({
           key: c.uha,
-          stage: "待驗",
+          stage: clearanceStageLabel(t, false),
           stageId: "port",
           released: false,
           uha: c.uha || "",

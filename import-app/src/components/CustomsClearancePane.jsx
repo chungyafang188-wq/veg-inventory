@@ -291,6 +291,17 @@ function cardBadge(r) {
   return { lab: "待確認", cls: "bg-amber-100 text-amber-700" };
 }
 
+/** 表格「階段」欄：依藥檢／薰蒸同步，不再一律顯示待驗 */
+function stageBadge(r) {
+  const released = r.released || r.stageId === "release" || r.stage === "已放行";
+  if (released) return { lab: "已放行", cls: "bg-emerald-100 text-emerald-800" };
+  if (r.inspect === "wait") return { lab: "待藥檢", cls: "bg-sky-100 text-sky-800" };
+  if (r.fumigate === "wait") return { lab: "待薰蒸", cls: "bg-violet-100 text-violet-800" };
+  if (r.inspect === "skip" && r.fumigate === "skip") return { lab: "待驗", cls: "bg-slate-100 text-slate-600" };
+  if (r.inspect === "done" || r.fumigate === "done") return { lab: "待驗", cls: "bg-emerald-100 text-emerald-800" };
+  return { lab: r.stage || "待驗", cls: "bg-amber-100 text-amber-800" };
+}
+
 /**
  * 海關查驗管理：表格直輯（預設）＋卡片檢視二合一。
  */
@@ -443,7 +454,7 @@ export function CustomsClearancePane({
     if (!list.length) return;
     const headers = ["階段", "編號", "櫃號", "到港日", "品名", "賣方", "船公司", "報關行", "藥檢", "薰蒸", "碼頭", "備註"];
     const data = list.map((r) => ({
-      階段: r.stage || (r.released ? "已放行" : "待驗"),
+      階段: stageBadge(r).lab,
       編號: isRowPendingUha(r) ? "UHA（待補）" : r.uha || "",
       櫃號: r.containerNo || "",
       到港日: r.arriveDay || "",
@@ -671,6 +682,7 @@ export function CustomsClearancePane({
                       const uha = rowKey(r);
                       const released = r.released || r.stageId === "release" || r.stage === "已放行";
                       const on = picked.has(uha);
+                      const stage = stageBadge(r);
                       const cell = (col) => (
                         <InlineText
                           value={r[col] || ""}
@@ -692,12 +704,8 @@ export function CustomsClearancePane({
                             <input type="checkbox" checked={on} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
                           </td>
                           <td className="px-2 py-1.5 text-center align-middle">
-                            <span
-                              className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${
-                                released ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {released ? "已放行" : "待驗"}
+                            <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${stage.cls}`}>
+                              {stage.lab}
                             </span>
                           </td>
                           <td className="px-2 py-1.5 text-left align-middle">

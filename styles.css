@@ -1555,6 +1555,25 @@ body.sales-workspace #flow-tabs {
     flex-shrink: 0;
     max-height: none;
   }
+  /* 銷貨工作區維持：上欄＋左側欄＋中間，不改橫排 */
+  body.sales-workspace .sales-shell-body {
+    flex-direction: row;
+  }
+  body.sales-workspace .sales-shell-side {
+    width: 6.5rem;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  body.sales-workspace .sales-side-nav {
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+  body.sales-workspace .sales-side {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .home-mod {

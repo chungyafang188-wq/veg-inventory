@@ -216,6 +216,7 @@
         shipCo: d.shipCo || "",
         raw: d.raw || "",
         photoName: d.photoName || "",
+        photoData: d.photoData || "",
         missing: Array.isArray(d.missing) ? d.missing.slice() : [],
         _index: i,
         updatedAt: rowUpdatedAt(d),

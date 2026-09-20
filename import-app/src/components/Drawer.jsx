@@ -124,7 +124,14 @@ export function Drawer({
                   </pre>
                 </details>
               ) : null}
-              {f.photoName ? <p className="m-0 text-[0.75rem] text-imp-muted">附圖：{f.photoName}</p> : null}
+              {f.photoData ? (
+                <div className="overflow-hidden rounded-md border border-imp-line bg-slate-50">
+                  <img src={f.photoData} alt={f.photoName || "截圖"} className="mx-auto max-h-48 w-auto max-w-full object-contain" />
+                  {f.photoName ? <p className="m-0 border-t border-imp-line px-2 py-1 text-[0.7rem] text-imp-muted">{f.photoName}</p> : null}
+                </div>
+              ) : f.photoName ? (
+                <p className="m-0 text-[0.75rem] text-imp-muted">附圖：{f.photoName}</p>
+              ) : null}
               {Array.isArray(f.missing) && f.missing.length ? (
                 <p className="m-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[0.78rem] font-semibold text-amber-800">
                   尚缺：{f.missing.join("、")}（可後補）

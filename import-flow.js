@@ -4360,6 +4360,8 @@
         missingData: !!c.missingData,
         dispatched: !!c.dispatched,
         pickup: !!c.pickup,
+        ftAt: c.ftAt || "",
+        ftConfirmed: !!(c.ftConfirmed || c.ft),
         ftLabel: formatFtLabel(c),
         cells: [c.uha, c.containerNo || "—", c.product || "—", c.dock || "—", c.trailer || "—", c.unpackSite || "—", c.assignee || "—", c.pickupDay || "—"],
       }));

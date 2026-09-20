@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { api } from "../bridge";
+import { DateChip } from "./DateChip";
 import { ListQueryBar } from "./ListQueryBar";
+import { defaultPickupFromFt, formatMd, ftUrgency } from "../lib/dateChip";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS } from "../lib/listQuery";
 
 const chipIdle = "imp-chip flex-shrink-0";
@@ -12,7 +14,7 @@ function formatNotifyAt(iso) {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s.slice(0, 16).replace("T", " ");
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getMonth() + 1)}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function isTrailerNotified(row) {
@@ -73,8 +75,45 @@ function stageLab(r) {
   return { lab: "已放行", cls: "bg-amber-100 text-amber-800" };
 }
 
+function FtPickupCell({ row, uha, patch, disabled }) {
+  const ft = String(row.ftAt || "").slice(0, 10);
+  const urg = ftUrgency(ft);
+  const pickup = String(row.pickupDay || "").slice(0, 10);
+
+  const onFt = (v) => {
+    const day = String(v || "").slice(0, 10);
+    patch(uha, "ftAt", day);
+    if (day && !String(row.pickupDay || "").trim()) {
+      const def = defaultPickupFromFt(day);
+      if (def) patch(uha, "pickupDay", def);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-1">
+        <DateChip value={ft} onChange={onFt} prefix="FT" emptyLab="填 FT" disabled={disabled} ariaLabel="免堆期 FT" />
+        {urg.kind !== "none" ? (
+          <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.62rem] font-bold ${urg.cls}`}>
+            {urg.kind === "urgent" ? "急件" : urg.kind === "warn" ? "預警" : urg.lab}
+            {urg.left != null && urg.left < 0 ? ` ${Math.abs(urg.left)}天` : urg.left != null && urg.left <= 4 ? ` 剩${urg.left}天` : ""}
+          </span>
+        ) : null}
+      </div>
+      <DateChip
+        value={pickup}
+        onChange={(v) => patch(uha, "pickupDay", String(v || "").slice(0, 10))}
+        prefix="領櫃"
+        emptyLab={ft ? `預設 ${formatMd(defaultPickupFromFt(ft)) || "FT前1日"}` : "填領櫃日"}
+        disabled={disabled}
+        ariaLabel="領櫃日"
+      />
+    </div>
+  );
+}
+
 /**
- * 已放行：桌面 6 欄雙層緊湊表 + 手機直式卡片 + 批量通知工具列。
+ * 已放行：桌面 6 欄雙層緊湊表 + 手機卡片 + 批量通知。
  */
 export function ReleasePane({
   title,
@@ -181,7 +220,7 @@ export function ReleasePane({
     <div
       className={
         fixed
-          ? "fixed bottom-0 left-0 right-0 z-50 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+          ? "fixed bottom-0 left-0 right-0 z-50 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white p-3 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] md:hidden"
           : "mt-3 hidden flex-wrap items-center gap-2 md:flex"
       }
       role="toolbar"
@@ -239,9 +278,10 @@ export function ReleasePane({
     <input
       className="imp-field"
       value={r.unpackSite || ""}
-      placeholder="冰庫／客戶點"
+      placeholder="冰庫／客戶"
       disabled={!!r.dispatched}
       onChange={(e) => patch(uha, "unpackSite", e.target.value)}
+      list="imp-site-hints"
     />
   );
 
@@ -266,7 +306,7 @@ export function ReleasePane({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 text-xl font-bold text-slate-800">{title || "已放行"}</h2>
         </div>
-        <p className="mt-1 m-0 text-xs text-slate-400">桌面為雙層緊湊表、手機為卡片；勾選後可批量通知拖車／客戶。</p>
+        <p className="mt-1 m-0 text-xs text-slate-400">以 FT／領櫃日為決策軸心；日期以晶片顯示（MM/DD）。勾選後可批量通知。</p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
             ["open", "待派送", counts?.open],
@@ -301,16 +341,15 @@ export function ReleasePane({
           </p>
         ) : (
           <>
-            {/* Desktop: 6-column dual-layer table */}
             <div className="hidden overflow-x-auto rounded-xl border border-slate-200/80 md:block">
               <table className="w-full min-w-[48rem] table-fixed border-collapse text-sm">
                 <colgroup>
                   <col className="w-[4%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[24%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[28%]" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-100">
@@ -319,9 +358,9 @@ export function ReleasePane({
                     </th>
                     <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">階段／單號與櫃號</th>
                     <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">品名</th>
+                    <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">免堆期 FT／領櫃日</th>
                     <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">碼頭／拖車</th>
-                    <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">領櫃日／交貨點</th>
-                    <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">拆工與操作</th>
+                    <th className="px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600">交貨點／拆工派工</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,29 +394,23 @@ export function ReleasePane({
                         </td>
                         <td className="px-2 py-2 text-left font-semibold text-slate-800">{r.product || "—"}</td>
                         <td className="px-2 py-2 text-left">
-                          <div className="mb-1 text-sm font-semibold text-slate-700">{r.dock ? `${r.dock}` : "—"}</div>
-                          <input
-                            className="imp-field mb-1"
-                            value={r.dock || ""}
-                            placeholder="碼頭"
-                            disabled={!!r.dispatched}
-                            onChange={(e) => patch(uha, "dock", e.target.value)}
-                            aria-label="碼頭"
-                          />
+                          <FtPickupCell row={r} uha={uha} patch={patch} disabled={!!r.dispatched} />
+                        </td>
+                        <td className="px-2 py-2 text-left">
+                          <div className="mb-1">
+                            <input
+                              className="imp-field"
+                              value={r.dock || ""}
+                              placeholder="碼頭"
+                              disabled={!!r.dispatched}
+                              onChange={(e) => patch(uha, "dock", e.target.value)}
+                              aria-label="碼頭"
+                            />
+                          </div>
                           {trailerControl(r, uha)}
                         </td>
                         <td className="px-2 py-2 text-left">
-                          <input
-                            type="date"
-                            className="imp-field mb-1"
-                            value={r.pickupDay || ""}
-                            disabled={!!r.dispatched}
-                            onChange={(e) => patch(uha, "pickupDay", e.target.value)}
-                            aria-label="領櫃日"
-                          />
-                          {siteControl(r, uha)}
-                        </td>
-                        <td className="px-2 py-2 text-left">
+                          <div className="mb-1">{siteControl(r, uha)}</div>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <div className="min-w-0 flex-1">{assigneeControl(r, uha)}</div>
                             <button
@@ -397,7 +430,6 @@ export function ReleasePane({
               </table>
             </div>
 
-            {/* Mobile: vertical cards */}
             <ul className="m-0 grid list-none gap-2 p-0 md:hidden">
               {sorted.map((r) => {
                 const uha = r.uha || r.key;
@@ -437,6 +469,10 @@ export function ReleasePane({
                       </button>
                     </div>
                     <div className="grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
+                      <div>
+                        <span className="imp-field-lab">免堆期 FT／領櫃日</span>
+                        <FtPickupCell row={r} uha={uha} patch={patch} disabled={!!r.dispatched} />
+                      </div>
                       <label className="min-w-0">
                         <span className="imp-field-lab">碼頭</span>
                         <input
@@ -450,16 +486,6 @@ export function ReleasePane({
                       <label className="min-w-0">
                         <span className="imp-field-lab">拖車</span>
                         {trailerControl(r, uha)}
-                      </label>
-                      <label className="min-w-0">
-                        <span className="imp-field-lab">領櫃日</span>
-                        <input
-                          type="date"
-                          className="imp-field"
-                          value={r.pickupDay || ""}
-                          disabled={!!r.dispatched}
-                          onChange={(e) => patch(uha, "pickupDay", e.target.value)}
-                        />
                       </label>
                       <label className="min-w-0">
                         <span className="imp-field-lab">交貨點</span>
@@ -489,6 +515,11 @@ export function ReleasePane({
         {unpackerOpts.map((t) => (
           <option key={t} value={t} />
         ))}
+      </datalist>
+      <datalist id="imp-site-hints">
+        <option value="冰庫" />
+        <option value="客戶" />
+        <option value="碼頭" />
       </datalist>
     </div>
   );

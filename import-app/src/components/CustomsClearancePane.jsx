@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../bridge";
 import { clearLab, clearOptsFor } from "../constants";
+import { DateChip } from "./DateChip";
 import { ListQueryBar } from "./ListQueryBar";
+import { formatMd } from "../lib/dateChip";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS, uhaSortKey } from "../lib/listQuery";
 
 const VIEW_KEY = "imp-customs-view-v1";
 const EDIT_COLS = ["seller", "shipCo", "broker", "dock", "note"];
 
 function shortDay(d) {
-  const s = String(d || "");
-  const m = s.match(/^\d{4}-(\d{2})-(\d{2})/);
-  return m ? `${Number(m[1])}/${Number(m[2])}` : s || "";
+  return formatMd(d) || "";
 }
 
 function csvEscape(v) {
@@ -241,7 +241,7 @@ function InlineText({ value, placeholder = "+ 點擊填寫", onSave, rowIndex, c
   );
 }
 
-function StatusMini({ value, kind, onChange }) {
+function StatusMini({ value, kind, onChange, displayLab, toneClass }) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const boxRef = useRef(null);
@@ -337,7 +337,7 @@ function StatusMini({ value, kind, onChange }) {
       <button
         ref={btnRef}
         type="button"
-        className={`imp-st-badge ${statusTone(id)}`}
+        className={`imp-st-badge ${toneClass || statusTone(id)}`}
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={(e) => {
@@ -351,7 +351,7 @@ function StatusMini({ value, kind, onChange }) {
           });
         }}
       >
-        {clearLab(id, kind)}
+        {displayLab || clearLab(id, kind)}
       </button>
       {menu}
     </div>
@@ -359,25 +359,49 @@ function StatusMini({ value, kind, onChange }) {
 }
 
 function ClearanceStatusCell({ value, at, kind, onStatus, onAt }) {
-  const needAt = value === "wait" || value === "done";
-  const atLab = kind === "inspect" ? (value === "done" ? "報告時間" : "藥檢時間") : value === "done" ? "完成時間" : "薰蒸時間";
+  const hasAt = !!String(at || "").trim();
+  const showChip = value === "wait" || value === "done" || hasAt;
+  const id = value || "none";
+
+  let displayLab = clearLab(id, kind);
+  let toneOverride = null;
+  if (kind === "inspect") {
+    if (hasAt || id === "done") {
+      displayLab = "已出報告";
+      toneOverride = "bg-sky-100 text-sky-800";
+    }
+  } else if (hasAt) {
+    displayLab = "已排薰蒸";
+    toneOverride = "bg-emerald-100 text-emerald-800";
+  }
+
   return (
     <div className="imp-clear-stack">
-      <StatusMini value={value || "none"} kind={kind} onChange={onStatus} />
-      {needAt ? (
-        <label className="imp-clear-at">
-          <span className="imp-clear-at-lab">{atLab}</span>
-          <input
-            type="datetime-local"
-            className="imp-field imp-field-at"
-            value={String(at || "").slice(0, 16)}
-            onChange={(e) => onAt?.(e.target.value)}
-            aria-label={atLab}
-          />
-        </label>
+      <StatusMini value={id} kind={kind} onChange={onStatus} displayLab={displayLab} toneClass={toneOverride} />
+      {showChip && id !== "skip" ? (
+        <DateChip
+          value={at}
+          mode={kind === "inspect" ? "date" : "datetime"}
+          emptyLab={kind === "inspect" ? "出報告日" : "安排日時"}
+          onChange={(v) => {
+            onAt?.(v);
+            if (kind === "inspect" && v && id !== "done") onStatus?.("done");
+          }}
+          ariaLabel={kind === "inspect" ? "出報告日期" : "薰蒸安排日期時間"}
+        />
       ) : null}
     </div>
   );
+}
+
+/** 需要藥檢／薰蒸時須填時間後才可標示已放行 */
+function canMarkReleased(r) {
+  if (r.released || r.stageId === "release") return false;
+  const insp = r.inspect || "none";
+  const fume = r.fumigate || "none";
+  if ((insp === "wait" || insp === "done") && !String(r.inspectAt || "").trim()) return false;
+  if (fume === "wait" && !String(r.fumigateAt || "").trim()) return false;
+  return true;
 }
 function hasFt(r) {
   return !!(r?.ftAt || r?.ftConfirmed || r?.ft || (r?.ftLabel && r.ftLabel !== "—"));
@@ -401,15 +425,9 @@ function ArriveFtCell({ arriveDay, ftAt, onArrive, onFt }) {
   const ft = String(ftAt || "").slice(0, 10);
   return (
     <div className="imp-clear-stack items-stretch">
-      <label className="imp-clear-at">
-        <span className="imp-clear-at-lab">到港日</span>
-        <input type="date" className="imp-field imp-field-at" value={day} onChange={(e) => onArrive?.(e.target.value)} aria-label="到港日" />
-      </label>
+      <DateChip value={day} onChange={(v) => onArrive?.(String(v || "").slice(0, 10))} prefix="到港" emptyLab="填到港日" ariaLabel="到港日" />
       {day ? (
-        <label className="imp-clear-at">
-          <span className="imp-clear-at-lab">FT 日</span>
-          <input type="date" className="imp-field imp-field-at" value={ft} onChange={(e) => onFt?.(e.target.value)} aria-label="FT日期" />
-        </label>
+        <DateChip value={ft} onChange={(v) => onFt?.(String(v || "").slice(0, 10))} prefix="FT" emptyLab="填 FT" ariaLabel="FT日期" />
       ) : (
         <span className="text-center text-[0.62rem] text-slate-400">填到港後可填 FT</span>
       )}
@@ -532,9 +550,12 @@ export function CustomsClearancePane({
   const markSelected = () => {
     const list = [...picked].filter((u) => {
       const row = sheet.find((r) => rowKey(r) === u);
-      return row && !(row.released || row.stageId === "release");
+      return row && canMarkReleased(row);
     });
-    if (!list.length) return;
+    if (!list.length) {
+      alert("選取的貨櫃尚有藥檢／薰蒸時間未填，無法標示已放行。");
+      return;
+    }
     if (!confirm(`確定將選取的 ${list.length} 櫃標示為已放行？`)) return;
     api().markPortReleasedMany?.(list);
     setPicked(new Set());
@@ -544,7 +565,11 @@ export function CustomsClearancePane({
 
   const markOne = (uha) => {
     const row = sheet.find((r) => rowKey(r) === uha);
-    const lab = row && isRowPendingUha(row) ? `UHA（待補）${row.containerNo ? " · " + row.containerNo : ""}` : uha;
+    if (!row || !canMarkReleased(row)) {
+      alert("請先完成藥檢出報告日／薰蒸安排時間後再標示已放行。");
+      return;
+    }
+    const lab = isRowPendingUha(row) ? `UHA（待補）${row.containerNo ? " · " + row.containerNo : ""}` : uha;
     if (!confirm(`確定將 ${lab} 標示為已放行？`)) return;
     api().markPortReleased?.(uha, { quiet: true });
     setPicked((prev) => {
@@ -641,7 +666,7 @@ export function CustomsClearancePane({
 
   const pendingPicked = [...picked].filter((u) => {
     const row = sheet.find((r) => rowKey(r) === u);
-    return row && !(row.released || row.stageId === "release");
+    return row && canMarkReleased(row);
   }).length;
 
   const filterChips =
@@ -873,7 +898,13 @@ export function CustomsClearancePane({
                               {cell("note")}
                             </div>
                             {!released ? (
-                              <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => markOne(uha)}>
+                              <button
+                                type="button"
+                                className="imp-btn-primary px-2 py-1 text-xs"
+                                disabled={!canMarkReleased(r)}
+                                title={canMarkReleased(r) ? "" : "請先填寫藥檢／薰蒸時間"}
+                                onClick={() => markOne(uha)}
+                              >
                                 放行
                               </button>
                             ) : (
@@ -929,7 +960,13 @@ export function CustomsClearancePane({
                             <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-amber-800">編號待補</span>
                           ) : null}
                         </div>
-                        <button type="button" className="imp-btn-primary shrink-0" onClick={() => markOne(uha)}>
+                        <button
+                          type="button"
+                          className="imp-btn-primary shrink-0"
+                          disabled={!canMarkReleased(r)}
+                          title={canMarkReleased(r) ? "" : "請先填寫藥檢／薰蒸時間"}
+                          onClick={() => markOne(uha)}
+                        >
                           本櫃放行
                         </button>
                       </div>

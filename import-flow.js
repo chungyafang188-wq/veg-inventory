@@ -2107,6 +2107,10 @@
     if (row.notifyTrailer == null) row.notifyTrailer = false;
     if (row.notifyUnpacker == null) row.notifyUnpacker = false;
     if (row.notifyCustomer == null) row.notifyCustomer = false;
+    if (row.notifyTrailerAt == null) row.notifyTrailerAt = "";
+    if (row.notifyTrailerBy == null) row.notifyTrailerBy = "";
+    if (row.notifyCustomerAt == null) row.notifyCustomerAt = "";
+    if (row.notifyCustomerBy == null) row.notifyCustomerBy = "";
     if (row.halfSplit == null) row.halfSplit = false;
     if (row.assignee2 == null) row.assignee2 = "";
     if (row.assignQty2 == null) row.assignQty2 = "";
@@ -3465,6 +3469,50 @@
     return true;
   }
 
+  function notifyOperatorLabel() {
+    try {
+      const saved = localStorage.getItem("ha-operator") || localStorage.getItem("imp-operator");
+      if (saved) return String(saved).trim();
+    } catch (_) {}
+    if (typeof window !== "undefined" && window.state && window.state.role) return String(window.state.role);
+    return "操作員";
+  }
+
+  /**
+   * 批量標記已通知拖車／客戶（並記錄時間與操作者）
+   * @param {string[]} uhas
+   * @param {"trailer"|"customer"} kind
+   */
+  function notifyReleaseMany(uhas, kind) {
+    ensureState();
+    const list = Array.isArray(uhas) ? uhas.map((u) => String(u || "").trim()).filter(Boolean) : [];
+    if (!list.length) return 0;
+    const who = notifyOperatorLabel();
+    const at = new Date().toISOString();
+    let n = 0;
+    for (const u of list) {
+      const row = findReleased(u);
+      if (!row) continue;
+      ensureClearanceShape(row);
+      if (kind === "customer") {
+        row.notifyCustomer = true;
+        row.notifyCustomerAt = at;
+        row.notifyCustomerBy = who;
+      } else {
+        row.notifyTrailer = true;
+        row.notifyTrailerAt = at;
+        row.notifyTrailerBy = who;
+      }
+      stampRow(row);
+      n += 1;
+    }
+    if (n && typeof save === "function") save();
+    if (typeof setStatus === "function") {
+      setStatus(kind === "customer" ? `已通知客戶 ${n} 櫃。` : `已通知拖車 ${n} 櫃。`);
+    }
+    return n;
+  }
+
   function renderStock(body) {
     const list = stockList();
     const rows = list.map((a) => ({
@@ -4157,6 +4205,7 @@
     unmarkPortReleased,
     unmarkPortReleasedMany,
     patchReleaseField,
+    notifyReleaseMany,
     confirmReleasePickup,
     trailerNames,
     exportSumExcel,
@@ -4282,6 +4331,10 @@
         assignee: c.assignee || "",
         notifyTrailer: !!c.notifyTrailer,
         notifyCustomer: !!c.notifyCustomer,
+        notifyTrailerAt: c.notifyTrailerAt || "",
+        notifyTrailerBy: c.notifyTrailerBy || "",
+        notifyCustomerAt: c.notifyCustomerAt || "",
+        notifyCustomerBy: c.notifyCustomerBy || "",
         missingTelex: !!c.missingTelex,
         missingData: !!c.missingData,
         dispatched: !!c.dispatched,

@@ -2006,148 +2006,11 @@ function renderHomeHub() {
       </div>
       ${bodyHtml}
     </section>`;
-  /** 銷貨三工作區（權限過濾後可能少於三欄） */
-  const buildSalesBlocks = () => {
-    const blocks = [];
-    const orderTabs = [];
-    if (can("page-orders")) {
-      orderTabs.push({
-        id: "form",
-        lab: "下單",
-        hint: "建立訂單",
-        attrs: 'data-sales-pane="form"',
-      });
-      orderTabs.push({
-        id: "today",
-        lab: "已填單",
-        hint: "可改／結單",
-        attrs: 'data-sales-pane="today"',
-      });
-      const lineN = linePendingCount();
-      orderTabs.push({
-        id: "line",
-        lab: "LINE",
-        hint: lineN ? `待轉 ${lineN}` : "轉成已填單",
-        attrs: 'data-sales-pane="line"',
-        badge: lineN || 0,
-      });
-    }
-    if (can("page-plan")) {
-      if (role !== "driver") {
-        orderTabs.push({
-          id: "short",
-          lab: "現場排程",
-          hint: "備貨清單",
-          attrs: 'data-sales-pane="short"',
-        });
-      }
-      orderTabs.push({
-        id: "ship",
-        lab: role === "driver" ? "擇單送貨" : "司機送貨",
-        hint: "確認出貨",
-        attrs: 'data-sales-pane="ship"',
-      });
-    }
-    if (can("page-orders") || can("page-plan") || can("page-books")) {
-      orderTabs.push({
-        id: "labels",
-        lab: "標籤印製",
-        hint: "貼紙列印",
-        attrs: 'data-sales-pane="labels"',
-      });
-    }
-    if (can("page-books")) {
-      orderTabs.push({
-        id: "label-prints",
-        lab: "列印明細",
-        hint: "列印紀錄",
-        attrs: 'data-sales-pane="label-prints"',
-      });
-    }
-    if (can("page-sitework")) {
-      orderTabs.push({
-        id: "sitework",
-        lab: "現場工作",
-        hint: "調倉・接單・工作單",
-        attrs: 'data-sales-pane="sitework"',
-      });
-    }
-    if (orderTabs.length) blocks.push({ id: "orders", lab: "訂貨出貨", tabs: orderTabs });
-
-    const wareTabs = [];
-    if (can("books-stock")) {
-      wareTabs.push({
-        id: "stock",
-        lab: "庫存盤點",
-        hint: "點貨・盤點",
-        attrs: 'data-sales-pane="stock"',
-      });
-    }
-    if (can("page-books")) {
-      wareTabs.push({
-        id: "in",
-        lab: "進貨",
-        hint: "進貨登錄",
-        attrs: 'data-sales-pane="in"',
-      });
-      wareTabs.push({
-        id: "rack",
-        lab: "資財管理",
-        hint: "鐵架／八格籃",
-        attrs: 'data-sales-pane="rack"',
-      });
-    }
-    if (wareTabs.length) blocks.push({ id: "ware", lab: "倉庫", tabs: wareTabs });
-
-    const acctTabs = [];
-    if (can("page-books")) {
-      acctTabs.push({
-        id: "sales-bill",
-        lab: "出貨帳單",
-        hint: "對帳開立",
-        attrs: 'data-sales-pane="sales-bill"',
-      });
-      acctTabs.push({
-        id: "ledger",
-        lab: "進銷存清單",
-        hint: "進出彙總",
-        attrs: 'data-sales-pane="ledger"',
-      });
-      acctTabs.push({
-        id: "cust",
-        lab: "客戶",
-        hint: "建置中",
-        attrs: 'data-sales-pane="cust"',
-      });
-      acctTabs.push({
-        id: "vendor",
-        lab: "廠商",
-        hint: "建置中",
-        attrs: 'data-sales-pane="vendor"',
-      });
-    }
-    acctTabs.push({
-      id: "help",
-      lab: "貨運比對",
-      hint: "帳務核對",
-      attrs: 'data-sales-pane="help"',
-    });
-    if (can("page-stats")) {
-      acctTabs.push({
-        id: "stats",
-        lab: "營運統計",
-        hint: "圖表・紀錄",
-        attrs: 'data-sales-pane="stats"',
-      });
-    }
-    if (acctTabs.length) blocks.push({ id: "acct", lab: "帳款", tabs: acctTabs });
-    return blocks;
-  };
-
+  /** 銷貨三工作區（權限過濾後可能少於三欄）— buildSalesBlocks 已抽到外層 */
   const renderSalesShell = () => {
-    restoreSalesMount();
     const blocks = buildSalesBlocks();
     if (!blocks.length) {
+      restoreSalesMount();
       box.classList.remove("hub-pick");
       box.classList.add("home-app", "hub-shelf");
       box.innerHTML = `${topLevelSwitch("sales")}<p class="home-open-hint">此帳號目前沒有銷貨項目可用。</p>`;
@@ -2156,38 +2019,22 @@ function renderHomeHub() {
     if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
     const cur = blocks.find((b) => b.id === hubSalesBlock) || blocks[0];
     if (hubSalesPane && !cur.tabs.some((t) => t.id === hubSalesPane)) hubSalesPane = "";
-    const landing = !hubSalesPane;
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
+
+    // 殼已存在：只更新上／側欄狀態，不整頁重建（避免亂跳）
+    if (box.querySelector(".sales-shell") && syncSalesShellChrome()) {
+      if (!hubSalesPane) fillSalesLanding();
+      return;
+    }
+
     const blockChips = blocks
       .map((b) => {
         const on = b.id === cur.id;
         return `<button type="button" class="sales-block-chip${on ? " is-on" : ""}" data-sales-block="${esc(b.id)}">${esc(b.lab)}</button>`;
       })
       .join("");
-    const sideHtml = cur.tabs
-      .map((t) => {
-        const on = t.id === hubSalesPane;
-        const badge = t.badge ? `<span class="sales-side-badge">${esc(String(t.badge))}</span>` : "";
-        return `<button type="button" class="sales-side${on ? " is-on" : ""}" ${t.attrs}>
-          <span class="sales-side-lab">${esc(t.lab)}${badge}</span>
-          <em class="sales-side-hint">${esc(t.hint || "")}</em>
-        </button>`;
-      })
-      .join("");
-    const mainCards = cur.tabs
-      .map(
-        (t) => `<button type="button" class="sales-main-card${t.id === hubSalesPane ? " is-on" : ""}" ${t.attrs}>
-          <strong>${esc(t.lab)}</strong>
-          <em>${esc(t.hint || "")}</em>
-        </button>`,
-      )
-      .join("");
-    const mainBody = landing
-      ? `<h2 class="sales-main-title">${esc(cur.lab)}</h2>
-            <p class="sales-main-hint">點左側或下方卡片進入功能（同頁切換，不離開銷貨殼）。</p>
-            <div class="sales-main-grid">${mainCards}</div>`
-      : `<div id="sales-shell-mount" class="sales-shell-mount"></div>`;
-    box.classList.remove("hub-pick");
-    box.classList.add("home-app", "hub-shelf");
+    const sideHtml = cur.tabs.map(salesSideBtnHtml).join("");
     box.innerHTML = `
       <section class="sales-shell">
         <header class="sales-shell-head">
@@ -2199,9 +2046,12 @@ function renderHomeHub() {
             <div class="sales-side-title">${esc(cur.lab)}</div>
             <nav class="sales-side-nav">${sideHtml}</nav>
           </aside>
-          <section class="sales-shell-main${landing ? " is-landing" : ""}">${mainBody}</section>
+          <section class="sales-shell-main${hubSalesPane ? "" : " is-landing"}">
+            <div id="sales-shell-mount" class="sales-shell-mount"></div>
+          </section>
         </div>
       </section>`;
+    if (!hubSalesPane) fillSalesLanding();
   };
 
   const stubShelfItem = (x) =>
@@ -2384,6 +2234,7 @@ function renderHomeHub() {
   }
 
   if (hubDept === "sales") {
+    document.body.classList.add("sales-workspace");
     renderSalesShell();
     return;
   }
@@ -2534,6 +2385,221 @@ function goOpsStep(step, { skipEnteringGuard } = {}) {
     return true;
   }
   return false;
+}
+function buildSalesBlocks() {
+  const role = currentRole();
+  const blocks = [];
+  const orderTabs = [];
+  if (can("page-orders")) {
+    orderTabs.push({
+      id: "form",
+      lab: "下單",
+      hint: "建立訂單",
+      attrs: 'data-sales-pane="form"',
+    });
+    orderTabs.push({
+      id: "today",
+      lab: "已填單",
+      hint: "可改／結單",
+      attrs: 'data-sales-pane="today"',
+    });
+    const lineN = linePendingCount();
+    orderTabs.push({
+      id: "line",
+      lab: "LINE",
+      hint: lineN ? `待轉 ${lineN}` : "轉成已填單",
+      attrs: 'data-sales-pane="line"',
+      badge: lineN || 0,
+    });
+  }
+  if (can("page-plan")) {
+    if (role !== "driver") {
+      orderTabs.push({
+        id: "short",
+        lab: "現場排程",
+        hint: "備貨清單",
+        attrs: 'data-sales-pane="short"',
+      });
+    }
+    orderTabs.push({
+      id: "ship",
+      lab: role === "driver" ? "擇單送貨" : "司機送貨",
+      hint: "確認出貨",
+      attrs: 'data-sales-pane="ship"',
+    });
+  }
+  if (can("page-orders") || can("page-plan") || can("page-books")) {
+    orderTabs.push({
+      id: "labels",
+      lab: "標籤印製",
+      hint: "貼紙列印",
+      attrs: 'data-sales-pane="labels"',
+    });
+  }
+  if (can("page-books")) {
+    orderTabs.push({
+      id: "label-prints",
+      lab: "列印明細",
+      hint: "列印紀錄",
+      attrs: 'data-sales-pane="label-prints"',
+    });
+  }
+  if (can("page-sitework")) {
+    orderTabs.push({
+      id: "sitework",
+      lab: "現場工作",
+      hint: "調倉・接單・工作單",
+      attrs: 'data-sales-pane="sitework"',
+    });
+  }
+  if (orderTabs.length) blocks.push({ id: "orders", lab: "訂貨出貨", tabs: orderTabs });
+
+  const wareTabs = [];
+  if (can("books-stock")) {
+    wareTabs.push({
+      id: "stock",
+      lab: "庫存盤點",
+      hint: "點貨・盤點",
+      attrs: 'data-sales-pane="stock"',
+    });
+  }
+  if (can("page-books")) {
+    wareTabs.push({
+      id: "in",
+      lab: "進貨",
+      hint: "進貨登錄",
+      attrs: 'data-sales-pane="in"',
+    });
+    wareTabs.push({
+      id: "rack",
+      lab: "資財管理",
+      hint: "鐵架／八格籃",
+      attrs: 'data-sales-pane="rack"',
+    });
+  }
+  if (wareTabs.length) blocks.push({ id: "ware", lab: "倉庫", tabs: wareTabs });
+
+  const acctTabs = [];
+  if (can("page-books")) {
+    acctTabs.push({
+      id: "sales-bill",
+      lab: "出貨帳單",
+      hint: "對帳開立",
+      attrs: 'data-sales-pane="sales-bill"',
+    });
+    acctTabs.push({
+      id: "ledger",
+      lab: "進銷存清單",
+      hint: "進出彙總",
+      attrs: 'data-sales-pane="ledger"',
+    });
+    acctTabs.push({
+      id: "cust",
+      lab: "客戶",
+      hint: "建置中",
+      attrs: 'data-sales-pane="cust"',
+    });
+    acctTabs.push({
+      id: "vendor",
+      lab: "廠商",
+      hint: "建置中",
+      attrs: 'data-sales-pane="vendor"',
+    });
+  }
+  acctTabs.push({
+    id: "help",
+    lab: "貨運比對",
+    hint: "帳務核對",
+    attrs: 'data-sales-pane="help"',
+  });
+  if (can("page-stats")) {
+    acctTabs.push({
+      id: "stats",
+      lab: "營運統計",
+      hint: "圖表・紀錄",
+      attrs: 'data-sales-pane="stats"',
+    });
+  }
+  if (acctTabs.length) blocks.push({ id: "acct", lab: "帳款", tabs: acctTabs });
+  return blocks;
+}
+function salesSideBtnHtml(t) {
+  const on = t.id === hubSalesPane;
+  const badge = t.badge ? `<span class="sales-side-badge">${esc(String(t.badge))}</span>` : "";
+  return `<button type="button" class="sales-side${on ? " is-on" : ""}" ${t.attrs}>
+    <span class="sales-side-lab">${esc(t.lab)}${badge}</span>
+    <em class="sales-side-hint">${esc(t.hint || "")}</em>
+  </button>`;
+}
+function salesLandingHtml(cur) {
+  const cards = cur.tabs
+    .map(
+      (t) => `<button type="button" class="sales-main-card" ${t.attrs}>
+        <strong>${esc(t.lab)}</strong>
+        <em>${esc(t.hint || "")}</em>
+      </button>`,
+    )
+    .join("");
+  return `<div class="sales-landing">
+    <h2 class="sales-main-title">${esc(cur.lab)}</h2>
+    <p class="sales-main-hint">點左側進入功能；上方與側欄固定，只換中間工作區。</p>
+    <div class="sales-main-grid">${cards}</div>
+  </div>`;
+}
+function fillSalesLanding() {
+  const mount = document.getElementById("sales-shell-mount");
+  const main = document.querySelector(".sales-shell-main");
+  if (!mount) return;
+  restoreSalesMount();
+  const blocks = buildSalesBlocks();
+  if (!blocks.length) return;
+  if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
+  const cur = blocks.find((b) => b.id === hubSalesBlock) || blocks[0];
+  if (main) main.classList.add("is-landing");
+  mount.innerHTML = salesLandingHtml(cur);
+}
+function syncSalesShellChrome() {
+  const shell = document.querySelector("#home-hub .sales-shell");
+  if (!shell) return false;
+  const blocks = buildSalesBlocks();
+  if (!blocks.length) return false;
+  if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
+  const cur = blocks.find((b) => b.id === hubSalesBlock) || blocks[0];
+  if (hubSalesPane && !cur.tabs.some((t) => t.id === hubSalesPane)) hubSalesPane = "";
+
+  shell.querySelectorAll("[data-sales-block]").forEach((b) => {
+    b.classList.toggle("is-on", b.dataset.salesBlock === cur.id);
+  });
+  const sideTitle = shell.querySelector(".sales-side-title");
+  if (sideTitle) sideTitle.textContent = cur.lab;
+  const sideNav = shell.querySelector(".sales-side-nav");
+  if (sideNav) {
+    const existing = [...sideNav.querySelectorAll("[data-sales-pane]")].map((el) => el.dataset.salesPane).join("\0");
+    const wanted = cur.tabs.map((t) => t.id).join("\0");
+    if (existing !== wanted) {
+      sideNav.innerHTML = cur.tabs.map(salesSideBtnHtml).join("");
+    } else {
+      sideNav.querySelectorAll("[data-sales-pane]").forEach((b) => {
+        b.classList.toggle("is-on", b.dataset.salesPane === hubSalesPane);
+        const tab = cur.tabs.find((t) => t.id === b.dataset.salesPane);
+        if (tab?.badge) {
+          const lab = b.querySelector(".sales-side-lab");
+          if (lab) {
+            const badge = `<span class="sales-side-badge">${esc(String(tab.badge))}</span>`;
+            lab.innerHTML = `${esc(tab.lab)}${badge}`;
+          }
+        }
+      });
+    }
+  }
+  const main = shell.querySelector(".sales-shell-main");
+  if (main) {
+    main.classList.toggle("is-landing", !hubSalesPane);
+    if (!document.getElementById("sales-shell-mount")) {
+      main.innerHTML = `<div id="sales-shell-mount" class="sales-shell-mount"></div>`;
+    }
+  }
+  return true;
 }
 function restoreSalesMount() {
   if (!salesMount) return;
@@ -2717,12 +2783,22 @@ function runSalesPaneRenderers(paneId) {
 function embedSalesPaneContent() {
   const mount = document.getElementById("sales-shell-mount");
   if (!mount || !hubSalesPane) return;
-  restoreSalesMount();
   const el = pageElForSalesPane(hubSalesPane);
   if (!el) return;
+  // 已掛著同一個頁面就只刷新內容，不拆 DOM
+  if (salesMount && salesMount.el === el && el.parentNode === mount) {
+    el.hidden = false;
+    runSalesPaneRenderers(hubSalesPane);
+    syncOpsFlowTabs();
+    return;
+  }
+  restoreSalesMount();
   salesMount = { el, parent: el.parentNode, next: el.nextSibling };
+  mount.innerHTML = "";
   mount.appendChild(el);
   el.hidden = false;
+  const main = document.querySelector(".sales-shell-main");
+  if (main) main.classList.remove("is-landing");
   runSalesPaneRenderers(hubSalesPane);
   syncOpsFlowTabs();
 }
@@ -2741,6 +2817,14 @@ function activateSalesPane(paneId) {
   hubSalesBlock = salesPaneBlockId(id);
   applySalesPaneState(id);
   page = "home";
+  document.body.classList.add("on-home", "sales-workspace");
+  const pageHome = document.getElementById("page-home");
+  if (pageHome) pageHome.hidden = false;
+  // 殼已在：只鎖上／側欄、換中間工作區（不整頁 render）
+  if (document.querySelector("#home-hub .sales-shell") && syncSalesShellChrome()) {
+    embedSalesPaneContent();
+    return;
+  }
   render();
 }
 function goFromHub(btn) {
@@ -11008,7 +11092,13 @@ function applyCopy() {
 }
 
 function render() {
-  restoreSalesMount();
+  const staySales =
+    page === "home" &&
+    hubDept === "sales" &&
+    !!hubSalesPane &&
+    !!salesMount &&
+    salesMount.el === pageElForSalesPane(hubSalesPane);
+  if (!staySales) restoreSalesMount();
   try {
     if (ensureTodayBooks()) {
       syncAllNqQty();
@@ -11155,7 +11245,16 @@ function render() {
     run(window.renderBooksLedger);
   }
   if (onRack) run(renderRack);
-  if (page === "home" && hubDept === "sales" && hubSalesPane) run(embedSalesPaneContent);
+  if (page === "home" && hubDept === "sales" && hubSalesPane) {
+    const mounted = pageElForSalesPane(hubSalesPane);
+    if (mounted) mounted.hidden = false;
+    if (staySales) {
+      run(() => runSalesPaneRenderers(hubSalesPane));
+      syncOpsFlowTabs();
+    } else {
+      run(embedSalesPaneContent);
+    }
+  }
 }
 
 document.getElementById("home-btn")?.addEventListener("click", goHome);
@@ -11178,6 +11277,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       hubDept = "";
       hubSalesBlock = "orders";
       hubSalesPane = "";
+      document.body.classList.remove("sales-workspace");
     } else if (hubOpen) {
       hubOpen = "";
     } else {
@@ -11185,6 +11285,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       hubDept = "";
       hubSalesBlock = "orders";
       hubSalesPane = "";
+      document.body.classList.remove("sales-workspace");
     }
     renderHomeHub();
     return;
@@ -11192,17 +11293,20 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   const salesBlockBtn = e.target.closest("[data-sales-block]");
   if (salesBlockBtn) {
     const nextBlock = salesBlockBtn.dataset.salesBlock || "orders";
-    restoreSalesMount();
     hubSalesBlock = nextBlock;
     hubDept = "sales";
     hubOpen = "";
-    // 切上方工作區時保留側欄：自動進該區第一個功能（同頁）
-    hubSalesPane = "";
     page = "home";
-    renderHomeHub();
-    const firstSide = document.querySelector(".sales-shell-side [data-sales-pane]");
-    if (firstSide) {
-      activateSalesPane(firstSide.dataset.salesPane || "");
+    const blocks = buildSalesBlocks();
+    const cur = blocks.find((b) => b.id === nextBlock) || blocks[0];
+    const first = cur?.tabs?.[0]?.id || "";
+    if (first) {
+      activateSalesPane(first);
+    } else {
+      hubSalesPane = "";
+      restoreSalesMount();
+      syncSalesShellChrome();
+      fillSalesLanding();
     }
     return;
   }

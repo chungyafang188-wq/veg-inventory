@@ -1272,6 +1272,70 @@ body.on-home.layout-web .app {
   background: #f8fafc;
   color: #1e293b;
 }
+/* 銷貨工作區：鎖定上欄＋側欄，只滾中間 */
+body.sales-workspace {
+  height: 100dvh;
+  overflow: hidden;
+}
+body.sales-workspace .app {
+  box-sizing: border-box;
+  display: flex;
+  height: 100dvh;
+  max-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0.35rem;
+}
+body.sales-workspace .app-head {
+  flex-shrink: 0;
+}
+body.sales-workspace #page-home,
+body.sales-workspace .home-shell,
+body.sales-workspace #home-hub.hub-shelf,
+body.sales-workspace #home-hub {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+body.sales-workspace .sales-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  height: auto;
+  border-radius: 0.85rem;
+}
+body.sales-workspace .sales-shell-head {
+  position: relative;
+  z-index: 4;
+  flex-shrink: 0;
+}
+body.sales-workspace .sales-shell-body {
+  min-height: 0;
+  flex: 1;
+}
+body.sales-workspace .sales-shell-side {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+body.sales-workspace .sales-shell-main,
+body.sales-workspace .sales-shell-mount {
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+body.sales-workspace .sales-shell-mount > section {
+  min-height: 0;
+}
+body.sales-workspace #flow-tabs {
+  display: none !important;
+}
 .sales-shell-head {
   display: flex;
   align-items: center;
@@ -1475,6 +1539,10 @@ body.on-home.layout-web .app {
   .sales-side {
     flex-shrink: 0;
     min-width: 5.5rem;
+  }
+  body.sales-workspace .sales-shell-side {
+    flex-shrink: 0;
+    max-height: none;
   }
 }
 

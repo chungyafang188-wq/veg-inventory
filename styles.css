@@ -1260,6 +1260,192 @@ body.on-home.layout-web .app {
   margin: 0;
 }
 
+/* —— 銷貨三欄工作區（對齊進口殼） —— */
+.sales-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: min(78vh, 40rem);
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #f8fafc;
+  color: #1e293b;
+}
+.sales-shell-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+.sales-block-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 0.5rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.sales-block-chip {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sales-block-chip.is-on {
+  border-color: #166534;
+  background: #166534;
+  color: #fff;
+}
+.sales-home-chip {
+  font-weight: 600;
+}
+.sales-shell-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.sales-shell-side {
+  display: flex;
+  width: 7.75rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-right: 1px solid #e2e8f0;
+  background: #e8efea;
+}
+.sales-side-title {
+  padding: 0 0.25rem 0.25rem;
+  color: #166534;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.sales-side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.sales-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0.5rem 0.45rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #1e293b;
+  text-align: left;
+  cursor: pointer;
+}
+.sales-side:hover {
+  background: rgba(22, 101, 52, 0.08);
+}
+.sales-side-lab {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.sales-side-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.sales-side-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.65rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.sales-shell-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  padding: 1rem;
+  background: #fff;
+}
+.sales-main-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.sales-main-hint {
+  margin: 0 0 0.9rem;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+.sales-main-grid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+}
+.sales-main-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  color: #1e293b;
+  text-align: left;
+  cursor: pointer;
+}
+.sales-main-card:hover {
+  border-color: #86efac;
+  background: #ecfdf5;
+}
+.sales-main-card strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+.sales-main-card em {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .sales-shell-body {
+    flex-direction: column;
+  }
+  .sales-shell-side {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .sales-side-nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .sales-side {
+    flex-shrink: 0;
+    min-width: 5.5rem;
+  }
+}
+
 .home-mod {
   margin: 0;
   width: 100%;

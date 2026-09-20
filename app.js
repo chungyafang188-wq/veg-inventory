@@ -817,6 +817,8 @@ let co = "nq";
 let page = "home";
 let hubDept = "";
 let hubOpen = "";
+/** 銷貨工作區：orders｜ware｜acct（對齊進口三欄） */
+let hubSalesBlock = "orders";
 let helpFilter = "issues";
 let helpResult = null;
 const LABEL_RUN_KEY = "veg-label-run-v1";
@@ -1487,6 +1489,7 @@ function finishLogin(name) {
   page = homePage();
   hubDept = "";
   hubOpen = "";
+  hubSalesBlock = "orders";
   render();
   return true;
 }
@@ -1533,6 +1536,7 @@ function goHome() {
   page = "home";
   hubDept = "";
   hubOpen = "";
+  hubSalesBlock = "orders";
   render();
 }
 window.goHome = goHome;
@@ -1994,72 +1998,198 @@ function renderHomeHub() {
       </div>
       ${bodyHtml}
     </section>`;
-  const salesFolders = [
-    {
-      id: "flow",
-      tone: "orders",
-      icon: "clip",
-      title: "訂貨區",
-      blurb: "下單・已填・排程・送貨",
-      open: flow.length
-        ? openCard(
-            "flow",
-            "orders",
-            "clip",
-            "訂貨區",
-            `<p class="home-open-hint">進入後可用上方分頁切換。</p><div class="home-flow">${flow.join("")}</div>`,
-          )
-        : "",
-      show: flow.length > 0,
-    },
-    {
-      id: "sitework",
-      tone: "ware",
-      icon: "cal",
-      title: "現場工作",
-      blurb: "調倉・接單・工作單",
-      open: "",
-      show: can("page-sitework"),
-      direct: "sitework",
-    },
-    {
-      id: "stats",
-      tone: "acct",
-      icon: "chart",
-      title: "營運統計",
-      blurb: "圖表・刪除紀錄",
-      open: "",
-      show: can("page-stats"),
-      direct: "stats",
-    },
-    {
-      id: "prep",
-      tone: "ware",
-      icon: "crate",
-      title: "倉庫管理",
-      blurb: "盤點・進貨・資財",
-      open: prep.length ? openCard("prep", "ware", "crate", "倉庫管理", `<div class="hub-links">${prep.join("")}</div>`) : "",
-      show: prep.length > 0,
-    },
-    {
-      id: "acct",
-      tone: "acct",
-      icon: "coin",
-      title: "帳款業務",
-      blurb: "帳單・客戶",
-      open: acct.length ? openCard("acct", "acct", "coin", "帳款業務", `<div class="hub-links">${acct.join("")}</div>`) : "",
-      show: acct.length > 0,
-    },
-    {
+  /** 銷貨三工作區（權限過濾後可能少於三欄） */
+  const buildSalesBlocks = () => {
+    const blocks = [];
+    const orderTabs = [];
+    if (can("page-orders")) {
+      orderTabs.push({
+        id: "form",
+        lab: "下單",
+        hint: "建立訂單",
+        attrs: 'data-go="orders" data-orders-pane="form"',
+      });
+      orderTabs.push({
+        id: "today",
+        lab: "已填單",
+        hint: "可改／結單",
+        attrs: 'data-go="orders" data-orders-pane="today"',
+      });
+      const lineN = linePendingCount();
+      orderTabs.push({
+        id: "line",
+        lab: "LINE",
+        hint: lineN ? `待轉 ${lineN}` : "轉成已填單",
+        attrs: 'data-go="orders" data-orders-pane="line"',
+        badge: lineN || 0,
+      });
+    }
+    if (can("page-plan")) {
+      if (role !== "driver") {
+        orderTabs.push({
+          id: "short",
+          lab: "現場排程",
+          hint: "備貨清單",
+          attrs: 'data-go="plan" data-plan-main="short"',
+        });
+      }
+      orderTabs.push({
+        id: "ship",
+        lab: role === "driver" ? "擇單送貨" : "司機送貨",
+        hint: "確認出貨",
+        attrs: 'data-go="plan" data-plan-main="ship"',
+      });
+    }
+    if (can("page-orders") || can("page-plan") || can("page-books")) {
+      orderTabs.push({
+        id: "labels",
+        lab: "標籤印製",
+        hint: "貼紙列印",
+        attrs: 'data-go="labels"',
+      });
+    }
+    if (can("page-books")) {
+      orderTabs.push({
+        id: "label-prints",
+        lab: "列印明細",
+        hint: "列印紀錄",
+        attrs: 'data-go="label-prints"',
+      });
+    }
+    if (can("page-sitework")) {
+      orderTabs.push({
+        id: "sitework",
+        lab: "現場工作",
+        hint: "調倉・接單・工作單",
+        attrs: 'data-go="sitework"',
+      });
+    }
+    if (orderTabs.length) blocks.push({ id: "orders", lab: "訂貨出貨", tabs: orderTabs });
+
+    const wareTabs = [];
+    if (can("books-stock")) {
+      wareTabs.push({
+        id: "stock",
+        lab: "庫存盤點",
+        hint: "點貨・盤點",
+        attrs: 'data-go="books" data-books="stock" data-stock-phase="pick"',
+      });
+    }
+    if (can("page-books")) {
+      wareTabs.push({
+        id: "in",
+        lab: "進貨",
+        hint: "進貨登錄",
+        attrs: 'data-go="books" data-books="in"',
+      });
+      wareTabs.push({
+        id: "rack",
+        lab: "資財管理",
+        hint: "鐵架／八格籃",
+        attrs: 'data-go="books" data-books="rack"',
+      });
+    }
+    if (wareTabs.length) blocks.push({ id: "ware", lab: "倉庫", tabs: wareTabs });
+
+    const acctTabs = [];
+    if (can("page-books")) {
+      acctTabs.push({
+        id: "sales-bill",
+        lab: "出貨帳單",
+        hint: "對帳開立",
+        attrs: 'data-go="books" data-books="sales"',
+      });
+      acctTabs.push({
+        id: "ledger",
+        lab: "進銷存清單",
+        hint: "進出彙總",
+        attrs: 'data-go="books" data-books="ledger"',
+      });
+      acctTabs.push({
+        id: "cust",
+        lab: "客戶",
+        hint: "建置中",
+        attrs: 'data-go="soon" data-soon="cust"',
+      });
+      acctTabs.push({
+        id: "vendor",
+        lab: "廠商",
+        hint: "建置中",
+        attrs: 'data-go="soon" data-soon="vendor"',
+      });
+    }
+    acctTabs.push({
       id: "help",
-      tone: "help",
-      icon: "spark",
-      title: "小幫手",
-      blurb: "貨運核對",
-      open: help.length ? openCard("help", "help", "spark", "小幫手", `<div class="hub-links">${help.join("")}</div>`) : "",
-      show: help.length > 0,
-    },
-  ].filter((x) => x.show);
+      lab: "貨運比對",
+      hint: "帳務核對",
+      attrs: 'data-go="help"',
+    });
+    if (can("page-stats")) {
+      acctTabs.push({
+        id: "stats",
+        lab: "營運統計",
+        hint: "圖表・紀錄",
+        attrs: 'data-go="stats"',
+      });
+    }
+    if (acctTabs.length) blocks.push({ id: "acct", lab: "帳款", tabs: acctTabs });
+    return blocks;
+  };
+
+  const renderSalesShell = () => {
+    const blocks = buildSalesBlocks();
+    if (!blocks.length) {
+      box.classList.remove("hub-pick");
+      box.classList.add("home-app", "hub-shelf");
+      box.innerHTML = `${topLevelSwitch("sales")}<p class="home-open-hint">此帳號目前沒有銷貨項目可用。</p>`;
+      return;
+    }
+    if (!blocks.some((b) => b.id === hubSalesBlock)) hubSalesBlock = blocks[0].id;
+    const cur = blocks.find((b) => b.id === hubSalesBlock) || blocks[0];
+    const blockChips = blocks
+      .map((b) => {
+        const on = b.id === cur.id;
+        return `<button type="button" class="sales-block-chip${on ? " is-on" : ""}" data-sales-block="${esc(b.id)}">${esc(b.lab)}</button>`;
+      })
+      .join("");
+    const sideHtml = cur.tabs
+      .map((t) => {
+        const badge = t.badge ? `<span class="sales-side-badge">${esc(String(t.badge))}</span>` : "";
+        return `<button type="button" class="sales-side" ${t.attrs}>
+          <span class="sales-side-lab">${esc(t.lab)}${badge}</span>
+          <em class="sales-side-hint">${esc(t.hint || "")}</em>
+        </button>`;
+      })
+      .join("");
+    const mainCards = cur.tabs
+      .map(
+        (t) => `<button type="button" class="sales-main-card" ${t.attrs}>
+          <strong>${esc(t.lab)}</strong>
+          <em>${esc(t.hint || "")}</em>
+        </button>`,
+      )
+      .join("");
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
+    box.innerHTML = `
+      <section class="sales-shell">
+        <header class="sales-shell-head">
+          <button type="button" class="sales-block-chip sales-home-chip" data-hub-back data-sales-home>← 總覽</button>
+          <nav class="sales-block-nav" aria-label="銷貨主模組">${blockChips}</nav>
+        </header>
+        <div class="sales-shell-body">
+          <aside class="sales-shell-side" aria-label="銷貨子選單">
+            <div class="sales-side-title">${esc(cur.lab)}</div>
+            <nav class="sales-side-nav">${sideHtml}</nav>
+          </aside>
+          <section class="sales-shell-main">
+            <h2 class="sales-main-title">${esc(cur.lab)}</h2>
+            <p class="sales-main-hint">點左側或下方卡片進入功能（同頁切換工作區）。</p>
+            <div class="sales-main-grid">${mainCards}</div>
+          </section>
+        </div>
+      </section>`;
+  };
 
   const stubShelfItem = (x) =>
     `<button type="button" class="shelf-item is-soon" data-go="soon" data-soon="${esc(x.soon)}">
@@ -2218,13 +2348,6 @@ function renderHomeHub() {
     return;
   }
 
-  const salesSwitchItems = salesFolders.map((x) => ({
-    id: x.id,
-    icon: x.icon,
-    title: x.title,
-    tone: x.tone,
-  }));
-
   if (hubOpen === "labels" && !hubDept) {
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
@@ -2247,32 +2370,12 @@ function renderHomeHub() {
     return;
   }
 
-  if (hubDept === "sales" && hubOpen) {
-    const cur = salesFolders.find((x) => x.id === hubOpen);
-    box.classList.remove("hub-pick");
-    box.classList.add("home-app", "hub-shelf");
-    if (cur?.open) {
-      const salesBar = `<section class="shelf-rack shelf-switch-rack shelf-switch-sub">
-        <p class="shelf-rack-label">銷貨</p>
-        <div class="shelf-board">
-          <div class="shelf-switch-wrap">${shelfSwitchStrip(salesSwitchItems, {
-            active: hubOpen,
-            attr: "hub",
-            compact: true,
-          })}</div>
-          <div class="shelf-ledge" aria-hidden="true"></div>
-        </div>
-      </section>`;
-      box.innerHTML = `${topLevelSwitch("sales")}${salesBar}${cur.open.replace(
-        /<button type="button" class="ghost hub-back" data-hub-back>返回<\/button>/,
-        "",
-      )}`;
-      return;
-    }
-    hubOpen = "";
+  if (hubDept === "sales") {
+    renderSalesShell();
+    return;
   }
 
-  if (hubDept === "import" || hubDept === "export" || hubDept === "sales") {
+  if (hubDept === "import" || hubDept === "export") {
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
     const switcher = topLevelSwitch(hubDept);
@@ -2287,23 +2390,6 @@ function renderHomeHub() {
       box.innerHTML = `${switcher}${shelfWrap("出口", "orders", "plane", stubShelf(exportItems))}`;
       return;
     }
-    const salesTiles = salesFolders
-      .map(
-        (x) =>
-          `<button type="button" class="shelf-item hub-${x.tone}" data-hub="${esc(x.id)}">
-            <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
-            <strong class="shelf-lab">${esc(x.title)}</strong>
-            <em class="shelf-note">${esc(x.blurb || "")}</em>
-          </button>`,
-      )
-      .join("");
-    box.innerHTML = `${switcher}${shelfWrap(
-      "銷貨",
-      "acct",
-      "sales",
-      salesTiles || `<p class="home-open-hint">此帳號目前沒有銷貨項目可用。</p>`,
-    )}`;
-    return;
   }
 
   box.classList.add("hub-pick", "home-app", "hub-shelf");
@@ -2988,7 +3074,7 @@ function labelStickerHtml(item, forPrint) {
       <div class="sticker-cont-main">
         <p class="sticker-cont-name${long}">${esc(name)}</p>
         <p class="sticker-box${boxWide}">${codeHtml}</p>
-      </div>
+    </div>
       ${meta}
     </article>`;
   }
@@ -3213,7 +3299,7 @@ function renderLabels() {
   const preview = document.getElementById("label-preview");
   if (preview) {
     if (isText) {
-      preview.innerHTML = labelStickerHtml({
+    preview.innerHTML = labelStickerHtml({
         kind: "text",
         text: labelText || "南瓜",
         remark: labelTextRemark,
@@ -3234,8 +3320,8 @@ function renderLabels() {
         customer: labelShipCust || "客戶",
         sku: labelShipSku || "南瓜",
         solar: solarDateText(day),
-        seq: padLabelSeq(run.n + 1),
-      });
+      seq: padLabelSeq(run.n + 1),
+    });
     }
   }
 }
@@ -3248,19 +3334,19 @@ function printSelectedLabels() {
     labelText = text;
     labelTextRemark = String(labelTextRemark || document.getElementById("label-text-remark")?.value || "").trim();
     const solar = labelSolarOn ? solarDateText(day) : "";
-    const run = loadLabelRun(day);
+  const run = loadLabelRun(day);
     const cards = Array.from({ length: copies }, (_, i) =>
-      labelStickerHtml(
-        {
+    labelStickerHtml(
+      {
           kind: "text",
           text,
           remark: labelTextRemark,
           solar,
           seq: labelSeqOn ? padLabelSeq(run.n + i + 1) : "",
-        },
-        true,
-      ),
-    );
+      },
+      true,
+    ),
+  );
     if (!openLabelPrint(cards)) return;
     const seqFrom = labelSeqOn ? padLabelSeq(run.n + 1) : "";
     const seqTo = labelSeqOn ? padLabelSeq(run.n + copies) : "";
@@ -3314,7 +3400,7 @@ function printSelectedLabels() {
     if (!openLabelPrint(cards)) return;
     const codes = Array.from({ length: copies }, (_, i) => labelContCode(box, day, run.n + i + 1));
     run.n += copies;
-    saveLabelRun(run);
+  saveLabelRun(run);
     recordLabelPrint({
       day,
       kind: "container",
@@ -3327,7 +3413,7 @@ function printSelectedLabels() {
       seqFrom: codes[0] || "",
       seqTo: codes[codes.length - 1] || "",
     });
-    renderLabels();
+  renderLabels();
     return setStatus(`已送出貨櫃標籤 ${copies} 張，下一組 ${labelContCode(box, day, run.n + 1)}。`);
   }
   labelShipCust = String(labelShipCust || document.getElementById("label-ship-cust")?.value || "").trim();
@@ -5593,7 +5679,7 @@ function unifiedLineHtml(rec = {}) {
           <span class="line-metric-lab">件數</span>
           <div class="line-metric-body">
             ${qtyStepperHtml({ key: "line-qty", id: "form", value: qty, step, placeholder: qtyFieldPlaceholder(banQty), aria: "件數" })}
-            <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
+      <span class="unit" data-line-unit>${big ? esc(nqUnitOfCat(unitFam, pack)) : ""}</span>
           </div>
         </div>
       </div>
@@ -8415,7 +8501,7 @@ function planCustRowsHtml(day, rows, hideSpec) {
           const spec = hideSpec ? "" : planLineSpec(r);
           const prepped = isLinePrepped(day, r);
           const mark = r.done
-            ? `<span class="plan-shipped">已出貨</span>`
+              ? `<span class="plan-shipped">已出貨</span>`
             : prepped
               ? `<span class="plan-prepped">已理貨</span>`
               : someDone || somePrep
@@ -8439,8 +8525,8 @@ function planCustRowsHtml(day, rows, hideSpec) {
           ? `<span class="plan-prepped">已理貨</span>`
           : somePrep
             ? `<span class="plan-prepped is-part">理貨中</span>`
-            : someDone
-              ? `<span class="plan-shipped is-part">部分已出貨</span>`
+        : someDone
+          ? `<span class="plan-shipped is-part">部分已出貨</span>`
               : `<span class="plan-open">待理貨</span>`;
       const cls = allDone
         ? "is-shipped"
@@ -10814,14 +10900,14 @@ function render() {
     if (restBtn) restBtn.hidden = false;
     const nqCancel = document.getElementById("nq-cancel-edit");
     if (nqCancel) nqCancel.hidden = true;
-    run(renderLineDrafts);
-    run(renderCustSuggest);
-    run(renderDailyGrid);
-    run(renderSheet);
-    run(renderCheck);
-    run(renderOrders);
-    run(renderRestList);
-    run(() => applyOrdersPane(false));
+  run(renderLineDrafts);
+  run(renderCustSuggest);
+  run(renderDailyGrid);
+  run(renderSheet);
+  run(renderCheck);
+  run(renderOrders);
+  run(renderRestList);
+  run(() => applyOrdersPane(false));
     run(syncOrderEntering);
   } else {
     const orderForm = document.getElementById("order-form");
@@ -10831,8 +10917,8 @@ function render() {
   }
   if (page === "plan") {
     run(renderPlan);
-    run(() => applyPlanPane());
-    run(() => applyPlanMain(false));
+  run(() => applyPlanPane());
+  run(() => applyPlanMain(false));
   }
   if (onBooks && booksPart === "stock") run(renderStock);
   if (onBooks && booksPart === "in") {
@@ -10860,14 +10946,24 @@ document.querySelector(".layout-mode")?.addEventListener("click", (e) => {
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-hub-back]")) {
-    if (e.target.closest(".shelf-home-back") || (!hubOpen && hubDept)) {
+    if (e.target.closest(".shelf-home-back") || e.target.closest("[data-sales-home]") || (!hubOpen && hubDept)) {
       hubOpen = "";
       hubDept = "";
+      hubSalesBlock = "orders";
     } else if (hubOpen) {
       hubOpen = "";
     } else {
       hubDept = "";
+      hubSalesBlock = "orders";
     }
+    renderHomeHub();
+    return;
+  }
+  const salesBlockBtn = e.target.closest("[data-sales-block]");
+  if (salesBlockBtn) {
+    hubSalesBlock = salesBlockBtn.dataset.salesBlock || "orders";
+    hubDept = "sales";
+    hubOpen = "";
     renderHomeHub();
     return;
   }
@@ -10887,6 +10983,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       return setStatus("出口目前僅開放給雅芳。", true);
     }
     hubDept = next;
+    if (next === "sales") hubSalesBlock = "orders";
     renderHomeHub();
     return;
   }
@@ -12002,7 +12099,7 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
       ticketLines[i].destFreight = true;
       delete ticketLines[i].destOther;
     } else {
-      ticketLines[i].destOther = true;
+    ticketLines[i].destOther = true;
       delete ticketLines[i].destFreight;
     }
     syncHiddenShipAddr();
@@ -12046,8 +12143,8 @@ document.getElementById("ticket")?.addEventListener("input", (e) => {
     ticketLines[i].qty = 0;
     if (skuNeedsShipLot(ticketLines[i].skuId)) clearLineLot(ticketLines[i]);
     if (!lineHasItem(ticketLines[i])) {
-      ticketLines.splice(i, 1);
-      syncHiddenShipAddr();
+    ticketLines.splice(i, 1);
+    syncHiddenShipAddr();
     }
     renderTicket();
   } else {
@@ -13572,7 +13669,7 @@ function takeRemoteOrders(remote) {
   if (!remote || typeof remote !== "object") return;
   const bundle = { ...remote };
   if (remote.orders && Array.isArray(remote.orders.orders)) {
-    const mergedOrders = mergeOrderLists(state.orders, remote.orders.orders);
+  const mergedOrders = mergeOrderLists(state.orders, remote.orders.orders);
     bundle.orders = {
       ...remote.orders,
       orders: mergedOrders,

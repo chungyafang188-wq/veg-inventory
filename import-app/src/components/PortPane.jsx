@@ -73,42 +73,34 @@ function LockedSelect({ lab, kind, value, unlocked, onUnlock, onChange }) {
 }
 
 /**
- * 排定時間：有值＝鎖定進清單；無值＝一個「填時間」鈕；按修正才開輸入框。
+ * 排定時間：本地暫存，選完再按「鎖定」才寫入（避免 datetime-local 選一半就跳掉）。
  */
-function ScheduleSlot({ lab, value, unlocked, onUnlock, onChange, onLock }) {
-  const has = !!dtValue(value);
-  const editing = unlocked || !has;
-
-  if (!editing && has) {
-    return (
-      <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-        <span className="text-[0.7rem] font-bold text-slate-500">{lab}</span>
-        <span className="text-sm font-semibold tabular-nums text-slate-800">{shortAt(value)}</span>
-        <button type="button" className="text-[0.65rem] font-bold text-emerald-700 underline" onClick={onUnlock}>
-          修正
-        </button>
-      </div>
-    );
-  }
+function ScheduleSlot({ lab, value, onCommitLock }) {
+  const saved = dtValue(value);
+  const [draft, setDraft] = useState(saved);
 
   return (
-    <label className="min-w-0 flex-1 basis-[12rem]">
+    <label className="min-w-0 flex-1 basis-[14rem]">
       <span className="imp-field-lab">{lab}</span>
       <div className="flex gap-1.5">
         <input
           type="datetime-local"
           className="imp-field flex-1"
-          value={dtValue(value)}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => {
-            if (e.target.value) onLock?.();
-          }}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
         />
-        {has ? (
-          <button type="button" className="imp-btn-ghost shrink-0 self-stretch px-2 text-xs" onClick={onLock}>
-            鎖定
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="imp-btn-primary shrink-0 self-stretch px-2.5 text-xs disabled:opacity-40"
+          disabled={!dtValue(draft)}
+          onClick={() => {
+            const v = dtValue(draft);
+            if (!v) return;
+            onCommitLock?.(v);
+          }}
+        >
+          鎖定
+        </button>
       </div>
     </label>
   );
@@ -178,9 +170,13 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
         unlock(uha, atField);
       }
     }
-    if (field === "inspectAt" || field === "fumigateAt") {
-      if (value) lock(uha, field);
-    }
+    refresh?.();
+  };
+
+  /** 時間選完按鎖定才寫入，避免選取過程被 refresh 打斷 */
+  const commitAt = (uha, field, value) => {
+    api().patchPortField?.(uha, field, value);
+    lock(uha, field);
     refresh?.();
   };
 
@@ -248,7 +244,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
           </div>
         </div>
         <p className="mt-1.5 m-0 text-xs text-slate-400">
-          選定藥檢／薰蒸與排定時間後會鎖定進清單；要改再按「修正」。
+          藥檢／薰蒸選定後會鎖定；時間請選完再按「鎖定」寫入清單，要改再按「修正」。
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -465,20 +461,14 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                         <ScheduleSlot
                           lab="藥檢排定／報告時間"
                           value={r.inspectAt}
-                          unlocked={editInspectAt}
-                          onUnlock={() => unlock(uha, "inspectAt")}
-                          onChange={(v) => patch(uha, "inspectAt", v)}
-                          onLock={() => lock(uha, "inspectAt")}
+                          onCommitLock={(v) => commitAt(uha, "inspectAt", v)}
                         />
                       ) : null}
                       {needFume && (!fumeAt || editFumeAt) ? (
                         <ScheduleSlot
                           lab="薰蒸排定時間"
                           value={r.fumigateAt}
-                          unlocked={editFumeAt}
-                          onUnlock={() => unlock(uha, "fumigateAt")}
-                          onChange={(v) => patch(uha, "fumigateAt", v)}
-                          onLock={() => lock(uha, "fumigateAt")}
+                          onCommitLock={(v) => commitAt(uha, "fumigateAt", v)}
                         />
                       ) : null}
                     </div>

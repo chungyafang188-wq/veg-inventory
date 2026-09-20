@@ -9113,6 +9113,11 @@ var v = [
 		block: "port"
 	},
 	{
+		id: "checklist",
+		lab: "查驗清單",
+		block: "port"
+	},
+	{
 		id: "files",
 		lab: "舊資料",
 		block: "port"
@@ -9166,6 +9171,7 @@ var v = [
 	parse: "判讀",
 	port: "海關查驗",
 	release: "已放行",
+	checklist: "查驗清單",
 	stock: "進口庫存",
 	sum: "拆卸總清單",
 	upBoard: "拆卸貨櫃總資料",
@@ -10430,6 +10436,8 @@ var we = {
 		"uha",
 		"containerNo",
 		"product",
+		"seller",
+		"shipCo",
 		"dock",
 		"note",
 		"status",
@@ -10783,7 +10791,7 @@ function Ne({ title: e, portTab: t, setPortTab: n, portCounts: r, rows: i, refre
 							sortBy: y,
 							onSort: b,
 							sortOpts: Te.port,
-							placeholder: "搜尋編號、櫃號、品名、碼頭、備註…",
+							placeholder: "搜尋編號、櫃號、品名、賣方、船公司…",
 							resultCount: x.length,
 							totalCount: (i || []).length
 						})
@@ -10925,6 +10933,27 @@ function Ne({ title: e, portTab: t, setPortTab: n, portCounts: r, rows: i, refre
 													className: "m-0 mt-0.5 text-base font-semibold text-slate-800",
 													children: e.product || "—"
 												}),
+												/* @__PURE__ */ (0, D.jsxs)("p", {
+													className: "m-0 mt-0.5 text-xs text-slate-500",
+													children: [
+														/* @__PURE__ */ (0, D.jsx)("span", {
+															className: "font-semibold text-slate-600",
+															children: "賣方"
+														}),
+														" ",
+														e.seller || "—",
+														/* @__PURE__ */ (0, D.jsx)("span", {
+															className: "text-slate-300",
+															children: " · "
+														}),
+														/* @__PURE__ */ (0, D.jsx)("span", {
+															className: "font-semibold text-slate-600",
+															children: "船公司"
+														}),
+														" ",
+														e.shipCo || "—"
+													]
+												}),
 												e.note ? /* @__PURE__ */ (0, D.jsxs)("p", {
 													className: "m-0 mt-0.5 truncate text-xs text-slate-500",
 													children: ["備註 ", e.note]
@@ -10942,6 +10971,30 @@ function Ne({ title: e, portTab: t, setPortTab: n, portCounts: r, rows: i, refre
 								/* @__PURE__ */ (0, D.jsxs)("div", {
 									className: "flex flex-wrap items-end gap-2 border-t border-slate-100/80 bg-slate-50/50 px-3 py-2",
 									children: [
+										/* @__PURE__ */ (0, D.jsxs)("label", {
+											className: "min-w-0 flex-1 basis-[7rem]",
+											children: [/* @__PURE__ */ (0, D.jsx)("span", {
+												className: "imp-field-lab",
+												children: "賣方"
+											}), /* @__PURE__ */ (0, D.jsx)("input", {
+												className: "imp-field",
+												value: e.seller || "",
+												placeholder: "賣方／廠商",
+												onChange: (e) => T(t, "seller", e.target.value)
+											})]
+										}),
+										/* @__PURE__ */ (0, D.jsxs)("label", {
+											className: "min-w-0 flex-1 basis-[7rem]",
+											children: [/* @__PURE__ */ (0, D.jsx)("span", {
+												className: "imp-field-lab",
+												children: "船公司"
+											}), /* @__PURE__ */ (0, D.jsx)("input", {
+												className: "imp-field",
+												value: e.shipCo || "",
+												placeholder: "船公司",
+												onChange: (e) => T(t, "shipCo", e.target.value)
+											})]
+										}),
 										/* @__PURE__ */ (0, D.jsx)(je, {
 											lab: "藥檢",
 											kind: "inspect",

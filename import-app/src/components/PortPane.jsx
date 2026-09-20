@@ -269,7 +269,7 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
             sortBy={sortBy}
             onSort={setSortBy}
             sortOpts={SORT_OPTS.port}
-            placeholder="搜尋編號、櫃號、品名、碼頭、備註…"
+            placeholder="搜尋編號、櫃號、品名、賣方、船公司…"
             resultCount={viewed.length}
             totalCount={(rows || []).length}
           />
@@ -368,6 +368,11 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
                         <span className="font-mono text-sm font-semibold text-slate-700">{r.containerNo || "無櫃號"}</span>
                       </div>
                       <p className="m-0 mt-0.5 text-base font-semibold text-slate-800">{r.product || "—"}</p>
+                      <p className="m-0 mt-0.5 text-xs text-slate-500">
+                        <span className="font-semibold text-slate-600">賣方</span> {r.seller || "—"}
+                        <span className="text-slate-300"> · </span>
+                        <span className="font-semibold text-slate-600">船公司</span> {r.shipCo || "—"}
+                      </p>
                       {r.note ? <p className="m-0 mt-0.5 truncate text-xs text-slate-500">備註 {r.note}</p> : null}
                     </div>
 
@@ -378,6 +383,24 @@ export function PortPane({ title, portTab, setPortTab, portCounts, rows, refresh
 
                   {/* 第一排：確認橫排 */}
                   <div className="flex flex-wrap items-end gap-2 border-t border-slate-100/80 bg-slate-50/50 px-3 py-2">
+                    <label className="min-w-0 flex-1 basis-[7rem]">
+                      <span className="imp-field-lab">賣方</span>
+                      <input
+                        className="imp-field"
+                        value={r.seller || ""}
+                        placeholder="賣方／廠商"
+                        onChange={(e) => patch(uha, "seller", e.target.value)}
+                      />
+                    </label>
+                    <label className="min-w-0 flex-1 basis-[7rem]">
+                      <span className="imp-field-lab">船公司</span>
+                      <input
+                        className="imp-field"
+                        value={r.shipCo || ""}
+                        placeholder="船公司"
+                        onChange={(e) => patch(uha, "shipCo", e.target.value)}
+                      />
+                    </label>
                     <LockedSelect
                       lab="藥檢"
                       kind="inspect"

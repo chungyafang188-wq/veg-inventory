@@ -39,6 +39,7 @@
     buy: "進口採購",
     port: "海關查驗",
     release: "已放行",
+    checklist: "查驗清單",
     stock: "進口庫存",
     sum: "拆卸總清單",
     upBoard: "拆卸貨櫃總資料",
@@ -60,6 +61,7 @@
     { id: "parse", lab: "判讀", block: "port" },
     { id: "port", lab: "海關查驗", block: "port" },
     { id: "release", lab: "已放行", block: "port" },
+    { id: "checklist", lab: "查驗清單", block: "port" },
     { id: "files", lab: "舊資料", block: "port" },
     { id: "upBoard", lab: "拆卸貨櫃總資料", block: "unpack" },
     { id: "unpack", lab: "拆櫃回報", block: "unpack" },
@@ -3138,6 +3140,8 @@
           arriveDay: c.arriveDay || "",
           containerNo: c.containerNo || "",
           product: c.product || "",
+          seller: c.seller || "",
+          shipCo: c.shipCo || "",
           inspect: track.inspect || "none",
           inspectAt: track.inspectAt || "",
           fumigate: track.fumigate || "none",
@@ -3154,6 +3158,8 @@
             c.uha,
             c.containerNo || "（尚無櫃號）",
             c.product || "—",
+            c.seller || "—",
+            c.shipCo || "—",
             clearLab(track.inspect),
             formatAtShort(track.inspectAt),
             clearLab(track.fumigate),
@@ -3163,12 +3169,29 @@
         };
       });
     },
-    /** 海關查驗：同畫面直接改狀態／時間／碼頭等 */
+    /** 海關查驗：同畫面直接改狀態／時間／碼頭／賣方／船公司等 */
     patchPortField(uha, field, value) {
       ensureState();
       const cab = (state.importCabinets || []).find((c) => c.uha === uha);
       if (!cab) return false;
       ensureTrackFromCabinet(cab);
+      if (field === "seller" || field === "shipCo" || field === "product" || field === "broker") {
+        cab[field] = String(value || "").trim();
+        stampRow(cab);
+        if (typeof save === "function") save();
+        return true;
+      }
+      if (field === "containerNo") {
+        cab.containerNo = normContainer(value);
+        stampRow(cab);
+        const track = findReleased(uha);
+        if (track) {
+          track.containerNo = cab.containerNo;
+          stampRow(track);
+        }
+        if (typeof save === "function") save();
+        return true;
+      }
       patchReleased(uha, field, value);
       return true;
     },

@@ -732,11 +732,8 @@
     ensureState();
     const d = state.importParseDrafts[i];
     if (!d) return;
-    const uha = normUha(d.uha);
-    if (!uha) {
-      if (typeof setStatus === "function") setStatus("請先填編號 UHA。", true);
-      return;
-    }
+    let uha = normUha(d.uha);
+    if (!uha) uha = makePendingUha();
     const cab = {
       id: uid("cab"),
       uha,
@@ -762,7 +759,13 @@
     stampRow(track);
     state.importParseDrafts.splice(i, 1);
     if (typeof save === "function") save();
-    if (typeof setStatus === "function") setStatus(`${uha} 已列入海關查驗（到港待驗）。`);
+    if (typeof setStatus === "function") {
+      setStatus(
+        isPendingUha(uha)
+          ? `已列入海關查驗（編號待補）${cab.containerNo ? " · " + cab.containerNo : ""}`
+          : `${uha} 已列入海關查驗（到港待驗）。`,
+      );
+    }
     importPane = "port";
     closeDrawer({ force: true });
     renderImportPage();
@@ -819,6 +822,70 @@
     if (refs.uha) return refs.uha;
     if (refs.nc) return refs.nc;
     return "";
+  }
+
+  /** 尚未補正式 UHA／NC（含暫編號） */
+  function isPendingUha(v) {
+    const s = String(v || "").trim();
+    if (!s) return true;
+    if (/^待編-/i.test(s) || /^TMP-/i.test(s)) return true;
+    return !/^(UHA|NC)\d+/i.test(s);
+  }
+
+  function makePendingUha() {
+    return `待編-${Date.now().toString(36).slice(-6)}`;
+  }
+
+  /**
+   * 港口補／改編號：同步櫃表、已放行追蹤、拆卸派工、進櫃紀錄。
+   * @returns {{ ok: boolean, uha?: string, error?: string }}
+   */
+  function assignPortUha(oldKey, newUhaRaw) {
+    ensureState();
+    const newUha = normUha(newUhaRaw);
+    if (!newUha) return { ok: false, error: "請填有效編號（如 UHA715 或 NC002）" };
+    const key = String(oldKey || "").trim();
+    if (!key) return { ok: false, error: "找不到資料" };
+
+    const cab = (state.importCabinets || []).find((c) => c.uha === key || c.id === key);
+    if (!cab) return { ok: false, error: "找不到貨櫃資料" };
+
+    const oldUha = String(cab.uha || key);
+    if (oldUha === newUha) return { ok: true, uha: newUha };
+
+    const clash = (state.importCabinets || []).find((c) => c !== cab && c.uha === newUha);
+    if (clash) return { ok: false, error: `${newUha} 已存在，請改用其他編號` };
+
+    cab.uha = newUha;
+    stampRow(cab);
+
+    const track =
+      (state.importReleased || []).find((x) => x.uha === oldUha) ||
+      (state.importReleased || []).find((x) => x.uha === key);
+    if (track) {
+      track.uha = newUha;
+      stampRow(track);
+    }
+
+    if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
+    for (const j of state.unpackJobs) {
+      if (j.sourceUha === oldUha || j.box === oldUha || j.sourceUha === key || j.box === key) {
+        j.sourceUha = newUha;
+        j.box = newUha;
+        j.updatedAt = Date.now();
+      }
+    }
+
+    for (const a of state.importArrivals || []) {
+      if (a.uha === oldUha || a.uha === key) {
+        a.uha = newUha;
+        stampRow(a);
+      }
+    }
+
+    if (typeof save === "function") save();
+    if (typeof setStatus === "function") setStatus(isPendingUha(oldUha) ? `已補編號 ${newUha}` : `編號已改為 ${newUha}`);
+    return { ok: true, uha: newUha, oldUha };
   }
 
   function isContainerNo(v) {
@@ -1883,14 +1950,11 @@
     return n;
   }
 
-  /** 海關查驗：手動新增一筆 */
+  /** 海關查驗：手動新增一筆（編號可後補） */
   function addManualPortRow(fields) {
     ensureState();
-    const uha = normUha(fields && fields.uha);
-    if (!uha) {
-      if (typeof setStatus === "function") setStatus("請填編號（如 UHA715）。", true);
-      return false;
-    }
+    let uha = normUha(fields && fields.uha);
+    if (!uha) uha = makePendingUha();
     const row = {
       uha,
       containerNo: (fields && fields.containerNo) || "",
@@ -1911,7 +1975,9 @@
     upsertCabinetFromTpl(row);
     applyTrackFromTpl(uha, row, false);
     if (typeof save === "function") save();
-    if (typeof setStatus === "function") setStatus(`已新增 ${uha}。`);
+    if (typeof setStatus === "function") {
+      setStatus(isPendingUha(uha) ? `已新增（編號待補）${row.containerNo ? " · " + row.containerNo : ""}` : `已新增 ${uha}。`);
+    }
     return true;
   }
 
@@ -2793,8 +2859,8 @@
   }
 
   function openImport(pane) {
-    if (typeof can === "function" && !can("page-books") && !can("page-unpack")) {
-      if (typeof setStatus === "function") setStatus("沒有進口業務權限。", true);
+    if (typeof can === "function" && !can("page-import")) {
+      if (typeof setStatus === "function") setStatus("進口目前僅開放給雅芳。", true);
       return;
     }
     page = "import";

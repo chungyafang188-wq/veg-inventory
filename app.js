@@ -1327,7 +1327,8 @@ function saveStaffList(list) {
 const STAFF_ROSTER = [
   { name: "現場", role: "site" },
   { name: "凱婷", role: "acct" },
-  { name: "曉琪", role: "acct" },
+  { name: "凱琪", role: "acct" },
+  { name: "宜淨", role: "acct" },
   { name: "子羽", role: "acct" },
   { name: "湯", role: "acct" },
   { name: "小胖", role: "driver" },
@@ -1365,6 +1366,8 @@ function can(action) {
   const r = currentRole();
   if (!r) return false;
   if (r === "boss") return true;
+  // 進口／出口：目前僅雅芳（主管）
+  if (action === "page-import" || action === "page-export") return false;
   // TEMP: 拆櫃/庫存/現場 未完成，暫僅雅芳 — 恢復時刪除此段，並還原下方 page-unpack / page-sitework / books-stock 規則
   if (action === "page-unpack" || action === "page-sitework" || action === "books-stock") {
     return false;
@@ -2062,7 +2065,22 @@ function renderHomeHub() {
   };
 
   const topLevelSwitch = (activeId) => {
-    const deptRow = shelfSwitchStrip(DEPT_DEFS, { active: activeId, attr: "dept", compact: true });
+    const visibleDepts = DEPT_DEFS.filter((d) => {
+      if (d.id === "import") return can("page-import");
+      if (d.id === "export") return can("page-export");
+      if (d.id === "sales") {
+        return (
+          can("page-orders") ||
+          can("page-plan") ||
+          can("page-books") ||
+          can("page-stats") ||
+          can("page-sitework") ||
+          can("page-help")
+        );
+      }
+      return true;
+    });
+    const deptRow = shelfSwitchStrip(visibleDepts, { active: activeId, attr: "dept", compact: true });
     const toolRow = labelBtns.length
       ? shelfSwitchStrip([{ id: "labels", icon: "tag", title: "標籤列印", tone: "ware" }], {
           active: activeId,
@@ -2082,7 +2100,7 @@ function renderHomeHub() {
     </section>`;
   };
 
-  const canImport = can("page-books") || can("page-unpack");
+  const canImport = can("page-import");
   /** 進口子層架：橫排名稱切換，不佔直立空間 */
   const importSwitchItems = [
     { pane: "parse", icon: "clip", title: "判讀" },
@@ -2258,7 +2276,24 @@ function renderHomeHub() {
   box.classList.add("hub-pick", "home-app", "hub-shelf");
   const roleHint =
     role === "driver" ? "司機作業" : role === "site" ? "現場作業" : role === "unpacker" ? "拆櫃作業" : "會計作業";
-  const deptTiles = shelfSwitchStrip(DEPT_DEFS, { active: "", attr: "dept", compact: false, bare: true });
+  const deptTiles = shelfSwitchStrip(
+    DEPT_DEFS.filter((d) => {
+      if (d.id === "import") return can("page-import");
+      if (d.id === "export") return can("page-export");
+      if (d.id === "sales") {
+        return (
+          can("page-orders") ||
+          can("page-plan") ||
+          can("page-books") ||
+          can("page-stats") ||
+          can("page-sitework") ||
+          can("page-help")
+        );
+      }
+      return true;
+    }),
+    { active: "", attr: "dept", compact: false, bare: true },
+  );
   const toolsTile = labelBtns.length
     ? `<button type="button" class="shelf-item shelf-tool hub-ware" data-hub="labels">
         <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic("tag")}</span>
@@ -2396,7 +2431,7 @@ function goFromHub(btn) {
       rackSrc = "";
     }
   } else if (go === "import") {
-    if (!can("page-books") && !can("page-unpack")) return setStatus("沒有進口業務權限。", true);
+    if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
     if (typeof window.openImport === "function") {
       window.openImport(btn.dataset.import || "status");
     } else {
@@ -3911,7 +3946,7 @@ function applyRoleUi() {
   if (can("page-orders")) pages.push("orders");
   if (can("page-plan")) pages.push("plan");
   if (can("page-books")) pages.push("books");
-  if (can("page-books") || can("page-unpack")) pages.push("import");
+  if (can("page-import")) pages.push("import");
   if (can("page-unpack")) pages.push("unpack");
   if (can("page-sitework")) pages.push("sitework");
   if (can("page-stats")) pages.push("stats");
@@ -10810,10 +10845,14 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     hubOpen = "";
     // 進口：直接進頁面，上方橫排切換，不要再攤一層層架
     if (next === "import") {
+      if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
       if (typeof window.openImport === "function") {
         window.openImport("parse");
         return;
       }
+    }
+    if (next === "export" && !can("page-export")) {
+      return setStatus("出口目前僅開放給雅芳。", true);
     }
     hubDept = next;
     renderHomeHub();

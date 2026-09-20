@@ -126,6 +126,7 @@
     return {
       qty: null,
       unpackQty: null,
+      assignQty: null,
       reportBox: "",
       stockIn: true,
       location: "",
@@ -970,6 +971,13 @@
     const apprN = pendingApprovals().length;
     const apprMine = pendingApprovalsForMe().length;
     const showApproveTab = apprN > 0 || isUnpackManager() || iAmNamed(APPROVER_REPORT);
+    const pathBack = `<nav class="imp-crumb-nav up-imp-path" aria-label="路徑">
+      <button type="button" class="imp-path-link" data-up-go-home>首頁</button>
+      <span class="imp-path-sep" aria-hidden="true">›</span>
+      <button type="button" class="imp-path-link" data-up-go-import>進口</button>
+      <span class="imp-path-sep" aria-hidden="true">›</span>
+      <strong class="imp-path-here">拆櫃回報</strong>
+    </nav>`;
     const tabs = `<nav class="up-tabs${showApproveTab ? " up-tabs-3" : ""}" aria-label="拆櫃清單切換">
         <button type="button" class="up-tab${unpackListTab === "pending" ? " on" : ""}" data-up-tab="pending">待回報</button>
         <button type="button" class="up-tab${unpackListTab === "reported" ? " on" : ""}" data-up-tab="reported">回報明細清單</button>
@@ -1009,6 +1017,7 @@
         </article>`;
       };
       list.innerHTML = `
+        ${pathBack}
         <header class="up-head">
           <h2>拆櫃核對申請</h2>
           <p class="muted">申報後修改／刪除由${APPROVER_REPORT}核對；通過後才生效。</p>
@@ -1059,6 +1068,7 @@
         </article>`;
       };
       list.innerHTML = `
+        ${pathBack}
         <header class="up-head">
           <h2>${iAmUnpacker() ? "我的拆櫃回報" : "拆櫃回報"}</h2>
           <p class="muted">回報明細清單僅顯示近 ${REPORTED_DETAIL_DAYS} 日已回報資料；有權限者可修改或刪除（異動會記入主管後台）。</p>
@@ -1135,6 +1145,7 @@
         </section>`
       : "";
     list.innerHTML = `
+      ${pathBack}
       <header class="up-head">
         <h2>${iAmUnpacker() ? "我的拆櫃回報" : "拆櫃回報"}</h2>
         <p class="muted">${
@@ -1212,16 +1223,23 @@
     renderUnpackList();
   }
 
-  function assignJob(id, who) {
-    if (!canAssignUnpack()) return;
+  function assignJob(id, who, assignQty) {
+    if (!canAssignUnpack()) return false;
     const j = jobById(id);
-    if (!j || j.status !== "pending") return;
+    if (!j || j.status !== "pending") return false;
     j.assignee = who || "";
+    if (assignQty !== undefined && assignQty !== null && assignQty !== "") {
+      const n = Number(assignQty);
+      j.assignQty = Number.isFinite(n) && n >= 0 ? n : null;
+    }
     save();
     if (typeof setStatus === "function") {
       setStatus(who ? `已指派給 ${who}` : "已取消指派", false);
     }
-    renderUnpackList();
+    if (document.getElementById("up-list") && !document.querySelector("#import-root .imp-tw")) {
+      renderUnpackList();
+    }
+    return true;
   }
 
   function renderUnpackDetail(id) {
@@ -1771,6 +1789,21 @@
     if (document.body.dataset.upBound === "4") return;
     document.body.dataset.upBound = "4";
     document.body.addEventListener("click", (e) => {
+      if (e.target.closest("[data-up-go-home]")) {
+        page = "home";
+        if (typeof hubDept !== "undefined") hubDept = "";
+        if (typeof hubOpen !== "undefined") hubOpen = "";
+        if (typeof render === "function") render();
+        return;
+      }
+      if (e.target.closest("[data-up-go-import]")) {
+        if (typeof window.openImport === "function") window.openImport("hub");
+        else {
+          page = "import";
+          if (typeof render === "function") render();
+        }
+        return;
+      }
       // Edit / delete / save MUST be handled before data-up-open (card body).
       const editBtn = e.target.closest("[data-up-edit]");
       if (editBtn && !editBtn.disabled) {
@@ -1950,6 +1983,177 @@
       return r;
     };
   }
+
+  function submitReportFields(id, fields) {
+    const j = jobById(id);
+    if (!j || j.status !== "pending" || !jobAllowed(j)) {
+      if (typeof setStatus === "function") setStatus("無法回報此筆。", true);
+      return false;
+    }
+    const unpackN = Number(fields && fields.unpackQty);
+    if (!Number.isFinite(unpackN) || unpackN < 0) {
+      if (typeof setStatus === "function") setStatus("請填拆櫃數量。", true);
+      return false;
+    }
+    if (j.assignQty != null && Number(j.assignQty) >= 0 && unpackN > Number(j.assignQty)) {
+      if (typeof setStatus === "function") setStatus(`拆櫃數量不可超過指派數量 ${j.assignQty}。`, true);
+      return false;
+    }
+    const n = Number(fields && fields.qty);
+    if (!Number.isFinite(n) || n < 0) {
+      if (typeof setStatus === "function") setStatus("請填外箱。", true);
+      return false;
+    }
+    const box = String((fields && fields.reportBox) || j.box || "").trim();
+    if (!box) {
+      if (typeof setStatus === "function") setStatus("請填拆櫃編號。", true);
+      return false;
+    }
+    const location = String((fields && fields.location) || j.location || "").trim();
+    if (!location) {
+      if (typeof setStatus === "function") setStatus("請選拆櫃位置（倉庫或客戶）。", true);
+      return false;
+    }
+    const customerName =
+      location === "customer" ? String((fields && fields.customerName) || j.customerName || "").trim() : "";
+    if (location === "customer" && !customerName) {
+      if (typeof setStatus === "function") setStatus("請填客戶名稱。", true);
+      return false;
+    }
+    const wantStockIn = fields && fields.stockIn === false ? false : true;
+    const roundFn = typeof round === "function" ? round : (x) => x;
+    j.unpackQty = roundFn(unpackN);
+    j.qty = roundFn(n);
+    j.reportBox = box;
+    j.location = location;
+    j.stockIn = wantStockIn;
+    j.customerName = location === "customer" ? customerName : "";
+    j.customer = String((fields && fields.customer) || j.customer || "").trim();
+    j.unloadPoint = String((fields && fields.unloadPoint) || j.unloadPoint || "").trim();
+    j.note = String((fields && fields.note) || "").trim();
+    if (fields && fields.photo) j.photo = fields.photo;
+    j.status = "reported";
+    j.reportedBy = typeof currentStaff === "function" ? currentStaff() || "" : "";
+    j.reportedAt = Date.now();
+    if (wantStockIn) {
+      const ledgerId = uid("in");
+      const locNote =
+        j.location === "customer" ? `客戶 ${j.customerName}` : `位置 ${whName(j.location)}`;
+      state.inboundLedger.push({
+        id: ledgerId,
+        source: "unpack",
+        unpackId: j.id,
+        day: j.day,
+        code: j.reportBox || (j.codes && j.codes[0]) || j.box,
+        name: j.name,
+        qty: j.qty,
+        unpackQty: j.unpackQty,
+        note: [j.note, j.country, j.vendor, `拆櫃 ${j.reportBox || j.box}`, `拆櫃數量 ${j.unpackQty}`, `外箱 ${j.qty}`, locNote]
+          .filter(Boolean)
+          .join(" · "),
+        warehouse: j.location === "customer" ? "customer" : j.location,
+        customerName: j.customerName || "",
+        photo: j.photo || "",
+        status: "pending",
+        by: "",
+        at: 0,
+        createdAt: Date.now(),
+        createdBy: j.reportedBy,
+      });
+      j.ledgerId = ledgerId;
+    } else {
+      j.ledgerId = "";
+    }
+    save();
+    if (typeof setStatus === "function") {
+      setStatus(wantStockIn ? (iAmUnpacker() ? "已回報並勾選入庫，謝謝。" : "已回報，已轉到進貨待確認。") : iAmUnpacker() ? "已回報（未勾選入庫）。" : "已回報（未勾選入庫，未轉進貨）。", false);
+    }
+    return true;
+  }
+
+  function jobRowCells(j) {
+    const codes = (j.codes || []).filter(Boolean).join("、") || "—";
+    return {
+      key: j.id,
+      cells: [
+        j.day || "—",
+        j.box || "—",
+        j.name || "—",
+        codes,
+        j.assignee || "未指派",
+        j.assignQty != null ? String(j.assignQty) : "—",
+        j.unpackQty != null ? String(j.unpackQty) : "—",
+        statusLabel(j),
+      ],
+    };
+  }
+
+  window.__unpackApi = {
+    listJobs(tab) {
+      ensureState();
+      if (!iAmUnpacker()) syncJobsFromLabels();
+      const t = tab || "pending";
+      if (t === "reported") return reportedDetailJobs().map(jobRowCells);
+      return pendingJobs().map(jobRowCells);
+    },
+    tabCounts() {
+      ensureState();
+      if (!iAmUnpacker()) syncJobsFromLabels();
+      return {
+        pending: pendingJobs().length,
+        reported: reportedDetailJobs().length,
+      };
+    },
+    loadJob(id) {
+      ensureState();
+      const j = jobById(id);
+      if (!j || !jobAllowed(j)) return null;
+      return {
+        id: j.id,
+        day: j.day || "",
+        box: j.box || "",
+        name: j.name || "",
+        country: j.country || "",
+        vendor: j.vendor || "",
+        codes: (j.codes || []).slice(),
+        assignee: j.assignee || "",
+        assignQty: j.assignQty != null ? j.assignQty : "",
+        status: j.status || "pending",
+        statusLab: statusLabel(j),
+        qty: j.qty != null ? j.qty : "",
+        unpackQty: j.unpackQty != null ? j.unpackQty : "",
+        reportBox: j.reportBox || j.box || "",
+        stockIn: j.stockIn !== false,
+        location: j.location || "",
+        customerName: j.customerName || "",
+        customer: j.customer || "",
+        unloadPoint: j.unloadPoint || "",
+        note: j.note || "",
+        updatedAt: Number(j.reportedAt) || Number(j.updatedAt) || 0,
+        canAssign: canAssignUnpack() && j.status === "pending",
+        canReport: j.status === "pending" && jobAllowed(j),
+        readOnly: j.status !== "pending",
+      };
+    },
+    assign(id, who, assignQty) {
+      return assignJob(id, who, assignQty);
+    },
+    submitReport(id, fields) {
+      return submitReportFields(id, fields);
+    },
+    unpackerNames() {
+      return unpackerNames();
+    },
+    warehouses() {
+      return warehouseOpts().concat([{ id: "customer", label: "客戶" }]);
+    },
+    isUnpacker() {
+      return iAmUnpacker();
+    },
+    canAssign() {
+      return canAssignUnpack();
+    },
+  };
 
     window.renderUnpackPage = renderUnpackPage;
   window.renderInboundExtras = renderInboundExtras;

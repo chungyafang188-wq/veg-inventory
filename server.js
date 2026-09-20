@@ -426,6 +426,33 @@ function handleApi(req, res) {
   }
   if (urlPath === "/api/line/webhook") return handleLineWebhook(req, res);
   if (urlPath === "/api/line/drafts") return handleLineDrafts(req, res);
+  if (urlPath === "/api/xlsx-parse") {
+    if (req.method !== "POST") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    readBody(req, 25e6)
+      .then((raw) => {
+        const body = JSON.parse(raw);
+        const name = String(body?.name || "upload.xlsx");
+        const b64 = String(body?.data || "").replace(/^data:.*,/, "");
+        if (!b64) throw new Error("no file");
+        const buf = Buffer.from(b64, "base64");
+        const XLSX = require("xlsx");
+        const wb = XLSX.read(buf, { type: "buffer", cellDates: false });
+        const sheets = wb.SheetNames.map((sheetName) => ({
+          name: sheetName,
+          rows: XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "", raw: true }),
+        }));
+        send(res, 200, JSON.stringify({ ok: true, name, sheets }), TYPES[".json"]);
+      })
+      .catch((err) => {
+        const msg = String(err?.message || err);
+        const code = msg === "too large" ? 413 : 400;
+        send(res, code, JSON.stringify({ ok: false, error: msg === "too large" ? "檔案太大" : "解析失敗" }), TYPES[".json"]);
+      });
+    return true;
+  }
   if (urlPath === "/api/racks-txns") {
     if (req.method !== "GET") {
       send(res, 405, "Method not allowed");

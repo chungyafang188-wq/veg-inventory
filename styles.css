@@ -42,34 +42,37 @@ body {
 .layout-mode {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0;
-  padding: 0.12rem;
-  border-radius: 999px;
-  background: #e7efe9;
-  border: 1px solid #c9d8ce;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border-radius: 0.85rem;
+  background: #ecf5f0;
+  border: 1px solid #d5e5db;
   width: max-content;
+  box-shadow: inset 0 1px 1px rgba(22, 36, 28, 0.04);
 }
 .layout-mode .layout-btn {
   margin: 0;
-  min-height: 1.55rem;
-  min-width: 2.6rem;
-  padding: 0.12rem 0.7rem;
+  min-height: 1.7rem;
+  min-width: 2.85rem;
+  padding: 0.22rem 0.85rem;
   border: none;
-  border-radius: 999px;
+  border-radius: 0.65rem;
   box-shadow: none;
   background: transparent;
-  color: #5a6a61;
+  color: #64748b;
   font: inherit;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
   line-height: 1.2;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .layout-mode .layout-btn.on {
   background: #fff;
-  color: var(--green);
-  box-shadow: 0 1px 2px rgba(22, 36, 28, 0.08);
+  color: #047857;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  font-weight: 700;
 }
 body.layout-web .app {
   max-width: min(72rem, calc(100vw - 1.5rem));
@@ -866,31 +869,38 @@ body.layout-web .who-wrap {
 .who-btn {
   width: auto;
   margin: 0;
-  padding: 0.38rem 0.85rem;
-  border-radius: 999px;
-  font-size: 0.86rem;
-  font-weight: 800;
+  padding: 0.38rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
   background: #fff;
-  box-shadow: 0 1px 0 rgba(255,255,255,.8);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.who-btn:hover {
+  background: #f8fafc;
 }
 .who-btn.who-tool {
-  padding: 0.28rem 0.62rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--line);
-  box-shadow: none;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
-#sync-reload, #sync-upload {
-  padding: 0.28rem 0.62rem;
-  font-size: 0.74rem;
+#sync-reload,
+#sync-upload {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
 }
 .who-home {
   display: inline-flex;
   align-items: center;
   gap: 0.28rem;
-  color: var(--green);
+  color: #047857;
 }
 .who-home svg { display: block; }
 .hub-lead { margin: 0.2rem 0 0.9rem; }
@@ -937,17 +947,17 @@ body.on-home .app-head-tools {
   display: none;
 }
 body.on-home .layout-mode {
-  background: #e4efe8;
-  border-color: #c5d7cc;
+  background: #ecf5f0;
+  border-color: #d5e5db;
 }
 body.on-home .layout-mode .layout-btn.on {
-  color: var(--home-leaf);
+  color: #047857;
 }
 body.on-home .who-btn {
-  border: 1px solid var(--home-line);
+  border: 1px solid #e2e8f0;
   background: #fff;
-  box-shadow: none;
-  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  font-weight: 600;
 }
 body.on-home .who-now {
   font-weight: 500;
@@ -998,6 +1008,258 @@ body.on-home .who-now {
   grid-template-columns: 1fr 1fr;
   gap: 0.55rem;
 }
+
+/* —— 層架式 hub —— */
+.hub-shelf {
+  gap: 0.85rem;
+}
+.shelf-rack {
+  margin: 0;
+  padding: 0.75rem 0.65rem 0.85rem;
+  border: 1px solid var(--home-line);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #f7faf8 0%, #eef3f0 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+.shelf-rack.shelf-home {
+  background: linear-gradient(180deg, #fbf8f2 0%, #f0ebe3 100%);
+  border-color: #e2d8c8;
+}
+.shelf-rack.shelf-tools {
+  background: linear-gradient(180deg, #f4f7f5 0%, #e8efea 100%);
+  border-color: #d0ddd4;
+}
+.shelf-item.shelf-tool {
+  min-width: 5.6rem;
+}
+.shelf-rack-label {
+  margin: 0 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--home-soft);
+}
+.shelf-rack-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+  padding: 0 0.15rem;
+}
+.shelf-rack-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--home-ink);
+}
+.shelf-rack-head .hub-mark {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+.shelf-rack-head .hub-mark.has-pic .hub-pic,
+.shelf-rack-head .hub-mark.has-pic .hub-pic svg {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+.shelf-board {
+  position: relative;
+  padding: 0.35rem 0.2rem 0.15rem;
+}
+.shelf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.35rem;
+  justify-content: flex-start;
+  align-items: flex-end;
+  padding: 0.25rem 0.15rem 0.55rem;
+}
+.shelf-ledge {
+  height: 0.55rem;
+  border-radius: 0.2rem 0.2rem 0.45rem 0.45rem;
+  background: linear-gradient(180deg, #c4a574 0%, #a8844e 55%, #8d6a3a 100%);
+  box-shadow: 0 3px 6px rgba(80, 55, 25, 0.18), 0 1px 0 rgba(255, 230, 180, 0.35) inset;
+}
+.shelf-item {
+  margin: 0;
+  width: 4.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.35rem 0.2rem 0.2rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.shelf-item:active {
+  transform: translateY(1px);
+}
+.shelf-ico.hub-mark {
+  width: 3.35rem;
+  height: 3.35rem;
+  border-radius: 0.85rem;
+  box-shadow: 0 2px 6px rgba(26, 50, 40, 0.1);
+}
+.shelf-ico.hub-mark.has-pic .hub-pic,
+.shelf-ico.hub-mark.has-pic .hub-pic svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.shelf-lab {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--home-ink);
+  letter-spacing: 0.02em;
+}
+.shelf-note {
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--home-soft);
+  max-width: 100%;
+}
+.shelf-item.is-soon .shelf-note {
+  color: #a8844e;
+}
+.shelf-row-depts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem 0.45rem;
+  justify-items: center;
+  align-items: end;
+  width: 100%;
+  padding: 0.35rem 0.1rem 0.65rem;
+}
+.shelf-item.shelf-dept {
+  width: 100%;
+  max-width: 8.5rem;
+  flex: none;
+  min-width: 0;
+}
+.shelf-dept .shelf-ico.hub-mark {
+  width: 4.4rem;
+  height: 4.4rem;
+}
+.shelf-dept .shelf-lab {
+  font-size: 0.88rem;
+}
+.shelf-dept .shelf-note {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.shelf-switch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+.shelf-switch-bar:not(.is-compact) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+}
+@media (max-width: 420px) {
+  .shelf-item {
+    width: 4.35rem;
+  }
+  .shelf-item.shelf-dept {
+    width: 100%;
+    max-width: none;
+  }
+  .shelf-ico.hub-mark {
+    width: 3.4rem;
+    height: 3.4rem;
+  }
+  .shelf-dept .shelf-ico.hub-mark {
+    width: 3.85rem;
+    height: 3.85rem;
+  }
+}
+body.layout-web .shelf-row {
+  gap: 0.55rem 0.65rem;
+}
+body.layout-web .shelf-item {
+  width: 5.4rem;
+}
+body.layout-web .shelf-item.shelf-dept {
+  width: 100%;
+  max-width: 10rem;
+}
+body.layout-web .shelf-dept .shelf-ico.hub-mark {
+  width: 5rem;
+  height: 5rem;
+}
+body.on-home.layout-web .app {
+  max-width: min(42rem, calc(100vw - 1.5rem));
+}
+
+/* 層架橫排切換（進入部門後） */
+.shelf-switch-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.2rem 0.1rem 0.45rem;
+}
+.shelf-switch {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--home-ink);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shelf-switch.is-on {
+  border-color: #b7d0c2;
+  background: #e8f3ec;
+  color: var(--home-leaf);
+}
+.shelf-switch-ico {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  border-radius: 0.35rem;
+  overflow: hidden;
+}
+.shelf-switch-ico .hub-pic,
+.shelf-switch-ico .hub-pic svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.shelf-switch-lab {
+  white-space: nowrap;
+}
+.shelf-switch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.shelf-switch-head .shelf-rack-label {
+  margin: 0;
+}
+
 .home-mod {
   margin: 0;
   width: 100%;

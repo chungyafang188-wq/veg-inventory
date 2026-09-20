@@ -577,6 +577,9 @@ function load() {
       if (!Array.isArray(data.unpackJobs)) data.unpackJobs = [];
       if (!Array.isArray(data.inboundLedger)) data.inboundLedger = [];
       if (!Array.isArray(data.unpackApprovals)) data.unpackApprovals = [];
+      if (!Array.isArray(data.importCabinets)) data.importCabinets = [];
+      if (!Array.isArray(data.importArrivals)) data.importArrivals = [];
+      if (!Array.isArray(data.importReleased)) data.importReleased = [];
       if (!Array.isArray(data.siteMoves)) data.siteMoves = [];
       if (!Array.isArray(data.siteWorks)) data.siteWorks = [];
       if (!Array.isArray(data.auditLog)) data.auditLog = [];
@@ -594,6 +597,9 @@ function load() {
     unpackJobs: [],
     inboundLedger: [],
     unpackApprovals: [],
+    importCabinets: [],
+    importArrivals: [],
+    importReleased: [],
     siteMoves: [],
     siteWorks: [],
     auditLog: [],
@@ -796,6 +802,9 @@ if (!state.wareItems || typeof state.wareItems !== "object") state.wareItems = {
 if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
 if (!Array.isArray(state.inboundLedger)) state.inboundLedger = [];
 if (!Array.isArray(state.unpackApprovals)) state.unpackApprovals = [];
+if (!Array.isArray(state.importCabinets)) state.importCabinets = [];
+if (!Array.isArray(state.importArrivals)) state.importArrivals = [];
+if (!Array.isArray(state.importReleased)) state.importReleased = [];
 if (!Array.isArray(state.siteMoves)) state.siteMoves = [];
 if (!Array.isArray(state.siteWorks)) state.siteWorks = [];
 if (!Array.isArray(state.auditLog)) state.auditLog = [];
@@ -806,6 +815,7 @@ if (migrated || seeded || recounted) save();
 
 let co = "nq";
 let page = "home";
+let hubDept = "";
 let hubOpen = "";
 let helpFilter = "issues";
 let helpResult = null;
@@ -1452,6 +1462,7 @@ function finishLogin(name) {
   hideLoginPin();
   closeLoginGate();
   page = homePage();
+  hubDept = "";
   hubOpen = "";
   render();
 }
@@ -1484,14 +1495,43 @@ function homePage() {
 }
 function goHome() {
   page = "home";
+  hubDept = "";
   hubOpen = "";
   render();
 }
+window.goHome = goHome;
+
+function goUnpackPage() {
+  if (!can("page-unpack")) {
+    setStatus("拆櫃回報建置中，暫僅主管可進入。", true);
+    return;
+  }
+  page = "unpack";
+  hubDept = "import";
+  hubOpen = "";
+  render();
+}
+window.goUnpack = goUnpackPage;
 function soonCopy(kind) {
   if (kind === "cust") return { title: "客戶", hint: "之後會放客戶資料、常用出貨對象與對帳。現在開單時直接填出貨對象即可。" };
   if (kind === "vendor") return { title: "廠商", hint: "之後會放進貨廠商與對帳。現在請到倉管的進貨記入。" };
   if (kind === "freight") return { title: "貨運核帳", hint: "之後會放貨運費用、對帳與核銷。目前先用司機送貨與出貨帳單核對。" };
-  return { title: "即將開放", hint: "這項還在整理。" };
+  if (kind === "imp-status") return { title: "貨櫃狀況", hint: "到港待拆與放行追蹤（到港日）；已入庫請看拆櫃總明細（拆櫃日）。" };
+  if (kind === "imp-buy") return { title: "進口採購", hint: "進口採購單與到貨追蹤建置中。" };
+  if (kind === "imp-port") return { title: "貨櫃到港", hint: "日期＝到港日。櫃表有、尚未拆櫃入庫。" };
+  if (kind === "imp-release") return { title: "進口資料放行", hint: "查驗完成＝放行＝待安排拆櫃（依 FT＋藥檢／煙燻結束時間）。日期＝到港日。" };
+  if (kind === "imp-unpack-sum")
+    return { title: "拆櫃總明細", hint: "日期＝拆櫃日。已拆櫃入公司倉庫。" };
+  if (kind === "imp-stock") return { title: "進口庫存", hint: "日期＝拆櫃日。已入庫查詢。" };
+  if (kind === "imp-broker") return { title: "報關行", hint: "報關行往來與費用對帳建置中。" };
+  if (kind === "imp-vendor") return { title: "廠商", hint: "進口廠商資料與對帳建置中。" };
+  if (kind === "imp-trailer") return { title: "拖車", hint: "拖車費用與調度對帳建置中。" };
+  if (kind === "imp-labor") return { title: "拆工", hint: "拆櫃工資與工班對帳建置中。" };
+  if (kind === "exp-order") return { title: "出口訂單", hint: "出口訂單建置中。" };
+  if (kind === "exp-ship") return { title: "備貨出貨", hint: "出口備貨與出貨建置中。" };
+  if (kind === "exp-label") return { title: "出口標籤", hint: "出口標籤印製建置中。" };
+  if (kind === "exp-acct") return { title: "出口帳務", hint: "出口帳務建置中。" };
+  return { title: "建置中", hint: "這項還在整理。" };
 }
 function hubSvg(name) {
   const d = {
@@ -1669,6 +1709,41 @@ function hubPic(name) {
       <path d="M37.2 12.8v3.4M35.5 14.5h3.4" stroke="#fff" stroke-width="1.35" stroke-linecap="round"/>
       <path d="M11.5 16.5l1.3 2.2 2.4.2-1.8 1.6.6 2.4-2.1-1.2-2.1 1.2.6-2.4-1.8-1.6 2.4-.2z" fill="#f2c14b"/>
     </svg>`,
+    /* 進口部門：貨櫃船 */
+    ship: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#e4f0f4"/>
+      <ellipse cx="24" cy="40" rx="13" ry="2" fill="#1a6843" opacity=".1"/>
+      <path d="M8 28.5h32l-2.5 5.5H10.5L8 28.5z" fill="#2a6f78"/>
+      <path d="M10 28.5V22h6v6.5M18 28.5V18h7v10.5M27 28.5V20h7v8.5" fill="#3d9a64"/>
+      <path d="M10 22h6M18 18h7M27 20h7" stroke="#8fd4a4" stroke-width="1.1"/>
+      <path d="M6 31.5c4 3.5 10 5 18 5s14-1.5 18-5" stroke="#5eb3b8" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="36" cy="14" r="3.4" fill="#f2a27a"/>
+      <path d="M36 12.4v3.2M34.4 14h3.2" stroke="#fff" stroke-width="1.25" stroke-linecap="round"/>
+    </svg>`,
+    /* 出口部門：出貨卡車＋飛機感 */
+    plane: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#eef5e8"/>
+      <ellipse cx="24" cy="40" rx="12" ry="2" fill="#1a6843" opacity=".1"/>
+      <path d="M10 28V19c0-1.3 1-2.4 2.3-2.4H23v11.4H10z" fill="#1a6843"/>
+      <path d="M23 21h6.5L34 26.5V30H23V21z" fill="#3d9a64"/>
+      <circle cx="15" cy="32.2" r="3" fill="#2a3430"/>
+      <circle cx="15" cy="32.2" r="1.2" fill="#c5d0cb"/>
+      <circle cx="30" cy="32.2" r="3" fill="#2a3430"/>
+      <circle cx="30" cy="32.2" r="1.2" fill="#c5d0cb"/>
+      <path d="M28 12l10 3.2-2.2 2.4-4.2-.6-1.2 3.8-2.2-.8 1-3.6-3.4-1.2L28 12z" fill="#f2c14b"/>
+      <circle cx="14" cy="14.5" r="2.8" fill="#6bc48a"/>
+      <path d="M14 13.2v2.6M12.7 14.5h2.6" stroke="#fff" stroke-width="1.15" stroke-linecap="round"/>
+    </svg>`,
+    /* 銷售帳務：帳單＋菜 */
+    sales: `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="42" height="42" rx="13" fill="#f6f0e4"/>
+      <rect x="11" y="12" width="18" height="24" rx="3" fill="#fff" stroke="#c48a3a" stroke-width="1.4"/>
+      <path d="M15 19h10M15 23.5h10M15 28h7" stroke="#c48a3a" stroke-width="1.35" stroke-linecap="round"/>
+      <circle cx="33" cy="20" r="8.5" fill="#f2c14b"/>
+      <circle cx="33" cy="20" r="6" fill="#fff7e4" stroke="#c48a3a" stroke-width="1.1"/>
+      <path d="M33 16.2v7.6M30.6 18c.5-.8 1.8-1.1 2.6-.3.8.8.5 1.9-.4 2.3-.9.4-1.9.3-2.5 1.2-.4.7.1 1.8 1.6 2" stroke="#8d5a3a" stroke-width="1.15" stroke-linecap="round"/>
+      <path d="M22 10c1.5-2.8 4.8-3.6 6.8-1.8-1.8 1.6-3.2 3.6-3.6 5.8-2-.8-3.4-2.2-3.2-4z" fill="#6bc48a"/>
+    </svg>`,
   };
   const key = pics[name] ? name : "clip";
   const svg = String(pics[key]).replace(
@@ -1814,7 +1889,7 @@ function renderHomeHub() {
   if (!box) return;
   if (!currentStaff()) {
     box.innerHTML = "";
-    box.classList.remove("hub-pick", "home-app");
+    box.classList.remove("hub-pick", "home-app", "hub-shelf");
     if (lead) lead.textContent = "登入後開始今天的出貨。";
     return;
   }
@@ -1852,19 +1927,12 @@ function renderHomeHub() {
     );
   }
   const prep = [];
-  // TEMP: 庫存盤點暫僅雅芳（books-stock）；進貨／資財仍依 page-books
   if (can("books-stock")) {
-    prep.push(
-      hubLink('data-go="books" data-books="stock" data-stock-phase="pick"', "crate", "庫存盤點"),
-    );
+    prep.push(hubLink('data-go="books" data-books="stock" data-stock-phase="pick"', "crate", "庫存盤點"));
   }
   if (can("page-books")) {
     prep.push(hubLink('data-go="books" data-books="in"', "inbox", "進貨", "is-soft"));
     prep.push(hubLink('data-go="books" data-books="rack"', "rack", "資財管理", "", "", "鐵架／八格籃"));
-  }
-  const unpackBtns = [];
-  if (can("page-unpack")) {
-    unpackBtns.push(hubLink('data-go="unpack"', "box", "拆櫃回報", "is-primary"));
   }
   const labelBtns = [];
   if (can("page-orders") || can("page-plan") || can("page-books")) {
@@ -1890,7 +1958,7 @@ function renderHomeHub() {
       </div>
       ${bodyHtml}
     </section>`;
-  const folders = [
+  const salesFolders = [
     {
       id: "flow",
       tone: "orders",
@@ -1907,27 +1975,6 @@ function renderHomeHub() {
           )
         : "",
       show: flow.length > 0,
-    },
-    {
-      id: "labels",
-      tone: "ware",
-      icon: "tag",
-      title: "標籤印製",
-      blurb: "貼紙・列印明細",
-      open: labelBtns.length
-        ? openCard("labels", "ware", "tag", "標籤印製", `<div class="hub-links">${labelBtns.join("")}</div>`)
-        : "",
-      show: labelBtns.length > 0,
-    },
-    {
-      id: "unpack",
-      tone: "ware",
-      icon: "box",
-      title: "拆櫃回報",
-      blurb: "標籤彙整・回填數量",
-      open: "",
-      show: unpackBtns.length > 0,
-      direct: "unpack",
     },
     {
       id: "sitework",
@@ -1977,10 +2024,123 @@ function renderHomeHub() {
       show: help.length > 0,
     },
   ].filter((x) => x.show);
+
+  const stubShelfItem = (x) =>
+    `<button type="button" class="shelf-item is-soon" data-go="soon" data-soon="${esc(x.soon)}">
+      <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
+      <strong class="shelf-lab">${esc(x.title)}</strong>
+      <em class="shelf-note">建置中</em>
+    </button>`;
+  const stubShelf = (items) => items.map(stubShelfItem).join("");
+
+  const DEPT_DEFS = [
+    { id: "import", icon: "ship", title: "進口", blurb: "採購・拆櫃・帳務", tone: "ware" },
+    { id: "export", icon: "plane", title: "出口", blurb: "訂單・出貨・帳務", tone: "orders" },
+    { id: "sales", icon: "sales", title: "銷貨", blurb: "訂貨・倉庫・帳款", tone: "acct" },
+  ];
+
+  const shelfSwitchStrip = (items, { active, attr, compact, bare } = {}) => {
+    const row = items
+      .map((x) => {
+        const on = x.id === active ? " is-on" : "";
+        const data = attr === "dept" ? `data-hub-dept="${esc(x.id)}"` : `data-hub="${esc(x.id)}"`;
+        if (compact) {
+          return `<button type="button" class="shelf-switch hub-${x.tone || "ware"}${on}" ${data}>
+            <span class="shelf-switch-ico" aria-hidden="true">${hubPic(x.icon)}</span>
+            <span class="shelf-switch-lab">${esc(x.title)}</span>
+          </button>`;
+        }
+        return `<button type="button" class="shelf-item shelf-dept hub-${x.tone || "ware"}${on}" ${data}>
+          <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
+          <strong class="shelf-lab">${esc(x.title)}</strong>
+          <em class="shelf-note">${esc(x.blurb || "")}</em>
+        </button>`;
+      })
+      .join("");
+    if (bare) return row;
+    return `<div class="shelf-switch-bar${compact ? " is-compact" : ""}" role="tablist">${row}</div>`;
+  };
+
+  const topLevelSwitch = (activeId) => {
+    const deptRow = shelfSwitchStrip(DEPT_DEFS, { active: activeId, attr: "dept", compact: true });
+    const toolRow = labelBtns.length
+      ? shelfSwitchStrip([{ id: "labels", icon: "tag", title: "標籤列印", tone: "ware" }], {
+          active: activeId,
+          attr: "hub",
+          compact: true,
+        })
+      : "";
+    return `<section class="shelf-rack shelf-switch-rack">
+      <div class="shelf-switch-head">
+        <p class="shelf-rack-label">層架切換</p>
+        <button type="button" class="ghost hub-back shelf-home-back" data-hub-back>回總覽</button>
+      </div>
+      <div class="shelf-board">
+        <div class="shelf-switch-wrap">${deptRow}${toolRow}</div>
+        <div class="shelf-ledge" aria-hidden="true"></div>
+      </div>
+    </section>`;
+  };
+
+  const canImport = can("page-books") || can("page-unpack");
+  /** 進口子層架：橫排名稱切換，不佔直立空間 */
+  const importSwitchItems = [
+    { pane: "parse", icon: "clip", title: "判讀" },
+    { pane: "port", icon: "ship", title: "海關查驗" },
+    { pane: "release", icon: "list", title: "已放行" },
+    { pane: "sum", icon: "chart", title: "總明細" },
+    { pane: "stock", icon: "crate", title: "庫存" },
+    { pane: "buy", icon: "clip", title: "採購" },
+    { pane: "files", icon: "box", title: "舊資料" },
+  ];
+  const importSwitchHtml = canImport
+    ? importSwitchItems
+        .map(
+          (x) => `<button type="button" class="shelf-switch hub-ware" data-go="import" data-import="${esc(x.pane)}">
+            <span class="shelf-switch-ico" aria-hidden="true">${hubPic(x.icon)}</span>
+            <span class="shelf-switch-lab">${esc(x.title)}</span>
+          </button>`,
+        )
+        .join("") +
+      (can("page-unpack")
+        ? `<button type="button" class="shelf-switch hub-ware" data-hub="unpack">
+            <span class="shelf-switch-ico" aria-hidden="true">${hubPic("box")}</span>
+            <span class="shelf-switch-lab">拆櫃</span>
+          </button>`
+        : "")
+    : stubShelfItem({ soon: "imp-port", icon: "ship", title: "海關查驗" });
+
+  const importLive = (pane, icon, title, note) =>
+    canImport
+      ? `<button type="button" class="shelf-item hub-ware" data-go="import" data-import="${esc(pane)}">
+          <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic(icon)}</span>
+          <strong class="shelf-lab">${esc(title)}</strong>
+          <em class="shelf-note">${esc(note)}</em>
+        </button>`
+      : "";
+  const importOpsHtml = importSwitchHtml;
+  const exportItems = [
+    { soon: "exp-order", icon: "clip", title: "出口訂單" },
+    { soon: "exp-ship", icon: "plane", title: "備貨出貨" },
+    { soon: "exp-label", icon: "tag", title: "出口標籤" },
+    { soon: "exp-acct", icon: "coin", title: "出口帳務" },
+  ];
+
+  const shelfWrap = (title, tone, icon, itemsHtml) =>
+    `<section class="shelf-rack hub-${tone}">
+      <div class="shelf-rack-head">
+        <span class="hub-mark has-pic" aria-hidden="true">${hubPic(icon)}</span>
+        <h2>${esc(title)}</h2>
+      </div>
+      <div class="shelf-board">
+        <div class="shelf-row">${itemsHtml}</div>
+        <div class="shelf-ledge" aria-hidden="true"></div>
+      </div>
+    </section>`;
+
   if (isUnpackerRole()) {
     box.classList.add("home-app");
-    box.classList.remove("hub-pick");
-    // TEMP: 拆櫃未完成，暫僅雅芳 — 拆櫃人員先顯示提示
+    box.classList.remove("hub-pick", "hub-shelf");
     if (!can("page-unpack")) {
       box.innerHTML = `<header class="home-top">
       <p class="home-meta">${esc(homeDayLabel())}</p>
@@ -2006,44 +2166,127 @@ function renderHomeHub() {
     </div>`;
     return;
   }
-  if (hubOpen) {
-    const cur = folders.find((x) => x.id === hubOpen);
+
+  const salesSwitchItems = salesFolders.map((x) => ({
+    id: x.id,
+    icon: x.icon,
+    title: x.title,
+    tone: x.tone,
+  }));
+
+  if (hubOpen === "labels" && !hubDept) {
     box.classList.remove("hub-pick");
-    box.classList.add("home-app");
+    box.classList.add("home-app", "hub-shelf");
+    const body = labelBtns.length
+      ? openCard(
+          "labels",
+          "ware",
+          "tag",
+          "標籤列印",
+          `<p class="home-open-hint">進口／出口／銷貨共用。</p><div class="hub-links">${labelBtns.join("")}</div>`,
+        )
+      : `<section class="hub-card hub-ware is-open home-open">
+          <div class="hub-head"><span class="hub-mark has-pic" aria-hidden="true">${hubPic("tag")}</span><h2>標籤列印</h2></div>
+          <p class="home-open-hint">此帳號目前沒有標籤權限。</p>
+        </section>`;
+    box.innerHTML = `${topLevelSwitch("labels")}${body.replace(
+      /<button type="button" class="ghost hub-back" data-hub-back>返回<\/button>/,
+      "",
+    )}`;
+    return;
+  }
+
+  if (hubDept === "sales" && hubOpen) {
+    const cur = salesFolders.find((x) => x.id === hubOpen);
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
     if (cur?.open) {
-      box.innerHTML = cur.open;
+      const salesBar = `<section class="shelf-rack shelf-switch-rack shelf-switch-sub">
+        <p class="shelf-rack-label">銷貨</p>
+        <div class="shelf-board">
+          <div class="shelf-switch-wrap">${shelfSwitchStrip(salesSwitchItems, {
+            active: hubOpen,
+            attr: "hub",
+            compact: true,
+          })}</div>
+          <div class="shelf-ledge" aria-hidden="true"></div>
+        </div>
+      </section>`;
+      box.innerHTML = `${topLevelSwitch("sales")}${salesBar}${cur.open.replace(
+        /<button type="button" class="ghost hub-back" data-hub-back>返回<\/button>/,
+        "",
+      )}`;
       return;
     }
     hubOpen = "";
   }
-  box.classList.add("hub-pick", "home-app");
+
+  if (hubDept === "import" || hubDept === "export" || hubDept === "sales") {
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
+    const switcher = topLevelSwitch(hubDept);
+    if (hubDept === "import") {
+      // 不再顯示直立層架；直接進進口頁（上方橫排）
+      if (typeof window.openImport === "function") {
+        window.openImport("parse");
+        return;
+      }
+    }
+    if (hubDept === "export") {
+      box.innerHTML = `${switcher}${shelfWrap("出口", "orders", "plane", stubShelf(exportItems))}`;
+      return;
+    }
+    const salesTiles = salesFolders
+      .map(
+        (x) =>
+          `<button type="button" class="shelf-item hub-${x.tone}" data-hub="${esc(x.id)}">
+            <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
+            <strong class="shelf-lab">${esc(x.title)}</strong>
+            <em class="shelf-note">${esc(x.blurb || "")}</em>
+          </button>`,
+      )
+      .join("");
+    box.innerHTML = `${switcher}${shelfWrap(
+      "銷貨",
+      "acct",
+      "sales",
+      salesTiles || `<p class="home-open-hint">此帳號目前沒有銷貨項目可用。</p>`,
+    )}`;
+    return;
+  }
+
+  box.classList.add("hub-pick", "home-app", "hub-shelf");
   const roleHint =
-    role === "driver"
-      ? "司機作業"
-      : role === "site"
-        ? "現場作業"
-        : role === "unpacker"
-          ? "拆櫃作業"
-          : "會計作業";
-  const primary = folders.find((x) => x.id === "flow");
-  const rest = folders.filter((x) => x.id !== "flow");
-  const tile = (x, cls = "") =>
-    `<button type="button" class="home-mod${cls ? ` ${cls}` : ""} hub-${x.tone}" data-hub="${esc(x.id)}">
-      <span class="home-mod-ico hub-mark has-pic" aria-hidden="true">${hubPic(x.icon)}</span>
-      <span class="home-mod-copy">
-        <strong>${esc(x.title)}</strong>
-        <em>${esc(x.blurb || "")}</em>
-      </span>
-      <span class="home-mod-go" aria-hidden="true">›</span>
-    </button>`;
+    role === "driver" ? "司機作業" : role === "site" ? "現場作業" : role === "unpacker" ? "拆櫃作業" : "會計作業";
+  const deptTiles = shelfSwitchStrip(DEPT_DEFS, { active: "", attr: "dept", compact: false, bare: true });
+  const toolsTile = labelBtns.length
+    ? `<button type="button" class="shelf-item shelf-tool hub-ware" data-hub="labels">
+        <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic("tag")}</span>
+        <strong class="shelf-lab">標籤列印</strong>
+        <em class="shelf-note">三部門共用</em>
+      </button>`
+    : "";
+  const toolsRack = toolsTile
+    ? `<section class="shelf-rack shelf-tools">
+      <p class="shelf-rack-label">共用工具</p>
+      <div class="shelf-board">
+        <div class="shelf-row">${toolsTile}</div>
+        <div class="shelf-ledge" aria-hidden="true"></div>
+      </div>
+    </section>`
+    : "";
   box.innerHTML = `<header class="home-top">
       <p class="home-meta">${esc(homeDayLabel())}</p>
       <h1 class="home-title">${esc(who)}<span>${esc(roleHint)}</span></h1>
     </header>
-    <div class="home-menu">
-      ${primary ? tile(primary, "is-primary") : ""}
-      ${rest.length ? `<div class="home-menu-grid">${rest.map((x) => tile(x)).join("")}</div>` : ""}
-    </div>`;
+    <section class="shelf-rack shelf-home">
+      <p class="shelf-rack-label">選擇部門</p>
+      <div class="shelf-board">
+        <div class="shelf-row shelf-row-depts">${deptTiles}</div>
+        <div class="shelf-ledge" aria-hidden="true"></div>
+      </div>
+    </section>
+    ${toolsRack}`;
 }
 function normalizeOrdersPane(v) {
   if (v === "today" || v === "line") return v;
@@ -2151,6 +2394,14 @@ function goFromHub(btn) {
       rackPick = "";
       rackLine = "";
       rackSrc = "";
+    }
+  } else if (go === "import") {
+    if (!can("page-books") && !can("page-unpack")) return setStatus("沒有進口業務權限。", true);
+    if (typeof window.openImport === "function") {
+      window.openImport(btn.dataset.import || "status");
+    } else {
+      page = "import";
+      hubOpen = "";
     }
   } else if (go === "unpack") {
     // TEMP: 拆櫃未完成，暫僅雅芳（勿再用 page-books 放行）
@@ -3660,6 +3911,7 @@ function applyRoleUi() {
   if (can("page-orders")) pages.push("orders");
   if (can("page-plan")) pages.push("plan");
   if (can("page-books")) pages.push("books");
+  if (can("page-books") || can("page-unpack")) pages.push("import");
   if (can("page-unpack")) pages.push("unpack");
   if (can("page-sitework")) pages.push("sitework");
   if (can("page-stats")) pages.push("stats");
@@ -10395,6 +10647,8 @@ function render() {
       ? "鴻安"
       : page === "unpack"
         ? "拆櫃回報"
+      : page === "import"
+        ? "進口業務"
       : page === "sitework"
         ? "現場工作"
       : page === "stats"
@@ -10447,6 +10701,8 @@ function render() {
   if (pageLabelPrints) pageLabelPrints.hidden = page !== "label-prints";
   const pageUnpack = document.getElementById("page-unpack");
   if (pageUnpack) pageUnpack.hidden = page !== "unpack";
+  const pageImport = document.getElementById("page-import");
+  if (pageImport) pageImport.hidden = page !== "import";
   const pageSitework = document.getElementById("page-sitework");
   if (pageSitework) pageSitework.hidden = page !== "sitework";
   const pageStats = document.getElementById("page-stats");
@@ -10480,6 +10736,7 @@ function render() {
   if (page === "labels") run(renderLabels);
   if (page === "label-prints") run(renderLabelPrints);
   if (page === "unpack" && typeof renderUnpackPage === "function") run(renderUnpackPage);
+  if (page === "import" && typeof renderImportPage === "function") run(renderImportPage);
   if (page === "sitework" && typeof renderSiteWork === "function") run(renderSiteWork);
   if (page === "stats" && typeof renderBossStats === "function") run(renderBossStats);
   if (page === "orders") {
@@ -10536,7 +10793,29 @@ document.querySelector(".layout-mode")?.addEventListener("click", (e) => {
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-hub-back]")) {
+    if (e.target.closest(".shelf-home-back") || (!hubOpen && hubDept)) {
+      hubOpen = "";
+      hubDept = "";
+    } else if (hubOpen) {
+      hubOpen = "";
+    } else {
+      hubDept = "";
+    }
+    renderHomeHub();
+    return;
+  }
+  const deptBtn = e.target.closest("[data-hub-dept]");
+  if (deptBtn) {
+    const next = deptBtn.dataset.hubDept || "";
     hubOpen = "";
+    // 進口：直接進頁面，上方橫排切換，不要再攤一層層架
+    if (next === "import") {
+      if (typeof window.openImport === "function") {
+        window.openImport("parse");
+        return;
+      }
+    }
+    hubDept = next;
     renderHomeHub();
     return;
   }
@@ -10566,6 +10845,13 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       render();
       return;
     }
+    if (hubId === "labels") {
+      hubDept = "";
+      hubOpen = "labels";
+      renderHomeHub();
+      return;
+    }
+    hubDept = hubDept || "sales";
     hubOpen = hubId;
     renderHomeHub();
     return;
@@ -12977,6 +13263,9 @@ function bundleHasData(b) {
   const nq = b.nqCustomers;
   if (nq && (nq.leaf?.length || nq.basil?.length || nq.herb?.length)) return true;
   if (Array.isArray(b.haCustomers) && b.haCustomers.length) return true;
+  if (Array.isArray(b.importCabinets) && b.importCabinets.length) return true;
+  if (Array.isArray(b.importArrivals) && b.importArrivals.length) return true;
+  if (Array.isArray(b.importReleased) && b.importReleased.length) return true;
   return stockHasData(b.orders?.stock);
 }
 function localHasData() {
@@ -12990,6 +13279,9 @@ function localHasData() {
   if (nq.leaf.length || nq.basil.length || nq.herb.length) return true;
   if (loadHaCustomers().length) return true;
   if (loadStaffList().length) return true;
+  if ((state.importCabinets || []).length) return true;
+  if ((state.importArrivals || []).length) return true;
+  if ((state.importReleased || []).length) return true;
   return stockHasData(state.stock);
 }
 function collectBundle() {
@@ -13001,6 +13293,9 @@ function collectBundle() {
     accountants: loadStaffList(),
     dailySheet: dailyStore(),
     labelPrints: loadLabelPrints(),
+    importCabinets: state.importCabinets || [],
+    importArrivals: state.importArrivals || [],
+    importReleased: state.importReleased || [],
   };
 }
 function applyBundle(b) {
@@ -13043,11 +13338,22 @@ function applyBundle(b) {
     if (Array.isArray(b.labelPrints)) {
       saveLabelPrints(mergeLabelPrints(loadLabelPrints(), b.labelPrints));
     }
+    if (Array.isArray(b.importCabinets)) state.importCabinets = b.importCabinets;
+    if (Array.isArray(b.importArrivals)) state.importArrivals = b.importArrivals;
+    if (Array.isArray(b.importReleased)) state.importReleased = b.importReleased;
+    if (Array.isArray(b.importCabinets) || Array.isArray(b.importArrivals) || Array.isArray(b.importReleased)) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (_) {}
+    }
     writeSyncAt(Number(b.updatedAt) || Date.now());
     syncAllNqQty();
   } finally {
     skipCloud = false;
   }
+  try {
+    if (typeof onImportRemoteApplied === "function") onImportRemoteApplied();
+  } catch (_) {}
 }
 async function pullCloud() {
   const r = await fetch(CLOUD_URL, { cache: "no-store", headers: { Accept: "application/json" } });
@@ -13086,10 +13392,133 @@ function orderSig(list) {
     .sort()
     .join("|");
 }
+
+/** 進口列：以 UHA 為鍵合併（較新 updatedAt 勝；同時間則欄位取較完整／較進展） */
+function normImportUhaKey(v) {
+  return String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/\(.*$/, "")
+    .trim();
+}
+function importClearRank(v) {
+  return { done: 3, wait: 2, skip: 1, none: 0 }[v] || 0;
+}
+function mergeImportRowPair(a, b) {
+  const ta = Number(a?.updatedAt) || 0;
+  const tb = Number(b?.updatedAt) || 0;
+  if (tb > ta) return { ...b };
+  if (ta > tb) return { ...a };
+  const out = { ...a };
+  for (const key of Object.keys(b || {})) {
+    const bv = b[key];
+    const av = out[key];
+    if (bv == null || bv === "") continue;
+    if (av == null || av === "") {
+      out[key] = bv;
+      continue;
+    }
+    if (typeof bv === "boolean" && bv && !av) out[key] = true;
+    if ((key === "inspect" || key === "fumigate") && importClearRank(bv) > importClearRank(av)) out[key] = bv;
+    if (
+      (key === "note" ||
+        key === "dock" ||
+        key === "trailer" ||
+        key === "product" ||
+        key === "containerNo" ||
+        key === "customsNo" ||
+        key === "broker" ||
+        key === "arriveDay" ||
+        key === "day") &&
+      String(bv).length > String(av || "").length
+    ) {
+      out[key] = bv;
+    }
+  }
+  if (a.released || b.released) out.released = true;
+  if (a.ftConfirmed || b.ftConfirmed || a.ft || b.ft) {
+    out.ftConfirmed = true;
+    out.ft = true;
+  }
+  if (a.pickupReady || b.pickupReady) out.pickupReady = true;
+  out.uha = normImportUhaKey(a.uha || b.uha);
+  out.updatedAt = Math.max(ta, tb);
+  if (!out.id) out.id = a.id || b.id;
+  return out;
+}
+function mergeImportByUha(a, b) {
+  const map = new Map();
+  const put = (row) => {
+    if (!row || typeof row !== "object") return;
+    const k = normImportUhaKey(row.uha);
+    if (!k) return;
+    const next = { ...row, uha: k };
+    const cur = map.get(k);
+    map.set(k, cur ? mergeImportRowPair(cur, next) : next);
+  };
+  for (const row of a || []) put(row);
+  for (const row of b || []) put(row);
+  return [...map.values()];
+}
+function importListSig(list) {
+  return (list || [])
+    .map((r) => {
+      const u = normImportUhaKey(r?.uha);
+      if (!u) return "";
+      return [
+        u,
+        Number(r?.updatedAt) || 0,
+        r?.released ? 1 : 0,
+        r?.pickupReady ? 1 : 0,
+        r?.ftConfirmed || r?.ft ? 1 : 0,
+        r?.inspect || "",
+        r?.fumigate || "",
+        r?.dock || "",
+        r?.trailer || "",
+        r?.note || "",
+        r?.containerNo || "",
+        r?.product || "",
+        r?.arriveDay || r?.day || "",
+      ].join(":");
+    })
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+function importBundleSig(cabinets, arrivals, released) {
+  return [importListSig(cabinets), importListSig(arrivals), importListSig(released)].join("\n");
+}
+function mergeImportBundle(localCab, localArr, localRel, remoteCab, remoteArr, remoteRel) {
+  return {
+    importCabinets: mergeImportByUha(localCab, remoteCab),
+    importArrivals: mergeImportByUha(localArr, remoteArr),
+    importReleased: mergeImportByUha(localRel, remoteRel),
+  };
+}
+
 function takeRemoteOrders(remote) {
-  if (!remote?.orders || !Array.isArray(remote.orders.orders)) return;
-  const mergedOrders = mergeOrderLists(state.orders, remote.orders.orders);
-  const bundle = { ...remote, orders: { ...remote.orders, orders: mergedOrders, rests: mergeRestLists(state.rests, remote.orders.rests) } };
+  if (!remote || typeof remote !== "object") return;
+  const bundle = { ...remote };
+  if (remote.orders && Array.isArray(remote.orders.orders)) {
+    const mergedOrders = mergeOrderLists(state.orders, remote.orders.orders);
+    bundle.orders = {
+      ...remote.orders,
+      orders: mergedOrders,
+      rests: mergeRestLists(state.rests, remote.orders.rests),
+    };
+  }
+  const mergedImp = mergeImportBundle(
+    state.importCabinets,
+    state.importArrivals,
+    state.importReleased,
+    remote.importCabinets,
+    remote.importArrivals,
+    remote.importReleased,
+  );
+  bundle.importCabinets = mergedImp.importCabinets;
+  bundle.importArrivals = mergedImp.importArrivals;
+  bundle.importReleased = mergedImp.importReleased;
   applyBundle(bundle);
 }
 async function pushCloud(force, retry) {
@@ -13101,8 +13530,10 @@ async function pushCloud(force, retry) {
     const remoteAt = Number(remote.updatedAt) || 0;
     if (bundleHasData(remote) && remoteAt > basedOn) {
       const before = orderSig(state.orders);
+      const beforeImp = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
       takeRemoteOrders(remote);
-      if (orderSig(state.orders) !== before) render();
+      const afterImp = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
+      if (orderSig(state.orders) !== before || afterImp !== beforeImp) render();
       basedOn = remoteAt;
     }
   } catch (_) {}
@@ -13146,20 +13577,42 @@ async function healCloudSync() {
       const mergedRests = mergeRestLists(state.rests, remote.orders?.rests);
       const localGap = orderSig(mergedOrders) !== orderSig(state.orders);
       const remoteGap = orderSig(mergedOrders) !== orderSig(remoteOrders);
-      if (remoteAt > localAt && !localGap && !remoteGap) {
+      const mergedImp = mergeImportBundle(
+        state.importCabinets,
+        state.importArrivals,
+        state.importReleased,
+        remote.importCabinets,
+        remote.importArrivals,
+        remote.importReleased,
+      );
+      const localImpSig = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
+      const remoteImpSig = importBundleSig(remote.importCabinets, remote.importArrivals, remote.importReleased);
+      const mergedImpSig = importBundleSig(
+        mergedImp.importCabinets,
+        mergedImp.importArrivals,
+        mergedImp.importReleased,
+      );
+      const importLocalGap = mergedImpSig !== localImpSig;
+      const importRemoteGap = mergedImpSig !== remoteImpSig;
+      if (remoteAt > localAt && !localGap && !remoteGap && !importLocalGap && !importRemoteGap) {
         applyBundle(remote);
         render();
         setSyncNote("已從手機／共用載入最新資料。");
-      } else if (localGap || remoteGap) {
-        const bundle = remoteAt >= localAt ? remote : collectBundle();
+      } else if (localGap || remoteGap || importLocalGap || importRemoteGap) {
+        const bundle = remoteAt >= localAt ? { ...remote } : collectBundle();
         bundle.orders = bundle.orders || {};
         bundle.orders.orders = mergedOrders;
         bundle.orders.rests = mergedRests;
+        if (remote.orders?.stock && !bundle.orders.stock) bundle.orders.stock = remote.orders.stock;
+        if (remote.orders?.daily && !bundle.orders.daily) bundle.orders.daily = remote.orders.daily;
+        bundle.importCabinets = mergedImp.importCabinets;
+        bundle.importArrivals = mergedImp.importArrivals;
+        bundle.importReleased = mergedImp.importReleased;
         bundle.updatedAt = Date.now();
         applyBundle(bundle);
         render();
         await pushCloud(true);
-        setSyncNote("已把各電腦訂單對齊成同一份。");
+        setSyncNote("已把各電腦訂單／進口資料對齊成同一份。");
       } else if (remoteAt > localAt) {
         applyBundle(remote);
         render();

@@ -2,7 +2,8 @@
   "name": "veg-inventory",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:import": "npm run build --prefix import-app"
   },
   "engines": {
     "node": ">=18"

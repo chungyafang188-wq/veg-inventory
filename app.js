@@ -2278,7 +2278,7 @@ function renderHomeHub() {
     if (hubDept === "import") {
       // 不再顯示直立層架；直接進進口頁（上方橫排）
       if (typeof window.openImport === "function") {
-        window.openImport("track");
+        window.openImport("port");
         return;
       }
     }
@@ -2926,7 +2926,7 @@ function goFromHub(btn) {
   } else if (go === "import") {
     if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
     if (typeof window.openImport === "function") {
-      window.openImport(btn.dataset.import || "track");
+      window.openImport(btn.dataset.import || "port");
     } else {
       page = "import";
       hubOpen = "";
@@ -11713,7 +11713,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     if (next === "import") {
       if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
       if (typeof window.openImport === "function") {
-        window.openImport("track");
+        window.openImport("port");
         return;
       }
     }

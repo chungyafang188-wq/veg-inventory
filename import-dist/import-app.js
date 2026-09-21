@@ -9237,8 +9237,8 @@ var S = [{
 	lab: "交客戶"
 }], C = Object.fromEntries(y.map((e) => [e.id, e]));
 function ne(e) {
-	let t = e || "track";
-	return (t === "board" || t === "hub") && (t = "track"), (t === "status" || t === "checklist") && (t = "port"), t === "現場作業" && (t = "upBoard"), C[t] || (t = "track"), t;
+	let t = e || "port";
+	return (t === "board" || t === "hub") && (t = "track"), (t === "status" || t === "checklist") && (t = "port"), t === "現場作業" && (t = "upBoard"), C[t] || (t = "port"), t;
 }
 function w(e) {
 	let t = C[ne(e)];
@@ -9248,8 +9248,9 @@ function T(e) {
 	return y.filter((t) => t.block === e);
 }
 function E(e) {
+	if (e === "port") return "port";
 	let t = T(e).find((e) => !e.go) || T(e)[0];
-	return t ? t.id : "parse";
+	return t ? t.id : "port";
 }
 function re(e) {
 	return T(w(e)).filter((e) => !e.go).map((e) => e.id);
@@ -14055,7 +14056,7 @@ function Qt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/ImportApp.jsx
-function $t({ initialPane: e = "track" }) {
+function $t({ initialPane: e = "port" }) {
 	let t = ue(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("arrange"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [E, re] = (0, l.useState)(() => ie());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
@@ -14284,7 +14285,7 @@ function nn(e, t = {}) {
 		if (en) try {
 			en.unmount();
 		} catch {}
-		return e.innerHTML = "", tn = e, en = (0, u.createRoot)(e), en.render(/* @__PURE__ */ (0, D.jsx)($t, { initialPane: t.pane || "track" })), en;
+		return e.innerHTML = "", tn = e, en = (0, u.createRoot)(e), en.render(/* @__PURE__ */ (0, D.jsx)($t, { initialPane: t.pane || "port" })), en;
 	}
 }
 function rn() {

@@ -8,7 +8,7 @@
  * UI：左側模組列 + 主表 + 右側／底部抽屜（不換頁）
  */
 (function () {
-  let importPane = "track"; // track | parse | buy | port | release | stock | sum | files | broker...
+  let importPane = "port"; // track | parse | buy | port | release | stock | sum | files | broker...
 
   let releaseListTab = "arrange"; // arrange | pickup | open
   let drawer = null; // { kind, key } | null
@@ -79,7 +79,7 @@
   function activeTabId(pane) {
     if (pane === "board" || pane === "hub") return "track";
     if (pane === "status" || pane === "checklist") return "port";
-    return pane || "track";
+    return pane || "port";
   }
 
   function blockOfPane(pane) {
@@ -93,10 +93,10 @@
   }
 
   function normalizePane(pane) {
-    let p = pane || "track";
+    let p = pane || "port";
     if (p === "board" || p === "hub") p = "track";
     if (p === "status" || p === "checklist") p = "port";
-    if (!IMP_TABS.some((x) => x.id === p)) p = "track";
+    if (!IMP_TABS.some((x) => x.id === p)) p = "port";
     return p;
   }
 
@@ -3880,7 +3880,7 @@
     } else {
       closeDrawer({ force: true });
     }
-    importPane = normalizePane(pane || "track");
+    importPane = normalizePane(pane || "port");
     const box = document.getElementById("import-root");
     if (typeof window.mountImportApp === "function" && box) {
       window.mountImportApp(box, { pane: importPane, forcePane: true });
@@ -3895,7 +3895,7 @@
       return;
     }
     page = "import";
-    importPane = normalizePane(pane || "track");
+    importPane = normalizePane(pane || "port");
     drawer = null;
     drawerFull = false;
     drawerSession = null;
@@ -4242,7 +4242,7 @@
     addManualPortRow,
     templateMeta,
     setHostPane(pane) {
-      importPane = normalizePane(pane || "track");
+      importPane = normalizePane(pane || "port");
     },
     listDrafts() {
       ensureState();

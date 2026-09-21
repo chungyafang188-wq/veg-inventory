@@ -76,11 +76,11 @@ export const DEST_OPTS = [
 const TAB_BY_ID = Object.fromEntries(TABS.map((t) => [t.id, t]));
 
 export function normalizePane(pane) {
-  let p = pane || "track";
+  let p = pane || "port";
   if (p === "board" || p === "hub") p = "track";
   if (p === "status" || p === "checklist") p = "port";
   if (p === "現場作業") p = "upBoard";
-  if (!TAB_BY_ID[p]) p = "track";
+  if (!TAB_BY_ID[p]) p = "port";
   return p;
 }
 
@@ -94,8 +94,9 @@ export function tabsForBlock(blockId) {
 }
 
 export function defaultPaneForBlock(blockId) {
+  if (blockId === "port") return "port";
   const first = tabsForBlock(blockId).find((t) => !t.go) || tabsForBlock(blockId)[0];
-  return first ? first.id : "parse";
+  return first ? first.id : "port";
 }
 
 /** 手機橫滑：同模組內、不含跳出頁 */

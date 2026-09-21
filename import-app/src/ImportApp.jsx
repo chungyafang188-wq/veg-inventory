@@ -10,7 +10,7 @@ import { WebShell } from "./shells/WebShell";
  * 方案 3：依 layout 只掛一殼；切換只靠 activeTab。
  * 不使用 JS 直接改 DOM display。
  */
-export default function ImportApp({ initialPane = "track" }) {
+export default function ImportApp({ initialPane = "port" }) {
   const layout = useLayoutMode();
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((n) => n + 1);

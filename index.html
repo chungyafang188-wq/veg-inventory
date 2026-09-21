@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#1a6843" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="鴻安" />
+    <meta name="apple-mobile-web-app-title" content="鴻�?" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>鴻安</title>
+    <title>鴻�?</title>
     <link rel="manifest" href="./manifest.webmanifest?v=300" />
     <link rel="icon" href="./assets/hongan-logo.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/hongan-logo.png" />
@@ -27,89 +27,89 @@
       <header class="app-head">
         <div class="app-head-row">
           <div class="app-brand">
-            <img class="brand-logo" src="./assets/hongan-logo.png" alt="鴻安" width="44" height="44" />
-            <p class="eyebrow" id="co-name">鴻安</p>
-            <div class="layout-mode" role="group" aria-label="顯示方式">
-              <button type="button" class="layout-btn" data-layout="phone" id="layout-phone-btn">手機</button>
-              <button type="button" class="layout-btn" data-layout="web" id="layout-web-btn">網頁</button>
+            <img class="brand-logo" src="./assets/hongan-logo.png" alt="鴻�?" width="44" height="44" />
+            <p class="eyebrow" id="co-name">鴻�?</p>
+            <div class="layout-mode" role="group" aria-label="顯示?��?">
+              <button type="button" class="layout-btn" data-layout="phone" id="layout-phone-btn">?��?</button>
+              <button type="button" class="layout-btn" data-layout="web" id="layout-web-btn">網�?</button>
             </div>
           </div>
           <div class="who-wrap">
             <button type="button" class="who-btn who-home" id="home-btn" hidden>
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>
-              首頁
+              首�?
             </button>
             <span class="who-now" id="who-now" hidden></span>
-            <button type="button" class="who-btn" id="who-btn">登入</button>
+            <button type="button" class="who-btn" id="who-btn">?�入</button>
           </div>
         </div>
         <div class="app-head-tools">
           <p class="muted sync-note" id="sync-note" hidden></p>
-          <button type="button" class="who-btn who-tool" id="sync-reload">載入共用</button>
-          <button type="button" class="who-btn who-tool" id="sync-upload">上傳這台</button>
+          <button type="button" class="who-btn who-tool" id="sync-reload">載入?�用</button>
+          <button type="button" class="who-btn who-tool" id="sync-upload">上傳?�台</button>
         </div>
       </header>
       <div id="login-gate" class="login-gate" hidden>
         <div class="login-card">
-          <h2>請選取使用者</h2>
-          <p class="hint">同一台手機或電腦登入一次即可，之後會記住。現場共用「現場」。其他人暫時不用密碼。</p>
+          <h2>請選?�使?��?/h2>
+          <p class="hint">?��??��?機�??�腦?�入一次即?��?之�??��?住。現?�共?�「現?�」。其他人?��?不用密碼??/p>
           <div id="login-people"></div>
           <form id="login-pin" class="login-pin" hidden novalidate>
-            <p class="login-pin-who" id="login-pin-who">請輸入主管密碼</p>
+            <p class="login-pin-who" id="login-pin-who">請輸?�主管�?�?/p>
             <label class="field">密碼
               <input id="login-pin-input" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code" />
             </label>
-            <p class="login-pin-err" id="login-pin-err" hidden>密碼不對，請再試一次。</p>
+            <p class="login-pin-err" id="login-pin-err" hidden>密碼不�?，�??�試一次�?/p>
             <div class="btn-row">
-              <button type="submit" class="primary">確認</button>
-              <button type="button" class="ghost" id="login-pin-back">返回</button>
+              <button type="submit" class="primary">確�?</button>
+              <button type="button" class="ghost" id="login-pin-back">返�?</button>
             </div>
           </form>
         </div>
       </div>
-      <nav class="tabs ops-flow" id="flow-tabs" hidden aria-label="作業流程">
+      <nav class="tabs ops-flow" id="flow-tabs" hidden aria-label="作業流�?">
         <button type="button" class="tab on" data-ops="form">下單</button>
         <button type="button" class="tab" data-ops="today">已填</button>
         <button type="button" class="tab" data-ops="line">LINE</button>
-        <button type="button" class="tab" data-ops="short">排程</button>
-        <button type="button" class="tab" data-ops="ship">送貨</button>
+        <button type="button" class="tab" data-ops="short">?��?</button>
+        <button type="button" class="tab" data-ops="ship">?�貨</button>
       </nav>
-      <nav class="tabs" id="books-part-tabs" hidden aria-label="後帳項目">
-        <button type="button" class="tab on" data-books="stock">庫存盤點</button>
-        <button type="button" class="tab" data-books="in">進貨</button>
-        <button type="button" class="tab" data-books="sales">當日訂單</button>
+      <nav class="tabs" id="books-part-tabs" hidden aria-label="後帳?�目">
+        <button type="button" class="tab on" data-books="stock">庫�??��?</button>
+        <button type="button" class="tab" data-books="in">?�貨</button>
+        <button type="button" class="tab" data-books="sales">?�日訂單</button>
       </nav>
       <p id="alerts" class="alerts" hidden></p>
       <section id="page-home" hidden>
         <div class="home-shell">
-          <p class="hint hub-lead" hidden>點步驟進入後，上方可直接切換，不必再回首頁。</p>
+          <p class="hint hub-lead" hidden>點步驟進入後�?上方?�直?��??��?不�??��?首�???/p>
           <div id="home-hub" class="hub"></div>
         </div>
       </section>
       <section id="page-help" hidden>
         <section class="card help-card" id="help-freight-card">
-          <h2>貨運帳務比對</h2>
-          <p class="hint">左邊選進銷存銷售明細，右邊選貨運請款 Excel。比對圖與「高鳴修正版-比對」相同：綠相同、橘兩邊數字不同（貨運／進銷存）、紅只有貨運、黃只有進銷存。公斤不計件。</p>
+          <h2>貨�?帳�?比�?</h2>
+          <p class="hint">左�??�進銷存銷?��?細�??��??�貨?��?�?Excel?��?對�??�「�?鳴修�??-比�??�相?��?綠相?�、�??��??��?不�?（貨?��??�銷存�??��??��?貨�??��??��??�銷存。公?��?計件??/p>
           <div class="help-files">
-            <label class="help-file">進銷存
+            <label class="help-file">?�銷�?
               <input type="file" id="help-sales-file" accept=".xlsx,.xls,.csv,.txt,.tsv" />
-              <span id="help-sales-name" class="muted">尚未選擇</span>
+              <span id="help-sales-name" class="muted">尚未?��?</span>
             </label>
-            <label class="help-file">貨運請款
+            <label class="help-file">貨�?請款
               <input type="file" id="help-freight-file" accept=".xlsx,.xls,.csv,.txt,.tsv" />
-              <span id="help-freight-name" class="muted">尚未選擇</span>
+              <span id="help-freight-name" class="muted">尚未?��?</span>
             </label>
           </div>
           <div class="btn-row">
-            <button type="button" class="primary" id="help-freight-run">開始比對</button>
+            <button type="button" class="primary" id="help-freight-run">?��?比�?</button>
           </div>
           <p id="help-freight-msg" class="muted"></p>
           <div id="help-freight-stats" class="help-stats"></div>
           <div class="btn-row help-freight-tools" id="help-freight-tools" hidden>
-            <button type="button" class="ghost" data-help-filter="issues">只看差異</button>
-            <button type="button" class="ghost" data-help-filter="all">全部</button>
-            <button type="button" class="ghost" id="help-freight-xls">下載 Excel</button>
-            <button type="button" class="ghost" id="help-freight-png">下載圖片</button>
+            <button type="button" class="ghost" data-help-filter="issues">?��?差異</button>
+            <button type="button" class="ghost" data-help-filter="all">?�部</button>
+            <button type="button" class="ghost" id="help-freight-xls">下�? Excel</button>
+            <button type="button" class="ghost" id="help-freight-png">下�??��?</button>
           </div>
           <div class="help-table-wrap" id="help-freight-table"></div>
         </section>
@@ -119,106 +119,106 @@
           <span class="hub-mark hub-mark-soon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l3.5 2"/></svg>
           </span>
-          <h2 id="soon-title">即將開放</h2>
-          <p class="hint" id="soon-hint">這項還在整理，先用其他區塊。</p>
+          <h2 id="soon-title">?��??�放</h2>
+          <p class="hint" id="soon-hint">?��??�在?��?，�??�其他�?塊�?/p>
         </section>
       </section>
       <section id="page-label-prints" hidden>
         <section class="card">
           <div class="head">
-            <h2>標籤列印明細</h2>
-            <label class="date-inline">日期 <input id="label-prints-date" type="date" /></label>
+            <h2>標籤?�印?�細</h2>
+            <label class="date-inline">?��? <input id="label-prints-date" type="date" /></label>
           </div>
-          <p class="hint" id="label-prints-hint">列印後會留在這裡，方便帳款核對。</p>
-          <nav class="tabs" id="label-prints-kind-tabs" aria-label="列印種類">
-            <button type="button" class="tab on" data-label-prints-kind="all">全部</button>
-            <button type="button" class="tab" data-label-prints-kind="text">文字</button>
-            <button type="button" class="tab" data-label-prints-kind="container">貨櫃</button>
-            <button type="button" class="tab" data-label-prints-kind="ship">出貨</button>
+          <p class="hint" id="label-prints-hint">?�印後�??�在?�裡，方便帳款核對�?/p>
+          <nav class="tabs" id="label-prints-kind-tabs" aria-label="?�印種�?">
+            <button type="button" class="tab on" data-label-prints-kind="all">?�部</button>
+            <button type="button" class="tab" data-label-prints-kind="text">?��?</button>
+            <button type="button" class="tab" data-label-prints-kind="container">貨�?</button>
+            <button type="button" class="tab" data-label-prints-kind="ship">?�貨</button>
           </nav>
           <div id="label-prints-list"></div>
         </section>
       </section>
       <section id="page-orders" hidden>
-        <nav class="tabs" id="orders-pane-tabs" hidden aria-label="下單切換">
+        <nav class="tabs" id="orders-pane-tabs" hidden aria-label="下單?��?">
           <button type="button" class="tab on" data-orders-pane="form">下單</button>
-          <button type="button" class="tab" data-orders-pane="today">已填單</button>
+          <button type="button" class="tab" data-orders-pane="today">已填??/button>
         </nav>
         <div class="orders-swipe" id="orders-swipe">
           <div class="orders-pane" data-orders-pane-page="form">
         <p class="form-line-entry" hidden>
-          <button type="button" class="ghost" data-orders-pane="line">LINE文字轉單</button>
-          <span class="muted">貼客人叫貨文字，確認後進已填單</span>
+          <button type="button" class="ghost" data-orders-pane="line">LINE?��?轉單</button>
+          <span class="muted">貼客人叫貨�?字�?確�?後進已填單</span>
         </p>
-        <nav class="tabs" id="form-kind-tabs" hidden aria-label="出貨表單"></nav>
+        <nav class="tabs" id="form-kind-tabs" hidden aria-label="?�貨表單"></nav>
         <section class="card daily-sheet-card" id="daily-sheet-card" hidden>
           <div class="head">
-            <h2 id="daily-sheet-title">穠全 地瓜葉出貨</h2>
-            <label class="date-inline">日期 <input id="daily-sheet-date" type="date" /></label>
+            <h2 id="daily-sheet-title">穠全 ?��??�出�?/h2>
+            <label class="date-inline">?��? <input id="daily-sheet-date" type="date" /></label>
           </div>
-          <p class="hint" id="daily-sheet-hint">地瓜葉分誌／芳填當天叫貨。裝箱預設籃裝。出貨對象預設小琳、欣儒，可自行新增。</p>
+          <p class="hint" id="daily-sheet-hint">?��??��?誌�??�填?�天?�貨?��?箱�?設�?裝。出貨�?象�?設�??�、欣?��??�自行新增�?/p>
           <div class="nq-who-bar" id="nq-who-bar">
-            <label>新增出貨對象 <input id="nq-add-who" type="text" placeholder="名稱" autocomplete="off" /></label>
-            <button type="button" id="nq-add-who-btn">新增</button>
+            <label>?��??�貨對象 <input id="nq-add-who" type="text" placeholder="?�稱" autocomplete="off" /></label>
+            <button type="button" id="nq-add-who-btn">?��?</button>
           </div>
           <div class="sheet-scroll" id="daily-sheet"></div>
           <div class="btn-row">
-            <button type="button" id="nq-confirm" class="primary">確認輸入訂單</button>
-            <button type="button" id="nq-cancel-edit" class="ghost" hidden>取消編輯</button>
+            <button type="button" id="nq-confirm" class="primary">確�?輸入訂單</button>
+            <button type="button" id="nq-cancel-edit" class="ghost" hidden>?��?編輯</button>
           </div>
         </section>
         <form id="order-form" class="order-desk">
           <header class="order-desk-top">
             <h2 id="form-title" class="order-desk-sr">下單</h2>
             <div class="order-desk-top-row">
-              <label class="field order-who-field" for="customer">叫貨對象
+              <label class="field order-who-field" for="customer">?�貨對象
                 <span class="cust-wrap">
-                  <input id="customer" type="text" required placeholder="輸入姓名／電話…" autocomplete="off" spellcheck="false" lang="zh-Hant" />
+                  <input id="customer" type="text" required placeholder="輸入姓�?／電話�? autocomplete="off" spellcheck="false" lang="zh-Hant" />
                   <div id="cust-suggest" class="cust-suggest" hidden></div>
                 </span>
               </label>
-              <label class="field order-date-field" for="ship-date">出貨日
+              <label class="field order-date-field" for="ship-date">?�貨??
                 <input id="ship-date" type="date" required />
               </label>
-              <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
+              <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="?�單?��??�已填單?�?�面">
                 <span class="urgent-toggle-ico" aria-hidden="true">!</span>
-                <span class="urgent-toggle-lab">急單</span>
+                <span class="urgent-toggle-lab">?�單</span>
               </button>
-              <p class="order-desk-dayhint" id="ship-more-sum">當日</p>
-              <button type="button" class="route-compact-btn" id="route-compact-btn" aria-expanded="false" aria-controls="route-popover" title="物流路線">
-                <span class="route-compact-ico" aria-hidden="true">路線</span>
-                <strong id="route-compact-lab">預設</strong>
-                <span class="route-compact-edit" aria-hidden="true">✎</span>
+              <p class="order-desk-dayhint" id="ship-more-sum">?�日</p>
+              <button type="button" class="route-compact-btn" id="route-compact-btn" aria-expanded="false" aria-controls="route-popover" title="?��?路�?">
+                <span class="route-compact-ico" aria-hidden="true">路�?</span>
+                <strong id="route-compact-lab">?�設</strong>
+                <span class="route-compact-edit" aria-hidden="true">??/span>
               </button>
-              <button type="button" class="ghost order-line-jump" data-orders-pane="line" id="form-line-entry-btn">LINE文字轉單</button>
+              <button type="button" class="ghost order-line-jump" data-orders-pane="line" id="form-line-entry-btn">LINE?��?轉單</button>
               <input id="order-urgent" type="checkbox" hidden />
             </div>
             <div class="route-popover" id="route-popover" hidden>
               <div class="route-pair">
                 <div class="route-leg">
-                  <p class="route-leg-lab"><span class="route-ico" aria-hidden="true">起</span>我方出貨倉</p>
-                  <select id="form-ship-wh" class="route-wh" aria-label="我方出貨倉">
-                    <option value="">（未選／預設）</option>
-                    <option value="穠全(A倉)">穠全(A倉)</option>
-                    <option value="二崙(B倉)">二崙(B倉)</option>
-                    <option value="大庄">大庄</option>
-                    <option value="油一">油一</option>
-                    <option value="油二">油二</option>
-                    <option value="油三">油三</option>
-                    <option value="周">周</option>
+                  <p class="route-leg-lab"><span class="route-ico" aria-hidden="true">�?/span>?�方?�貨??/p>
+                  <select id="form-ship-wh" class="route-wh" aria-label="?�方?�貨??>
+                    <option value="">（未?��??�設�?/option>
+                    <option value="穠全(A??">穠全(A??</option>
+                    <option value="二�?(B??">二�?(B??</option>
+                    <option value="大�?">大�?</option>
+                    <option value="油�?">油�?</option>
+                    <option value="油�?">油�?</option>
+                    <option value="油�?">油�?</option>
+                    <option value="??>??/option>
                   </select>
                 </div>
                 <div class="route-leg">
-                  <p class="route-leg-lab"><span class="route-ico is-end" aria-hidden="true">迄</span>客戶下貨點</p>
-                  <div class="route-dest-picks" id="form-dest-picks" role="group" aria-label="客戶下貨點"></div>
-                  <input id="form-dest-other" class="dest-other route-dest-other" type="text" placeholder="貨運名稱或其他位置" hidden autocomplete="off" />
+                  <p class="route-leg-lab"><span class="route-ico is-end" aria-hidden="true">�?/span>客戶下貨�?/p>
+                  <div class="route-dest-picks" id="form-dest-picks" role="group" aria-label="客戶下貨�?></div>
+                  <input id="form-dest-other" class="dest-other route-dest-other" type="text" placeholder="貨�??�稱?�其他�?�? hidden autocomplete="off" />
                   <p class="route-dest-hint muted" id="form-dest-hint" hidden></p>
                 </div>
               </div>
             </div>
             <details class="ship-more" id="ship-more" hidden>
-              <summary>出貨日進階</summary>
-              <p class="ship-more-note">預設今天。改成明天以後會當成預訂單，當天再出貨。</p>
+              <summary>?�貨?�進�?</summary>
+              <p class="ship-more-note">?�設今天?�改?��?天以後�??��??��??��??�天?�出貨�?/p>
             </details>
           </header>
           <p class="hint" id="form-hint" hidden></p>
@@ -228,35 +228,35 @@
           <div class="order-desk-grid">
             <div class="order-desk-main">
               <section class="order-block order-items" aria-labelledby="order-items-title">
-                <h3 class="order-block-title" id="order-items-title">全品項快打</h3>
+                <h3 class="order-block-title" id="order-items-title">?��??�快??/h3>
                 <label class="field sku-search-field" for="sku-quick-search">
-                  <span class="sku-search-lab">搜尋</span>
-                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="🔍 輸入品項名稱或簡碼...（按 Enter 加入）" autocomplete="off" spellcheck="false" />
+                  <span class="sku-search-lab">?��?</span>
+                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="?? 輸入?��??�稱?�簡�?..（�? Enter ?�入�? autocomplete="off" spellcheck="false" />
                   <datalist id="sku-quick-list"></datalist>
                 </label>
-                <div class="sku-hot" id="sku-hot-chips" role="group" aria-label="常用品項">
-                  <button type="button" class="sku-mini" data-hot-big="leaf"><span class="sku-mini-lab">地瓜葉</span></button>
-                  <button type="button" class="sku-mini" data-hot-big="basil"><span class="sku-mini-lab">九層塔</span></button>
+                <div class="sku-hot" id="sku-hot-chips" role="group" aria-label="常用?��?">
+                  <button type="button" class="sku-mini" data-hot-big="leaf"><span class="sku-mini-lab">?��???/span></button>
+                  <button type="button" class="sku-mini" data-hot-big="basil"><span class="sku-mini-lab">九層�?/span></button>
                   <button type="button" class="sku-mini" data-hot-big="on"><span class="sku-mini-lab">洋蔥</span></button>
-                  <button type="button" class="sku-mini" data-hot-big="cab"><span class="sku-mini-lab">高麗菜</span></button>
+                  <button type="button" class="sku-mini" data-hot-big="cab"><span class="sku-mini-lab">高�???/span></button>
                 </div>
                 <div id="sheet" class="order-sheet"></div>
-                <p class="order-desk-tip muted">提示：點品項連擊加算；搜尋框 Enter 連續加入；右側可微調件數</p>
+                <p class="order-desk-tip muted">?�示：�??��?????��?；�?尋�? Enter ????�入；右?�可微調件數</p>
               </section>
             </div>
 
             <aside class="order-desk-cart order-block" aria-labelledby="order-cart-title">
-              <h3 class="order-block-title" id="order-cart-title">待確認清單</h3>
+              <h3 class="order-block-title" id="order-cart-title">待確認�???/h3>
               <div id="ticket" class="ticket"></div>
               <div class="order-cart-foot">
-                <label class="field order-cart-note" for="order-note">訂單備註
-                  <input id="order-note" type="text" placeholder="可填寫送貨時間等…" autocomplete="off" spellcheck="false" />
+                <label class="field order-cart-note" for="order-note">訂單?�註
+                  <input id="order-note" type="text" placeholder="?�填寫送貨?��?等�? autocomplete="off" spellcheck="false" />
                 </label>
                 <div class="btn-row order-submit-row">
-                  <p class="ticket-total" id="ticket-foot-total" hidden>總件數 <strong>0</strong> 件</p>
-                  <button type="submit" class="primary" id="order-submit">送出訂單</button>
-                  <button type="button" id="nq-rest-btn" class="ghost" hidden>今日無叫貨</button>
-                  <button type="button" id="cancel-edit" class="ghost" hidden>取消編輯</button>
+                  <p class="ticket-total" id="ticket-foot-total" hidden>總件??<strong>0</strong> �?/p>
+                  <button type="submit" class="primary" id="order-submit">?�出訂單</button>
+                  <button type="button" id="nq-rest-btn" class="ghost" hidden>今日?�叫�?/button>
+                  <button type="button" id="cancel-edit" class="ghost" hidden>?��?編輯</button>
                 </div>
               </div>
             </aside>
@@ -265,14 +265,14 @@
           </div>
           <div class="orders-pane" data-orders-pane-page="line">
         <section class="card" id="line-draft-card">
-          <h2>LINE判讀／訂單確認</h2>
-          <p class="hint">貼上客人傳來的叫貨文字會直接解析。第一行寫客人，其後品項與件數。判讀結果可改完再確認列入出貨。</p>
+          <h2>LINE?��?／�??�確�?/h2>
+          <p class="hint">貼�?客人?��??�叫貨�?字�??�接�???�第一行寫客人，其後�??��?件數?�判讀結�??�改完�?確�??�入?�貨??/p>
           <p class="muted" id="line-api-status"></p>
-          <label class="field">下單文字
-            <textarea id="line-paste" rows="6" placeholder="文福&#10;地瓜葉誌 20"></textarea>
+          <label class="field">下單?��?
+            <textarea id="line-paste" rows="6" placeholder="?��?&#10;?��??��? 20"></textarea>
           </label>
           <div class="btn-row">
-            <button type="button" id="line-parse-btn" class="primary">解析文字</button>
+            <button type="button" id="line-parse-btn" class="primary">�???��?</button>
           </div>
           <div id="line-drafts"></div>
         </section>
@@ -280,17 +280,17 @@
           <div class="orders-pane" data-orders-pane-page="today">
             <section class="card" id="orders-today-card">
               <div class="head">
-                <h2 id="orders-today-title">已填單</h2>
-                <label class="date-inline">日期 <input id="orders-today-date" type="date" /></label>
+                <h2 id="orders-today-title">已填??/h2>
+                <label class="date-inline">?��? <input id="orders-today-date" type="date" /></label>
               </div>
-              <p class="hint">下單後依客戶彙整。未送貨在上、已送出在下；急單排最前。未結可改；核對後按「結單」＝會計收單確認（不扣庫）。備貨完成後再送貨才扣庫。</p>
+              <p class="hint">下單後�?客戶彙整?�未?�貨?��??�已?�出?��?；急單?��??�。未結可?��??��?後�??��??�」�??��??�單確�?（�???��）。�?貨�??��??�送貨?�扣庫�?/p>
               <div class="orders-today-search" id="orders-today-search">
-                <label class="orders-today-q-lab" for="orders-today-q">搜尋</label>
+                <label class="orders-today-q-lab" for="orders-today-q">?��?</label>
                 <div class="orders-today-q-row">
                   <input
                     id="orders-today-q"
                     type="text"
-                    placeholder="客戶名稱或訂單號碼"
+                    placeholder="客戶?�稱?��??��?�?
                     autocomplete="off"
                     spellcheck="false"
                     enterkeyhint="search"
@@ -309,24 +309,24 @@
       <section id="page-plan" hidden>
         <section class="card" id="plan-card">
           <div class="head plan-date-row">
-            <nav class="tabs" id="plan-main-tabs" hidden aria-label="現場排程切換">
-              <button type="button" class="tab on" data-plan-main="short">現場排程</button>
-              <button type="button" class="tab" data-plan-main="ship">司機送貨</button>
+            <nav class="tabs" id="plan-main-tabs" hidden aria-label="?�場?��??��?">
+              <button type="button" class="tab on" data-plan-main="short">?�場?��?</button>
+              <button type="button" class="tab" data-plan-main="ship">?��??�貨</button>
             </nav>
-            <label class="date-inline">日期 <input id="plan-date" type="date" /></label>
+            <label class="date-inline">?��? <input id="plan-date" type="date" /></label>
           </div>
           <div class="orders-swipe" id="plan-main-swipe">
             <div class="orders-pane" data-plan-main-page="short">
-              <h2 id="plan-short-title">現場排程・備貨</h2>
-              <p class="hint plan-short-hint">上「當日訂單」依品項看客戶；中「理貨確認」勾選備妥；下「全部訂單」看狀態。備貨中在上、已送貨在下。點區標題可摺疊。</p>
+              <h2 id="plan-short-title">?�場?��??��?�?/h2>
+              <p class="hint plan-short-hint">上「當?��??�」�??��??�客?��?中「�?貨確認」勾?��?妥�?下「全?��??�」�??�?�。�?貨中?��??�已?�貨?��??��??�標�??�摺?��?/p>
               <div id="plan-short"></div>
-              <div id="plan-break" class="plan-break-host" aria-label="理貨確認區"></div>
-              <div id="plan-all" class="plan-all-host" aria-label="全部訂單區"></div>
+              <div id="plan-break" class="plan-break-host" aria-label="?�貨確�??�"></div>
+              <div id="plan-all" class="plan-all-host" aria-label="?�部訂單?�"></div>
             </div>
             <div class="orders-pane" data-plan-main-page="ship">
-              <nav class="tabs" id="plan-pane-tabs" aria-label="送貨切換">
+              <nav class="tabs" id="plan-pane-tabs" aria-label="?�貨?��?">
                 <button type="button" class="tab on" data-plan-pane="pending">待送貨</button>
-                <button type="button" class="tab" data-plan-pane="done">已送貨完成</button>
+                <button type="button" class="tab" data-plan-pane="done">已送貨完�?</button>
               </nav>
               <div id="plan-pending"></div>
               <div id="plan-done" hidden></div>
@@ -337,38 +337,38 @@
       <section id="page-stock" hidden>
         <section class="card" id="stock-head-card">
           <div class="head">
-            <h2 id="stock-title">庫存盤點</h2>
-            <label class="date-inline">日期 <input id="stock-date" type="date" /></label>
+            <h2 id="stock-title">庫�??��?</h2>
+            <label class="date-inline">?��? <input id="stock-date" type="date" /></label>
           </div>
-          <p class="hint" id="guide-stock">庫存盤點：對照當日要出的量，整理各倉庫可備數量。請從首頁選倉庫別進入。</p>
+          <p class="hint" id="guide-stock">庫�??��?：�??�當?��??��??��??��??�倉庫?��??��??��?從�??�選?�庫?�進入??/p>
           <div id="stock-overview" class="stock-overview"></div>
         </section>
-        <nav class="tabs stock-kind-tabs" id="stock-kind-tabs" aria-label="庫存品項">
-          <button type="button" class="tab on" data-stock-kind="leaf">地瓜葉</button>
-          <button type="button" class="tab" data-stock-kind="basil">九層塔</button>
+        <nav class="tabs stock-kind-tabs" id="stock-kind-tabs" aria-label="庫�??��?">
+          <button type="button" class="tab on" data-stock-kind="leaf">?��???/button>
+          <button type="button" class="tab" data-stock-kind="basil">九層�?/button>
         </nav>
         <section class="card stock-count-card" id="count-card">
-          <h2>早上盤點</h2>
-          <p class="hint" id="guide-count">填現場早上數量後按確認。可用＋／－。帶入是昨晚結算，不對可以改。確認後只鎖定早上庫存，不會自動加進貨。</p>
+          <h2>?��??��?</h2>
+          <p class="hint" id="guide-count">填現?�早上數?��??�確認。可?��?／�??�帶?�是?��?結�?，�?對可以改?�確認�??��?定早上庫存�?不�??��??�進貨??/p>
           <div id="stock-count"></div>
           <div class="btn-row stock-count-actions">
-            <button type="button" id="fill-count" hidden>確認今日早上盤點</button>
-            <button type="button" id="fix-morning" class="ghost" hidden>修正早上盤點</button>
+            <button type="button" id="fill-count" hidden>確�?今日?��??��?</button>
+            <button type="button" id="fix-morning" class="ghost" hidden>修正?��??��?</button>
           </div>
         </section>
         <form id="process" class="card" hidden>
-          <h2>洋蔥加工</h2>
-          <p class="hint">從現有庫存轉成已加工好（可出）。</p>
+          <h2>洋蔥?�工</h2>
+          <p class="hint">從現?�庫存�??�已?�工好�??�出）�?/p>
           <label class="field">規格 <select id="pr-sku"></select></label>
-          <label class="field">加工數量 <input id="pr-qty" type="number" min="0" step="0.1" /></label>
-          <button type="submit" class="primary">記入已加工</button>
+          <label class="field">?�工?��? <input id="pr-qty" type="number" min="0" step="0.1" /></label>
+          <button type="submit" class="primary">記入已�?�?/button>
         </form>
       </section>
       <section id="page-sales" hidden>
         <section class="card">
           <div class="head">
-            <h2 id="sales-title">銷貨帳單</h2>
-            <label class="date-inline">日期 <input id="sales-date" type="date" /></label>
+            <h2 id="sales-title">?�貨帳單</h2>
+            <label class="date-inline">?��? <input id="sales-date" type="date" /></label>
           </div>
           <p class="hint" id="sales-hint" hidden></p>
           <div id="rest-list"></div>
@@ -394,35 +394,35 @@
       </section>
       <section id="page-in" hidden>
         <div class="in-toolbar">
-          <h2 id="in-title">進貨</h2>
-          <label class="date-inline">日期 <input id="in-date" type="date" /></label>
+          <h2 id="in-title">?�貨</h2>
+          <label class="date-inline">?��? <input id="in-date" type="date" /></label>
         </div>
-        <nav class="tabs" id="in-pane-tabs" aria-label="進貨切換">
-          <button type="button" class="tab on" data-in-pane="form">進貨輸入</button>
-          <button type="button" class="tab" data-in-pane="view">進貨總覽</button>
+        <nav class="tabs" id="in-pane-tabs" aria-label="?�貨?��?">
+          <button type="button" class="tab on" data-in-pane="form">?�貨輸入</button>
+          <button type="button" class="tab" data-in-pane="view">?�貨總覽</button>
         </nav>
         <div class="orders-swipe" id="in-swipe">
           <div class="orders-pane" data-in-pane-page="form">
-            <p class="hint in-hint" id="guide-in">有貨進來才記入。＋／－調本批後按記入。</p>
+            <p class="hint in-hint" id="guide-in">?�貨?��??��??�。�?／�?調本?��??��??��?/p>
             <div id="stock-in"></div>
             <section id="ha-excel" class="ha-excel" hidden>
               <span class="ha-excel-mark" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/><path d="M8 13h8M8 17h5"/></svg>
               </span>
               <div>
-                <h3>連結 Excel 匯入</h3>
-                <p>鴻安進貨之後直接連工作表匯入，不必在這裡逐筆打。匯入後請到總覽核對。</p>
+                <h3>??? Excel ?�入</h3>
+                <p>鴻�??�貨之�??�接??��作表?�入，�?必在?�裡?��??�。匯?��?請到總覽?��???/p>
                 <div class="ha-excel-actions">
-                  <button type="button" class="primary" id="ha-excel-link" disabled>連結工作表</button>
-                  <label class="ha-excel-file">選擇檔案<input type="file" id="ha-excel-file" accept=".xlsx,.xls,.csv" disabled /></label>
+                  <button type="button" class="primary" id="ha-excel-link" disabled>???工�?�?/button>
+                  <label class="ha-excel-file">?��?檔�?<input type="file" id="ha-excel-file" accept=".xlsx,.xls,.csv" disabled /></label>
                 </div>
-                <p class="ha-excel-soon">即將開放</p>
+                <p class="ha-excel-soon">?��??�放</p>
               </div>
             </section>
             <form id="receive" class="card in-recv" hidden>
-              <label class="field">品項 <select id="in-sku"></select></label>
-              <label class="field">數量 <input id="in-qty" type="number" min="0" step="0.1" /></label>
-              <button type="submit" id="recv-btn">入庫</button>
+              <label class="field">?��? <select id="in-sku"></select></label>
+              <label class="field">?��? <input id="in-qty" type="number" min="0" step="0.1" /></label>
+              <button type="submit" id="recv-btn">?�庫</button>
             </form>
           </div>
           <div class="orders-pane" data-in-pane-page="view">
@@ -432,177 +432,177 @@
       </section>
       <section id="page-rack" hidden>
         <div class="in-toolbar rack-head">
-          <h2>鐵架／八格籃</h2>
-          <label class="rack-xls-btn">匯入 Excel<input id="rack-xls" type="file" accept=".xlsx,.xls,.csv" multiple /></label>
+          <h2>?�架／八?��?</h2>
+          <label class="rack-xls-btn">?�入 Excel<input id="rack-xls" type="file" accept=".xlsx,.xls,.csv" multiple /></label>
         </div>
         <p class="rack-import-msg" id="rack-import-msg" hidden></p>
         <div class="rack-period">
           <div class="btn-row rack-mode-row">
-            <button type="button" class="pick on" data-rack-mode="asof">截至某日</button>
-            <button type="button" class="pick" data-rack-mode="custom">自訂區間</button>
+            <button type="button" class="pick on" data-rack-mode="asof">?�至?�日</button>
+            <button type="button" class="pick" data-rack-mode="custom">?��??�??/button>
             <button type="button" class="pick" data-rack-mode="y114">114年度</button>
             <button type="button" class="pick" data-rack-mode="y115">115年度</button>
           </div>
           <p class="rack-year-lab" id="rack-year-lab" hidden></p>
-          <label id="rack-from-wrap" class="date-inline" hidden>起 <input id="rack-from" type="date" /></label>
-          <label class="date-inline" id="rack-to-lab"><span id="rack-to-word">截至</span> <input id="rack-to" type="date" /></label>
+          <label id="rack-from-wrap" class="date-inline" hidden>�?<input id="rack-from" type="date" /></label>
+          <label class="date-inline" id="rack-to-lab"><span id="rack-to-word">?�至</span> <input id="rack-to" type="date" /></label>
           <label class="rack-prior" id="rack-prior-wrap" hidden>
             <input id="rack-prior" type="checkbox" checked />
-            含前期尚欠
+            ?��??��?�?
           </label>
         </div>
         <div class="rack-filters">
-          <label>公司
+          <label>?�司
             <select id="rack-co">
-              <option value="">兩家合計</option>
+              <option value="">?�家?��?</option>
               <option value="穠全">穠全</option>
-              <option value="鴻安">鴻安</option>
+              <option value="鴻�?">鴻�?</option>
             </select>
           </label>
-          <label id="rack-frame-wrap">鐵架種類
+          <label id="rack-frame-wrap">?�架種�?
             <select id="rack-frame">
-              <option value="">全部</option>
+              <option value="">?�部</option>
             </select>
           </label>
-          <label class="rack-search" id="rack-q-wrap">搜尋 <input id="rack-q" type="search" placeholder="客人、貨運" /></label>
+          <label class="rack-search" id="rack-q-wrap">?��? <input id="rack-q" type="search" placeholder="客人?�貨?? /></label>
         </div>
-        <nav class="tabs" id="rack-pane-tabs" aria-label="鐵架彙整">
-          <button type="button" class="tab on" data-rack-pane="frame">架種彙整</button>
-          <button type="button" class="tab" data-rack-pane="customer">客人尚欠</button>
-          <button type="button" class="tab" data-rack-pane="carrier">貨運行</button>
+        <nav class="tabs" id="rack-pane-tabs" aria-label="?�架彙整">
+          <button type="button" class="tab on" data-rack-pane="frame">?�種彙整</button>
+          <button type="button" class="tab" data-rack-pane="customer">客人尚�?</button>
+          <button type="button" class="tab" data-rack-pane="carrier">貨�?�?/button>
         </nav>
-        <p class="hint in-hint rack-hint">還欠＝客人手上未還。點客人看總單，再點品項看出貨單。選年度或區間時可取消「含前期尚欠」，只看本期進出。</p>
-        <p class="rack-range" id="rack-range">統計區間依已匯入資料為準。</p>
+        <p class="hint in-hint rack-hint">?��?＝客人�?上未?�。�?客人?�總?��??��??��??�出貨單?�選年度?��??��??��?消「含?��?尚�??��??��??��??�出??/p>
+        <p class="rack-range" id="rack-range">統�??�?��?已匯?��??�為準�?/p>
         <div id="rack-box"></div>
       </section>
       <section id="page-labels" hidden>
-        <nav class="tabs" id="label-kind-tabs" aria-label="標籤種類">
-          <button type="button" class="tab on" data-label-kind="text">文字標籤</button>
-          <button type="button" class="tab" data-label-kind="container">貨櫃標籤</button>
-          <button type="button" class="tab" data-label-kind="ship">出貨標籤</button>
+        <nav class="tabs" id="label-kind-tabs" aria-label="標籤種�?">
+          <button type="button" class="tab on" data-label-kind="text">?��?標籤</button>
+          <button type="button" class="tab" data-label-kind="container">貨�?標籤</button>
+          <button type="button" class="tab" data-label-kind="ship">?�貨標籤</button>
         </nav>
-        <p class="hint label-page-hint" id="label-kind-hint">熱感紙 70mm × 50mm（寬版）。預覽＝印出樣子。</p>
+        <p class="hint label-page-hint" id="label-kind-hint">?��?�?70mm ? 50mm（寬?��??��?覽�??�出�????/p>
         <div class="label-layout">
           <div class="label-form-col">
             <section class="card label-pane-card" id="label-pane-text">
-              <h3>品項</h3>
+              <h3>?��?</h3>
               <div id="label-text-chips" class="picks"></div>
-              <label class="field">自行輸入
-                <input id="label-text-custom" type="text" placeholder="類別沒有時再打" />
+              <label class="field">?��?輸入
+                <input id="label-text-custom" type="text" placeholder="類別沒�??��??? />
               </label>
-              <label class="field">備註
-                <input id="label-text-remark" type="text" placeholder="可空" />
+              <label class="field">?�註
+                <input id="label-text-remark" type="text" placeholder="?�空" />
               </label>
               <div class="label-text-opts">
                 <label class="label-solar-opt">
                   <input id="label-solar-on" type="checkbox" />
-                  太陽日
+                  太陽??
                 </label>
                 <label class="label-solar-opt">
                   <input id="label-seq-on" type="checkbox" />
-                  流水編
+                  流水�?
                 </label>
               </div>
             </section>
             <section class="card label-pane-card" id="label-pane-container" hidden>
-              <h3>品名</h3>
+              <h3>?��?</h3>
               <div id="label-cont-name-chips" class="picks"></div>
-              <label class="field">自行輸入品名
-                <input id="label-cont-name" type="text" placeholder="例如 高麗菜" />
+              <label class="field">?��?輸入?��?
+                <input id="label-cont-name" type="text" placeholder="例�? 高�??? />
               </label>
-              <h3>貨櫃編號</h3>
+              <h3>貨�?編�?</h3>
               <div class="label-inline-fields label-cont-no-date">
-                <label class="field">貨櫃編號
-                  <input id="label-cont-no" type="text" placeholder="例如 UHA158" />
+                <label class="field">貨�?編�?
+                  <input id="label-cont-no" type="text" placeholder="例�? UHA158" />
                 </label>
                 <div id="label-cont-date-slot" class="label-cont-date-slot"></div>
               </div>
               <div id="label-cont-no-chips" class="picks"></div>
-              <h3>國別／廠商</h3>
+              <h3>?�別／�???/h3>
               <div id="label-cont-country-chips" class="picks"></div>
               <div class="label-inline-fields">
-                <label class="field">國別
-                  <input id="label-cont-country" type="text" placeholder="例如 韓國" />
+                <label class="field">?�別
+                  <input id="label-cont-country" type="text" placeholder="例�? ?��?" />
                 </label>
-                <label class="field">廠商
-                  <input id="label-cont-vendor" type="text" placeholder="自行輸入" />
+                <label class="field">廠�?
+                  <input id="label-cont-vendor" type="text" placeholder="?��?輸入" />
                 </label>
               </div>
             </section>
             <section class="card label-pane-card" id="label-pane-ship" hidden>
-              <h3>出貨</h3>
+              <h3>?�貨</h3>
               <label class="field">客戶
-                <input id="label-ship-cust" type="text" placeholder="自行輸入" autocomplete="off" />
+                <input id="label-ship-cust" type="text" placeholder="?��?輸入" autocomplete="off" />
               </label>
-              <p class="pick-lab">品項</p>
+              <p class="pick-lab">?��?</p>
               <div id="label-ship-chips" class="picks"></div>
-              <label class="field">自行輸入品項
-                <input id="label-ship-sku" type="text" placeholder="類別沒有時再打" />
+              <label class="field">?��?輸入?��?
+                <input id="label-ship-sku" type="text" placeholder="類別沒�??��??? />
               </label>
             </section>
           </div>
           <div class="label-side-col">
             <section class="card label-pane-card" id="label-preview-card">
-              <h3>預覽（寬版 70×50）</h3>
+              <h3>?�覽（寬??70?50�?/h3>
               <div id="label-preview" class="label-preview"></div>
             </section>
             <section class="card label-print-card" id="label-print-card">
               <div class="label-toolbar" id="label-shared-bar">
-                <label class="field" id="label-date-wrap">日期
+                <label class="field" id="label-date-wrap">?��?
                   <input id="label-date" type="date" />
                 </label>
-                <label class="field" id="label-md-m-wrap" hidden>月
-                  <input id="label-md-m" type="number" min="1" max="12" inputmode="numeric" placeholder="月" />
+                <label class="field" id="label-md-m-wrap" hidden>??
+                  <input id="label-md-m" type="number" min="1" max="12" inputmode="numeric" placeholder="?? />
                 </label>
-                <label class="field" id="label-md-d-wrap" hidden>日
-                  <input id="label-md-d" type="number" min="1" max="31" inputmode="numeric" placeholder="日" />
+                <label class="field" id="label-md-d-wrap" hidden>??
+                  <input id="label-md-d" type="number" min="1" max="31" inputmode="numeric" placeholder="?? />
                 </label>
                 <label class="field" id="label-copies-wrap"><span id="label-copies-caption">張數</span>
                   <input id="label-copies" type="number" min="1" max="99" inputmode="numeric" value="1" />
                 </label>
-                <p class="label-seq-line" id="label-seq-line"><span id="label-seq-caption">下一號</span> <strong id="label-next-seq">001</strong></p>
+                <p class="label-seq-line" id="label-seq-line"><span id="label-seq-caption">下�???/span> <strong id="label-next-seq">001</strong></p>
                 <button type="button" class="ghost" id="label-reset-seq">歸零</button>
-                <button type="button" class="primary" id="label-print">列印</button>
+                <button type="button" class="primary" id="label-print">?�印</button>
               </div>
               <p id="label-msg" class="muted"></p>
             </section>
           </div>
         </div>
-        <button type="button" class="ghost" id="label-all" hidden>全選</button>
+        <button type="button" class="ghost" id="label-all" hidden>?�選</button>
         <button type="button" class="ghost" id="label-none" hidden>不選</button>
       </section>
       <div id="label-order-gate" class="login-gate" hidden>
         <div class="login-card">
-          <h2>記入訂單？</h2>
-          <p class="hint" id="label-order-hint">印完後可把這筆寫進已填單。</p>
+          <h2>記入訂單�?/h2>
+          <p class="hint" id="label-order-hint">?��?後可?�這�?寫進已填單??/p>
           <div class="btn-row">
             <button type="button" class="primary" id="label-order-yes">記入訂單</button>
-            <button type="button" class="ghost" id="label-order-no">先不入單</button>
+            <button type="button" class="ghost" id="label-order-no">?��??�單</button>
           </div>
         </div>
       </div>
       <div id="ship-labels-gate" class="login-gate" hidden></div>
       <div id="proof-gate" class="login-gate" hidden>
         <div class="login-card proof-card">
-          <h2 id="proof-title">確認送貨</h2>
-          <p class="hint" id="proof-hint">簽名或拍照擇一即可。確認後視為已送到，並立刻扣庫。件數不對請回報會計修改。</p>
+          <h2 id="proof-title">確�??�貨</h2>
+          <p class="hint" id="proof-hint">簽�??��??��?一?�可?�確認�?視為已送到，並立刻??��?�件?��?對�??�報?��?修改??/p>
           <div class="btn-row proof-modes">
-            <button type="button" class="pick on" data-proof-mode="sign">電子簽單</button>
-            <button type="button" class="pick" data-proof-mode="photo">拍照上傳</button>
+            <button type="button" class="pick on" data-proof-mode="sign">?��?簽單</button>
+            <button type="button" class="pick" data-proof-mode="photo">?�照上傳</button>
           </div>
           <div id="proof-sign-box">
-            <canvas id="proof-canvas" width="640" height="240" aria-label="簽名"></canvas>
-            <button type="button" class="ghost" id="proof-clear">清除簽名</button>
+            <canvas id="proof-canvas" width="640" height="240" aria-label="簽�?"></canvas>
+            <button type="button" class="ghost" id="proof-clear">清除簽�?</button>
           </div>
           <div id="proof-photo-box" hidden>
-            <label class="field">現場照片
+            <label class="field">?�場?��?
               <input id="proof-file" type="file" accept="image/*" capture="environment" />
             </label>
             <img id="proof-preview" alt="" hidden />
           </div>
           <div class="btn-row">
-            <button type="button" class="primary" id="proof-ok">確認送貨並扣庫</button>
-            <button type="button" class="ghost" id="proof-cancel">取消</button>
+            <button type="button" class="primary" id="proof-ok">確�??�貨並扣�?/button>
+            <button type="button" class="ghost" id="proof-cancel">?��?</button>
           </div>
         </div>
       </div>
@@ -614,9 +614,9 @@
     <script src="./app.js?v=394"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=15"></script>
-    <script src="./import-flow.js?v=72"></script>
-    <link rel="stylesheet" href="./import-dist/import-app.css?v=72" />
-    <script type="module" src="./import-dist/import-app.js?v=72"></script>
+    <script src="./import-flow.js?v=73"></script>
+    <link rel="stylesheet" href="./import-dist/import-app.css?v=73" />
+    <script type="module" src="./import-dist/import-app.js?v=73"></script>
     <script src="./site-work.js?v=3"></script>
     <script src="./boss-stats.js?v=13"></script>
   </body>

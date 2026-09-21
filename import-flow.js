@@ -4494,7 +4494,9 @@
       return rows;
     },
     trackBoardCounts() {
-      const all = this.listTrackBoard();
+      ensureState();
+      fixArriveDaysInState();
+      const all = window.__importApi.listTrackBoard();
       return {
         all: all.length,
         customs: all.filter((r) => r.trackFilter === "customs").length,

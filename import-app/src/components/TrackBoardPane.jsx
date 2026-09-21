@@ -76,7 +76,7 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer }
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="m-0 text-xl font-bold text-slate-800">{title || "貨櫃追蹤"}</h2>
-            <p className="mt-1 m-0 text-xs text-slate-400">先看階段與下一步；點「處理」進海關查驗或已放行編輯。</p>
+            <p className="mt-1 m-0 text-xs text-slate-400">先看階段與下一步；點「處理」進海關查驗或已放行編輯。 · v72</p>
           </div>
           <button type="button" className="imp-btn-primary" onClick={() => setActiveTab?.("port")}>
             ＋ 新增／查驗

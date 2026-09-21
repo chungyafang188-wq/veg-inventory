@@ -26,7 +26,7 @@ export function mountImportApp(el, opts = {}) {
   el.innerHTML = "";
   hostEl = el;
   root = createRoot(el);
-  root.render(<ImportApp initialPane={opts.pane || "parse"} />);
+  root.render(<ImportApp initialPane={opts.pane || "track"} />);
   return root;
 }
 

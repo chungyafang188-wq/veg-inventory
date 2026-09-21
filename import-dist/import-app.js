@@ -13211,7 +13211,7 @@ function Ft({ title: e, rows: t, counts: n, setActiveTab: r, openDrawer: i }) {
 		d((e) => f.every((t) => e.has(t.uha || t.key)) && f.length ? /* @__PURE__ */ new Set() : new Set(f.map((e) => e.uha || e.key)));
 	}, _ = (e) => {
 		let t = e.uha || e.key, n = e.dest === "release" || e.released ? "release" : "port";
-		r?.(n), window.setTimeout(() => i?.(n, t), 40);
+		i?.(n, t);
 	}, v = [
 		[
 			"all",
@@ -13247,7 +13247,7 @@ function Ft({ title: e, rows: t, counts: n, setActiveTab: r, openDrawer: i }) {
 							children: e || "貨櫃追蹤"
 						}), /* @__PURE__ */ (0, D.jsx)("p", {
 							className: "mt-1 m-0 text-xs text-slate-400",
-							children: "先看階段與下一步；點「處理」進海關查驗或已放行編輯。"
+							children: "先看階段與下一步；點「處理」開單櫃表單（不離開本頁）。左側「海關查驗／已放行」才是舊整表。"
 						})] }), /* @__PURE__ */ (0, D.jsx)("button", {
 							type: "button",
 							className: "imp-btn-primary",

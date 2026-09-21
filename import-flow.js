@@ -3880,7 +3880,7 @@
     } else {
       closeDrawer({ force: true });
     }
-    importPane = normalizePane(pane || "parse");
+    importPane = normalizePane(pane || "track");
     const box = document.getElementById("import-root");
     if (typeof window.mountImportApp === "function" && box) {
       window.mountImportApp(box, { pane: importPane, forcePane: true });
@@ -3895,7 +3895,7 @@
       return;
     }
     page = "import";
-    importPane = normalizePane(pane || "parse");
+    importPane = normalizePane(pane || "track");
     drawer = null;
     drawerFull = false;
     drawerSession = null;
@@ -4242,7 +4242,7 @@
     addManualPortRow,
     templateMeta,
     setHostPane(pane) {
-      importPane = normalizePane(pane || "parse");
+      importPane = normalizePane(pane || "track");
     },
     listDrafts() {
       ensureState();

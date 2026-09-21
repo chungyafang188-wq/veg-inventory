@@ -58,9 +58,8 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer }
   const goHandle = (r) => {
     const uha = r.uha || r.key;
     const dest = r.dest === "release" || r.released ? "release" : "port";
-    setActiveTab?.(dest);
-    // 稍後再開抽屜，等 tab 切換完成
-    window.setTimeout(() => openDrawer?.(dest, uha), 40);
+    // 留在追蹤頁，用抽屜編這櫃（避免跳進舊清單整表）
+    openDrawer?.(dest, uha);
   };
 
   const tabs = [
@@ -76,7 +75,9 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer }
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="m-0 text-xl font-bold text-slate-800">{title || "貨櫃追蹤"}</h2>
-            <p className="mt-1 m-0 text-xs text-slate-400">先看階段與下一步；點「處理」進海關查驗或已放行編輯。</p>
+            <p className="mt-1 m-0 text-xs text-slate-400">
+              先看階段與下一步；點「處理」開單櫃表單（不離開本頁）。左側「海關查驗／已放行」才是舊整表。
+            </p>
           </div>
           <button type="button" className="imp-btn-primary" onClick={() => setActiveTab?.("port")}>
             ＋ 新增／查驗

@@ -315,6 +315,31 @@
   font-weight: 650;
   outline: 2px solid rgba(4, 120, 87, 0.2);
 }
+.imp-tw .imp-excel-cell {
+  display: block;
+  width: 100%;
+  margin: 0;
+  min-height: 1.7rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid #c5d4cc;
+  border-radius: 0.2rem;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.imp-tw .imp-excel-cell:hover {
+  border-color: #1a6843;
+}
+.imp-tw .imp-excel-cell.is-focus,
+.imp-tw .imp-excel-cell:focus {
+  outline: 2px solid #1a6843;
+  outline-offset: 0;
+  border-color: #1a6843;
+  background: #f0fdf4;
+}
 .imp-tw .imp-id-stack {
   display: flex;
   flex-direction: column;
@@ -549,7 +574,8 @@
   text-overflow: ellipsis;
 }
 .imp-tw .imp-inline-table .imp-inline-btn,
-.imp-tw .imp-inline-table .imp-inline-input {
+.imp-tw .imp-inline-table .imp-inline-input,
+.imp-tw .imp-inline-table .imp-excel-cell {
   max-width: 100%;
 }
 

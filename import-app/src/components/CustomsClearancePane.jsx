@@ -168,63 +168,48 @@ const FILTERS = [
   { id: "fume", lab: "需要薰蒸" },
 ];
 
-function InlineText({ value, placeholder = "+ 點擊填寫", onSave, rowIndex, colId, onNav, registerFocus }) {
-  const [editing, setEditing] = useState(false);
+function InlineText({ value, placeholder = "", onSave, rowIndex, colId, onNav, registerFocus }) {
   const [draft, setDraft] = useState(String(value || ""));
+  const [focused, setFocused] = useState(false);
   const ref = useRef(null);
-  const btnRef = useRef(null);
 
   useEffect(() => {
-    if (!editing) setDraft(String(value || ""));
-  }, [value, editing]);
+    if (!focused) setDraft(String(value || ""));
+  }, [value, focused]);
 
   useEffect(() => {
-    registerFocus?.(rowIndex, colId, btnRef.current);
+    registerFocus?.(rowIndex, colId, ref.current);
     return () => registerFocus?.(rowIndex, colId, null);
   }, [rowIndex, colId, registerFocus]);
-
-  useEffect(() => {
-    if (editing) {
-      ref.current?.focus();
-      ref.current?.select?.();
-    }
-  }, [editing]);
 
   const commit = (thenNav) => {
     const next = String(draft || "").trim();
     const prev = String(value || "").trim();
-    setEditing(false);
     if (next !== prev) onSave?.(next);
     if (thenNav) onNav?.(rowIndex, colId, thenNav);
   };
 
-  if (!editing) {
-    return (
-      <button
-        ref={btnRef}
-        type="button"
-        className={`imp-inline-btn${value ? "" : " is-empty"}`}
-        onClick={() => setEditing(true)}
-        title="點擊編輯"
-      >
-        {value ? String(value) : placeholder}
-      </button>
-    );
-  }
-
   return (
     <input
       ref={ref}
-      className="imp-inline-input"
+      className={`imp-excel-cell${focused ? " is-focus" : ""}`}
       value={draft}
-      placeholder={placeholder}
+      placeholder={placeholder || "—"}
+      aria-label={colId || "欄位"}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => commit()}
+      onFocus={(e) => {
+        setFocused(true);
+        e.target.select();
+      }}
+      onBlur={() => {
+        setFocused(false);
+        commit();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.preventDefault();
           setDraft(String(value || ""));
-          setEditing(false);
+          e.currentTarget.blur();
           return;
         }
         if (e.key === "Enter") {
@@ -466,13 +451,7 @@ export function CustomsClearancePane({
   onAfterRelease,
   openDrawer,
 }) {
-  const [view, setView] = useState(() => {
-    try {
-      return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table";
-    } catch {
-      return "table";
-    }
-  });
+  const [view, setView] = useState("table");
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("uha");
@@ -677,7 +656,10 @@ export function CustomsClearancePane({
     }
     if (nextRow < 0 || nextRow >= viewed.length) return;
     requestAnimationFrame(() => {
-      focusMap.current.get(`${nextRow}:${EDIT_COLS[nextCol]}`)?.click?.();
+      const el = focusMap.current.get(`${nextRow}:${EDIT_COLS[nextCol]}`);
+      if (!el) return;
+      el.focus?.();
+      el.select?.();
     });
   };
 
@@ -720,7 +702,9 @@ export function CustomsClearancePane({
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
             <div>
               <h2 className="m-0 text-xl font-bold tracking-tight text-slate-800">{title || "海關查驗"}</h2>
-              <p className="mt-1 m-0 text-[0.72rem] text-slate-400">表格：點格編輯 · Tab 下一格 · Enter 下一列（改完不整頁重刷）</p>
+              <p className="mt-1 m-0 rounded-md bg-teal-50 px-2 py-1 text-[0.75rem] font-bold text-teal-900">
+                高速表格：格子直接輸入 · Tab 下一格 · Enter 下一列
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <div className="imp-view-toggle" role="group" aria-label="檢視模式">

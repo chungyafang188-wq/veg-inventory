@@ -10736,46 +10736,43 @@ var Ge = () => ({
 		lab: "需要薰蒸"
 	}
 ];
-function qe({ value: e, placeholder: t = "+ 點擊填寫", onSave: n, rowIndex: r, colId: i, onNav: a, registerFocus: o }) {
-	let [s, c] = (0, l.useState)(!1), [u, d] = (0, l.useState)(String(e || "")), f = (0, l.useRef)(null), p = (0, l.useRef)(null);
+function qe({ value: e, placeholder: t = "", onSave: n, rowIndex: r, colId: i, onNav: a, registerFocus: o }) {
+	let [s, c] = (0, l.useState)(String(e || "")), [u, d] = (0, l.useState)(!1), f = (0, l.useRef)(null);
 	(0, l.useEffect)(() => {
-		s || d(String(e || ""));
-	}, [e, s]), (0, l.useEffect)(() => (o?.(r, i, p.current), () => o?.(r, i, null)), [
+		u || c(String(e || ""));
+	}, [e, u]), (0, l.useEffect)(() => (o?.(r, i, f.current), () => o?.(r, i, null)), [
 		r,
 		i,
 		o
-	]), (0, l.useEffect)(() => {
-		s && (f.current?.focus(), f.current?.select?.());
-	}, [s]);
-	let m = (t) => {
-		let o = String(u || "").trim(), s = String(e || "").trim();
-		c(!1), o !== s && n?.(o), t && a?.(r, i, t);
+	]);
+	let p = (t) => {
+		let o = String(s || "").trim();
+		o !== String(e || "").trim() && n?.(o), t && a?.(r, i, t);
 	};
-	return s ? /* @__PURE__ */ (0, O.jsx)("input", {
+	return /* @__PURE__ */ (0, O.jsx)("input", {
 		ref: f,
-		className: "imp-inline-input",
-		value: u,
-		placeholder: t,
-		onChange: (e) => d(e.target.value),
-		onBlur: () => m(),
+		className: `imp-excel-cell${u ? " is-focus" : ""}`,
+		value: s,
+		placeholder: t || "—",
+		"aria-label": i || "欄位",
+		onChange: (e) => c(e.target.value),
+		onFocus: (e) => {
+			d(!0), e.target.select();
+		},
+		onBlur: () => {
+			d(!1), p();
+		},
 		onKeyDown: (t) => {
 			if (t.key === "Escape") {
-				t.preventDefault(), d(String(e || "")), c(!1);
+				t.preventDefault(), c(String(e || "")), t.currentTarget.blur();
 				return;
 			}
 			if (t.key === "Enter") {
-				t.preventDefault(), m("enter");
+				t.preventDefault(), p("enter");
 				return;
 			}
-			t.key === "Tab" && (t.preventDefault(), m(t.shiftKey ? "shift-tab" : "tab"));
+			t.key === "Tab" && (t.preventDefault(), p(t.shiftKey ? "shift-tab" : "tab"));
 		}
-	}) : /* @__PURE__ */ (0, O.jsx)("button", {
-		ref: p,
-		type: "button",
-		className: `imp-inline-btn${e ? "" : " is-empty"}`,
-		onClick: () => c(!0),
-		title: "點擊編輯",
-		children: e ? String(e) : t
 	});
 }
 function Je({ value: e, kind: t, onChange: n, displayLab: r, toneClass: i }) {
@@ -10926,13 +10923,7 @@ function et(e) {
 	return Qe(e).map((e) => e.lab).join("＋");
 }
 function tt({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCounts: a, refresh: o, onAfterRelease: s, openDrawer: c }) {
-	let [u, d] = (0, l.useState)(() => {
-		try {
-			return localStorage.getItem(Ie) === "cards" ? "cards" : "table";
-		} catch {
-			return "table";
-		}
-	}), [f, p] = (0, l.useState)("all"), [m, h] = (0, l.useState)(""), [g, v] = (0, l.useState)("uha"), [y, b] = (0, l.useState)(() => /* @__PURE__ */ new Set()), [x, ee] = (0, l.useState)(!1), [C, w] = (0, l.useState)(Ge), te = (0, l.useRef)(/* @__PURE__ */ new Map()), [T, E] = (0, l.useState)(() => ({}));
+	let [u, d] = (0, l.useState)("table"), [f, p] = (0, l.useState)("all"), [m, h] = (0, l.useState)(""), [g, v] = (0, l.useState)("uha"), [y, b] = (0, l.useState)(() => /* @__PURE__ */ new Set()), [x, ee] = (0, l.useState)(!1), [C, w] = (0, l.useState)(Ge), te = (0, l.useRef)(/* @__PURE__ */ new Map()), [T, E] = (0, l.useState)(() => ({}));
 	(0, l.useEffect)(() => {
 		E({});
 	}, [t]);
@@ -11078,7 +11069,8 @@ function tt({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 		if (r < 0) return;
 		let i = e, a = r;
 		n === "tab" ? a += 1 : n === "shift-tab" ? --a : n === "enter" && (i += 1), a >= Le.length && (a = 0, i += 1), a < 0 && (a = Le.length - 1, --i), !(i < 0 || i >= ie.length) && requestAnimationFrame(() => {
-			te.current.get(`${i}:${Le[a]}`)?.click?.();
+			let e = te.current.get(`${i}:${Le[a]}`);
+			e && (e.focus?.(), e.select?.());
 		});
 	}, fe = (e) => {
 		b((t) => {
@@ -11125,8 +11117,8 @@ function tt({ title: e, rows: t, portRows: n, portTab: r, setPortTab: i, portCou
 								className: "m-0 text-xl font-bold tracking-tight text-slate-800",
 								children: e || "海關查驗"
 							}), /* @__PURE__ */ (0, O.jsx)("p", {
-								className: "mt-1 m-0 text-[0.72rem] text-slate-400",
-								children: "表格：點格編輯 · Tab 下一格 · Enter 下一列（改完不整頁重刷）"
+								className: "mt-1 m-0 rounded-md bg-teal-50 px-2 py-1 text-[0.75rem] font-bold text-teal-900",
+								children: "高速表格：格子直接輸入 · Tab 下一格 · Enter 下一列"
 							})] }), /* @__PURE__ */ (0, O.jsxs)("div", {
 								className: "flex flex-wrap items-center gap-1.5",
 								children: [/* @__PURE__ */ (0, O.jsxs)("div", {

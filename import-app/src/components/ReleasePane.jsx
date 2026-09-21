@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../bridge";
 import { DateChip } from "./DateChip";
 import { InlineEdit } from "./InlineEdit";
@@ -132,16 +132,31 @@ export function ReleasePane({
   const [sortBy, setSortBy] = useState("uha");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState(() => new Set());
+  const [overrides, setOverrides] = useState(() => ({}));
+
+  useEffect(() => {
+    setOverrides({});
+  }, [rows]);
+
+  const mergedRows = useMemo(
+    () =>
+      (rows || []).map((r) => {
+        const k = r.uha || r.key;
+        const o = overrides[k];
+        return o ? { ...r, ...o } : r;
+      }),
+    [rows, overrides],
+  );
 
   const sorted = useMemo(
     () =>
-      queryRows(rows, {
+      queryRows(mergedRows, {
         query,
         sortBy,
         fields: SEARCH_FIELDS.release,
         getters: SORT_GETTERS.release,
       }),
-    [rows, query, sortBy],
+    [mergedRows, query, sortBy],
   );
 
   const revertible = useMemo(() => sorted.filter((r) => !r.dispatched), [sorted]);
@@ -166,6 +181,14 @@ export function ReleasePane({
 
   const patch = (uha, field, value) => {
     api().patchReleaseField?.(uha, field, value);
+    setOverrides((prev) => ({
+      ...prev,
+      [uha]: { ...(prev[uha] || {}), [field]: value },
+    }));
+  };
+
+  const hardRefresh = () => {
+    setOverrides({});
     refresh?.();
   };
 
@@ -191,7 +214,7 @@ export function ReleasePane({
       next.delete(uha);
       return next;
     });
-    refresh?.();
+    hardRefresh();
     onDispatched?.(uha);
   };
 
@@ -204,7 +227,7 @@ export function ReleasePane({
       next.delete(uha);
       return next;
     });
-    refresh?.();
+    hardRefresh();
     onAfterUnmark?.([uha]);
   };
 
@@ -220,7 +243,7 @@ export function ReleasePane({
     if (!confirm(`確定將選取的 ${list.length} 櫃退回海關查驗？`)) return;
     api().unmarkPortReleasedMany?.(list);
     setPicked(new Set());
-    refresh?.();
+    hardRefresh();
     onAfterUnmark?.(list);
   };
 
@@ -237,7 +260,7 @@ export function ReleasePane({
       alert("通知失敗，請再試一次。");
       return;
     }
-    refresh?.();
+    hardRefresh();
   };
 
   const trailerOpts = trailers?.length ? trailers : [];
@@ -334,7 +357,7 @@ export function ReleasePane({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 text-xl font-bold text-slate-800">{title || "已放行"}</h2>
         </div>
-        <p className="mt-1 m-0 text-xs text-slate-400">點擊欄位即可編輯；日期顯示 MM/DD。勾選後可批量通知。</p>
+        <p className="mt-1 m-0 text-xs text-slate-400">點擊欄位即可編輯；日期 MM/DD。改完不整頁重刷。勾選後可批量通知。</p>
         <div className="mt-3 flex flex-wrap gap-1.5" role="tablist">
           {[
             ["arrange", "待排", counts?.arrange],

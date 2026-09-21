@@ -480,6 +480,12 @@ export function CustomsClearancePane({
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const focusMap = useRef(new Map());
+  /** 整表高速：欄位寫入後先本地合併，避免整頁 refresh 丟焦點 */
+  const [overrides, setOverrides] = useState(() => ({}));
+
+  useEffect(() => {
+    setOverrides({});
+  }, [rows]);
 
   const setViewMode = (mode) => {
     setView(mode);
@@ -490,7 +496,15 @@ export function CustomsClearancePane({
     }
   };
 
-  const sheet = useMemo(() => rows || [], [rows]);
+  const sheet = useMemo(
+    () =>
+      (rows || []).map((r) => {
+        const k = rowKey(r);
+        const o = overrides[k];
+        return o ? { ...r, ...o } : r;
+      }),
+    [rows, overrides],
+  );
 
   const filtered = useMemo(() => {
     let list = sheet;
@@ -539,9 +553,19 @@ export function CustomsClearancePane({
     });
   }, [portRows, sheet, portTab, query, sortBy]);
 
-  const patch = (uha, field, value) => {
+  const patch = (uha, field, value, opts = {}) => {
     if (!uha) return;
     api().patchPortField?.(uha, field, value);
+    setOverrides((prev) => ({
+      ...prev,
+      [uha]: { ...(prev[uha] || {}), [field]: value },
+    }));
+    // 結構性變更才整頁重抓；一般欄位只本地更新以保高速
+    if (opts.hard) refresh?.();
+  };
+
+  const hardRefresh = () => {
+    setOverrides({});
     refresh?.();
   };
 
@@ -555,7 +579,7 @@ export function CustomsClearancePane({
         return next;
       });
     }
-    refresh?.();
+    hardRefresh();
   };
 
   const markSelected = () => {
@@ -570,7 +594,7 @@ export function CustomsClearancePane({
     if (!confirm(`確定將選取的 ${list.length} 櫃標示為已放行？`)) return;
     api().markPortReleasedMany?.(list);
     setPicked(new Set());
-    refresh?.();
+    hardRefresh();
     onAfterRelease?.(list);
   };
 
@@ -588,7 +612,7 @@ export function CustomsClearancePane({
       next.delete(uha);
       return next;
     });
-    refresh?.();
+    hardRefresh();
     onAfterRelease?.([uha]);
   };
 
@@ -602,7 +626,7 @@ export function CustomsClearancePane({
     const uha = form.uha;
     setForm(emptyForm());
     setShowAdd(false);
-    refresh?.();
+    hardRefresh();
     if (wasReleased) onAfterRelease?.([uha]);
   };
 
@@ -693,8 +717,11 @@ export function CustomsClearancePane({
     <div className="imp-customs grid grid-cols-1 gap-6 lg:grid-cols-12">
       <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm lg:col-span-12">
         <div className="border-b border-slate-100 px-4 pb-3 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <h2 className="m-0 text-xl font-bold tracking-tight text-slate-800">{title || "海關查驗"}</h2>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+            <div>
+              <h2 className="m-0 text-xl font-bold tracking-tight text-slate-800">{title || "海關查驗"}</h2>
+              <p className="mt-1 m-0 text-[0.72rem] text-slate-400">表格：點格編輯 · Tab 下一格 · Enter 下一列（改完不整頁重刷）</p>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <div className="imp-view-toggle" role="group" aria-label="檢視模式">
                 <button type="button" className={view === "table" ? "imp-view-btn is-on" : "imp-view-btn"} onClick={() => setViewMode("table")}>
@@ -742,7 +769,7 @@ export function CustomsClearancePane({
               {showAdd ? "收起新增" : "手動新增貨櫃"}
             </button>
             {typeof refresh === "function" ? (
-              <button type="button" className="imp-btn-ghost text-xs" onClick={refresh}>
+              <button type="button" className="imp-btn-ghost text-xs" onClick={hardRefresh}>
                 重新整理
               </button>
             ) : null}

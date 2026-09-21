@@ -5,6 +5,7 @@ import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
 import { ReleasePane } from "./ReleasePane";
 import { TablePane } from "./TablePane";
+import { TrackBoardPane } from "./TrackBoardPane";
 import { UnpackBoardPane, UnpackReportPane, UnpackSumPane } from "./UnpackBoardPane";
 
 /** 共用內容區：只依 activeTab 條件渲染，不改 DOM display */
@@ -31,6 +32,16 @@ export function ImportTabContent({
 
   return (
     <div className={`min-h-0 flex-1 overflow-auto ${padClass}`}>
+      {activeTab === "track" ? (
+        <TrackBoardPane
+          title={PANE_TITLE.track}
+          rows={lists.track}
+          counts={lists.trackCounts}
+          setActiveTab={setActiveTab}
+          openDrawer={openDrawer}
+        />
+      ) : null}
+
       {activeTab === "parse" ? (
         <ParsePane title={title} drafts={lists.drafts} onParsed={refresh} onOpenDraft={(key) => openDrawer("draft", String(key))} />
       ) : null}

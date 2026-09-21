@@ -10,7 +10,7 @@ import { WebShell } from "./shells/WebShell";
  * 方案 3：依 layout 只掛一殼；切換只靠 activeTab。
  * 不使用 JS 直接改 DOM display。
  */
-export default function ImportApp({ initialPane = "parse" }) {
+export default function ImportApp({ initialPane = "track" }) {
   const layout = useLayoutMode();
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((n) => n + 1);
@@ -136,6 +136,13 @@ export default function ImportApp({ initialPane = "parse" }) {
     const sumCounts = a.sumTabCounts?.() || { open: 0, needQty: 0, customer: 0, coldstore: 0 };
     const sum = a.listSum?.(sumTab) || [];
     const checklist = a.listClearanceSheet?.() || [];
+    const track = a.listTrackBoard?.() || [];
+    const trackCounts = a.trackBoardCounts?.() || {
+      all: track.length,
+      customs: track.filter((r) => r.trackFilter === "customs").length,
+      arrange: track.filter((r) => r.trackFilter === "arrange").length,
+      arranged: track.filter((r) => r.trackFilter === "arranged").length,
+    };
     return {
       drafts,
       port,
@@ -143,6 +150,8 @@ export default function ImportApp({ initialPane = "parse" }) {
       release: a.listRelease?.(releaseTab) || [],
       releaseCounts,
       checklist,
+      track,
+      trackCounts,
       stock,
       upBoard,
       upBoardMeta,
@@ -153,6 +162,7 @@ export default function ImportApp({ initialPane = "parse" }) {
       unpackers: a.unpackerNames?.() || [],
       trailers: a.trailerNames?.() || [],
       tabCounts: {
+        track: trackCounts.all,
         parse: drafts.length,
         port: portCounts.open,
         release: releaseCounts.open,

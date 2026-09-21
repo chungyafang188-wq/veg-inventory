@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>進口貨櫃追蹤 · 第1階段模擬（只讀＋下一步）</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #fff;
+      --line: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #0d9488;
+      --accent-soft: #ccfbf1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .banner {
+      background: #134e4a;
+      color: #ecfdf5;
+      padding: 8px 16px;
+      font-size: 12px;
+    }
+    .banner strong { color: #5eead4; }
+    header.app {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 20px 12px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 { margin: 0; font-size: 22px; }
+    header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 16px 40px; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 900px) {
+      .stats { grid-template-columns: repeat(3, 1fr); }
+      .desk { display: none !important; }
+      .phone { display: grid !important; }
+    }
+    @media (min-width: 901px) {
+      .phone { display: none !important; }
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .stat .n { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .stat.warn .n { color: #b45309; }
+    .stat.danger .n { color: #b91c1c; }
+    .stat.ok .n { color: #047857; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .tab {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .tab.on {
+      background: var(--accent-soft);
+      border-color: #5eead4;
+      color: #0f766e;
+    }
+    .search {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      min-width: 200px;
+      flex: 1;
+      max-width: 280px;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: top;
+    }
+    tr:hover td { background: #f8fafc; }
+    tr { cursor: pointer; }
+    .uha { font-weight: 800; font-variant-numeric: tabular-nums; }
+    .cno { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .b-amber { background: #fef3c7; color: #b45309; }
+    .b-sky { background: #e0f2fe; color: #0369a1; }
+    .b-violet { background: #ede9fe; color: #6d28d9; }
+    .b-emerald { background: #d1fae5; color: #047857; }
+    .b-slate { background: #f1f5f9; color: #475569; }
+    .b-red { background: #fee2e2; color: #b91c1c; }
+    .next {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f766e;
+    }
+    .next-hint { font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .batch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+      align-items: center;
+    }
+    .batch .note { font-size: 11px; color: var(--muted); }
+    .phone { display: none; gap: 10px; padding: 10px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .meta { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .card-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: none;
+      z-index: 20;
+      max-width: 90vw;
+    }
+    .foot {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>模擬頁（非正式功能）</strong>
+    · 第 1 階段構想：列表只讀＋「下一步」· 點列／處理 → 進現有海關／已放行頁 · 資料仍由判讀／匯入／手動新增進入
+  </div>
+
+  <header class="app">
+    <div>
+      <h1>進口貨櫃追蹤</h1>
+      <p>先看階段與下一步，再點進去做事（編輯不在列表上）</p>
+    </div>
+    <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增貨櫃</button>
+  </header>
+
+  <div class="wrap">
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <div class="tabs" id="tabs"></div>
+      <input class="search" id="q" type="search" placeholder="搜尋編號、櫃號、品名…" />
+    </div>
+
+    <div class="panel">
+      <div class="batch">
+        <label><input type="checkbox" id="checkAll" /> 全選本頁</label>
+        <button type="button" class="btn" id="btnNotifyT">通知拖車（已選）</button>
+        <button type="button" class="btn" id="btnNotifyC">通知客戶（已選）</button>
+        <span class="note">列表不可直接改欄位 · 批量通知留在此列</span>
+      </div>
+
+      <div class="desk">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:2.5rem"></th>
+              <th>單號／櫃號</th>
+              <th>品名</th>
+              <th>階段</th>
+              <th>藥檢／薰蒸</th>
+              <th>下一步</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="phone" id="cards"></div>
+    </div>
+
+    <p class="foot">
+      此頁為靜態模擬，用假資料示意第 1 階段範圍。正式版會接 <code>listTrackBoard</code>，點「處理」導向現有海關查驗／已放行。
+      海運中／ETA 等欄位尚未入資料時，統計可先顯示 0 或不開 Tab。
+    </p>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const ROWS = [
+      { uha: "UHA663", cno: "FBIU5243300", product: "白k-奴", stage: "customs", stageLab: "待藥檢", stageCls: "b-amber",
+        inspect: "需要藥檢", fume: "無須薰蒸", next: "填出報告日", nextHint: "填日後未到當天會顯示待藥檢結果", dest: "port" },
+      { uha: "UHA670", cno: "TEMU8891001", product: "青花菜", stage: "customs", stageLab: "待藥檢結果", stageCls: "b-sky",
+        inspect: "待藥檢結果 · 9/25", fume: "無須薰蒸", next: "等藥檢結果（9/25）", nextHint: "當天起才可標已出報告／放行", dest: "port" },
+      { uha: "UHA655", cno: "MSCU1122334", product: "紅蘿蔔", stage: "customs", stageLab: "待薰蒸", stageCls: "b-violet",
+        inspect: "無須檢驗", fume: "需要薰蒸", next: "填薰蒸安排時間", nextHint: "填妥後可推進放行", dest: "port" },
+      { uha: "UHA641", cno: "TCLU5566778", product: "馬鈴薯", stage: "release", stageLab: "待排", stageCls: "b-amber",
+        inspect: "已出報告", fume: "無須薰蒸", next: "填 FT／領櫃日", nextHint: "已放行，待安排領櫃", dest: "release" },
+      { uha: "UHA638", cno: "FBIU9900112", product: "高麗菜", stage: "arranged", stageLab: "已排櫃", stageCls: "b-emerald",
+        inspect: "已出報告", fume: "已排薰蒸", next: "填拆工後派工", nextHint: "列表可快捷派工；細節進已放行頁", dest: "release" },
+      { uha: "UHA620", cno: "OOLU3344556", product: "洋蔥", stage: "release", stageLab: "待排", stageCls: "b-amber",
+        inspect: "已出報告", fume: "無須薰蒸", next: "選拖車", nextHint: "有拖車＋拆工才派工", dest: "release" },
+    ];
+
+    const TABS = [
+      { id: "all", lab: "全部" },
+      { id: "customs", lab: "報關／檢疫" },
+      { id: "release", lab: "待排" },
+      { id: "arranged", lab: "已排櫃" },
+    ];
+
+    let tab = "all";
+    let q = "";
+    const picked = new Set();
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.style.display = "none"; }, 2200);
+    }
+
+    function filtered() {
+      return ROWS.filter((r) => {
+        if (tab !== "all" && r.stage !== tab) return false;
+        if (!q) return true;
+        const s = (r.uha + r.cno + r.product).toLowerCase();
+        return s.includes(q.toLowerCase());
+      });
+    }
+
+    function counts() {
+      return {
+        all: ROWS.length,
+        customs: ROWS.filter((r) => r.stage === "customs").length,
+        release: ROWS.filter((r) => r.stage === "release").length,
+        arranged: ROWS.filter((r) => r.stage === "arranged").length,
+        nextFill: ROWS.filter((r) => r.next.includes("填")).length,
+        wait: ROWS.filter((r) => r.next.includes("等")).length,
+      };
+    }
+
+    function renderStats() {
+      const c = counts();
+      document.getElementById("stats").innerHTML = [
+        ["全部在追", c.all, ""],
+        ["報關／檢疫", c.customs, ""],
+        ["待排", c.release, "warn"],
+        ["已排櫃", c.arranged, "ok"],
+        ["待填資料", c.nextFill, "warn"],
+        ["等待結果", c.wait, ""],
+      ].map(([l, n, cls]) => `<div class="stat ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+    }
+
+    function renderTabs() {
+      const c = counts();
+      document.getElementById("tabs").innerHTML = TABS.map((t) => {
+        const n = t.id === "all" ? c.all : c[t.id];
+        return `<button type="button" class="tab ${tab === t.id ? "on" : ""}" data-tab="${t.id}">${t.lab} ${n}</button>`;
+      }).join("");
+    }
+
+    function openRow(r) {
+      const page = r.dest === "port" ? "海關查驗" : "已放行";
+      toast(`模擬：開啟「${page}」處理 ${r.uha}（正式版會導頁／開抽屜）`);
+    }
+
+    function renderTable() {
+      const list = filtered();
+      document.getElementById("tbody").innerHTML = list.map((r) => `
+        <tr data-uha="${r.uha}">
+          <td onclick="event.stopPropagation()"><input type="checkbox" data-pick="${r.uha}" ${picked.has(r.uha) ? "checked" : ""} /></td>
+          <td><div class="uha">${r.uha}</div><div class="cno">${r.cno}</div></td>
+          <td>${r.product}</td>
+          <td><span class="badge ${r.stageCls}">${r.stageLab}</span></td>
+          <td><div>${r.inspect}</div><div class="cno">${r.fume}</div></td>
+          <td><div class="next">${r.next}</div><div class="next-hint">${r.nextHint}</div></td>
+          <td><button type="button" class="btn btn-primary" data-go="${r.uha}">處理</button></td>
+        </tr>
+      `).join("");
+
+      document.getElementById("cards").innerHTML = list.map((r) => `
+        <div class="card" data-uha="${r.uha}">
+          <div class="card-top">
+            <div>
+              <label onclick="event.stopPropagation()"><input type="checkbox" data-pick="${r.uha}" ${picked.has(r.uha) ? "checked" : ""} /> <strong class="uha">${r.uha}</strong></label>
+              <div class="cno">${r.cno}</div>
+            </div>
+            <span class="badge ${r.stageCls}">${r.stageLab}</span>
+          </div>
+          <div class="meta">${r.product} · ${r.inspect} · ${r.fume}</div>
+          <div class="next" style="margin-top:8px">${r.next}</div>
+          <div class="next-hint">${r.nextHint}</div>
+          <div class="card-actions">
+            <button type="button" class="btn btn-primary" data-go="${r.uha}">處理</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function render() {
+      renderStats();
+      renderTabs();
+      renderTable();
+    }
+
+    document.getElementById("tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tab]");
+      if (!b) return;
+      tab = b.dataset.tab;
+      render();
+    });
+
+    document.getElementById("q").addEventListener("input", (e) => {
+      q = e.target.value;
+      render();
+    });
+
+    document.getElementById("checkAll").addEventListener("change", (e) => {
+      const list = filtered();
+      if (e.target.checked) list.forEach((r) => picked.add(r.uha));
+      else list.forEach((r) => picked.delete(r.uha));
+      render();
+    });
+
+    document.body.addEventListener("change", (e) => {
+      const el = e.target.closest("[data-pick]");
+      if (!el) return;
+      if (el.checked) picked.add(el.dataset.pick);
+      else picked.delete(el.dataset.pick);
+    });
+
+    document.body.addEventListener("click", (e) => {
+      const go = e.target.closest("[data-go]");
+      if (go) {
+        e.stopPropagation();
+        const r = ROWS.find((x) => x.uha === go.dataset.go);
+        if (r) openRow(r);
+        return;
+      }
+      const tr = e.target.closest("tr[data-uha], .card[data-uha]");
+      if (tr && !e.target.closest("input,button,label")) {
+        const r = ROWS.find((x) => x.uha === tr.dataset.uha);
+        if (r) openRow(r);
+      }
+    });
+
+    document.getElementById("btnAdd").onclick = () => toast("模擬：開啟「手動新增」或「判讀」（入資料不在追蹤頁）");
+    document.getElementById("btnNotifyT").onclick = () => toast(picked.size ? `模擬：通知拖車 ${picked.size} 筆` : "請先勾選");
+    document.getElementById("btnNotifyC").onclick = () => toast(picked.size ? `模擬：通知客戶 ${picked.size} 筆` : "請先勾選");
+
+    render();
+  </script>
+</body>
+</html>

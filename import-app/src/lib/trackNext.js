@@ -1,0 +1,92 @@
+import { formatMd, isDayReached } from "./dateChip";
+
+/**
+ * 依現有欄位推導「下一步」（追蹤看板只讀用）
+ */
+export function trackNextStep(row) {
+  if (!row) return { lab: "—", hint: "", kind: "none" };
+
+  if (!row.released) {
+    const insp = row.inspect || "none";
+    const fume = row.fumigate || "none";
+
+    if (insp === "wait" || insp === "done") {
+      if (!String(row.inspectAt || "").trim()) {
+        return { lab: "填出報告日", hint: "需要藥檢：先填出報告日", kind: "action" };
+      }
+      if (!isDayReached(row.inspectAt)) {
+        return {
+          lab: `等藥檢結果（${formatMd(row.inspectAt) || "—"}）`,
+          hint: "到出報告當天起才顯示已出報告、才可放行",
+          kind: "wait",
+        };
+      }
+    }
+
+    if (fume === "wait" && !String(row.fumigateAt || "").trim()) {
+      return { lab: "填薰蒸安排時間", hint: "需要薰蒸：先填安排日時", kind: "action" };
+    }
+
+    if (row.missingTelex || row.missingData) {
+      return { lab: "補齊缺件", hint: row.missingTelex ? "缺電放" : "缺資料", kind: "warn" };
+    }
+
+    return { lab: "標示放行", hint: "進海關查驗完成後標示已放行", kind: "action" };
+  }
+
+  if (!String(row.ftAt || "").trim() && !row.ftConfirmed) {
+    return { lab: "填 FT", hint: "已放行：先確認免堆期", kind: "action" };
+  }
+
+  if (!String(row.pickupDay || "").trim()) {
+    return { lab: "填領櫃日", hint: "建議預設 FT 前一天", kind: "action" };
+  }
+
+  if (!String(row.trailer || "").trim()) {
+    return { lab: "選拖車", hint: "進已放行頁選擇拖車", kind: "action" };
+  }
+
+  if (!String(row.assignee || "").trim()) {
+    return { lab: "填拆工", hint: "填妥後再按派工", kind: "action" };
+  }
+
+  if (!row.dispatched) {
+    return { lab: "派工", hint: "進已放行頁確認後派工", kind: "action" };
+  }
+
+  return { lab: "已完成", hint: "", kind: "done" };
+}
+
+export function trackStageBadge(row) {
+  if (!row) return { lab: "—", cls: "bg-slate-100 text-slate-600" };
+  if (row.trackFilter === "arranged" || row.pickup) {
+    return { lab: "已排櫃", cls: "bg-emerald-100 text-emerald-800" };
+  }
+  if (row.trackFilter === "arrange" || row.released) {
+    return { lab: "待排", cls: "bg-amber-100 text-amber-800" };
+  }
+  const s = String(row.stageLab || row.status || "報關／檢疫");
+  if (s.includes("薰蒸")) return { lab: s, cls: "bg-violet-100 text-violet-800" };
+  if (s.includes("藥檢") || s.includes("待驗")) return { lab: s, cls: "bg-amber-100 text-amber-800" };
+  return { lab: s || "報關／檢疫", cls: "bg-sky-100 text-sky-800" };
+}
+
+export function inspectFumeSummary(row) {
+  const insp = row?.inspect || "none";
+  const fume = row?.fumigate || "none";
+  let inspLab = "待確認";
+  if (insp === "skip") inspLab = "無須檢驗";
+  else if (insp === "wait" || insp === "done") {
+    if (!String(row.inspectAt || "").trim()) inspLab = "需要藥檢";
+    else if (!isDayReached(row.inspectAt)) inspLab = `待藥檢結果 ${formatMd(row.inspectAt)}`;
+    else inspLab = `已出報告 ${formatMd(row.inspectAt)}`;
+  } else if (insp === "done") inspLab = "已出報告";
+
+  let fumeLab = "待確認";
+  if (fume === "skip") fumeLab = "無須薰蒸";
+  else if (fume === "wait") fumeLab = String(row.fumigateAt || "").trim() ? `已排薰蒸 ${formatMd(row.fumigateAt)}` : "需要薰蒸";
+  else if (fume === "done") fumeLab = "薰蒸完成";
+  else if (String(row.fumigateAt || "").trim()) fumeLab = `已排薰蒸 ${formatMd(row.fumigateAt)}`;
+
+  return { inspLab, fumeLab };
+}

@@ -8,7 +8,8 @@
  * UI：左側模組列 + 主表 + 右側／底部抽屜（不換頁）
  */
 (function () {
-  let importPane = "parse"; // parse | buy | port | release | stock | sum | files | broker...
+  let importPane = "track"; // track | parse | buy | port | release | stock | sum | files | broker...
+
   let releaseListTab = "arrange"; // arrange | pickup | open
   let drawer = null; // { kind, key } | null
   let drawerFull = false;
@@ -32,10 +33,11 @@
   }
 
   const PANE_TITLE = {
-    hub: "判讀",
+    hub: "貨櫃追蹤",
+    track: "貨櫃追蹤",
     parse: "判讀",
     status: "海關查驗",
-    board: "判讀",
+    board: "貨櫃追蹤",
     buy: "進口採購",
     port: "海關查驗",
     release: "已放行",
@@ -58,6 +60,7 @@
   ];
 
   const IMP_TABS = [
+    { id: "track", lab: "貨櫃追蹤", block: "port" },
     { id: "parse", lab: "判讀", block: "port" },
     { id: "port", lab: "海關查驗", block: "port" },
     { id: "release", lab: "已放行", block: "port" },
@@ -74,9 +77,9 @@
   ];
 
   function activeTabId(pane) {
-    if (pane === "board" || pane === "hub") return "parse";
+    if (pane === "board" || pane === "hub") return "track";
     if (pane === "status" || pane === "checklist") return "port";
-    return pane || "parse";
+    return pane || "track";
   }
 
   function blockOfPane(pane) {
@@ -90,10 +93,10 @@
   }
 
   function normalizePane(pane) {
-    let p = pane || "parse";
-    if (p === "board" || p === "hub") p = "parse";
+    let p = pane || "track";
+    if (p === "board" || p === "hub") p = "track";
     if (p === "status" || p === "checklist") p = "port";
-    if (!IMP_TABS.some((x) => x.id === p)) p = "parse";
+    if (!IMP_TABS.some((x) => x.id === p)) p = "track";
     return p;
   }
 
@@ -4391,6 +4394,112 @@
         arrange: s.arrange,
         pickup: s.pickup,
         check: s.check,
+      };
+    },
+    /** 貨櫃追蹤看板：未放行＋已放行未派工（只讀列表用） */
+    listTrackBoard() {
+      ensureState();
+      fixArriveDaysInState();
+      const cabBy = new Map((state.importCabinets || []).map((c) => [c.uha, c]));
+      const rows = [];
+
+      for (const c of portWaitingList()) {
+        const t = c.track || {};
+        ensureClearanceShape(t);
+        rows.push({
+          key: c.uha,
+          uha: c.uha || "",
+          pendingUha: isPendingUha(c.uha),
+          containerNo: c.containerNo || "",
+          arriveDay: c.arriveDay || "",
+          product: c.product || "",
+          dock: t.dock || "",
+          inspect: t.inspect || "none",
+          inspectAt: t.inspectAt || "",
+          fumigate: t.fumigate || "none",
+          fumigateAt: t.fumigateAt || "",
+          trailer: t.trailer || "",
+          assignee: t.assignee || "",
+          unpackSite: t.unpackSite || "",
+          pickupDay: t.pickupDay || "",
+          ftAt: t.ftAt || "",
+          ftConfirmed: !!(t.ftConfirmed || t.ft),
+          missingTelex: !!t.missingTelex,
+          missingData: !!t.missingData,
+          released: false,
+          pickup: false,
+          dispatched: false,
+          trackFilter: "customs",
+          dest: "port",
+          stageLab: clearanceStageLabel(t, false),
+          status: portStatusLabel(t),
+        });
+      }
+
+      for (const r of releaseWorkList()) {
+        if (r.dispatched) continue;
+        ensureClearanceShape(r);
+        const cab = cabBy.get(r.uha) || {};
+        const arranged = !!r.pickup;
+        rows.push({
+          key: r.uha,
+          uha: r.uha || "",
+          pendingUha: isPendingUha(r.uha),
+          containerNo: r.containerNo || cab.containerNo || "",
+          arriveDay: r.arriveDay || cab.arriveDay || "",
+          product: r.product || cab.product || "",
+          dock: r.dock || "",
+          inspect: r.inspect || "none",
+          inspectAt: r.inspectAt || "",
+          fumigate: r.fumigate || "none",
+          fumigateAt: r.fumigateAt || "",
+          trailer: r.trailer || "",
+          assignee: r.assignee || "",
+          unpackSite: r.unpackSite || "",
+          pickupDay: r.pickupDay || "",
+          ftAt: r.ftAt || "",
+          ftConfirmed: !!(r.ftConfirmed || r.ft),
+          missingTelex: !!r.missingTelex,
+          missingData: !!r.missingData,
+          released: true,
+          pickup: arranged,
+          dispatched: false,
+          trackFilter: arranged ? "arranged" : "arrange",
+          dest: "release",
+          stageLab: arranged ? "已排櫃" : "待排",
+          status: releaseStatusLabel(r),
+        });
+      }
+
+      rows.sort((a, b) => {
+        const ta = (() => {
+          const s = String(a.uha || "").trim().toUpperCase();
+          if (!s || /^待編-/i.test(s) || /^TMP-/i.test(s) || /^(UHA|NC)\s*$/i.test(s)) return null;
+          const m = s.match(/^(UHA|NC)(\d+)/);
+          return m ? Number(m[2].slice(-3)) : null;
+        })();
+        const tb = (() => {
+          const s = String(b.uha || "").trim().toUpperCase();
+          if (!s || /^待編-/i.test(s) || /^TMP-/i.test(s) || /^(UHA|NC)\s*$/i.test(s)) return null;
+          const m = s.match(/^(UHA|NC)(\d+)/);
+          return m ? Number(m[2].slice(-3)) : null;
+        })();
+        const pa = ta == null;
+        const pb = tb == null;
+        if (pa !== pb) return pa ? 1 : -1;
+        if (!pa && !pb && ta !== tb) return ta - tb;
+        return String(a.arriveDay || "").localeCompare(String(b.arriveDay || ""));
+      });
+
+      return rows;
+    },
+    trackBoardCounts() {
+      const all = this.listTrackBoard();
+      return {
+        all: all.length,
+        customs: all.filter((r) => r.trackFilter === "customs").length,
+        arrange: all.filter((r) => r.trackFilter === "arrange").length,
+        arranged: all.filter((r) => r.trackFilter === "arranged").length,
       };
     },
     /** 查驗清單：海關查驗＋已放行狀態總覽（後台 Excel 式） */

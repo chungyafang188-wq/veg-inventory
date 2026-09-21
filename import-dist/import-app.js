@@ -9098,6 +9098,11 @@ var v = [
 	}
 ], y = [
 	{
+		id: "track",
+		lab: "貨櫃追蹤",
+		block: "port"
+	},
+	{
 		id: "parse",
 		lab: "判讀",
 		block: "port"
@@ -9163,6 +9168,7 @@ var v = [
 		block: "acct"
 	}
 ], b = {
+	track: "貨櫃追蹤",
 	parse: "判讀",
 	port: "海關查驗",
 	release: "已放行",
@@ -9231,8 +9237,8 @@ var S = [{
 	lab: "交客戶"
 }], C = Object.fromEntries(y.map((e) => [e.id, e]));
 function ne(e) {
-	let t = e || "parse";
-	return (t === "board" || t === "hub") && (t = "parse"), (t === "status" || t === "checklist") && (t = "port"), t === "現場作業" && (t = "upBoard"), C[t] || (t = "parse"), t;
+	let t = e || "track";
+	return (t === "board" || t === "hub") && (t = "track"), (t === "status" || t === "checklist") && (t = "port"), t === "現場作業" && (t = "upBoard"), C[t] || (t = "track"), t;
 }
 function w(e) {
 	let t = C[ne(e)];
@@ -10205,6 +10211,7 @@ function ue() {
 //#endregion
 //#region src/components/CountBadge.jsx
 var de = /* @__PURE__ */ new Set([
+	"track",
 	"parse",
 	"port",
 	"release",
@@ -13070,8 +13077,442 @@ function Ot({ title: e, hint: t, columns: n, rows: r, onOpen: i }) {
 	});
 }
 //#endregion
+//#region src/lib/trackNext.js
+function kt(e) {
+	if (!e) return {
+		lab: "—",
+		hint: "",
+		kind: "none"
+	};
+	if (!e.released) {
+		let t = e.inspect || "none", n = e.fumigate || "none";
+		if (t === "wait" || t === "done") {
+			if (!String(e.inspectAt || "").trim()) return {
+				lab: "填出報告日",
+				hint: "需要藥檢：先填出報告日",
+				kind: "action"
+			};
+			if (!M(e.inspectAt)) return {
+				lab: `等藥檢結果（${ge(e.inspectAt) || "—"}）`,
+				hint: "到出報告當天起才顯示已出報告、才可放行",
+				kind: "wait"
+			};
+		}
+		return n === "wait" && !String(e.fumigateAt || "").trim() ? {
+			lab: "填薰蒸安排時間",
+			hint: "需要薰蒸：先填安排日時",
+			kind: "action"
+		} : e.missingTelex || e.missingData ? {
+			lab: "補齊缺件",
+			hint: e.missingTelex ? "缺電放" : "缺資料",
+			kind: "warn"
+		} : {
+			lab: "標示放行",
+			hint: "進海關查驗完成後標示已放行",
+			kind: "action"
+		};
+	}
+	return !String(e.ftAt || "").trim() && !e.ftConfirmed ? {
+		lab: "填 FT",
+		hint: "已放行：先確認免堆期",
+		kind: "action"
+	} : String(e.pickupDay || "").trim() ? String(e.trailer || "").trim() ? String(e.assignee || "").trim() ? e.dispatched ? {
+		lab: "已完成",
+		hint: "",
+		kind: "done"
+	} : {
+		lab: "派工",
+		hint: "進已放行頁確認後派工",
+		kind: "action"
+	} : {
+		lab: "填拆工",
+		hint: "填妥後再按派工",
+		kind: "action"
+	} : {
+		lab: "選拖車",
+		hint: "進已放行頁選擇拖車",
+		kind: "action"
+	} : {
+		lab: "填領櫃日",
+		hint: "建議預設 FT 前一天",
+		kind: "action"
+	};
+}
+function At(e) {
+	if (!e) return {
+		lab: "—",
+		cls: "bg-slate-100 text-slate-600"
+	};
+	if (e.trackFilter === "arranged" || e.pickup) return {
+		lab: "已排櫃",
+		cls: "bg-emerald-100 text-emerald-800"
+	};
+	if (e.trackFilter === "arrange" || e.released) return {
+		lab: "待排",
+		cls: "bg-amber-100 text-amber-800"
+	};
+	let t = String(e.stageLab || e.status || "報關／檢疫");
+	return t.includes("薰蒸") ? {
+		lab: t,
+		cls: "bg-violet-100 text-violet-800"
+	} : t.includes("藥檢") || t.includes("待驗") ? {
+		lab: t,
+		cls: "bg-amber-100 text-amber-800"
+	} : {
+		lab: t || "報關／檢疫",
+		cls: "bg-sky-100 text-sky-800"
+	};
+}
+function jt(e) {
+	let t = e?.inspect || "none", n = e?.fumigate || "none", r = "待確認";
+	t === "skip" ? r = "無須檢驗" : t === "wait" || t === "done" ? r = String(e.inspectAt || "").trim() ? M(e.inspectAt) ? `已出報告 ${ge(e.inspectAt)}` : `待藥檢結果 ${ge(e.inspectAt)}` : "需要藥檢" : t === "done" && (r = "已出報告");
+	let i = "待確認";
+	return n === "skip" ? i = "無須薰蒸" : n === "wait" ? i = String(e.fumigateAt || "").trim() ? `已排薰蒸 ${ge(e.fumigateAt)}` : "需要薰蒸" : n === "done" ? i = "薰蒸完成" : String(e.fumigateAt || "").trim() && (i = `已排薰蒸 ${ge(e.fumigateAt)}`), {
+		inspLab: r,
+		fumeLab: i
+	};
+}
+//#endregion
+//#region src/components/TrackBoardPane.jsx
+var Mt = "imp-chip flex-shrink-0", Nt = "imp-chip imp-chip-on flex-shrink-0", Pt = [
+	"uha",
+	"containerNo",
+	"product",
+	"dock",
+	"trailer",
+	"assignee",
+	"stageLab",
+	"status"
+];
+function Ft({ title: e, rows: t, counts: n, setActiveTab: r, openDrawer: i }) {
+	let [a, o] = (0, l.useState)("all"), [s, c] = (0, l.useState)(""), [u, d] = (0, l.useState)(() => /* @__PURE__ */ new Set()), f = (0, l.useMemo)(() => {
+		let e = t || [];
+		return a === "customs" ? e = e.filter((e) => e.trackFilter === "customs") : a === "arrange" ? e = e.filter((e) => e.trackFilter === "arrange") : a === "arranged" && (e = e.filter((e) => e.trackFilter === "arranged")), Pe(e, {
+			query: s,
+			sortBy: "uha",
+			fields: Pt,
+			getters: { uha: (e) => e.uha || e.key }
+		});
+	}, [
+		t,
+		a,
+		s
+	]), p = n || {
+		all: (t || []).length,
+		customs: (t || []).filter((e) => e.trackFilter === "customs").length,
+		arrange: (t || []).filter((e) => e.trackFilter === "arrange").length,
+		arranged: (t || []).filter((e) => e.trackFilter === "arranged").length
+	}, m = !!f.length && f.every((e) => u.has(e.uha || e.key)), h = (e) => {
+		d((t) => {
+			let n = new Set(t);
+			return n.has(e) ? n.delete(e) : n.add(e), n;
+		});
+	}, g = () => {
+		d((e) => f.every((t) => e.has(t.uha || t.key)) && f.length ? /* @__PURE__ */ new Set() : new Set(f.map((e) => e.uha || e.key)));
+	}, _ = (e) => {
+		let t = e.uha || e.key, n = e.dest === "release" || e.released ? "release" : "port";
+		r?.(n), window.setTimeout(() => i?.(n, t), 40);
+	}, v = [
+		[
+			"all",
+			"全部",
+			p.all
+		],
+		[
+			"customs",
+			"報關／檢疫",
+			p.customs
+		],
+		[
+			"arrange",
+			"待排",
+			p.arrange
+		],
+		[
+			"arranged",
+			"已排櫃",
+			p.arranged
+		]
+	];
+	return /* @__PURE__ */ (0, D.jsxs)("div", {
+		className: "rounded-2xl border border-slate-200/80 bg-white shadow-sm",
+		children: [
+			/* @__PURE__ */ (0, D.jsxs)("div", {
+				className: "border-b border-slate-100 px-4 pb-3 pt-4",
+				children: [
+					/* @__PURE__ */ (0, D.jsxs)("div", {
+						className: "flex flex-wrap items-end justify-between gap-2",
+						children: [/* @__PURE__ */ (0, D.jsxs)("div", { children: [/* @__PURE__ */ (0, D.jsx)("h2", {
+							className: "m-0 text-xl font-bold text-slate-800",
+							children: e || "貨櫃追蹤"
+						}), /* @__PURE__ */ (0, D.jsx)("p", {
+							className: "mt-1 m-0 text-xs text-slate-400",
+							children: "先看階段與下一步；點「處理」進海關查驗或已放行編輯。"
+						})] }), /* @__PURE__ */ (0, D.jsx)("button", {
+							type: "button",
+							className: "imp-btn-primary",
+							onClick: () => r?.("port"),
+							children: "＋ 新增／查驗"
+						})]
+					}),
+					/* @__PURE__ */ (0, D.jsx)("div", {
+						className: "mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4",
+						children: [
+							[
+								"全部在追",
+								p.all,
+								""
+							],
+							[
+								"報關／檢疫",
+								p.customs,
+								""
+							],
+							[
+								"待排",
+								p.arrange,
+								"text-amber-700"
+							],
+							[
+								"已排櫃",
+								p.arranged,
+								"text-emerald-700"
+							]
+						].map(([e, t, n]) => /* @__PURE__ */ (0, D.jsxs)("div", {
+							className: "rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5",
+							children: [/* @__PURE__ */ (0, D.jsx)("div", {
+								className: `text-xl font-extrabold tabular-nums ${n}`,
+								children: t ?? 0
+							}), /* @__PURE__ */ (0, D.jsx)("div", {
+								className: "text-[0.7rem] font-semibold text-slate-500",
+								children: e
+							})]
+						}, e))
+					}),
+					/* @__PURE__ */ (0, D.jsxs)("div", {
+						className: "mt-3 flex flex-wrap items-center gap-2",
+						children: [/* @__PURE__ */ (0, D.jsx)("div", {
+							className: "flex flex-wrap gap-1.5",
+							role: "tablist",
+							children: v.map(([e, t, n]) => /* @__PURE__ */ (0, D.jsxs)("button", {
+								type: "button",
+								className: a === e ? Nt : Mt,
+								onClick: () => o(e),
+								children: [t, /* @__PURE__ */ (0, D.jsx)("span", {
+									className: "ml-1 tabular-nums opacity-80",
+									children: n ?? 0
+								})]
+							}, e))
+						}), /* @__PURE__ */ (0, D.jsx)("input", {
+							type: "search",
+							className: "imp-field min-w-[12rem] flex-1 md:max-w-xs",
+							placeholder: "搜尋編號、櫃號、品名、拖車、拆工…",
+							value: s,
+							onChange: (e) => c(e.target.value),
+							"aria-label": "搜尋貨櫃"
+						})]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, D.jsxs)("div", {
+				className: "flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-500",
+				children: [/* @__PURE__ */ (0, D.jsxs)("label", {
+					className: "flex cursor-pointer items-center gap-1.5 font-semibold text-slate-600",
+					children: [/* @__PURE__ */ (0, D.jsx)("input", {
+						type: "checkbox",
+						checked: m,
+						onChange: g,
+						disabled: !f.length
+					}), "全選本頁"]
+				}), /* @__PURE__ */ (0, D.jsxs)("span", {
+					className: "text-slate-400",
+					children: [
+						"列表只讀 · 已選 ",
+						u.size,
+						" 筆（批量通知之後接）"
+					]
+				})]
+			}),
+			/* @__PURE__ */ (0, D.jsx)("div", {
+				className: "px-2 py-2 sm:px-3",
+				children: f.length ? /* @__PURE__ */ (0, D.jsxs)(D.Fragment, { children: [/* @__PURE__ */ (0, D.jsx)("div", {
+					className: "hidden overflow-x-auto rounded-xl border border-slate-200/80 md:block",
+					children: /* @__PURE__ */ (0, D.jsxs)("table", {
+						className: "w-full min-w-[52rem] table-fixed border-collapse text-sm",
+						children: [/* @__PURE__ */ (0, D.jsx)("thead", { children: /* @__PURE__ */ (0, D.jsxs)("tr", {
+							className: "border-b border-slate-200 bg-slate-100",
+							children: [
+								/* @__PURE__ */ (0, D.jsx)("th", { className: "w-[3rem] px-2 py-2 text-center" }),
+								/* @__PURE__ */ (0, D.jsx)("th", {
+									className: "px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600",
+									children: "單號／櫃號"
+								}),
+								/* @__PURE__ */ (0, D.jsx)("th", {
+									className: "px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600",
+									children: "品名"
+								}),
+								/* @__PURE__ */ (0, D.jsx)("th", {
+									className: "px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600",
+									children: "階段"
+								}),
+								/* @__PURE__ */ (0, D.jsx)("th", {
+									className: "px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600",
+									children: "藥檢／薰蒸"
+								}),
+								/* @__PURE__ */ (0, D.jsx)("th", {
+									className: "px-2 py-2 text-left text-[0.7rem] font-bold text-slate-600",
+									children: "下一步"
+								}),
+								/* @__PURE__ */ (0, D.jsx)("th", { className: "w-[5.5rem] px-2 py-2" })
+							]
+						}) }), /* @__PURE__ */ (0, D.jsx)("tbody", { children: f.map((e) => {
+							let t = e.uha || e.key, n = At(e), r = kt(e), i = jt(e);
+							return /* @__PURE__ */ (0, D.jsxs)("tr", {
+								className: "cursor-pointer border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-teal-50/40",
+								onClick: () => _(e),
+								children: [
+									/* @__PURE__ */ (0, D.jsx)("td", {
+										className: "px-2 py-2 text-center align-middle",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, D.jsx)("input", {
+											type: "checkbox",
+											checked: u.has(t),
+											onChange: () => h(t),
+											"aria-label": `選取 ${t}`
+										})
+									}),
+									/* @__PURE__ */ (0, D.jsxs)("td", {
+										className: "px-2 py-2",
+										children: [/* @__PURE__ */ (0, D.jsx)("div", {
+											className: "font-bold tabular-nums text-slate-800",
+											children: t
+										}), /* @__PURE__ */ (0, D.jsx)("div", {
+											className: "font-mono text-[0.7rem] text-slate-400",
+											children: e.containerNo || "無櫃號"
+										})]
+									}),
+									/* @__PURE__ */ (0, D.jsx)("td", {
+										className: "px-2 py-2 font-semibold text-slate-800",
+										children: e.product || "—"
+									}),
+									/* @__PURE__ */ (0, D.jsx)("td", {
+										className: "px-2 py-2",
+										children: /* @__PURE__ */ (0, D.jsx)("span", {
+											className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${n.cls}`,
+											children: n.lab
+										})
+									}),
+									/* @__PURE__ */ (0, D.jsxs)("td", {
+										className: "px-2 py-2 text-[0.78rem] text-slate-600",
+										children: [/* @__PURE__ */ (0, D.jsx)("div", { children: i.inspLab }), /* @__PURE__ */ (0, D.jsx)("div", {
+											className: "text-slate-400",
+											children: i.fumeLab
+										})]
+									}),
+									/* @__PURE__ */ (0, D.jsxs)("td", {
+										className: "px-2 py-2",
+										children: [/* @__PURE__ */ (0, D.jsx)("div", {
+											className: "text-[0.8rem] font-bold text-teal-800",
+											children: r.lab
+										}), r.hint ? /* @__PURE__ */ (0, D.jsx)("div", {
+											className: "text-[0.68rem] text-slate-400",
+											children: r.hint
+										}) : null]
+									}),
+									/* @__PURE__ */ (0, D.jsx)("td", {
+										className: "px-2 py-2",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, D.jsx)("button", {
+											type: "button",
+											className: "imp-btn-primary px-2 py-1 text-xs",
+											onClick: () => _(e),
+											children: "處理"
+										})
+									})
+								]
+							}, t);
+						}) })]
+					})
+				}), /* @__PURE__ */ (0, D.jsx)("ul", {
+					className: "m-0 grid list-none gap-2 p-0 md:hidden",
+					children: f.map((e) => {
+						let t = e.uha || e.key, n = At(e), r = kt(e), i = jt(e);
+						return /* @__PURE__ */ (0, D.jsx)("li", {
+							className: "rounded-xl border border-slate-200/90 bg-white",
+							children: /* @__PURE__ */ (0, D.jsxs)("div", {
+								className: "flex items-start gap-2 px-3 py-2.5",
+								children: [
+									/* @__PURE__ */ (0, D.jsx)("label", {
+										className: "mt-1",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, D.jsx)("input", {
+											type: "checkbox",
+											checked: u.has(t),
+											onChange: () => h(t)
+										})
+									}),
+									/* @__PURE__ */ (0, D.jsxs)("button", {
+										type: "button",
+										className: "min-w-0 flex-1 border-0 bg-transparent p-0 text-left",
+										onClick: () => _(e),
+										children: [
+											/* @__PURE__ */ (0, D.jsxs)("div", {
+												className: "flex flex-wrap items-center gap-1.5",
+												children: [/* @__PURE__ */ (0, D.jsx)("strong", {
+													className: "tabular-nums text-slate-800",
+													children: t
+												}), /* @__PURE__ */ (0, D.jsx)("span", {
+													className: `inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${n.cls}`,
+													children: n.lab
+												})]
+											}),
+											/* @__PURE__ */ (0, D.jsx)("div", {
+												className: "mt-0.5 font-mono text-xs text-slate-400",
+												children: e.containerNo || "無櫃號"
+											}),
+											/* @__PURE__ */ (0, D.jsx)("p", {
+												className: "m-0 mt-1 text-sm font-semibold text-slate-800",
+												children: e.product || "—"
+											}),
+											/* @__PURE__ */ (0, D.jsxs)("p", {
+												className: "m-0 mt-1 text-xs text-slate-500",
+												children: [
+													i.inspLab,
+													" · ",
+													i.fumeLab
+												]
+											}),
+											/* @__PURE__ */ (0, D.jsx)("p", {
+												className: "m-0 mt-1.5 text-sm font-bold text-teal-800",
+												children: r.lab
+											}),
+											r.hint ? /* @__PURE__ */ (0, D.jsx)("p", {
+												className: "m-0 text-[0.7rem] text-slate-400",
+												children: r.hint
+											}) : null
+										]
+									}),
+									/* @__PURE__ */ (0, D.jsx)("button", {
+										type: "button",
+										className: "imp-btn-primary shrink-0 px-2 py-1 text-xs",
+										onClick: () => _(e),
+										children: "處理"
+									})
+								]
+							})
+						}, t);
+					})
+				})] }) : /* @__PURE__ */ (0, D.jsx)("p", {
+					className: "m-0 py-12 text-center text-sm text-slate-400",
+					children: (t || []).length ? "沒有符合搜尋／篩選的貨櫃" : "目前沒有追蹤中的貨櫃"
+				})
+			})
+		]
+	});
+}
+//#endregion
 //#region src/components/UnpackBoardPane.jsx
-function kt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
+function It({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) {
 	let a = t.upBoardMeta || {
 		total: 0,
 		missingTrailer: 0
@@ -13171,8 +13612,8 @@ function kt({ title: e, lists: t, boardDay: n, setBoardDay: r, openDrawer: i }) 
 		]
 	});
 }
-var At = "imp-chip flex-shrink-0", jt = "imp-chip imp-chip-on flex-shrink-0";
-function Mt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
+var Lt = "imp-chip flex-shrink-0", Rt = "imp-chip imp-chip-on flex-shrink-0";
+function zt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }) {
 	let a = t.unpackCounts || {
 		pending: 0,
 		reported: 0
@@ -13203,7 +13644,7 @@ function Mt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 					a.reported
 				]].map(([e, t, i]) => /* @__PURE__ */ (0, D.jsxs)("button", {
 					type: "button",
-					className: n === e ? jt : At,
+					className: n === e ? Rt : Lt,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, D.jsx)(fe, { count: i })]
 				}, e))
@@ -13250,7 +13691,7 @@ function Mt({ title: e, lists: t, unpackTab: n, setUnpackTab: r, openDrawer: i }
 		]
 	});
 }
-function Nt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
+function Bt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExport: a }) {
 	let o = t.sumCounts || {
 		open: 0,
 		needQty: 0,
@@ -13288,13 +13729,13 @@ function Nt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 					]
 				].map(([e, t, i]) => /* @__PURE__ */ (0, D.jsxs)("button", {
 					type: "button",
-					className: n === e ? jt : At,
+					className: n === e ? Rt : Lt,
 					onClick: () => r(e),
 					children: [t, /* @__PURE__ */ (0, D.jsx)(fe, { count: i })]
 				}, e))
 			}), a ? /* @__PURE__ */ (0, D.jsx)("button", {
 				type: "button",
-				className: jt,
+				className: Rt,
 				onClick: a,
 				children: "匯出"
 			}) : null]
@@ -13319,7 +13760,7 @@ function Nt({ title: e, lists: t, sumTab: n, setSumTab: r, openDrawer: i, onExpo
 }
 //#endregion
 //#region src/components/ImportTabContent.jsx
-function Pt({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
+function Vt({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: i, setPortTab: a, unpackTab: o, setUnpackTab: s, sumTab: c, setSumTab: l, boardDay: u, setBoardDay: d, refresh: f, openDrawer: p, setActiveTab: m, padClass: h = "p-2.5" }) {
 	let g = b[e] || "進口", v = t.portCounts || {
 		open: 0,
 		inspect: 0,
@@ -13328,6 +13769,13 @@ function Pt({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 	return /* @__PURE__ */ (0, D.jsxs)("div", {
 		className: `min-h-0 flex-1 overflow-auto ${h}`,
 		children: [
+			e === "track" ? /* @__PURE__ */ (0, D.jsx)(Ft, {
+				title: b.track,
+				rows: t.track,
+				counts: t.trackCounts,
+				setActiveTab: m,
+				openDrawer: p
+			}) : null,
 			e === "parse" ? /* @__PURE__ */ (0, D.jsx)(mt, {
 				title: g,
 				drafts: t.drafts,
@@ -13357,21 +13805,21 @@ function Pt({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 				onDispatched: void 0,
 				onAfterUnmark: () => m?.("port")
 			}) : null,
-			e === "upBoard" ? /* @__PURE__ */ (0, D.jsx)(kt, {
+			e === "upBoard" ? /* @__PURE__ */ (0, D.jsx)(It, {
 				title: g,
 				lists: t,
 				boardDay: u,
 				setBoardDay: d,
 				openDrawer: p
 			}) : null,
-			e === "unpack" ? /* @__PURE__ */ (0, D.jsx)(Mt, {
+			e === "unpack" ? /* @__PURE__ */ (0, D.jsx)(zt, {
 				title: g,
 				lists: t,
 				unpackTab: o,
 				setUnpackTab: s,
 				openDrawer: p
 			}) : null,
-			e === "sum" ? /* @__PURE__ */ (0, D.jsx)(Nt, {
+			e === "sum" ? /* @__PURE__ */ (0, D.jsx)(Bt, {
 				title: g,
 				lists: t,
 				sumTab: c,
@@ -13412,14 +13860,14 @@ function Pt({ activeTab: e, lists: t, releaseTab: n, setReleaseTab: r, portTab: 
 }
 //#endregion
 //#region src/shells/PhoneShell.jsx
-var Ft = "imp-chip flex-shrink-0", It = "imp-chip imp-chip-on flex-shrink-0", Lt = "imp-chip flex-shrink-0 font-semibold", Rt = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
-function zt(e) {
+var Ht = "imp-chip flex-shrink-0", Ut = "imp-chip imp-chip-on flex-shrink-0", Wt = "imp-chip flex-shrink-0 font-semibold", Gt = "imp-chip imp-chip-on flex-shrink-0 font-semibold";
+function Kt(e) {
 	return !!(!(e instanceof Element) || e.closest(".imp-drawer-host, [role='dialog']") || e.closest("[data-no-tab-swipe]"));
 }
-function Bt(e, t) {
+function qt(e, t) {
 	return T(e).reduce((e, n) => e + (Number(t?.[n.id]) || 0), 0);
 }
-function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+function Jt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = (0, l.useRef)({
 		on: !1,
 		axis: null,
@@ -13448,14 +13896,14 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				"aria-label": "進口區塊",
 				children: [/* @__PURE__ */ (0, D.jsx)("button", {
 					type: "button",
-					className: Ft,
+					className: Ht,
 					onClick: h,
 					children: "← 總覽"
 				}), v.map((e) => {
-					let r = e.id === a, i = Bt(e.id, n);
+					let r = e.id === a, i = qt(e.id, n);
 					return /* @__PURE__ */ (0, D.jsxs)("button", {
 						type: "button",
-						className: r ? Rt : Lt,
+						className: r ? Gt : Wt,
 						onClick: () => {
 							e.id !== a && t(E(e.id));
 						},
@@ -13469,7 +13917,7 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let i = r.id === e;
 					return /* @__PURE__ */ (0, D.jsxs)("button", {
 						type: "button",
-						className: i ? It : Ft,
+						className: i ? Ut : Ht,
 						onClick: () => t(r.id),
 						children: [r.lab, de.has(r.id) ? /* @__PURE__ */ (0, D.jsx)(fe, { count: n[r.id] }) : null]
 					}, r.id);
@@ -13480,7 +13928,7 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			style: { touchAction: "pan-y" },
 			"data-imp-swipe": "1",
 			onTouchStart: (e) => {
-				if (e.touches.length !== 1 || zt(e.target)) return;
+				if (e.touches.length !== 1 || Kt(e.target)) return;
 				let t = e.touches[0];
 				i.current = {
 					on: !0,
@@ -13512,7 +13960,7 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				i.current.on = !1, i.current.axis = null;
 			},
 			onPointerDown: (e) => {
-				e.pointerType === "mouse" && e.button === 0 && (zt(e.target) || (i.current = {
+				e.pointerType === "mouse" && e.button === 0 && (Kt(e.target) || (i.current = {
 					on: !0,
 					axis: null,
 					x0: e.clientX,
@@ -13537,7 +13985,7 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				let n = e.clientX - t.x0, r = e.clientY - t.y0, a = t.axis === "h" || t.axis == null && Math.abs(n) >= 36 && Math.abs(n) > Math.abs(r) * 1.1;
 				t.axis = null, a && s(n);
 			},
-			children: /* @__PURE__ */ (0, D.jsx)(Pt, {
+			children: /* @__PURE__ */ (0, D.jsx)(Vt, {
 				activeTab: e,
 				padClass: "p-2.5",
 				...r
@@ -13547,8 +13995,8 @@ function Vt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/shells/WebShell.jsx
-var Ht = "imp-chip flex-shrink-0", Ut = "imp-chip imp-chip-on flex-shrink-0", Wt = "imp-side flex-shrink-0", Gt = "imp-side imp-side-on flex-shrink-0";
-function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
+var Yt = "imp-chip flex-shrink-0", Xt = "imp-chip imp-chip-on flex-shrink-0", P = "imp-side flex-shrink-0", Zt = "imp-side imp-side-on flex-shrink-0";
+function Qt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 	let i = w(e), a = T(i);
 	return /* @__PURE__ */ (0, D.jsxs)("div", {
 		className: "imp-tw relative flex min-h-[min(78vh,40rem)] max-w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/80 font-imp text-slate-800",
@@ -13556,7 +14004,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 			className: "flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/95 px-2 py-2",
 			children: [/* @__PURE__ */ (0, D.jsx)("button", {
 				type: "button",
-				className: `${Ht} shrink-0`,
+				className: `${Yt} shrink-0`,
 				onClick: h,
 				children: "← 總覽"
 			}), /* @__PURE__ */ (0, D.jsx)("nav", {
@@ -13566,7 +14014,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 					let n = e.id === i;
 					return /* @__PURE__ */ (0, D.jsx)("button", {
 						type: "button",
-						className: n ? Ut : Ht,
+						className: n ? Xt : Yt,
 						onClick: () => {
 							e.id !== i && t(E(e.id));
 						},
@@ -13588,7 +14036,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 						let i = r.id === e;
 						return /* @__PURE__ */ (0, D.jsxs)("button", {
 							type: "button",
-							className: i ? Gt : Wt,
+							className: i ? Zt : P,
 							onClick: () => t(r.id),
 							children: [r.lab, de.has(r.id) ? /* @__PURE__ */ (0, D.jsx)(fe, { count: n[r.id] }) : null]
 						}, r.id);
@@ -13596,7 +14044,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 				})]
 			}), /* @__PURE__ */ (0, D.jsx)("section", {
 				className: "flex min-w-0 flex-1 flex-col overflow-hidden",
-				children: /* @__PURE__ */ (0, D.jsx)(Pt, {
+				children: /* @__PURE__ */ (0, D.jsx)(Vt, {
 					activeTab: e,
 					padClass: "p-4",
 					...r
@@ -13607,7 +14055,7 @@ function Kt({ activeTab: e, setActiveTab: t, tabCounts: n, contentProps: r }) {
 }
 //#endregion
 //#region src/ImportApp.jsx
-function qt({ initialPane: e = "parse" }) {
+function $t({ initialPane: e = "track" }) {
 	let t = ue(), [n, r] = (0, l.useState)(0), i = () => r((e) => e + 1), [a, o] = (0, l.useState)(() => ne(e)), [s, c] = (0, l.useState)(null), [u, d] = (0, l.useState)(!1), [h, v] = (0, l.useState)(null), [y, b] = (0, l.useState)("arrange"), [x, te] = (0, l.useState)("open"), [S, C] = (0, l.useState)("pending"), [w, T] = (0, l.useState)("open"), [E, re] = (0, l.useState)(() => ie());
 	(0, l.useEffect)(() => {
 		y === "check" && b("arrange");
@@ -13703,7 +14151,12 @@ function qt({ initialPane: e = "parse" }) {
 			needQty: 0,
 			customer: 0,
 			coldstore: 0
-		}, p = e.listSum?.(w) || [], m = e.listClearanceSheet?.() || [];
+		}, p = e.listSum?.(w) || [], m = e.listClearanceSheet?.() || [], h = e.listTrackBoard?.() || [], g = e.trackBoardCounts?.() || {
+			all: h.length,
+			customs: h.filter((e) => e.trackFilter === "customs").length,
+			arrange: h.filter((e) => e.trackFilter === "arrange").length,
+			arranged: h.filter((e) => e.trackFilter === "arranged").length
+		};
 		return {
 			drafts: t,
 			port: r,
@@ -13711,6 +14164,8 @@ function qt({ initialPane: e = "parse" }) {
 			release: e.listRelease?.(y) || [],
 			releaseCounts: a,
 			checklist: m,
+			track: h,
+			trackCounts: g,
 			stock: i,
 			upBoard: s,
 			upBoardMeta: o,
@@ -13721,6 +14176,7 @@ function qt({ initialPane: e = "parse" }) {
 			unpackers: e.unpackerNames?.() || [],
 			trailers: e.trailerNames?.() || [],
 			tabCounts: {
+				track: g.all,
 				parse: t.length,
 				port: n.open,
 				release: a.open,
@@ -13753,12 +14209,12 @@ function qt({ initialPane: e = "parse" }) {
 		refresh: i,
 		openDrawer: O,
 		setActiveTab: ae
-	}, de = t === "web" ? /* @__PURE__ */ (0, D.jsx)(Kt, {
+	}, de = t === "web" ? /* @__PURE__ */ (0, D.jsx)(Qt, {
 		activeTab: a,
 		setActiveTab: ae,
 		tabCounts: se.tabCounts,
 		contentProps: le
-	}) : /* @__PURE__ */ (0, D.jsx)(Vt, {
+	}) : /* @__PURE__ */ (0, D.jsx)(Jt, {
 		activeTab: a,
 		setActiveTab: ae,
 		tabCounts: se.tabCounts,
@@ -13821,24 +14277,24 @@ function qt({ initialPane: e = "parse" }) {
 }
 //#endregion
 //#region src/mount.jsx
-var Jt = null, Yt = null;
-function Xt(e, t = {}) {
+var en = null, tn = null;
+function nn(e, t = {}) {
 	if (e) {
-		if (Jt && Yt === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), Jt;
-		if (Jt) try {
-			Jt.unmount();
+		if (en && tn === e) return t.pane != null && t.forcePane && window.dispatchEvent(new CustomEvent("import-set-pane", { detail: t.pane })), en;
+		if (en) try {
+			en.unmount();
 		} catch {}
-		return e.innerHTML = "", Yt = e, Jt = (0, u.createRoot)(e), Jt.render(/* @__PURE__ */ (0, D.jsx)(qt, { initialPane: t.pane || "parse" })), Jt;
+		return e.innerHTML = "", tn = e, en = (0, u.createRoot)(e), en.render(/* @__PURE__ */ (0, D.jsx)($t, { initialPane: t.pane || "parse" })), en;
 	}
 }
-function P() {
-	if (Jt) try {
-		Jt.unmount();
+function rn() {
+	if (en) try {
+		en.unmount();
 	} catch {}
-	Jt = null, Yt = null;
+	en = null, tn = null;
 }
-if (typeof window < "u" && (window.mountImportApp = Xt, window.unmountImportApp = P, window.page === "import" && typeof window.renderImportPage == "function")) try {
+if (typeof window < "u" && (window.mountImportApp = nn, window.unmountImportApp = rn, window.page === "import" && typeof window.renderImportPage == "function")) try {
 	window.renderImportPage();
 } catch {}
 //#endregion
-export { Xt as mountImportApp, P as unmountImportApp };
+export { nn as mountImportApp, rn as unmountImportApp };

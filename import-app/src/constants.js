@@ -7,6 +7,7 @@ export const BLOCKS = [
 
 /** 子頁（屬哪個模組；左側只顯示目前模組的子頁） */
 export const TABS = [
+  { id: "track", lab: "貨櫃追蹤", block: "port" },
   { id: "parse", lab: "判讀", block: "port" },
   { id: "port", lab: "海關查驗", block: "port" },
   { id: "release", lab: "已放行", block: "port" },
@@ -23,6 +24,7 @@ export const TABS = [
 ];
 
 export const PANE_TITLE = {
+  track: "貨櫃追蹤",
   parse: "判讀",
   port: "海關查驗",
   release: "已放行",
@@ -74,11 +76,11 @@ export const DEST_OPTS = [
 const TAB_BY_ID = Object.fromEntries(TABS.map((t) => [t.id, t]));
 
 export function normalizePane(pane) {
-  let p = pane || "parse";
-  if (p === "board" || p === "hub") p = "parse";
+  let p = pane || "track";
+  if (p === "board" || p === "hub") p = "track";
   if (p === "status" || p === "checklist") p = "port";
   if (p === "現場作業") p = "upBoard";
-  if (!TAB_BY_ID[p]) p = "parse";
+  if (!TAB_BY_ID[p]) p = "track";
   return p;
 }
 

@@ -2278,7 +2278,7 @@ function renderHomeHub() {
     if (hubDept === "import") {
       // 不再顯示直立層架；直接進進口頁（上方橫排）
       if (typeof window.openImport === "function") {
-        window.openImport("parse");
+        window.openImport("track");
         return;
       }
     }
@@ -2926,7 +2926,7 @@ function goFromHub(btn) {
   } else if (go === "import") {
     if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
     if (typeof window.openImport === "function") {
-      window.openImport(btn.dataset.import || "status");
+      window.openImport(btn.dataset.import || "track");
     } else {
       page = "import";
       hubOpen = "";
@@ -5857,6 +5857,8 @@ function lineChecks(qtyMap, current) {
 }
 
 const HA_ONION_ORIGINS = ["紐西蘭", "澳洲", "韓國", "越南"];
+const ONION_ORIGIN_SHORT = { 紐西蘭: "紐", 澳洲: "澳", 韓國: "韓", 越南: "越" };
+const ONION_LAST_ORIGIN_KEY = "veg-onion-last-origin";
 const HA_ONION_SPECS = ["12K", "20K"];
 const HA_ONION_SIZES = ["大球", "特大", "中球"];
 /** 南瓜規格（廠商／等級） */
@@ -11711,7 +11713,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     if (next === "import") {
       if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
       if (typeof window.openImport === "function") {
-        window.openImport("parse");
+        window.openImport("track");
         return;
       }
     }

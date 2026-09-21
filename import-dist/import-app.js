@@ -13247,7 +13247,7 @@ function Ft({ title: e, rows: t, counts: n, setActiveTab: r, openDrawer: i }) {
 							children: e || "貨櫃追蹤"
 						}), /* @__PURE__ */ (0, D.jsx)("p", {
 							className: "mt-1 m-0 text-xs text-slate-400",
-							children: "先看階段與下一步；點「處理」進海關查驗或已放行編輯。 · v72"
+							children: "先看階段與下一步；點「處理」進海關查驗或已放行編輯。"
 						})] }), /* @__PURE__ */ (0, D.jsx)("button", {
 							type: "button",
 							className: "imp-btn-primary",

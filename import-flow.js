@@ -44,7 +44,7 @@
     checklist: "海關查驗",
     stock: "進口庫存",
     sum: "拆卸總清單",
-    upBoard: "拆卸貨櫃總資料",
+    upBoard: "貨櫃拆卸排程",
     unpack: "拆櫃回報",
     files: "舊資料",
     broker: "報關行",
@@ -65,7 +65,7 @@
     { id: "port", lab: "海關查驗", block: "port" },
     { id: "release", lab: "已放行", block: "port" },
     { id: "files", lab: "舊資料", block: "port" },
-    { id: "upBoard", lab: "拆卸貨櫃總資料", block: "unpack" },
+    { id: "upBoard", lab: "貨櫃拆卸排程", block: "unpack" },
     { id: "unpack", lab: "拆櫃回報", block: "unpack" },
     { id: "sum", lab: "拆卸總清單", block: "unpack" },
     { id: "stock", lab: "庫存", block: "acct" },
@@ -290,8 +290,10 @@
         note: row.note || "",
         ftConfirmed: !!(row.ftConfirmed || row.ft),
         ftAt: row.ftAt || "",
+        pickupDay: row.pickupDay || "",
         pickupReady: !!row.pickupReady,
         unpackAt: row.unpackAt || "",
+        unpackShift: !!row.unpackShift,
         unpackSite: row.unpackSite || "",
         trailerPhone: row.trailerPhone || "",
         trailerConfirmed: !!row.trailerConfirmed,
@@ -375,6 +377,7 @@
       if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
       const j = state.unpackJobs.find((x) => x.id === key);
       if (!j) return null;
+      const rel = findReleased(j.sourceUha || j.box) || {};
       return {
         id: j.id,
         uha: j.sourceUha || j.box || "",
@@ -394,7 +397,9 @@
         trailerPhone: j.trailerPhone || "",
         trailerConfirmed: !!j.trailerConfirmed,
         trailerNote: j.trailerNote || "",
-        unpackAt: j.unpackAt || "",
+        unpackAt: j.unpackAt || rel.unpackAt || "",
+        unpackShift: !!(j.unpackShift || rel.unpackShift),
+        pickupDay: rel.pickupDay || "",
         destType: j.destType || "coldstore",
         customerName: j.customerName || "",
         stockIn: j.stockIn !== false,
@@ -515,10 +520,18 @@
       track.trailer = String(fields.trailer || "").trim();
       track.note = String(fields.note || "").trim();
       if (kind === "release") {
-        track.ftConfirmed = !!fields.ftConfirmed;
-        if (track.ftConfirmed) track.ft = true;
+        track.ftAt = String(fields.ftAt || "").slice(0, 10);
+        track.pickupDay = String(fields.pickupDay || "").slice(0, 10);
+        if (track.ftAt) {
+          track.ftConfirmed = true;
+          track.ft = true;
+        } else {
+          track.ftConfirmed = !!fields.ftConfirmed;
+          if (track.ftConfirmed) track.ft = true;
+        }
         track.pickupReady = !!fields.pickupReady;
         track.unpackAt = String(fields.unpackAt || "").trim();
+        track.unpackShift = !!fields.unpackShift;
         track.unpackSite = String(fields.unpackSite || "").trim();
         track.trailerPhone = String(fields.trailerPhone || "").trim();
         track.trailerConfirmed = !!fields.trailerConfirmed;
@@ -611,6 +624,8 @@
         j.trailerConfirmed = !!fields.trailerConfirmed;
         j.trailerNote = String(fields.trailerNote || "").trim();
         j.unpackAt = String(fields.unpackAt || "").trim();
+        j.unpackShift = !!fields.unpackShift;
+        if (j.unpackShift && j.unpackAt) j.unpackAt = j.unpackAt.slice(0, 10);
         if (j.unpackAt) j.day = unpackDayFromAt(j.unpackAt) || j.day;
         j.destType = fields.destType === "customer" ? "customer" : "coldstore";
         j.notifyTrailer = !!fields.notifyTrailer;
@@ -626,6 +641,8 @@
           rel.trailerConfirmed = j.trailerConfirmed;
           rel.trailerNote = j.trailerNote;
           rel.unpackAt = j.unpackAt;
+          rel.unpackShift = !!j.unpackShift;
+          if (fields.pickupDay != null) rel.pickupDay = String(fields.pickupDay || "").slice(0, 10);
           rel.unpackSite = j.location;
           rel.assignee = j.assignee;
           rel.assignQty = j.assignQty;
@@ -2101,6 +2118,7 @@
     if (row.trailerConfirmed == null) row.trailerConfirmed = false;
     if (row.trailerNote == null) row.trailerNote = "";
     if (row.unpackAt == null) row.unpackAt = "";
+    if (row.unpackShift == null) row.unpackShift = false;
     if (row.pickupDay == null) row.pickupDay = "";
     if (row.unpackSite == null) row.unpackSite = "";
     if (row.assignee == null) row.assignee = "";
@@ -3118,6 +3136,33 @@
     return "—";
   }
 
+  function mdSlash(v) {
+    const m = String(v || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return "";
+    return `${Number(m[2])}/${Number(m[3])}`;
+  }
+
+  function hmClock(v) {
+    const m = String(v || "").match(/T(\d{2}):(\d{2})/);
+    if (!m) return "";
+    return `${m[1]}:${m[2]}`;
+  }
+
+  /** 對齊手寫排程：9/26 上班領-到二崙、9/26 19:00到二崙、FT9/29 預定9/26 */
+  function schedulePhrase(day, unpackAt, shift, site, ftAt) {
+    const md = mdSlash(unpackAt) || mdSlash(day);
+    const ft = mdSlash(ftAt);
+    const place = String(site || "").trim();
+    const time = shift ? "上班領" : hmClock(unpackAt);
+    let line = "";
+    if (md && time && place) line = shift ? `${md} ${time}-到${place}` : `${md} ${time}到${place}`;
+    else if (md && time) line = `${md} ${time}`;
+    else if (md && place) line = `${md} 到${place}`;
+    else line = md || place;
+    if (ft && ft !== md) line = line ? `FT${ft} ${line}` : `FT${ft}`;
+    return line;
+  }
+
   let releaseSortBy = "uha"; // uha | ft
 
   function sortReleaseList(list) {
@@ -3196,14 +3241,29 @@
       }
     } else if (field === "missingTelex") row.missingTelex = Boolean(value);
     else if (field === "missingData") row.missingData = Boolean(value);
-    else if (field === "notifyTrailer") row.notifyTrailer = Boolean(value);
-    else if (field === "notifyCustomer") row.notifyCustomer = Boolean(value);
-    else if (field === "notifyUnpacker") row.notifyUnpacker = Boolean(value);
+    else if (field === "notifyTrailer") {
+      row.notifyTrailer = Boolean(value);
+      row.notified_trucker = row.notifyTrailer;
+      row.notifiedTrailer = row.notifyTrailer;
+      if (!row.notifyTrailer) {
+        row.notifyTrailerAt = "";
+        row.notifyTrailerBy = "";
+      }
+    } else if (field === "notifyCustomer") {
+      row.notifyCustomer = Boolean(value);
+      row.notified_customer = row.notifyCustomer;
+      row.notifiedCustomer = row.notifyCustomer;
+      if (!row.notifyCustomer) {
+        row.notifyCustomerAt = "";
+        row.notifyCustomerBy = "";
+      }
+    } else if (field === "notifyUnpacker") row.notifyUnpacker = Boolean(value);
     else if (field === "inspect" || field === "fumigate") {
       row[field] = value || "none";
       if (field === "inspect") row.inspectManual = true;
       else row.fumigateManual = true;
     } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt" || field === "unpackAt") row[field] = value || "";
+    else if (field === "unpackShift") row.unpackShift = Boolean(value);
     else if (field === "pickupDay") {
       const d = String(value || "").trim();
       row.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "";
@@ -3215,7 +3275,11 @@
       field === "trailerPhone" ||
       field === "trailerNote" ||
       field === "product" ||
-      field === "containerNo"
+      field === "containerNo" ||
+      field === "unpackSite" ||
+      field === "unpackSite2" ||
+      field === "assignee" ||
+      field === "assignee2"
     )
       row[field] = String(value || "").trim();
     if (field === "ftAt" && row.ftAt) {
@@ -3226,7 +3290,23 @@
       row.ftConfirmed = false;
     }
     stampRow(row);
+    if (field === "unpackAt" || field === "unpackShift" || field === "pickupDay") syncDispatchedSchedule(row);
     if (typeof save === "function") save();
+  }
+
+  function syncDispatchedSchedule(row) {
+    if (!row || !row.dispatched || !Array.isArray(state.unpackJobs)) return;
+    const uha = String(row.uha || "");
+    const jobs = state.unpackJobs.filter((j) => String(j.sourceUha || j.box || "") === uha && j.halfPart !== "2");
+    for (const j of jobs) {
+      if (row.unpackAt) {
+        j.unpackAt = row.unpackAt;
+        j.unpackShift = !!row.unpackShift;
+        const d = unpackDayFromAt(row.unpackAt);
+        if (d) j.day = d;
+      }
+      j.updatedAt = Date.now();
+    }
   }
 
   function unpackDayFromAt(unpackAt) {
@@ -3245,12 +3325,13 @@
       if (typeof setStatus === "function") setStatus("請先確認放行拖車再派送。", true);
       return false;
     }
-    if (!row.unpackAt) {
-      try {
-        row.unpackAt = new Date().toISOString().slice(0, 16);
-      } catch (_) {
-        row.unpackAt = typeof today === "function" ? `${today()}T08:00` : "";
-      }
+    if (!String(row.unpackAt || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先填拆櫃時間再派工。", true);
+      return false;
+    }
+    if (!String(row.unpackSite || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先填拆卸位置再派工。", true);
+      return false;
     }
     const day = unpackDayFromAt(row.unpackAt) || (typeof today === "function" ? today() : "");
     if (!day) {
@@ -3268,9 +3349,11 @@
       trailerConfirmed: false,
       trailerNote: row.trailerNote || "",
       unpackAt: row.unpackAt || "",
+      unpackShift: !!row.unpackShift,
+      dock: row.dock || "",
       destType: row.destType || "coldstore",
-      location: row.unpackSite || row.dock || "",
-      unloadPoint: row.unpackSite || row.dock || "",
+      location: row.unpackSite || "",
+      unloadPoint: row.unpackSite || "",
       sourceUha: row.uha,
       fromRelease: true,
       status: "pending",
@@ -3301,9 +3384,9 @@
       return j;
     }
 
-    upsertPart("1", row.assignee, row.assignQty, row.unpackSite || row.dock || "");
+    upsertPart("1", row.assignee, row.assignQty, row.unpackSite || "");
     if (row.halfSplit) {
-      upsertPart("2", row.assignee2, row.assignQty2, row.unpackSite2 || row.dock || "");
+      upsertPart("2", row.assignee2, row.assignQty2, row.unpackSite2 || "");
     } else {
       state.unpackJobs = state.unpackJobs.filter((x) => !(x.sourceUha === row.uha && x.halfPart === "2"));
     }
@@ -3489,7 +3572,14 @@
       if (typeof setStatus === "function") setStatus("請先填拖車再派工。", true);
       return false;
     }
-    if (!row.unpackSite && row.dock) row.unpackSite = row.dock;
+    if (!String(row.unpackAt || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先填拆櫃時間再派工。", true);
+      return false;
+    }
+    if (!String(row.unpackSite || "").trim()) {
+      if (typeof setStatus === "function") setStatus("請先填拆卸位置再派工。", true);
+      return false;
+    }
     const ok = dispatchToUnpackBoard(row);
     if (ok && typeof save === "function") save();
     return ok;
@@ -3535,6 +3625,41 @@
     if (n && typeof save === "function") save();
     if (typeof setStatus === "function") {
       setStatus(kind === "customer" ? `已通知客戶 ${n} 櫃。` : `已通知拖車 ${n} 櫃。`);
+    }
+    return n;
+  }
+
+  /** 取消拖車／客戶已通知，誤點可以改回來 */
+  function clearNotifyReleaseMany(uhas, kind) {
+    ensureState();
+    const list = Array.isArray(uhas) ? uhas.map((u) => String(u || "").trim()).filter(Boolean) : [];
+    if (!list.length) return 0;
+    let n = 0;
+    for (const u of list) {
+      const row = findReleased(u);
+      if (!row) continue;
+      ensureClearanceShape(row);
+      if (kind === "customer") {
+        if (!row.notifyCustomer && !row.notified_customer && !row.notifiedCustomer) continue;
+        row.notifyCustomer = false;
+        row.notified_customer = false;
+        row.notifiedCustomer = false;
+        row.notifyCustomerAt = "";
+        row.notifyCustomerBy = "";
+      } else {
+        if (!row.notifyTrailer && !row.notified_trucker && !row.notifiedTrailer) continue;
+        row.notifyTrailer = false;
+        row.notified_trucker = false;
+        row.notifiedTrailer = false;
+        row.notifyTrailerAt = "";
+        row.notifyTrailerBy = "";
+      }
+      stampRow(row);
+      n += 1;
+    }
+    if (n && typeof save === "function") save();
+    if (typeof setStatus === "function") {
+      setStatus(kind === "customer" ? `已取消客戶通知 ${n} 櫃。` : `已取消拖車通知 ${n} 櫃。`);
     }
     return n;
   }
@@ -3891,7 +4016,7 @@
 
   function openImport(pane) {
     if (typeof can === "function" && !can("page-import")) {
-      if (typeof setStatus === "function") setStatus("進口目前僅開放給雅芳。", true);
+      if (typeof setStatus === "function") setStatus("沒有進口權限。", true);
       return;
     }
     page = "import";
@@ -4233,6 +4358,7 @@
     patchReleaseField,
     dispatchRelease,
     notifyReleaseMany,
+    clearNotifyReleaseMany,
     confirmReleasePickup,
     trailerNames,
     exportSumExcel,
@@ -4366,6 +4492,8 @@
         trailer: c.trailer || "",
         trailerPhone: c.trailerPhone || "",
         pickupDay: c.pickupDay || "",
+        unpackAt: c.unpackAt || "",
+        unpackShift: !!c.unpackShift,
         unpackSite: c.unpackSite || "",
         assignee: c.assignee || "",
         notifyTrailer: !!c.notifyTrailer,
@@ -4456,6 +4584,8 @@
           trailer: r.trailer || "",
           assignee: r.assignee || "",
           unpackSite: r.unpackSite || "",
+          unpackAt: r.unpackAt || "",
+          unpackShift: !!r.unpackShift,
           pickupDay: r.pickupDay || "",
           ftAt: r.ftAt || "",
           ftConfirmed: !!(r.ftConfirmed || r.ft),
@@ -4665,33 +4795,50 @@
         .slice()
         .sort((a, b) => String(a.unpackAt || "").localeCompare(String(b.unpackAt || "")) || String(a.box).localeCompare(String(b.box)));
       return rows.map((j) => {
+        const uha = j.sourceUha || j.box || "";
+        const rel = findReleased(uha) || {};
         const missPhone = !String(j.trailerPhone || "").trim();
         const missTrailer = !String(j.trailer || "").trim();
-        const missUha = !String(j.sourceUha || j.box || "").trim();
-        const missAssignee = !String(j.assignee || "").trim();
-        const dayOnly =
-          (j.day || (j.unpackAt || "").slice(0, 10) || "").replace(/^(\d{4})-(\d{2})-(\d{2}).*/, (_, y, m, d) => `${Number(m)}/${Number(d)}`) ||
-          "—";
+        const missUha = !String(uha).trim();
+        const missAssignee = !String(j.assignee || rel.assignee || "").trim();
+        const dock = String(j.dock || rel.dock || "").trim();
+        const siteRaw = String(j.location || j.unloadPoint || rel.unpackSite || "").trim();
+        const site = siteRaw && siteRaw !== dock ? siteRaw : "";
+        const unpackAt = j.unpackAt || rel.unpackAt || "";
+        const shift = !!(j.unpackShift || rel.unpackShift);
+        const product = String(j.name || rel.product || "").replace(/\s+/g, " ").trim();
+        const containerNo = (j.codes && j.codes[0]) || rel.containerNo || "";
+        const phrase = schedulePhrase(j.day, unpackAt, shift, site, rel.ftAt);
         return {
           key: j.id,
-          uha: j.sourceUha || j.box || "",
-          sourceUha: j.sourceUha || j.box || "",
+          uha,
+          sourceUha: uha,
           box: j.box || "",
-          containerNo: (j.codes && j.codes[0]) || "",
-          product: j.name || "",
-          name: j.name || "",
+          containerNo,
+          product,
+          name: product,
           trailer: j.trailer || "",
           trailerPhone: j.trailerPhone || "",
-          assignee: j.assignee || "",
-          location: j.location || j.unloadPoint || "",
+          assignee: j.assignee || rel.assignee || "",
+          location: site,
+          dock,
           day: j.day || "",
-          unpackAt: j.unpackAt || "",
+          unpackAt,
           warn: missPhone || missTrailer || missUha,
           missPhone,
           missTrailer,
           missUha,
           missAssignee,
-          cells: [dayOnly, j.sourceUha || j.box || "—", j.assignee || "—", j.trailer || "—"],
+          cells: [
+            uha || "—",
+            containerNo || "—",
+            phrase || "—",
+            product || "—",
+            dock || "—",
+            j.trailer || "—",
+            site || "—",
+            j.assignee || rel.assignee || "—",
+          ],
         };
       });
     },
@@ -4713,8 +4860,29 @@
     },
     unpackerNames() {
       if (typeof window.__unpackApi?.unpackerNames === "function") return window.__unpackApi.unpackerNames();
-      if (typeof UNPACK_STAFF !== "undefined" && Array.isArray(UNPACK_STAFF)) return UNPACK_STAFF.slice();
-      return [];
+      if (typeof UNPACK_STAFF !== "undefined" && Array.isArray(UNPACK_STAFF)) {
+        const names = UNPACK_STAFF.slice();
+        if (!names.includes("自行拆櫃")) names.push("自行拆櫃");
+        return names;
+      }
+      return ["自行拆櫃"];
+    },
+    deliverySiteHints() {
+      ensureState();
+      const own = ["二崙", "油一", "油二", "油三", "周", "大庄", "新湖", "交謝墅", "詠諭"];
+      const seen = new Set(own);
+      const extra = [];
+      for (const r of state.importReleased || []) {
+        const dock = String(r.dock || "").trim();
+        for (const raw of [r.unpackSite, r.unpackSite2]) {
+          const s = String(raw || "").trim();
+          if (!s || seen.has(s)) continue;
+          if (dock && s === dock) continue;
+          seen.add(s);
+          extra.push(s);
+        }
+      }
+      return own.concat(extra);
     },
     dispatchUnpack(uha) {
       const row = findReleased(uha);

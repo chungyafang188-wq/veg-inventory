@@ -39,6 +39,61 @@ body {
   margin: 0 auto;
   padding: 0.85rem 0.95rem calc(2.2rem + env(safe-area-inset-bottom));
 }
+.layout-mode { display: none !important; }
+.phone-tabbar[hidden] { display: none !important; }
+body.layout-phone.has-phone-tabs .phone-tabbar {
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  margin: 0;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.2rem 0.15rem calc(0.25rem + env(safe-area-inset-bottom));
+  justify-content: space-around;
+  overflow-x: auto;
+  gap: 0;
+}
+body.layout-phone.has-phone-tabs .app {
+  padding-bottom: calc(4.4rem + env(safe-area-inset-bottom));
+}
+body.layout-phone.has-phone-tabs .shelf-switch-rack { display: none; }
+body.layout-phone .phone-tab {
+  flex: 1 1 0;
+  max-width: 6.5rem;
+  min-width: 0;
+  min-height: 3.15rem;
+  margin: 0;
+  padding: 0.2rem 0.1rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+body.layout-phone .phone-tab svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+body.layout-phone .phone-tab.is-on { color: #0b74c9; }
+body.layout-phone.has-phone-tabs .imp-tw [role="toolbar"] {
+  bottom: calc(3.6rem + env(safe-area-inset-bottom)) !important;
+}
 .layout-mode {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
@@ -1202,7 +1257,15 @@ body.layout-web .shelf-dept .shelf-ico.hub-mark {
   height: 5rem;
 }
 body.on-home.layout-web .app {
-  max-width: min(42rem, calc(100vw - 1.5rem));
+  max-width: min(72rem, calc(100vw - 1.5rem));
+}
+body.on-home .hub.hub-pick.hub-shelf {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  body.on-home .shelf-row-depts {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
 
 /* 層架橫排切換（進入部門後） */

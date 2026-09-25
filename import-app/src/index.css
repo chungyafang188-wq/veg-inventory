@@ -36,6 +36,24 @@
   max-width: none;
 }
 
+/* 抽屜遮罩是 button，主站 button{} 會把它畫成白底，排程表會整片空白 */
+button.imp-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(22, 36, 28, 0.45);
+  cursor: pointer;
+}
+.imp-drawer-host aside {
+  z-index: 1;
+}
+
 /* 主站 input/select 的大 padding 會把 h-8 文字裁掉；這裡強制可見 */
 .imp-tw .imp-field {
   display: block;
@@ -229,12 +247,14 @@
   color: #fff;
 }
 .imp-count-badge-warn {
-  background: #fef3c7;
-  color: #b45309;
+  background: #d97706;
+  color: #fff;
+  font-weight: 800;
 }
-.imp-chip-on .imp-count-badge-warn {
-  background: #fde68a;
-  color: #92400e;
+.imp-chip-on .imp-count-badge-warn,
+.imp-side-on .imp-count-badge-warn {
+  background: #b45309;
+  color: #fff;
 }
 .imp-side .imp-count-badge {
   margin-left: 0.3rem;
@@ -245,9 +265,48 @@
   background: rgb(255 255 255 / 0.2);
   color: #fff;
 }
-.imp-side-on .imp-count-badge-warn {
-  background: #fde68a;
-  color: #92400e;
+
+button.imp-remind {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0.7rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border: 2px solid #b45309;
+  border-radius: 0.9rem;
+  background: #f59e0b;
+  color: #451a03;
+  text-align: left;
+  box-shadow: 0 0 0 3px rgb(245 158 11 / 0.35);
+  cursor: pointer;
+}
+button.imp-remind .imp-remind-n {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+button.imp-remind .imp-remind-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+button.imp-remind .imp-remind-go {
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #451a03;
+  color: #fff7ed;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+button.imp-chip-warn {
+  background: #f59e0b;
+  color: #451a03;
+  border-color: #b45309;
 }
 
 /* —— 海關查驗：表格直輯／檢視切換 —— */

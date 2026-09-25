@@ -4,7 +4,7 @@ import { ListQueryBar } from "./ListQueryBar";
 import { TablePane } from "./TablePane";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS } from "../lib/listQuery";
 
-/** 拆卸貨櫃總資料（現場拆櫃）：搜尋／排序＋預設今天 */
+/** 貨櫃拆卸排程：當天要拆的櫃，欄位對齊手寫表 */
 export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawer }) {
   const meta = lists.upBoardMeta || { total: 0, missingTrailer: 0 };
   const [query, setQuery] = useState("");
@@ -38,7 +38,7 @@ export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawe
           </label>
         </div>
         <p className="mt-1 m-0 text-xs text-slate-400">
-          當日 {meta.total} 櫃。列表：拆卸日／編號／拆工／拖車。
+          當日 {meta.total} 櫃。編號、櫃號、排程、品名、碼頭、拖車、拆卸位置、拆工。
           <span className="ml-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-300 align-middle" aria-hidden />
           <span className="ml-1">底色＝缺編號／拖車／電話，點入補齊。</span>
           {meta.missingTrailer > 0 ? <span className="ml-2 font-bold text-amber-700">{meta.missingTrailer} 筆缺資料</span> : null}
@@ -59,15 +59,16 @@ export function UnpackBoardPane({ title, lists, boardDay, setBoardDay, openDrawe
             sortBy={sortBy}
             onSort={setSortBy}
             sortOpts={SORT_OPTS.upBoard}
-            placeholder="搜尋編號、拆工、拖車…"
+            placeholder="搜尋編號、櫃號、品名、碼頭、拆卸位置、拆工、拖車…"
             resultCount={viewed.length}
             totalCount={(lists.upBoard || []).length}
           />
         </div>
       </div>
       <TablePane
-        columns={["拆卸日", "編號", "拆工", "拖車"]}
+        columns={["編號", "櫃號", "排程", "品名", "碼頭", "拖車", "拆卸位置", "拆工"]}
         rows={viewed}
+        boldCol={0}
         onOpen={(key) => openDrawer("upBoard", key)}
       />
       {(lists.upBoard || []).length && !viewed.length ? (

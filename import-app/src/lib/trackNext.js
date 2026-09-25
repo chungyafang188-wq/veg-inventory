@@ -1,7 +1,7 @@
 import { formatMd, isDayReached } from "./dateChip";
 
 /**
- * 依現有欄位推導「下一步」（追蹤看板只讀用）
+ * 依現有欄位推導「下一步」。追蹤頁在這一列直接填。
  */
 export function trackNextStep(row) {
   if (!row) return { lab: "—", hint: "", kind: "none" };
@@ -12,10 +12,11 @@ export function trackNextStep(row) {
 
     if (insp === "wait" || insp === "done") {
       if (!String(row.inspectAt || "").trim()) {
-        return { lab: "填出報告日", hint: "需要藥檢：先填出報告日", kind: "action" };
+        return { step: "inspectAt", lab: "填出報告日", hint: "需要藥檢：先填出報告日", kind: "action" };
       }
       if (!isDayReached(row.inspectAt)) {
         return {
+          step: "inspectWait",
           lab: `等藥檢結果（${formatMd(row.inspectAt) || "—"}）`,
           hint: "到出報告當天起才顯示已出報告、才可放行",
           kind: "wait",
@@ -24,37 +25,47 @@ export function trackNextStep(row) {
     }
 
     if (fume === "wait" && !String(row.fumigateAt || "").trim()) {
-      return { lab: "填薰蒸安排時間", hint: "需要薰蒸：先填安排日時", kind: "action" };
+      return { step: "fumigateAt", lab: "填薰蒸安排時間", hint: "需要薰蒸：先填安排日時", kind: "action" };
     }
 
     if (row.missingTelex || row.missingData) {
-      return { lab: "補齊缺件", hint: row.missingTelex ? "缺電放" : "缺資料", kind: "warn" };
+      return { step: "missing", lab: "補齊缺件", hint: row.missingTelex ? "缺電放" : "缺資料", kind: "warn" };
     }
 
-    return { lab: "標示放行", hint: "進海關查驗完成後標示已放行", kind: "action" };
+    return { step: "release", lab: "標示放行", hint: "查驗完成後在這列標示已放行", kind: "action" };
   }
 
   if (!String(row.ftAt || "").trim() && !row.ftConfirmed) {
-    return { lab: "填 FT", hint: "已放行：先確認免堆期", kind: "action" };
+    return { step: "ft", lab: "填 FT", hint: "已放行：先確認免堆期", kind: "action" };
   }
 
   if (!String(row.pickupDay || "").trim()) {
-    return { lab: "填領櫃日", hint: "建議預設 FT 前一天", kind: "action" };
+    return { step: "pickup", lab: "填領櫃日", hint: "建議預設 FT 前一天", kind: "action" };
   }
 
   if (!String(row.trailer || "").trim()) {
-    return { lab: "選拖車", hint: "進已放行頁選擇拖車", kind: "action" };
+    return { step: "trailer", lab: "選拖車", hint: "在這列選拖車", kind: "action" };
+  }
+
+  if (!String(row.unpackAt || "").trim()) {
+    return { step: "unpackAt", lab: "填拆櫃時間", hint: "幾點到，或上班領", kind: "action" };
+  }
+
+  const site = String(row.unpackSite || "").trim();
+  const dock = String(row.dock || "").trim();
+  if (!site || (dock && site === dock)) {
+    return { step: "unpackSite", lab: "填拆卸位置", hint: "自己的倉，或客戶冰庫", kind: "action" };
   }
 
   if (!String(row.assignee || "").trim()) {
-    return { lab: "填拆工", hint: "填妥後再按派工", kind: "action" };
+    return { step: "assignee", lab: "填拆工", hint: "填妥後即可派工", kind: "action" };
   }
 
   if (!row.dispatched) {
-    return { lab: "派工", hint: "進已放行頁確認後派工", kind: "action" };
+    return { step: "dispatch", lab: "派工", hint: "時間、位置、拖車都有了就派上排程", kind: "action" };
   }
 
-  return { lab: "已完成", hint: "", kind: "done" };
+  return { step: "done", lab: "已完成", hint: "", kind: "done" };
 }
 
 export function trackStageBadge(row) {
@@ -62,8 +73,8 @@ export function trackStageBadge(row) {
   if (row.trackFilter === "arranged" || row.pickup) {
     return { lab: "已排櫃", cls: "bg-emerald-100 text-emerald-800" };
   }
-  if (row.trackFilter === "arrange" || row.released) {
-    return { lab: "待排", cls: "bg-amber-100 text-amber-800" };
+  if (row.trackFilter === "arrange" || (row.released && !row.pickup)) {
+    return { lab: "待排櫃", cls: "bg-amber-500 text-white" };
   }
   const s = String(row.stageLab || row.status || "報關／檢疫");
   if (s.includes("薰蒸")) return { lab: s, cls: "bg-violet-100 text-violet-800" };

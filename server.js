@@ -11,6 +11,23 @@ const { pathToFileURL } = require("url");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5174;
+function loadDotEnv() {
+  try {
+    const raw = fs.readFileSync(path.join(ROOT, ".env"), "utf8");
+    for (const line of raw.split(/\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const i = t.indexOf("=");
+      if (i < 0) continue;
+      const k = t.slice(0, i).trim();
+      if (process.env[k]) continue;
+      let v = t.slice(i + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      process.env[k] = v;
+    }
+  } catch (_) {}
+}
+loadDotEnv();
 function pickDataDir() {
   const candidates = [process.env.DATA_DIR, path.join(ROOT, "data"), path.join(os.tmpdir(), "veg-inventory-data")].filter(Boolean);
   for (const dir of candidates) {
@@ -169,6 +186,73 @@ function lineSigOk(rawBuf, header) {
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
 }
+let pgPool = null;
+let pgReady = null;
+function pgEnabled() {
+  return !!String(process.env.DATABASE_URL || "").trim();
+}
+function pgPoolGet() {
+  if (!pgEnabled()) return null;
+  if (!pgPool) {
+    const { Pool } = require("pg");
+    const connectionString = process.env.DATABASE_URL;
+    pgPool = new Pool({
+      connectionString,
+      ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
+      max: 3,
+    });
+  }
+  return pgPool;
+}
+function ensurePg() {
+  if (!pgEnabled()) return Promise.resolve(false);
+  if (!pgReady) {
+    const pool = pgPoolGet();
+    pgReady = pool
+      .query(
+        `CREATE TABLE IF NOT EXISTS app_state (
+          id text PRIMARY KEY,
+          doc jsonb NOT NULL,
+          updated_at bigint NOT NULL DEFAULT 0
+        )`,
+      )
+      .then(() => true);
+  }
+  return pgReady;
+}
+function seedDocFromFile() {
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (data && typeof data === "object" && !Array.isArray(data)) return data;
+  } catch (_) {}
+  return { updatedAt: 0 };
+}
+async function readSyncDoc() {
+  if (!(await ensurePg())) return null;
+  const pool = pgPoolGet();
+  const found = await pool.query("SELECT doc FROM app_state WHERE id = $1", ["sync"]);
+  if (found.rows.length) return found.rows[0].doc;
+  const seed = seedDocFromFile();
+  const at = Number(seed.updatedAt) || 0;
+  await pool.query(
+    "INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3) ON CONFLICT (id) DO NOTHING",
+    ["sync", JSON.stringify(seed), at],
+  );
+  const again = await pool.query("SELECT doc FROM app_state WHERE id = $1", ["sync"]);
+  return again.rows[0] ? again.rows[0].doc : seed;
+}
+async function writeSyncDoc(parsed) {
+  const pool = pgPoolGet();
+  const at = Number(parsed.updatedAt) || Date.now();
+  parsed.updatedAt = at;
+  await pool.query(
+    `INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
+    ["sync", JSON.stringify(parsed), at],
+  );
+  return parsed;
+}
+
 function loadSyncBundle() {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
@@ -551,6 +635,15 @@ function handleApi(req, res) {
     return true;
   }
   if (req.method === "GET") {
+    if (pgEnabled()) {
+      readSyncDoc()
+        .then((doc) => send(res, 200, JSON.stringify(doc || { updatedAt: 0 }), TYPES[".json"]))
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, '{"updatedAt":0,"ok":false}', TYPES[".json"]);
+        });
+      return true;
+    }
     fs.readFile(DATA_FILE, "utf8", (err, data) => {
       send(res, 200, err ? '{"updatedAt":0}' : data, TYPES[".json"]);
     });
@@ -558,11 +651,22 @@ function handleApi(req, res) {
   }
   if (req.method === "PUT" || req.method === "POST") {
     readBody(req)
-      .then((raw) => {
+      .then(async (raw) => {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("bad");
         const basedOn = Number(parsed.basedOn) || 0;
         delete parsed.basedOn;
+        if (pgEnabled()) {
+          const current = (await readSyncDoc()) || { updatedAt: 0 };
+          const curAt = Number(current.updatedAt) || 0;
+          if (basedOn && curAt && basedOn < curAt) {
+            send(res, 409, JSON.stringify(current), TYPES[".json"]);
+            return;
+          }
+          await writeSyncDoc(parsed);
+          send(res, 200, '{"ok":true}', TYPES[".json"]);
+          return;
+        }
         let current = { updatedAt: 0 };
         try {
           current = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
@@ -588,7 +692,10 @@ function handleApi(req, res) {
           });
         });
       })
-      .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
+      .catch((err) => {
+        console.error(err);
+        send(res, 400, '{"ok":false}', TYPES[".json"]);
+      });
     return true;
   }
   send(res, 405, "Method not allowed");

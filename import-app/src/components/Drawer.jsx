@@ -1,4 +1,6 @@
 import { DEST_OPTS, clearOptsFor } from "../constants";
+import { defaultPickupFromFt } from "../lib/dateChip";
+import { api } from "../bridge";
 
 function Field({ label, children }) {
   return (
@@ -15,7 +17,7 @@ function inputCls() {
 
 function Check({ label, checked, onChange }) {
   return (
-    <label className="inline-flex items-center gap-1.5 text-[0.82rem] font-normal text-imp-ink">
+    <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[0.82rem] font-normal text-imp-ink">
       <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
@@ -92,6 +94,7 @@ export function Drawer({
 }) {
   const f = draft.fields || {};
   const kind = drawer.kind;
+  const siteHints = api().deliverySiteHints?.() || [];
 
   const title =
     kind === "draft"
@@ -101,7 +104,7 @@ export function Drawer({
         : kind === "release"
           ? `已放行 ${drawer.key}`
           : kind === "upBoard"
-            ? `拆卸總資料 ${f.uha || drawer.key}`
+            ? `貨櫃拆卸排程 ${f.uha || drawer.key}`
             : kind === "unpack"
               ? `拆櫃回報 ${f.uha || drawer.key}`
               : kind === "sum"
@@ -124,8 +127,8 @@ export function Drawer({
   const showFooter = kind !== "stock";
 
   return (
-    <div className="imp-drawer-host pointer-events-none absolute inset-0 z-40">
-      <button type="button" aria-label="關閉" className="pointer-events-auto absolute inset-0 border-0 bg-black/35" onClick={onClose} />
+    <div className="imp-drawer-host imp-tw pointer-events-none absolute inset-0 z-40">
+      <button type="button" aria-label="關閉" className="imp-drawer-backdrop pointer-events-auto" onClick={onClose} />
       <aside
         className={`pointer-events-auto absolute flex flex-col bg-white shadow-xl ${
           full
@@ -140,10 +143,10 @@ export function Drawer({
           <div className="flex items-center justify-between gap-2">
             <strong className="text-[0.95rem] font-bold">{title}</strong>
             <div className="flex gap-1">
-              <button type="button" className="rounded px-2 py-1 text-[0.75rem] text-imp-muted hover:bg-imp-panel" onClick={onToggleFull}>
+              <button type="button" className="imp-btn-ghost px-2 py-1 text-[0.75rem]" onClick={onToggleFull}>
                 {full ? "結束完整編輯" : "完整編輯"}
               </button>
-              <button type="button" className="rounded px-2 py-1 text-[0.85rem] text-imp-muted hover:bg-imp-panel" onClick={onClose} aria-label="關閉">
+              <button type="button" className="imp-btn-ghost px-2 py-1 text-[0.85rem]" onClick={onClose} aria-label="關閉">
                 ✕
               </button>
             </div>
@@ -284,7 +287,9 @@ export function Drawer({
 
           {kind === "release" ? (
             <div className="grid gap-2.5">
-              <p className="m-0 text-[0.8rem] text-imp-muted">與拖車確認拆卸位置、日期時間後派送貨櫃拆卸資料；拆工可後填。</p>
+              <p className="m-0 text-[0.8rem] text-imp-muted">
+                {full ? "電話、藥檢、薰蒸、通知在這裡改。" : "先填這幾項。電話、藥檢、薰蒸、通知按右上「完整編輯」。"}
+              </p>
               <UhaCodeField
                 value={f.uha || ""}
                 pending={!!f.pendingUha}
@@ -292,73 +297,100 @@ export function Drawer({
                 onChange={(v) => onField("uha", v)}
                 onToggleEdit={(on) => onField("_editUha", on)}
               />
-              <div className="flex flex-wrap gap-3">
-                <Check label="確認 FT" checked={f.ftConfirmed} onChange={(v) => onField("ftConfirmed", v)} />
-                <Check label="已排拆櫃" checked={f.pickupReady} onChange={(v) => onField("pickupReady", v)} />
-              </div>
-              <Field label="拆卸日期時間">
-                <input type="datetime-local" className={inputCls()} value={(f.unpackAt || "").slice(0, 16)} onChange={(e) => onField("unpackAt", e.target.value)} />
+              <Field label="FT（免堆期）">
+                <input
+                  type="date"
+                  className={inputCls()}
+                  value={(f.ftAt || "").slice(0, 10)}
+                  onChange={(e) => {
+                    const day = e.target.value;
+                    onField("ftAt", day);
+                    onField("ftConfirmed", !!day);
+                    if (day && !String(f.pickupDay || "").trim()) onField("pickupDay", defaultPickupFromFt(day));
+                  }}
+                />
               </Field>
+              <Field label="領櫃日">
+                <input
+                  type="date"
+                  className={inputCls()}
+                  value={(f.pickupDay || "").slice(0, 10)}
+                  onChange={(e) => onField("pickupDay", e.target.value)}
+                />
+              </Field>
+              <Check label="已排拆櫃" checked={f.pickupReady} onChange={(v) => onField("pickupReady", v)} />
+              <Field label="拆卸日期時間">
+                {f.unpackShift ? (
+                  <input type="date" className={inputCls()} value={(f.unpackAt || "").slice(0, 10)} onChange={(e) => onField("unpackAt", e.target.value)} />
+                ) : (
+                  <input type="datetime-local" className={inputCls()} value={(f.unpackAt || "").slice(0, 16)} onChange={(e) => onField("unpackAt", e.target.value)} />
+                )}
+              </Field>
+              <Check label="上班領" checked={f.unpackShift} onChange={(v) => onField("unpackShift", v)} />
               <Field label="拆卸位置">
-                <input className={inputCls()} value={f.unpackSite || ""} onChange={(e) => onField("unpackSite", e.target.value)} placeholder="碼頭／冰庫／客戶點" />
+                <input className={inputCls()} list="imp-site-hints" value={f.unpackSite || ""} onChange={(e) => onField("unpackSite", e.target.value)} placeholder="自己的倉，或客戶冰庫名稱" />
               </Field>
               <Field label="拖車">
                 <input className={inputCls()} value={f.trailer || ""} onChange={(e) => onField("trailer", e.target.value)} />
               </Field>
-              <Field label="拖車電話">
-                <input type="tel" className={inputCls()} value={f.trailerPhone || ""} onChange={(e) => onField("trailerPhone", e.target.value)} />
-              </Field>
-              <div className="flex flex-wrap gap-3">
-                <Check label="已確認拖車電話" checked={f.trailerConfirmed} onChange={(v) => onField("trailerConfirmed", v)} />
-                <Check label="通知拖車" checked={f.notifyTrailer} onChange={(v) => onField("notifyTrailer", v)} />
-              </div>
-              <Field label="拖車備註">
-                <input className={inputCls()} value={f.trailerNote || ""} onChange={(e) => onField("trailerNote", e.target.value)} />
-              </Field>
               <Field label="拆工（可後填）">
                 <input className={inputCls()} list="imp-unpackers" value={f.assignee || ""} onChange={(e) => onField("assignee", e.target.value)} />
               </Field>
-              <Field label="指派數量（可後填）">
-                <input type="number" className={inputCls()} value={f.assignQty ?? ""} onChange={(e) => onField("assignQty", e.target.value)} />
-              </Field>
-              <Field label="去向">
-                <select className={inputCls()} value={f.destType || "coldstore"} onChange={(e) => onField("destType", e.target.value)}>
-                  {DEST_OPTS.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.lab}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <div className="flex flex-wrap gap-3">
-                <Check label="半櫃另指派" checked={f.halfSplit} onChange={(v) => onField("halfSplit", v)} />
-                <Check label="通知拆工" checked={f.notifyUnpacker} onChange={(v) => onField("notifyUnpacker", v)} />
-                <Check label="通知客戶" checked={f.notifyCustomer} onChange={(v) => onField("notifyCustomer", v)} />
-              </div>
-              {f.halfSplit ? (
+              {full ? (
                 <>
-                  <Field label="半櫃②拆工">
-                    <input className={inputCls()} list="imp-unpackers" value={f.assignee2 || ""} onChange={(e) => onField("assignee2", e.target.value)} />
+                  <Field label="拖車電話">
+                    <input type="tel" className={inputCls()} value={f.trailerPhone || ""} onChange={(e) => onField("trailerPhone", e.target.value)} />
                   </Field>
-                  <Field label="半櫃②數量">
-                    <input type="number" className={inputCls()} value={f.assignQty2 ?? ""} onChange={(e) => onField("assignQty2", e.target.value)} />
+                  <div className="flex flex-wrap gap-3">
+                    <Check label="已確認拖車電話" checked={f.trailerConfirmed} onChange={(v) => onField("trailerConfirmed", v)} />
+                    <Check label="通知拖車" checked={f.notifyTrailer} onChange={(v) => onField("notifyTrailer", v)} />
+                  </div>
+                  <Field label="拖車備註">
+                    <input className={inputCls()} value={f.trailerNote || ""} onChange={(e) => onField("trailerNote", e.target.value)} />
                   </Field>
-                  <Field label="半櫃②位置">
-                    <input className={inputCls()} value={f.unpackSite2 || ""} onChange={(e) => onField("unpackSite2", e.target.value)} />
+                  <Field label="指派數量（可後填）">
+                    <input type="number" className={inputCls()} value={f.assignQty ?? ""} onChange={(e) => onField("assignQty", e.target.value)} />
+                  </Field>
+                  <Field label="去向">
+                    <select className={inputCls()} value={f.destType || "coldstore"} onChange={(e) => onField("destType", e.target.value)}>
+                      {DEST_OPTS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.lab}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="flex flex-wrap gap-3">
+                    <Check label="半櫃另指派" checked={f.halfSplit} onChange={(v) => onField("halfSplit", v)} />
+                    <Check label="通知拆工" checked={f.notifyUnpacker} onChange={(v) => onField("notifyUnpacker", v)} />
+                    <Check label="通知客戶" checked={f.notifyCustomer} onChange={(v) => onField("notifyCustomer", v)} />
+                  </div>
+                  {f.halfSplit ? (
+                    <>
+                      <Field label="半櫃②拆工">
+                        <input className={inputCls()} list="imp-unpackers" value={f.assignee2 || ""} onChange={(e) => onField("assignee2", e.target.value)} />
+                      </Field>
+                      <Field label="半櫃②數量">
+                        <input type="number" className={inputCls()} value={f.assignQty2 ?? ""} onChange={(e) => onField("assignQty2", e.target.value)} />
+                      </Field>
+                      <Field label="半櫃②位置">
+                        <input className={inputCls()} value={f.unpackSite2 || ""} onChange={(e) => onField("unpackSite2", e.target.value)} />
+                      </Field>
+                    </>
+                  ) : null}
+                  <Field label="藥檢結束">
+                    {selectClear("inspect", f.inspect)}
+                    <input type="datetime-local" className={`${inputCls()} mt-1`} value={(f.inspectAt || "").slice(0, 16)} onChange={(e) => onField("inspectAt", e.target.value)} />
+                  </Field>
+                  <Field label="薰蒸結束">
+                    {selectClear("fumigate", f.fumigate)}
+                    <input type="datetime-local" className={`${inputCls()} mt-1`} value={(f.fumigateAt || "").slice(0, 16)} onChange={(e) => onField("fumigateAt", e.target.value)} />
+                  </Field>
+                  <Field label="備註">
+                    <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />
                   </Field>
                 </>
               ) : null}
-              <Field label="藥檢結束">
-                {selectClear("inspect", f.inspect)}
-                <input type="datetime-local" className={`${inputCls()} mt-1`} value={(f.inspectAt || "").slice(0, 16)} onChange={(e) => onField("inspectAt", e.target.value)} />
-              </Field>
-              <Field label="薰蒸結束">
-                {selectClear("fumigate", f.fumigate)}
-                <input type="datetime-local" className={`${inputCls()} mt-1`} value={(f.fumigateAt || "").slice(0, 16)} onChange={(e) => onField("fumigateAt", e.target.value)} />
-              </Field>
-              <Field label="備註">
-                <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />
-              </Field>
             </div>
           ) : null}
 
@@ -498,39 +530,44 @@ export function Drawer({
               <option key={n} value={n} />
             ))}
           </datalist>
+          <datalist id="imp-site-hints">
+            {siteHints.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
         </div>
 
         {showFooter ? (
           <div className="flex flex-wrap gap-2 border-t border-imp-line p-3">
             {kind === "draft" ? (
               <>
-                <button type="button" className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white" onClick={onConfirmDraft}>
+                <button type="button" className="imp-btn-primary" onClick={onConfirmDraft}>
                   匯入貨櫃追蹤
                 </button>
-                <button type="button" className="rounded-md border border-imp-line px-3 py-2 text-[0.82rem]" onClick={onDropDraft}>
+                <button type="button" className="imp-btn-ghost" onClick={onDropDraft}>
                   丟棄
                 </button>
               </>
             ) : null}
             {kind === "port" ? (
-              <button type="button" className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white" onClick={onMarkRelease}>
+              <button type="button" className="imp-btn-primary" onClick={onMarkRelease}>
                 標示放行
               </button>
             ) : null}
             {kind === "release" ? (
-              <button type="button" className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white" onClick={onDispatch}>
+              <button type="button" className="imp-btn-primary" onClick={onDispatch}>
                 儲存並派送拆卸
               </button>
             ) : null}
             {kind === "unpack" && f.canReport ? (
-              <button type="button" className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white" onClick={onSubmitReport}>
+              <button type="button" className="imp-btn-primary" onClick={onSubmitReport}>
                 送出回報
               </button>
             ) : null}
             {kind !== "unpack" || !f.canReport ? (
               <button
                 type="button"
-                className="rounded-md bg-imp-green px-3 py-2 text-[0.82rem] font-bold text-white disabled:opacity-40"
+                className="imp-btn-primary disabled:opacity-40"
                 disabled={!draft.dirty && kind !== "release"}
                 onClick={onSave}
               >
@@ -539,14 +576,14 @@ export function Drawer({
             ) : (
               <button
                 type="button"
-                className="rounded-md border border-imp-line px-3 py-2 text-[0.82rem] disabled:opacity-40"
+                className="imp-btn-ghost disabled:opacity-40"
                 disabled={!draft.dirty}
                 onClick={onSave}
               >
                 暫存
               </button>
             )}
-            <button type="button" className="rounded-md border border-imp-line px-3 py-2 text-[0.82rem]" onClick={onForceClose}>
+            <button type="button" className="imp-btn-ghost" onClick={onForceClose}>
               取消
             </button>
           </div>

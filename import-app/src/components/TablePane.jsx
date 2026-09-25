@@ -13,7 +13,7 @@ function EmptyState() {
 }
 
 /** warn：缺資料列用色塊標示（不寫狀態文字） */
-export function TablePane({ title, hint, columns, rows, onOpen }) {
+export function TablePane({ title, hint, columns, rows, onOpen, boldCol = 1 }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
       {title ? <h2 className="m-0 text-xl font-bold text-slate-800">{title}</h2> : null}
@@ -46,7 +46,7 @@ export function TablePane({ title, hint, columns, rows, onOpen }) {
                     {r.cells.map((cell, i) => (
                       <td
                         key={i}
-                        className={`px-3 py-2.5 align-top text-slate-700 ${i === 1 ? "font-bold text-slate-900" : ""}`}
+                        className={`px-3 py-2.5 align-top text-slate-700 ${i === boldCol ? "font-bold text-slate-900" : ""}`}
                       >
                         {cell || "—"}
                       </td>

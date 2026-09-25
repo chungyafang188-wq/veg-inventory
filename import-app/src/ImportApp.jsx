@@ -163,6 +163,7 @@ export default function ImportApp({ initialPane = "port" }) {
       trailers: a.trailerNames?.() || [],
       tabCounts: {
         track: trackCounts.all,
+        trackArrange: trackCounts.arrange,
         parse: drafts.length,
         port: portCounts.open,
         release: releaseCounts.open,

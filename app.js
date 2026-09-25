@@ -585,6 +585,7 @@ function load() {
       if (!Array.isArray(data.siteMoves)) data.siteMoves = [];
       if (!Array.isArray(data.siteWorks)) data.siteWorks = [];
       if (!Array.isArray(data.auditLog)) data.auditLog = [];
+      if (!data.cashDays || typeof data.cashDays !== "object" || Array.isArray(data.cashDays)) data.cashDays = {};
       return data;
     }
   } catch (_) {}
@@ -605,6 +606,7 @@ function load() {
     siteMoves: [],
     siteWorks: [],
     auditLog: [],
+    cashDays: {},
   };
 }
 function save() {
@@ -810,6 +812,7 @@ if (!Array.isArray(state.importReleased)) state.importReleased = [];
 if (!Array.isArray(state.siteMoves)) state.siteMoves = [];
 if (!Array.isArray(state.siteWorks)) state.siteWorks = [];
 if (!Array.isArray(state.auditLog)) state.auditLog = [];
+if (!state.cashDays || typeof state.cashDays !== "object" || Array.isArray(state.cashDays)) state.cashDays = {};
 const seeded = ensureTodayBooks();
 const recounted = recountAllBooks();
 syncAllNqQty();
@@ -819,8 +822,10 @@ let co = "nq";
 let page = "home";
 let hubDept = "";
 let hubOpen = "";
+/** 空殼工作區目前子頁（公告／田區／出口／人員） */
+let hubWorkPane = "";
 /** 銷貨工作區：orders｜ware｜acct（對齊進口三欄） */
-let hubSalesBlock = "orders";
+let hubSalesBlock = "ship";
 /** 銷貨殼內目前子頁（空＝只顯示工作區目錄） */
 let hubSalesPane = "";
 /** DOM 暫掛：把功能頁搬進銷貨工作區時還原用 */
@@ -1335,22 +1340,24 @@ function saveStaffList(list) {
 const STAFF_ROSTER = [
   { name: "現場", role: "site" },
   { name: "凱婷", role: "acct" },
-  { name: "凱琪", role: "acct" },
-  { name: "宜淨", role: "acct" },
   { name: "子羽", role: "acct" },
   { name: "湯", role: "acct" },
+  { name: "家鑫", role: "plant" },
   { name: "小胖", role: "driver" },
   { name: "善存", role: "driver" },
   { name: "阿宏", role: "unpacker" },
   { name: "靜宜", role: "unpacker" },
   { name: "雅芳", role: "boss" },
+  { name: "威誠", role: "viewer" },
 ];
 const ROLE_LABEL = {
   site: "現場",
   acct: "會計",
+  plant: "廠務",
   driver: "司機",
-  unpacker: "拆櫃人員",
+  unpacker: "拆工",
   boss: "主管",
+  viewer: "老闆",
 };
 const UNPACK_STAFF = STAFF_ROSTER.filter((p) => p.role === "unpacker").map((p) => p.name);
 function isUnpackerRole(role) {
@@ -1371,38 +1378,134 @@ function currentRole() {
   return staffByName(currentStaff())?.role || "";
 }
 function can(action) {
-  const r = currentRole();
+  const rec = staffByName(currentStaff());
+  const r = rec?.role || "";
+  const who = rec?.name || "";
   if (!r) return false;
   if (r === "boss") return true;
-  // 進口／出口：目前僅雅芳（主管）
-  if (action === "page-import" || action === "page-export") return false;
-  // TEMP: 拆櫃/庫存/現場 未完成，暫僅雅芳 — 恢復時刪除此段，並還原下方 page-unpack / page-sitework / books-stock 規則
-  if (action === "page-unpack" || action === "page-sitework" || action === "books-stock") {
-    return false;
+  const viewOnly = new Set([
+    "order", "count", "inbound", "edit", "delete", "cancel", "ship-books",
+    "books-in", "books-sales", "unpack-confirm", "assign-driver", "edit-shipped",
+    "sitework-create", "fix-morning", "split-run", "ship-plan", "take-run", "deliver",
+    "unpack-assign", "sitework-take",
+  ]);
+  if (r === "viewer") return !viewOnly.has(action);
+  const acct = r === "acct";
+  const plant = r === "plant";
+  const doImport = who === "湯" || who === "子羽" || plant;
+  const doStock = who === "子羽" || plant;
+  if (action === "page-board") return true;
+  if (action === "page-help" || action === "page-finance") return acct;
+  if (action === "cash-day-unlock") return false;
+  if (action === "page-books" || action === "books-in" || action === "books-sales") return acct;
+  if (action === "page-master") return acct || plant;
+  if (action === "page-report") return acct;
+  if (action === "page-stats" || action === "books-stock" || action === "page-export") return false;
+  if (action === "page-import") return doImport;
+  if (action === "page-unpack") return r === "unpacker";
+  if (action === "page-ware-in") return doStock;
+  if (action === "page-rack" || action === "page-sitework" || action === "sitework-create" || action === "sitework-take") {
+    return doStock || r === "site" || plant;
   }
-  if (r === "unpacker") {
-    return action === "page-unpack";
-  }
-  if (action === "page-stats") return false;
-  if (action === "page-help") return true;
-  if (action === "page-plan" || action === "view-ship") return r === "site" || r === "driver" || r === "acct";
   if (action === "page-orders" || action === "order" || action === "count" || action === "inbound" || action === "ship-books" || action === "edit" || action === "delete" || action === "cancel") {
-    return r === "acct";
+    return acct || plant;
   }
-  if (action === "page-books" || action === "books-in" || action === "books-sales") return r === "acct";
-  // TEMP off: if (action === "page-unpack") return r === "site" || r === "acct" || r === "driver";
-  if (action === "unpack-assign") return r === "site" || r === "acct";
-  // TEMP off: if (action === "page-sitework") return r === "site" || r === "acct" || r === "driver";
-  // TEMP off: if (action === "books-stock") return r === "acct";
-  if (action === "sitework-create") return r === "site" || r === "acct";
-  if (action === "sitework-take") return r === "driver" || r === "site" || r === "acct";
-  if (action === "unpack-confirm") return r === "acct";
+  if (action === "page-plan" || action === "view-ship") return acct || plant || r === "site" || r === "driver";
+  if (action === "page-fields") return acct || plant || r === "site";
+  if (action === "page-people") return acct || plant;
+  if (action === "page-labels") return acct || plant || r === "site" || r === "unpacker";
   if (action === "ship-plan" || action === "take-run" || action === "deliver") return r === "driver";
-  if (action === "assign-driver") return r === "acct";
-  if (action === "split-run") return r === "acct" || r === "driver";
-  if (action === "edit-shipped") return r === "acct";
-  if (action === "fix-morning") return false;
+  if (action === "assign-driver" || action === "unpack-confirm" || action === "edit-shipped") return acct;
+  if (action === "split-run") return acct || r === "driver";
+  if (r === "unpacker") return action === "page-unpack" || action === "page-board" || action === "page-labels";
   return false;
+}
+const WORK_AREAS = [
+  { id: "board", icon: "board", title: "公告欄", blurb: "全體一份", tone: "orders" },
+  { id: "fields", icon: "field", title: "田區管理", blurb: "契作・巡視・採收", tone: "ware" },
+  { id: "import", icon: "ship", title: "進口", blurb: "採購・拆櫃・帳務", tone: "ware" },
+  { id: "export", icon: "plane", title: "出口", blurb: "訂單・出貨・帳務", tone: "orders" },
+  { id: "sales", icon: "sales", title: "銷售管理", blurb: "訂貨・倉庫・帳款", tone: "acct" },
+  { id: "people", icon: "people", title: "人員管理", blurb: "帳號・調工・對帳", tone: "help" },
+];
+function canSalesHome() {
+  return (
+    can("page-orders") ||
+    can("page-plan") ||
+    can("page-books") ||
+    can("page-stats") ||
+    can("page-sitework") ||
+    can("page-help")
+  );
+}
+function canWorkArea(id) {
+  if (id === "board") return can("page-board");
+  if (id === "fields") return can("page-fields");
+  if (id === "import") return can("page-import");
+  if (id === "export") return can("page-export");
+  if (id === "sales") return canSalesHome();
+  if (id === "people") return can("page-people");
+  return false;
+}
+function workPanesFor(id) {
+  if (id === "board") {
+    return [{ id: "all", lab: "全體公告", hint: "全公司同一份，之後用標籤分類即可" }];
+  }
+  if (id === "fields") {
+    return [
+      { id: "contract", lab: "契作田區", hint: "高麗菜、紫高麗、洋蔥" },
+      { id: "watch", lab: "田間巡視", hint: "確認田區狀況" },
+      { id: "harvest", lab: "到日採收", hint: "時間到去採" },
+    ];
+  }
+  if (id === "export") {
+    return [
+      { id: "exp-order", lab: "出口訂單", hint: "出口訂單建置中" },
+      { id: "exp-ship", lab: "備貨出貨", hint: "備貨與出貨建置中" },
+      { id: "exp-label", lab: "出口標籤", hint: "標籤印製建置中" },
+      { id: "exp-acct", lab: "出口帳務", hint: "出口帳務建置中" },
+    ];
+  }
+  if (id === "people") {
+    return [
+      { id: "attend", lab: "每日到班", hint: "上班下班，時薪與調工分開算" },
+      { id: "accounts", lab: "系統帳號", hint: "登入、角色、權限" },
+      { id: "bosses", lab: "工人老闆", hint: "調工跟誰結工錢" },
+      { id: "workers", lab: "工人名單", hint: "現場工人歸哪位老闆" },
+      { id: "dispatch", lab: "調工單", hint: "先留著" },
+      { id: "labor-bill", lab: "工錢對帳", hint: "依老闆彙總應付" },
+    ];
+  }
+  return [];
+}
+function workStubHtml(dept, paneId) {
+  const panes = workPanesFor(dept);
+  const pane = panes.find((p) => p.id === paneId) || panes[0];
+  const area = WORK_AREAS.find((d) => d.id === dept);
+  const notes = {
+    "board:all": ["全公司只看這一欄，不拆進口／田區／銷售各一份。", "之後可用標籤（進口、田區、銷售、人事）過濾。", "主管發、其他人看。"],
+    "fields:contract": ["農民給種植日和地點。作物只有高麗菜、紫高麗、洋蔥。", "預計採收日用農民講的日子。", "平常不記施肥、施藥。"],
+    "fields:watch": ["同一塊田可以記多次。", "每次記巡視日、田況正常或要留意、一句話。"],
+    "fields:harvest": ["到了預計採收日，我們去採。", "記實際採收日和數量。數量之後才交庫存。"],
+    "export:exp-order": ["對齊進口殼：訂單先建骨架。"],
+    "export:exp-ship": ["備貨、出貨流程建置中。"],
+    "export:exp-label": ["出口標籤之後可接到共用標籤印製。"],
+    "export:exp-acct": ["出口帳務建置中。"],
+    "people:accounts": ["系統帳號＝誰能登入、什麼權限。", "和現場工人分開。"],
+    "people:bosses": ["工人各自跟不同老闆。", "工錢跟老闆結，不是跟每個工人結。"],
+    "people:workers": ["現場工人名單，預設歸一位老闆。"],
+    "people:attend": ["名字從工人名單帶出，不用重打。", "時薪：上班到下班扣休息，金額＝時薪×時數。", "調工：時數要記，錢用當天到班人數×今天的一人金額，金額每天另填。"],
+    "people:dispatch": ["舊的調工單先留著。", "每天到班改在「每日到班」記。"],
+    "people:labor-bill": ["依老闆、月份對帳。", "理貨一欄、田間一欄，可再拆種植／噴藥／採收。"],
+  };
+  const bullets = notes[`${dept}:${pane?.id || ""}`] || ["架構已定位，內容下一步再填。"];
+  const lis = bullets.map((x) => `<li>${esc(x)}</li>`).join("");
+  return `<div class="work-stub">
+    <p class="work-stub-kicker">${esc(area?.title || "")}</p>
+    <h2 class="work-stub-title">${esc(pane?.lab || "工作區")}</h2>
+    <p class="work-stub-hint">${esc(pane?.hint || "架構已定位，內容建置中。")}</p>
+    <ul class="work-stub-list">${lis}</ul>
+  </div>`;
 }
 function requireStaff() {
   const n = currentStaff();
@@ -1496,7 +1599,8 @@ function finishLogin(name) {
   page = homePage();
   hubDept = "";
   hubOpen = "";
-  hubSalesBlock = "orders";
+  hubWorkPane = "";
+  hubSalesBlock = "ship";
   hubSalesPane = "";
   render();
   return true;
@@ -1545,7 +1649,8 @@ function goHome() {
   page = "home";
   hubDept = "";
   hubOpen = "";
-  hubSalesBlock = "orders";
+  hubWorkPane = "";
+  hubSalesBlock = "ship";
   hubSalesPane = "";
   render();
 }
@@ -1985,16 +2090,17 @@ function renderHomeHub() {
     prep.push(hubLink('data-go="books" data-books="rack"', "rack", "資財管理", "", "", "鐵架／八格籃"));
   }
   const labelBtns = [];
-  if (can("page-orders") || can("page-plan") || can("page-books")) {
+  if (can("page-labels")) {
     labelBtns.push(hubLink('data-go="labels"', "tag", "標籤印製"));
   }
-  if (can("page-books")) {
+  if (can("page-report")) {
     labelBtns.push(hubLink('data-go="label-prints"', "tag", "列印明細"));
   }
   const acct = [];
   if (can("page-books")) {
     acct.push(hubLink('data-go="soon" data-soon="cust"', "person", "客戶", "soon"));
     acct.push(hubLink('data-go="soon" data-soon="vendor"', "shop", "廠商", "soon"));
+    acct.push(hubLink('data-go="books" data-books="cashday"', "coin", "現金日報"));
     acct.push(hubLink('data-go="books" data-books="sales"', "bill", "出貨帳單"));
     acct.push(hubLink('data-go="books" data-books="ledger"', "clip", "進銷存清單"));
   }
@@ -2094,9 +2200,16 @@ function renderHomeHub() {
   const stubShelf = (items) => items.map(stubShelfItem).join("");
 
   const DEPT_DEFS = [
-    { id: "import", icon: "ship", title: "進口", blurb: "採購・拆櫃・帳務", tone: "ware" },
-    { id: "export", icon: "plane", title: "出口", blurb: "訂單・出貨・帳務", tone: "orders" },
-    { id: "sales", icon: "sales", title: "銷貨", blurb: "訂貨・倉庫・帳款", tone: "acct" },
+    { id: "ship", icon: "sales", title: "訂單／出貨", blurb: "下單・排程・送貨", tone: "orders", show: () => can("page-orders") || can("page-plan") },
+    { id: "ware", icon: "crate", title: "庫存管理", blurb: "進貨・調倉・容器", tone: "ware", show: () => can("page-ware-in") || can("page-rack") || can("page-sitework") || can("books-stock") },
+    { id: "import", icon: "ship", title: "進口管理", blurb: "港口・放行・拆櫃", tone: "ware", show: () => can("page-import") || can("page-unpack") },
+    { id: "finance", icon: "coin", title: "財務核帳", blurb: "現金・貨運・沖帳", tone: "acct", show: () => can("page-finance") },
+    { id: "master", icon: "person", title: "基本資料", blurb: "客戶・廠商", tone: "help", show: () => can("page-master") },
+    { id: "report", icon: "clip", title: "報表中心", blurb: "進銷存・統計", tone: "acct", show: () => can("page-report") || can("page-stats") },
+    { id: "fields", icon: "clip", title: "田區管理", blurb: "契作・巡視・採收", tone: "ware", show: () => can("page-fields") },
+    { id: "people", icon: "person", title: "人員管理", blurb: "到班・工錢", tone: "help", show: () => can("page-people") },
+    { id: "export", icon: "plane", title: "出口", blurb: "先留著", tone: "orders", show: () => can("page-export") },
+    { id: "board", icon: "clip", title: "公告欄", blurb: "全體一份", tone: "orders", show: () => can("page-board") },
   ];
 
   const shelfSwitchStrip = (items, { active, attr, compact, bare } = {}) => {
@@ -2122,21 +2235,7 @@ function renderHomeHub() {
   };
 
   const topLevelSwitch = (activeId) => {
-    const visibleDepts = DEPT_DEFS.filter((d) => {
-      if (d.id === "import") return can("page-import");
-      if (d.id === "export") return can("page-export");
-      if (d.id === "sales") {
-        return (
-          can("page-orders") ||
-          can("page-plan") ||
-          can("page-books") ||
-          can("page-stats") ||
-          can("page-sitework") ||
-          can("page-help")
-        );
-      }
-      return true;
-    });
+    const visibleDepts = DEPT_DEFS.filter((d) => (typeof d.show === "function" ? d.show() : true));
     const deptRow = shelfSwitchStrip(visibleDepts, { active: activeId, attr: "dept", compact: true });
     const toolRow = labelBtns.length
       ? shelfSwitchStrip([{ id: "labels", icon: "tag", title: "標籤列印", tone: "ware" }], {
@@ -2271,6 +2370,14 @@ function renderHomeHub() {
     return;
   }
 
+  if (hubDept === "fields" || hubDept === "people" || hubDept === "board") {
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
+    const pane = hubDept === "fields" ? "contract" : hubDept === "people" ? "attend" : "all";
+    box.innerHTML = `${topLevelSwitch(hubDept)}${workStubHtml(hubDept, hubWorkPane || pane)}`;
+    return;
+  }
+
   if (hubDept === "import" || hubDept === "export") {
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
@@ -2290,30 +2397,16 @@ function renderHomeHub() {
 
   box.classList.add("hub-pick", "home-app", "hub-shelf");
   const roleHint =
-    role === "driver" ? "司機作業" : role === "site" ? "現場作業" : role === "unpacker" ? "拆櫃作業" : "會計作業";
+    role === "driver" ? "司機作業" : role === "site" ? "現場作業" : role === "unpacker" ? "拆工作業" : role === "plant" ? "廠務作業" : role === "viewer" ? "檢視" : role === "boss" ? "主管作業" : "會計作業";
   const deptTiles = shelfSwitchStrip(
-    DEPT_DEFS.filter((d) => {
-      if (d.id === "import") return can("page-import");
-      if (d.id === "export") return can("page-export");
-      if (d.id === "sales") {
-        return (
-          can("page-orders") ||
-          can("page-plan") ||
-          can("page-books") ||
-          can("page-stats") ||
-          can("page-sitework") ||
-          can("page-help")
-        );
-      }
-      return true;
-    }),
+    DEPT_DEFS.filter((d) => (typeof d.show === "function" ? d.show() : true)),
     { active: "", attr: "dept", compact: false, bare: true },
   );
   const toolsTile = labelBtns.length
     ? `<button type="button" class="shelf-item shelf-tool hub-ware" data-hub="labels">
         <span class="shelf-ico hub-mark has-pic" aria-hidden="true">${hubPic("tag")}</span>
         <strong class="shelf-lab">標籤列印</strong>
-        <em class="shelf-note">三部門共用</em>
+        <em class="shelf-note">出貨、進口、現場共用</em>
       </button>`
     : "";
   const toolsRack = toolsTile
@@ -2330,7 +2423,7 @@ function renderHomeHub() {
       <h1 class="home-title">${esc(who)}<span>${esc(roleHint)}</span></h1>
     </header>
     <section class="shelf-rack shelf-home">
-      <p class="shelf-rack-label">選擇部門</p>
+      <p class="shelf-rack-label">選擇模組</p>
       <div class="shelf-board">
         <div class="shelf-row shelf-row-depts">${deptTiles}</div>
         <div class="shelf-ledge" aria-hidden="true"></div>
@@ -2460,48 +2553,42 @@ function buildSalesBlocks() {
       attrs: 'data-sales-pane="ship"',
     });
   }
-  if (can("page-orders") || can("page-plan") || can("page-books")) {
+  if (can("page-orders")) {
     orderTabs.push({
-      id: "labels",
-      lab: "標籤印製",
-      hint: "貼紙列印",
-      attrs: 'data-sales-pane="labels"',
+      id: "sales-bill",
+      lab: "出貨帳單",
+      hint: "帳單留在出貨",
+      attrs: 'data-sales-pane="sales-bill"',
     });
   }
-  if (can("page-books")) {
-    orderTabs.push({
-      id: "label-prints",
-      lab: "列印明細",
-      hint: "列印紀錄",
-      attrs: 'data-sales-pane="label-prints"',
-    });
-  }
-  if (can("page-sitework")) {
-    orderTabs.push({
-      id: "sitework",
-      lab: "現場工作",
-      hint: "調倉・接單・工作單",
-      attrs: 'data-sales-pane="sitework"',
-    });
-  }
-  if (orderTabs.length) blocks.push({ id: "orders", lab: "訂貨出貨", tabs: orderTabs });
+  if (orderTabs.length) blocks.push({ id: "ship", lab: "訂單／出貨", tabs: orderTabs });
 
   const wareTabs = [];
-  if (can("books-stock")) {
-    wareTabs.push({
-      id: "stock",
-      lab: "庫存盤點",
-      hint: "點貨・盤點",
-      attrs: 'data-sales-pane="stock"',
-    });
-  }
-  if (can("page-books")) {
+  if (can("page-ware-in")) {
     wareTabs.push({
       id: "in",
       lab: "進貨",
       hint: "進貨登錄",
       attrs: 'data-sales-pane="in"',
     });
+  }
+  if (can("books-stock")) {
+    wareTabs.push({
+      id: "stock",
+      lab: "庫存盤點",
+      hint: "僅主管可改",
+      attrs: 'data-sales-pane="stock"',
+    });
+  }
+  if (can("page-sitework")) {
+    wareTabs.push({
+      id: "sitework",
+      lab: "現場調倉",
+      hint: "倉與倉",
+      attrs: 'data-sales-pane="sitework"',
+    });
+  }
+  if (can("page-rack")) {
     wareTabs.push({
       id: "rack",
       lab: "資財管理",
@@ -2509,50 +2596,43 @@ function buildSalesBlocks() {
       attrs: 'data-sales-pane="rack"',
     });
   }
-  if (wareTabs.length) blocks.push({ id: "ware", lab: "倉庫", tabs: wareTabs });
+  if (wareTabs.length) blocks.push({ id: "ware", lab: "庫存管理", tabs: wareTabs });
 
-  const acctTabs = [];
-  if (can("page-books")) {
-    acctTabs.push({
-      id: "sales-bill",
-      lab: "出貨帳單",
-      hint: "對帳開立",
-      attrs: 'data-sales-pane="sales-bill"',
-    });
-    acctTabs.push({
-      id: "ledger",
-      lab: "進銷存清單",
-      hint: "進出彙總",
-      attrs: 'data-sales-pane="ledger"',
-    });
-    acctTabs.push({
-      id: "cust",
-      lab: "客戶",
-      hint: "建置中",
-      attrs: 'data-sales-pane="cust"',
-    });
-    acctTabs.push({
-      id: "vendor",
-      lab: "廠商",
-      hint: "建置中",
-      attrs: 'data-sales-pane="vendor"',
-    });
+  const financeTabs = [];
+  if (can("page-finance")) {
+    financeTabs.push(
+      { id: "cashday", lab: "現金日報", hint: "現場登錄", attrs: 'data-sales-pane="cashday"' },
+      { id: "help", lab: "貨運比對", hint: "帳務核對", attrs: 'data-sales-pane="help"' },
+      { id: "ar-remit", lab: "匯款沖帳", hint: "應收×銀行", attrs: 'data-sales-pane="ar-remit"' },
+    );
   }
-  acctTabs.push({
-    id: "help",
-    lab: "貨運比對",
-    hint: "帳務核對",
-    attrs: 'data-sales-pane="help"',
-  });
+  if (financeTabs.length) blocks.push({ id: "finance", lab: "財務核帳", tabs: financeTabs });
+
+  const masterTabs = [];
+  if (can("page-master")) {
+    masterTabs.push(
+      { id: "cust", lab: "客戶", hint: "建置中", attrs: 'data-sales-pane="cust"' },
+      { id: "vendor", lab: "廠商", hint: "建置中", attrs: 'data-sales-pane="vendor"' },
+    );
+  }
+  if (masterTabs.length) blocks.push({ id: "master", lab: "基本資料", tabs: masterTabs });
+
+  const reportTabs = [];
+  if (can("page-report")) {
+    reportTabs.push(
+      { id: "ledger", lab: "進銷存清單", hint: "進出彙總", attrs: 'data-sales-pane="ledger"' },
+      { id: "label-prints", lab: "列印明細", hint: "列印紀錄", attrs: 'data-sales-pane="label-prints"' },
+    );
+  }
   if (can("page-stats")) {
-    acctTabs.push({
+    reportTabs.push({
       id: "stats",
       lab: "營運統計",
-      hint: "圖表・紀錄",
+      hint: "主管看結果",
       attrs: 'data-sales-pane="stats"',
     });
   }
-  if (acctTabs.length) blocks.push({ id: "acct", lab: "帳款", tabs: acctTabs });
+  if (reportTabs.length) blocks.push({ id: "report", lab: "報表中心", tabs: reportTabs });
   return blocks;
 }
 function salesSideBtnHtml(t) {
@@ -2666,6 +2746,7 @@ function syncSalesShellChrome() {
       main.innerHTML = `<div id="sales-shell-mount" class="sales-shell-mount"></div>`;
     }
   }
+  syncPhoneTabbar();
   return true;
 }
 function restoreSalesMount() {
@@ -2683,9 +2764,12 @@ function restoreSalesMount() {
   salesMount = null;
 }
 function salesPaneBlockId(paneId) {
-  if (["form", "today", "line", "short", "ship", "labels", "label-prints", "sitework"].includes(paneId)) return "orders";
-  if (["stock", "in", "rack"].includes(paneId)) return "ware";
-  return "acct";
+  if (["form", "today", "line", "short", "ship", "sales-bill"].includes(paneId)) return "ship";
+  if (["in", "stock", "sitework", "rack"].includes(paneId)) return "ware";
+  if (["cashday", "help", "ar-remit"].includes(paneId)) return "finance";
+  if (["cust", "vendor"].includes(paneId)) return "master";
+  if (["ledger", "label-prints", "stats"].includes(paneId)) return "report";
+  return "ship";
 }
 function salesVirtualPage(paneId) {
   if (["form", "today", "line"].includes(paneId)) return "orders";
@@ -2726,6 +2810,10 @@ function pageElForSalesPane(paneId) {
       return document.getElementById("page-help");
     case "stats":
       return document.getElementById("page-stats");
+    case "cashday":
+      return document.getElementById("page-cashday");
+    case "ar-remit":
+      return document.getElementById("page-ar-remit");
     default:
       return null;
   }
@@ -2739,15 +2827,23 @@ function salesPaneDenied(paneId) {
   } else if (paneId === "ship") {
     if (!can("page-plan")) return "沒有現場排程權限。";
   } else if (paneId === "labels") {
-    if (!can("page-orders") && !can("page-plan") && !can("page-books")) return "沒有列印權限。";
-  } else if (paneId === "label-prints") {
-    if (!can("page-books")) return "沒有倉管／帳款權限。";
+    if (!can("page-labels") && !can("page-orders") && !can("page-plan")) return "沒有列印權限。";
+  } else if (paneId === "label-prints" || paneId === "ledger") {
+    if (!can("page-report")) return "沒有報表權限。";
   } else if (paneId === "sitework") {
-    if (!can("page-sitework")) return "現場工作建置中，暫僅主管可進入。";
+    if (!can("page-sitework")) return "沒有調倉權限。";
   } else if (paneId === "stock") {
-    if (!can("books-stock")) return "庫存盤點建置中，暫僅主管可進入。";
-  } else if (paneId === "in" || paneId === "rack" || paneId === "sales-bill" || paneId === "ledger" || paneId === "cust" || paneId === "vendor") {
-    if (!can("page-books")) return "沒有倉管／帳款權限。";
+    if (!can("books-stock")) return "盤點僅主管可進。";
+  } else if (paneId === "in") {
+    if (!can("page-ware-in")) return "沒有進貨權限。";
+  } else if (paneId === "rack") {
+    if (!can("page-rack")) return "沒有容器登記權限。";
+  } else if (paneId === "sales-bill") {
+    if (!can("page-orders")) return "沒有出貨帳單權限。";
+  } else if (paneId === "cust" || paneId === "vendor") {
+    if (!can("page-master")) return "沒有基本資料權限。";
+  } else if (paneId === "cashday" || paneId === "ar-remit" || paneId === "help") {
+    if (!can("page-finance")) return "沒有財務權限。";
   } else if (paneId === "stats") {
     if (!can("page-stats")) return "僅主管可看統計。";
   }
@@ -2840,6 +2936,10 @@ function runSalesPaneRenderers(paneId) {
       run(renderHelpFreight);
     } else if (vpage === "stats" && typeof renderBossStats === "function") {
       run(renderBossStats);
+    } else if (vpage === "cashday" && typeof renderCashDay === "function") {
+      run(renderCashDay);
+    } else if (vpage === "ar-remit" && typeof renderArRemit === "function") {
+      run(renderArRemit);
     } else if (vpage === "soon") {
       applySalesPaneState(paneId);
     }
@@ -2902,6 +3002,7 @@ function goFromHub(btn) {
     return goOpsStep(btn.dataset.planMain === "ship" ? "ship" : "short");
   } else if (go === "books") {
     const part = btn.dataset.books || "stock";
+    if (part === "cashday") return activateSalesPane("cashday");
     if (part === "stock") {
       // TEMP: 庫存未完成，暫僅雅芳
       if (!can("books-stock")) return setStatus("庫存盤點建置中，暫僅主管可進入。", true);
@@ -4386,9 +4487,11 @@ function renderLoginPeople() {
   const groups = [
     { role: "site", names: STAFF_ROSTER.filter((p) => p.role === "site") },
     { role: "acct", names: STAFF_ROSTER.filter((p) => p.role === "acct") },
+    { role: "plant", names: STAFF_ROSTER.filter((p) => p.role === "plant") },
     { role: "driver", names: STAFF_ROSTER.filter((p) => p.role === "driver") },
     { role: "unpacker", names: STAFF_ROSTER.filter((p) => p.role === "unpacker") },
     { role: "boss", names: STAFF_ROSTER.filter((p) => p.role === "boss") },
+    { role: "viewer", names: STAFF_ROSTER.filter((p) => p.role === "viewer") },
   ];
   box.innerHTML = groups
     .map(
@@ -4401,10 +4504,6 @@ function renderLoginPeople() {
 }
 function preferredLayoutMode() {
   try {
-    const v = String(localStorage.getItem(LAYOUT_MODE_KEY) || "").trim();
-    if (v === "web" || v === "phone") return v;
-  } catch (_) {}
-  try {
     if (window.matchMedia("(min-width: 900px)").matches) return "web";
   } catch (_) {}
   return "phone";
@@ -4413,13 +4512,7 @@ function applyLayoutMode(mode) {
   const next = mode === "web" ? "web" : "phone";
   document.body.classList.toggle("layout-web", next === "web");
   document.body.classList.toggle("layout-phone", next === "phone");
-  try {
-    localStorage.setItem(LAYOUT_MODE_KEY, next);
-  } catch (_) {}
-  document.querySelectorAll(".layout-btn[data-layout]").forEach((b) => {
-    b.classList.toggle("on", b.dataset.layout === next);
-    b.setAttribute("aria-pressed", b.dataset.layout === next ? "true" : "false");
-  });
+  syncPhoneTabbar();
   // 銷貨殼手機／網頁結構不同，切換時整殼重建
   if (page === "home" && hubDept === "sales") {
     const keepPane = hubSalesPane;
@@ -4430,6 +4523,51 @@ function applyLayoutMode(mode) {
     if (keepPane) activateSalesPane(keepPane);
     else renderHomeHub();
   }
+}
+function phoneTabId() {
+  if (page === "import" || page === "unpack" || hubDept === "import") return "import";
+  if (hubDept === "export") return "export";
+  if (hubDept === "fields") return "fields";
+  if (hubDept === "people") return "people";
+  if (hubDept === "sales") return hubSalesBlock || "ship";
+  if (page === "orders" || page === "plan") return "ship";
+  if (page === "books") return "finance";
+  if (page === "home" && !hubDept) return "home";
+  return "";
+}
+function phoneTabDefs() {
+  return [
+    { id: "home", lab: "首頁", show: () => true },
+    { id: "ship", lab: "出貨", show: () => can("page-orders") || can("page-plan") },
+    { id: "import", lab: "進口", show: () => can("page-import") || can("page-unpack") },
+    { id: "ware", lab: "庫存", show: () => can("page-ware-in") || can("page-rack") || can("page-sitework") || can("books-stock") },
+  ];
+}
+function syncPhoneTabbar() {
+  const bar = document.getElementById("phone-tabbar");
+  if (!bar) return;
+  const phone = document.body.classList.contains("layout-phone");
+  const logged = !!currentStaff();
+  bar.hidden = !phone || !logged;
+  document.body.classList.toggle("has-phone-tabs", phone && logged);
+  if (!phone || !logged) return;
+  const active = phoneTabId();
+  const icon = {
+    home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10.5V20h11V10.5"/></svg>',
+    ship: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 11H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>',
+    ware: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v11H4z"/><path d="M4 13h16M12 8v11"/></svg>',
+    import: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18"/><path d="M5 17V9l7-4 7 4v8"/></svg>',
+    finance: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10h4a2 2 0 0 1 0 4h-3"/></svg>',
+    master: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M6 19c.7-3 3-4.5 6-4.5s5.3 1.5 6 4.5"/></svg>',
+    report: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l4 4v12H6z"/><path d="M9 13h6M9 17h4"/></svg>',
+  };
+  bar.innerHTML = phoneTabDefs()
+    .filter((t) => t.show())
+    .map((t) => {
+      const on = t.id === active;
+      return `<button type="button" class="phone-tab${on ? " is-on" : ""}" data-phone-tab="${t.id}"${on ? ' aria-current="page"' : ""}>${icon[t.id] || ""}${esc(t.lab)}</button>`;
+    })
+    .join("");
 }
 function applyRoleUi() {
   const logged = !!currentStaff();
@@ -4453,6 +4591,7 @@ function applyRoleUi() {
   if (can("page-sitework")) pages.push("sitework");
   if (can("page-stats")) pages.push("stats");
   if (can("page-help")) pages.push("help");
+  if (can("page-help") || can("page-books")) pages.push("ar-remit");
   if (!isUnpackerRole()) pages.push("soon");
   if (can("page-orders") || can("page-plan") || can("page-books")) pages.push("labels");
   if (can("page-books")) pages.push("label-prints");
@@ -11498,6 +11637,7 @@ function render() {
     console.error(err);
   }
   applyRoleUi();
+  syncPhoneTabbar();
   document.body.classList.toggle("on-home", page === "home");
   document.body.classList.toggle("sales-workspace", page === "home" && hubDept === "sales");
   document.getElementById("co-name").textContent =
@@ -11531,6 +11671,8 @@ function render() {
           ? "倉管／帳款"
           : page === "help"
             ? "小幫手"
+          : page === "ar-remit"
+            ? "匯款沖帳"
           : page === "labels"
             ? "標籤貼紙"
           : page === "label-prints"
@@ -11565,6 +11707,10 @@ function render() {
   if (pageSitework) pageSitework.hidden = page !== "sitework";
   const pageStats = document.getElementById("page-stats");
   if (pageStats) pageStats.hidden = page !== "stats";
+  const pageCashDay = document.getElementById("page-cashday");
+  if (pageCashDay) pageCashDay.hidden = page !== "cashday";
+  const pageArRemit = document.getElementById("page-ar-remit");
+  if (pageArRemit) pageArRemit.hidden = page !== "ar-remit";
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = !(onBooks && booksPart === "stock");
@@ -11591,6 +11737,7 @@ function render() {
   run(syncLinePendingHint);
   if (page === "home") run(renderHomeHub);
   if (page === "help") run(renderHelpFreight);
+  if (page === "ar-remit" && typeof renderArRemit === "function") run(renderArRemit);
   if (page === "labels") run(renderLabels);
   if (page === "label-prints") run(renderLabelPrints);
   if (page === "unpack" && typeof renderUnpackPage === "function") run(renderUnpackPage);
@@ -11654,10 +11801,36 @@ document.getElementById("sync-reload")?.addEventListener("click", () => {
 document.getElementById("sync-upload")?.addEventListener("click", () => {
   uploadThisDevice();
 });
-document.querySelector(".layout-mode")?.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-layout]");
+document.getElementById("phone-tabbar")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-phone-tab]");
   if (!btn) return;
-  applyLayoutMode(btn.dataset.layout);
+  const id = btn.dataset.phoneTab || "";
+  if (id === "home") {
+    goHome();
+    return;
+  }
+  const salesBlocks = { ship: "ship", ware: "ware", finance: "finance", master: "master", report: "report" };
+  if (salesBlocks[id]) {
+    restoreSalesMount();
+    page = "home";
+    hubDept = "sales";
+    hubOpen = "";
+    hubSalesBlock = salesBlocks[id];
+    hubSalesPane = "";
+    render();
+    return;
+  }
+  if (id === "import") {
+    if (currentRole() === "unpacker") {
+      page = "unpack";
+      hubDept = "import";
+      hubOpen = "";
+      render();
+      return;
+    }
+    if (!can("page-import")) return setStatus("沒有進口權限。", true);
+    if (typeof window.openImport === "function") window.openImport("port");
+  }
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (e.target.closest("[data-hub-back]")) {
@@ -11665,7 +11838,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       restoreSalesMount();
       hubOpen = "";
       hubDept = "";
-      hubSalesBlock = "orders";
+      hubSalesBlock = "ship";
       hubSalesPane = "";
       document.body.classList.remove("sales-workspace");
     } else if (hubOpen) {
@@ -11673,7 +11846,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     } else {
       restoreSalesMount();
       hubDept = "";
-      hubSalesBlock = "orders";
+      hubSalesBlock = "ship";
       hubSalesPane = "";
       document.body.classList.remove("sales-workspace");
     }
@@ -11682,7 +11855,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   }
   const salesBlockBtn = e.target.closest("[data-sales-block]");
   if (salesBlockBtn) {
-    const nextBlock = salesBlockBtn.dataset.salesBlock || "orders";
+    const nextBlock = salesBlockBtn.dataset.salesBlock || "ship";
     hubSalesBlock = nextBlock;
     hubDept = "sales";
     hubOpen = "";
@@ -11709,9 +11882,32 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   if (deptBtn) {
     const next = deptBtn.dataset.hubDept || "";
     hubOpen = "";
-    // 進口：直接進頁面，上方橫排切換，不要再攤一層層架
+    const salesBlocks = { ship: "ship", ware: "ware", finance: "finance", master: "master", report: "report" };
+    if (salesBlocks[next]) {
+      restoreSalesMount();
+      page = "home";
+      hubDept = "sales";
+      hubSalesBlock = salesBlocks[next];
+      hubSalesPane = "";
+      render();
+      return;
+    }
+    if (next === "fields" || next === "people" || next === "board") {
+      restoreSalesMount();
+      page = "home";
+      hubDept = next;
+      hubWorkPane = "";
+      render();
+      return;
+    }
     if (next === "import") {
-      if (!can("page-import")) return setStatus("進口目前僅開放給雅芳。", true);
+      if (currentRole() === "unpacker") {
+        page = "unpack";
+        hubDept = "import";
+        render();
+        return;
+      }
+      if (!can("page-import")) return setStatus("沒有進口權限。", true);
       if (typeof window.openImport === "function") {
         window.openImport("port");
         return;
@@ -11723,7 +11919,7 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     restoreSalesMount();
     hubDept = next;
     hubSalesPane = "";
-    if (next === "sales") hubSalesBlock = "orders";
+    if (next === "sales") hubSalesBlock = "ship";
     renderHomeHub();
     return;
   }
@@ -14249,7 +14445,12 @@ function bundleHasData(b) {
   if (Array.isArray(b.importCabinets) && b.importCabinets.length) return true;
   if (Array.isArray(b.importArrivals) && b.importArrivals.length) return true;
   if (Array.isArray(b.importReleased) && b.importReleased.length) return true;
+  if (cashDaysHaveData(b.cashDays)) return true;
   return stockHasData(b.orders?.stock);
+}
+function cashDaysHaveData(days) {
+  if (!days || typeof days !== "object") return false;
+  return Object.values(days).some((d) => (d?.lines || []).length > 0 || d?.openNq != null || d?.openHa != null || Number(d?.lockedAt) > 0);
 }
 function localHasData() {
   if (state.orders.length) return true;
@@ -14265,6 +14466,7 @@ function localHasData() {
   if ((state.importCabinets || []).length) return true;
   if ((state.importArrivals || []).length) return true;
   if ((state.importReleased || []).length) return true;
+  if (cashDaysHaveData(state.cashDays)) return true;
   return stockHasData(state.stock);
 }
 function collectBundle() {
@@ -14279,6 +14481,7 @@ function collectBundle() {
     importCabinets: state.importCabinets || [],
     importArrivals: state.importArrivals || [],
     importReleased: state.importReleased || [],
+    cashDays: state.cashDays || {},
   };
 }
 function applyBundle(b) {
@@ -14325,6 +14528,13 @@ function applyBundle(b) {
     if (Array.isArray(b.importArrivals)) state.importArrivals = b.importArrivals;
     if (Array.isArray(b.importReleased)) state.importReleased = b.importReleased;
     if (Array.isArray(b.importCabinets) || Array.isArray(b.importArrivals) || Array.isArray(b.importReleased)) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (_) {}
+    }
+    if (b.cashDays && typeof b.cashDays === "object" && !Array.isArray(b.cashDays)) {
+      state.cashDays =
+        typeof mergeCashDays === "function" ? mergeCashDays(state.cashDays, b.cashDays) : b.cashDays;
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
       } catch (_) {}
@@ -14661,6 +14871,12 @@ async function pollCloud() {
 ensureHaHistory();
 bindWorkDates();
 applyLayoutMode(preferredLayoutMode());
+try {
+  const layoutMq = window.matchMedia("(min-width: 900px)");
+  const onLayout = () => applyLayoutMode(preferredLayoutMode());
+  if (layoutMq.addEventListener) layoutMq.addEventListener("change", onLayout);
+  else if (layoutMq.addListener) layoutMq.addListener(onLayout);
+} catch (_) {}
 render();
 bootCloudSync();
 refreshLineDrafts();

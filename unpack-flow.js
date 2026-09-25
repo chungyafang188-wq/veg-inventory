@@ -25,8 +25,11 @@
   }
 
   function unpackerNames() {
-    if (typeof UNPACK_STAFF !== "undefined" && Array.isArray(UNPACK_STAFF)) return UNPACK_STAFF;
-    return ["阿宏", "靜宜"];
+    const base =
+      typeof UNPACK_STAFF !== "undefined" && Array.isArray(UNPACK_STAFF) ? UNPACK_STAFF : ["阿宏", "靜宜"];
+    const names = base.slice();
+    if (!names.includes("自行拆櫃")) names.push("自行拆櫃");
+    return names;
   }
 
   function iAmUnpacker() {
@@ -1192,7 +1195,7 @@
         : [];
     if (!who) return setStatus("請選負責拆工。", true);
     if (!box && !codes.length) return setStatus("請填貨櫃編號或貨櫃號碼。", true);
-    if (!unpackerNames().includes(who)) return setStatus("拆工只能選阿宏或靜宜。", true);
+    if (!unpackerNames().includes(who)) return setStatus("拆工請選阿宏、靜宜，或自行拆櫃。", true);
     if (customer && unloadPoint && typeof rememberShipAddr === "function") {
       rememberShipAddr(customer, unloadPoint);
     }

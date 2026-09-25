@@ -149,7 +149,11 @@ export function PhoneShell({ activeTab, setActiveTab, tabCounts, contentProps })
             return (
               <button key={t.id} type="button" className={on ? chipOn : chipIdle} onClick={() => setActiveTab(t.id)}>
                 {t.lab}
-                {TAB_COUNT_IDS.has(t.id) ? <CountBadge count={tabCounts[t.id]} /> : null}
+                {t.id === "track" && Number(tabCounts.trackArrange) > 0 ? (
+                  <CountBadge count={tabCounts.trackArrange} warn title="待排櫃" />
+                ) : TAB_COUNT_IDS.has(t.id) ? (
+                  <CountBadge count={tabCounts[t.id]} />
+                ) : null}
               </button>
             );
           })}

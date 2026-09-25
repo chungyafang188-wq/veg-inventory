@@ -39,6 +39,9 @@ export function ImportTabContent({
           counts={lists.trackCounts}
           setActiveTab={setActiveTab}
           openDrawer={openDrawer}
+          refresh={refresh}
+          trailers={lists.trailers}
+          unpackers={lists.unpackers}
         />
       ) : null}
 

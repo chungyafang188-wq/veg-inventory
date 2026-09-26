@@ -15176,6 +15176,7 @@ function collectBundle() {
     importCabinets: state.importCabinets || [],
     importArrivals: state.importArrivals || [],
     importReleased: state.importReleased || [],
+    importRemoved: state.importRemoved || [],
     cashDays: state.cashDays || {},
   };
 }
@@ -15222,7 +15223,8 @@ function applyBundle(b) {
     if (Array.isArray(b.importCabinets)) state.importCabinets = b.importCabinets;
     if (Array.isArray(b.importArrivals)) state.importArrivals = b.importArrivals;
     if (Array.isArray(b.importReleased)) state.importReleased = b.importReleased;
-    if (Array.isArray(b.importCabinets) || Array.isArray(b.importArrivals) || Array.isArray(b.importReleased)) {
+    if (Array.isArray(b.importRemoved)) state.importRemoved = b.importRemoved;
+    if (Array.isArray(b.importCabinets) || Array.isArray(b.importArrivals) || Array.isArray(b.importReleased) || Array.isArray(b.importRemoved)) {
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
       } catch (_) {}
@@ -15377,12 +15379,52 @@ function importListSig(list) {
 function importBundleSig(cabinets, arrivals, released) {
   return [importListSig(cabinets), importListSig(arrivals), importListSig(released)].join("\n");
 }
-function mergeImportBundle(localCab, localArr, localRel, remoteCab, remoteArr, remoteRel) {
+function removedAtMs(row) {
+  const n = Date.parse(row?.removedAt || "");
+  return Number.isFinite(n) ? n : 0;
+}
+function mergeRemovedLists(a, b) {
+  const map = new Map();
+  for (const row of [...(a || []), ...(b || [])]) {
+    if (!row || typeof row !== "object") continue;
+    const k = normImportUhaKey(row.uha);
+    if (!k) continue;
+    const next = { ...row, uha: k };
+    const cur = map.get(k);
+    if (!cur || removedAtMs(next) >= removedAtMs(cur)) map.set(k, next);
+  }
+  return [...map.values()];
+}
+/** 刪除清單上的櫃子不再從另一台合併回來。較晚的修改或放回才留在清單上。 */
+function reconcileImportRemoval(cabs, arrs, rels, removed) {
+  const drop = new Set();
+  const kept = [];
+  for (const row of removed || []) {
+    const k = normImportUhaKey(row.uha);
+    if (!k) continue;
+    const stamp = removedAtMs(row);
+    const newer = [...(cabs || []), ...(rels || [])].some(
+      (item) => normImportUhaKey(item?.uha) === k && (Number(item?.updatedAt) || 0) > stamp,
+    );
+    if (newer) continue;
+    drop.add(k);
+    kept.push(row);
+  }
   return {
-    importCabinets: mergeImportByUha(localCab, remoteCab),
-    importArrivals: mergeImportByUha(localArr, remoteArr),
-    importReleased: mergeImportByUha(localRel, remoteRel),
+    importCabinets: (cabs || []).filter((row) => !drop.has(normImportUhaKey(row.uha))),
+    importArrivals: arrs || [],
+    importReleased: (rels || []).filter((row) => !drop.has(normImportUhaKey(row.uha))),
+    importRemoved: kept,
   };
+}
+function mergeImportBundle(localCab, localArr, localRel, remoteCab, remoteArr, remoteRel, localRemoved, remoteRemoved) {
+  const merged = reconcileImportRemoval(
+    mergeImportByUha(localCab, remoteCab),
+    mergeImportByUha(localArr, remoteArr),
+    mergeImportByUha(localRel, remoteRel),
+    mergeRemovedLists(localRemoved, remoteRemoved),
+  );
+  return merged;
 }
 
 function takeRemoteOrders(remote) {
@@ -15403,10 +15445,13 @@ function takeRemoteOrders(remote) {
     remote.importCabinets,
     remote.importArrivals,
     remote.importReleased,
+    state.importRemoved,
+    remote.importRemoved,
   );
   bundle.importCabinets = mergedImp.importCabinets;
   bundle.importArrivals = mergedImp.importArrivals;
   bundle.importReleased = mergedImp.importReleased;
+  bundle.importRemoved = mergedImp.importRemoved;
   applyBundle(bundle);
 }
 async function pushCloud(force, retry) {
@@ -15472,6 +15517,8 @@ async function healCloudSync() {
         remote.importCabinets,
         remote.importArrivals,
         remote.importReleased,
+        state.importRemoved,
+        remote.importRemoved,
       );
       const localImpSig = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
       const remoteImpSig = importBundleSig(remote.importCabinets, remote.importArrivals, remote.importReleased);
@@ -15496,6 +15543,7 @@ async function healCloudSync() {
         bundle.importCabinets = mergedImp.importCabinets;
         bundle.importArrivals = mergedImp.importArrivals;
         bundle.importReleased = mergedImp.importReleased;
+        bundle.importRemoved = mergedImp.importRemoved;
         bundle.updatedAt = Date.now();
         applyBundle(bundle);
         render();

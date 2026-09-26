@@ -1,4 +1,5 @@
 import { formatMd, isDayReached } from "./dateChip";
+import { fumeWhenLab } from "./fumeShift";
 
 /**
  * 依現有欄位推導「下一步」。追蹤頁在這一列直接填。
@@ -24,8 +25,8 @@ export function trackNextStep(row) {
       }
     }
 
-    if (fume === "wait" && !String(row.fumigateAt || "").trim()) {
-      return { step: "fumigateAt", lab: "填薰蒸安排時間", hint: "需要薰蒸：先填安排日時", kind: "action" };
+    if (fume === "wait" && !String(row.fumigateAt || "").trim() && !String(row.fumigateShift || "").trim()) {
+      return { step: "fumigateAt", lab: "填煙燻班次", hint: "需要煙燻：先填日期和班次", kind: "action" };
     }
 
     if (row.missingTelex || row.missingData) {
@@ -88,19 +89,23 @@ export function trackStageBadge(row) {
 export function inspectFumeSummary(row) {
   const insp = row?.inspect || "none";
   const fume = row?.fumigate || "none";
+  const inspAt = String(row.inspectAt || "").trim();
   let inspLab = "待確認";
   if (insp === "skip") inspLab = "無須檢驗";
-  else if (insp === "wait" || insp === "done") {
-    if (!String(row.inspectAt || "").trim()) inspLab = "需要藥檢";
-    else if (!isDayReached(row.inspectAt)) inspLab = `待藥檢結果 ${formatMd(row.inspectAt)}`;
-    else inspLab = `已出報告 ${formatMd(row.inspectAt)}`;
-  } else if (insp === "done") inspLab = "已出報告";
+  else if (inspAt && !isDayReached(inspAt)) inspLab = `待藥檢結果 ${formatMd(inspAt)}`;
+  else if (insp === "wait" || insp === "done") inspLab = inspAt ? `已出報告 ${formatMd(inspAt)}` : "需要藥檢";
+  else if (inspAt) inspLab = `已出報告 ${formatMd(inspAt)}`;
 
   let fumeLab = "待確認";
   if (fume === "skip") fumeLab = "無須薰蒸";
-  else if (fume === "wait") fumeLab = String(row.fumigateAt || "").trim() ? `已排薰蒸 ${formatMd(row.fumigateAt)}` : "需要薰蒸";
-  else if (fume === "done") fumeLab = "薰蒸完成";
-  else if (String(row.fumigateAt || "").trim()) fumeLab = `已排薰蒸 ${formatMd(row.fumigateAt)}`;
+  else if (fume === "wait") {
+    const when = fumeWhenLab(row.fumigateAt, row.fumigateShift);
+    fumeLab = when ? `待煙燻 ${when}` : "需要煙燻";
+  } else if (fume === "done") fumeLab = "薰蒸完成";
+  else {
+    const when = fumeWhenLab(row.fumigateAt, row.fumigateShift);
+    if (when) fumeLab = `待煙燻 ${when}`;
+  }
 
   return { inspLab, fumeLab };
 }

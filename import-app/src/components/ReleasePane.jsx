@@ -379,6 +379,13 @@ export function ReleasePane({
     </div>
   );
 
+  const containerEdit = (r, uha) => (
+    <InlineEdit value={r.containerNo || ""} emptyLab="櫃號" ariaLabel="櫃號" onChange={(v) => patch(uha, "containerNo", v)} />
+  );
+  const productEdit = (r, uha) => (
+    <InlineEdit value={r.product || ""} emptyLab="品名" ariaLabel="品名" onChange={(v) => patch(uha, "product", v)} />
+  );
+
   const dockEdit = (r, uha) => (
     <InlineEdit
       value={r.dock || ""}
@@ -593,10 +600,10 @@ export function ReleasePane({
                             <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${st.cls}`}>{st.lab}</span>
                             <strong className="tabular-nums text-slate-800">{uha}</strong>
                           </div>
-                          <div className="mt-0.5 font-mono text-[0.72rem] text-slate-400">{r.containerNo || "無櫃號"}</div>
+                          <div className="mt-0.5">{containerEdit(r, uha)}</div>
                           <NotifyBadges row={r} onClear={(kind) => clearOne(uha, kind)} />
                         </td>
-                        <td className="px-2 py-2 text-left font-semibold text-slate-800">{r.product || "—"}</td>
+                        <td className="px-2 py-2 text-left font-semibold text-slate-800">{productEdit(r, uha)}</td>
                         <td className="px-2 py-2 text-left">
                           <FtPickupCell row={r} uha={uha} patch={patch} disabled={!!r.dispatched} />
                         </td>
@@ -666,8 +673,8 @@ export function ReleasePane({
                           <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${st.cls}`}>{st.lab}</span>
                           <strong className="text-base font-bold tabular-nums text-slate-800">{uha}</strong>
                         </div>
-                        <div className="mt-0.5 font-mono text-xs text-slate-400">{r.containerNo || "無櫃號"}</div>
-                        <p className="m-0 mt-1 text-sm font-semibold text-slate-800">{r.product || "—"}</p>
+                        <div className="mt-0.5">{containerEdit(r, uha)}</div>
+                        <div className="mt-1">{productEdit(r, uha)}</div>
                         <NotifyBadges row={r} onClear={(kind) => clearOne(uha, kind)} />
                       </div>
                       <button

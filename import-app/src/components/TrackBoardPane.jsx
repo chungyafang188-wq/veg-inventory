@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../bridge";
 import { DateChip } from "./DateChip";
+import { FumeWhenFields } from "./FumeWhenFields";
 import { inspectFumeSummary, trackNextStep, trackStageBadge } from "../lib/trackNext";
 import { defaultPickupFromFt } from "../lib/dateChip";
 import { queryRows } from "../lib/listQuery";
@@ -46,7 +47,12 @@ function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
     );
   } else if (next.step === "fumigateAt") {
     control = (
-      <DateChip mode="datetime" value={row.fumigateAt || ""} emptyLab="薰蒸時間" ariaLabel="薰蒸安排時間" onChange={(v) => savePort("fumigateAt", v)} />
+      <FumeWhenFields
+        at={row.fumigateAt || ""}
+        shift={row.fumigateShift || ""}
+        onAt={(v) => savePort("fumigateAt", v)}
+        onShift={(v) => savePort("fumigateShift", v)}
+      />
     );
   } else if (next.step === "missing") {
     control = (

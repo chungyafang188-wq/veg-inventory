@@ -256,6 +256,7 @@
         inspectAt: track.inspectAt || "",
         fumigate: track.fumigate || "none",
         fumigateAt: track.fumigateAt || "",
+        fumigateShift: track.fumigateShift || "",
         dock: track.dock || "",
         missingTelex: !!track.missingTelex,
         missingData: !!track.missingData,
@@ -285,6 +286,7 @@
         inspectAt: row.inspectAt || "",
         fumigate: row.fumigate || "none",
         fumigateAt: row.fumigateAt || "",
+        fumigateShift: row.fumigateShift || "",
         dock: row.dock || "",
         trailer: row.trailer || "",
         note: row.note || "",
@@ -514,6 +516,7 @@
       track.inspectAt = fields.inspectAt || "";
       track.fumigate = fields.fumigate || "none";
       track.fumigateAt = fields.fumigateAt || "";
+      track.fumigateShift = ["1", "2", "3", "4"].includes(String(fields.fumigateShift || "")) ? String(fields.fumigateShift) : "";
       track.dock = String(fields.dock || "").trim();
       track.missingTelex = !!fields.missingTelex;
       track.missingData = !!fields.missingData;
@@ -1832,6 +1835,15 @@
     return "";
   }
 
+  /** 手改櫃號：先留下打進去的字，方便把打錯的號碼改對。 */
+  function keepContainer(v) {
+    return String(v || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "")
+      .replace(/\.$/, "");
+  }
+
   function pad2(n) {
     return String(n).padStart(2, "0");
   }
@@ -2098,6 +2110,7 @@
     if (row.inspectAt == null) row.inspectAt = "";
     if (!row.fumigate) row.fumigate = "none";
     if (row.fumigateAt == null) row.fumigateAt = "";
+    if (row.fumigateShift == null) row.fumigateShift = "";
     if (row.customsNo == null) row.customsNo = "";
     if (row.dock == null) row.dock = "";
     if (row.checkKind == null) row.checkKind = "";
@@ -2921,8 +2934,82 @@
   }
 
   /** 海關查驗：手動新增一筆（編號可後補） */
+  function importPlaceOf(uhaKey) {
+    const cab = (state.importCabinets || []).find((c) => c.uha === uhaKey) || null;
+    const rel = (state.importReleased || []).find((r) => r.uha === uhaKey) || null;
+    const rem = (state.importRemoved || []).find((r) => r.uha === uhaKey) || null;
+    if (rel && rel.released !== false) {
+      return {
+        where: "已放行",
+        uha: uhaKey,
+        containerNo: rel.containerNo || (cab && cab.containerNo) || "",
+        product: rel.product || (cab && cab.product) || "",
+        seller: rel.seller || (cab && cab.seller) || "",
+        arriveDay: rel.arriveDay || (cab && cab.arriveDay) || "",
+      };
+    }
+    if (cab || rel) {
+      const src = cab || rel;
+      return {
+        where: "海關查驗",
+        uha: uhaKey,
+        containerNo: (cab && cab.containerNo) || (rel && rel.containerNo) || "",
+        product: (src && src.product) || "",
+        seller: (src && src.seller) || "",
+        arriveDay: (src && src.arriveDay) || "",
+      };
+    }
+    if (rem) {
+      return {
+        where: "已刪除",
+        uha: rem.uha || uhaKey,
+        containerNo: rem.containerNo || "",
+        product: rem.product || "",
+        seller: rem.seller || "",
+        arriveDay: rem.arriveDay || "",
+      };
+    }
+    return null;
+  }
+
+  /** 編號或櫃號已經在海關查驗、已放行或已刪除。 */
+  function findExistingImport(fields) {
+    ensureState();
+    const uha = normUha(fields && fields.uha);
+    const box = keepContainer(fields && fields.containerNo);
+    if (uha) {
+      const hit = importPlaceOf(uha);
+      if (hit) return { existing: true, via: "編號", ...hit };
+    }
+    if (box) {
+      const cab = (state.importCabinets || []).find((c) => keepContainer(c.containerNo) === box);
+      const rel = (state.importReleased || []).find((r) => keepContainer(r.containerNo) === box);
+      const key = (cab && cab.uha) || (rel && rel.uha) || "";
+      if (key) {
+        const hit = importPlaceOf(key);
+        if (hit) return { existing: true, via: "櫃號", ...hit };
+      }
+      const rem = (state.importRemoved || []).find((r) => keepContainer(r.containerNo) === box);
+      if (rem) {
+        return {
+          existing: true,
+          via: "櫃號",
+          where: "已刪除",
+          uha: rem.uha || "",
+          containerNo: rem.containerNo || box,
+          product: rem.product || "",
+          seller: rem.seller || "",
+          arriveDay: rem.arriveDay || "",
+        };
+      }
+    }
+    return null;
+  }
+
   function addManualPortRow(fields) {
     ensureState();
+    const already = findExistingImport(fields);
+    if (already) return already;
     let uha = normUha(fields && fields.uha);
     if (!uha) uha = makePendingUha();
     const row = {
@@ -2945,10 +3032,16 @@
     upsertCabinetFromTpl(row);
     applyTrackFromTpl(uha, row, false);
     if (typeof save === "function") save();
-    if (typeof setStatus === "function") {
-      setStatus(isPendingUha(uha) ? `已新增（編號待補）${row.containerNo ? " · " + row.containerNo : ""}` : `已新增 ${uha}。`);
-    }
-    return true;
+    return {
+      existing: false,
+      uha,
+      where: mapYes(row.released) ? "已放行" : "海關查驗",
+      via: "",
+      containerNo: keepContainer(row.containerNo),
+      product: String(row.product || "").trim(),
+      seller: String(row.seller || "").trim(),
+      arriveDay: row.arriveDay || "",
+    };
   }
 
   function templateMeta() {
@@ -2981,7 +3074,7 @@
   function portStatusLabel(track) {
     const bits = [];
     if (track.inspect === "wait") bits.push("待藥檢");
-    if (track.fumigate === "wait") bits.push("待薰蒸");
+    if (track.fumigate === "wait") bits.push(String(track.fumigateAt || "").trim() ? "已排薰蒸" : "待薰蒸");
     if (bits.length) return bits.join("＋");
     if (track.inspect === "skip" && track.fumigate === "skip") return "無須檢驗";
     if (track.portConfirm === "pending" || track.released === false) return "待確認";
@@ -2994,12 +3087,12 @@
     if (track.ftAt || track.ftConfirmed || track.ft) {
       const bits = ["已FT"];
       if (track.inspect === "wait") bits.push("待藥檢");
-      if (track.fumigate === "wait") bits.push("待薰蒸");
+      if (track.fumigate === "wait") bits.push(String(track.fumigateAt || "").trim() ? "已排薰蒸" : "待薰蒸");
       return bits.join("＋");
     }
     const bits = [];
     if (track.inspect === "wait") bits.push("待藥檢");
-    if (track.fumigate === "wait") bits.push("待薰蒸");
+    if (track.fumigate === "wait") bits.push(String(track.fumigateAt || "").trim() ? "已排薰蒸" : "待薰蒸");
     if (bits.length) return bits.join("＋");
     return "待驗";
   }
@@ -3262,6 +3355,13 @@
       row[field] = value || "none";
       if (field === "inspect") row.inspectManual = true;
       else row.fumigateManual = true;
+    } else if (field === "fumigateShift") {
+      const v = String(value || "").trim();
+      row.fumigateShift = v === "1" || v === "2" || v === "3" || v === "4" ? v : "";
+      if (row.fumigateShift && (!row.fumigate || row.fumigate === "none")) {
+        row.fumigate = "wait";
+        row.fumigateManual = true;
+      }
     } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt" || field === "unpackAt") row[field] = value || "";
     else if (field === "unpackShift") row.unpackShift = Boolean(value);
     else if (field === "pickupDay") {
@@ -3275,13 +3375,20 @@
       field === "trailerPhone" ||
       field === "trailerNote" ||
       field === "product" ||
-      field === "containerNo" ||
       field === "unpackSite" ||
       field === "unpackSite2" ||
       field === "assignee" ||
       field === "assignee2"
     )
       row[field] = String(value || "").trim();
+    else if (field === "containerNo") row.containerNo = keepContainer(value);
+    if (field === "containerNo" || field === "product") {
+      const cab = (state.importCabinets || []).find((c) => c.uha === row.uha);
+      if (cab) {
+        cab[field] = row[field];
+        stampRow(cab);
+      }
+    }
     if (field === "ftAt" && row.ftAt) {
       row.ft = true;
       row.ftConfirmed = true;
@@ -4409,6 +4516,7 @@
           inspectAt: track.inspectAt || "",
           fumigate: track.fumigate || "none",
           fumigateAt: track.fumigateAt || "",
+          fumigateShift: track.fumigateShift || "",
           dock: track.dock || "",
           missingTelex: !!track.missingTelex,
           missingData: !!track.missingData,
@@ -4441,11 +4549,16 @@
       if (field === "seller" || field === "shipCo" || field === "product" || field === "broker") {
         cab[field] = String(value || "").trim();
         stampRow(cab);
+        const track = findReleased(uha);
+        if (track && (field === "product" || field === "seller" || field === "shipCo" || field === "broker")) {
+          track[field] = cab[field];
+          stampRow(track);
+        }
         if (typeof save === "function") save();
         return true;
       }
       if (field === "containerNo") {
-        cab.containerNo = normContainer(value);
+        cab.containerNo = keepContainer(value);
         stampRow(cab);
         const track = findReleased(uha);
         if (track) {
@@ -4546,6 +4659,7 @@
           inspectAt: t.inspectAt || "",
           fumigate: t.fumigate || "none",
           fumigateAt: t.fumigateAt || "",
+          fumigateShift: t.fumigateShift || "",
           trailer: t.trailer || "",
           assignee: t.assignee || "",
           unpackSite: t.unpackSite || "",
@@ -4581,6 +4695,7 @@
           inspectAt: r.inspectAt || "",
           fumigate: r.fumigate || "none",
           fumigateAt: r.fumigateAt || "",
+          fumigateShift: r.fumigateShift || "",
           trailer: r.trailer || "",
           assignee: r.assignee || "",
           unpackSite: r.unpackSite || "",
@@ -4656,6 +4771,7 @@
               inspectAt: r.inspectAt || "",
               fumigate: r.fumigate || "none",
               fumigateAt: r.fumigateAt || "",
+              fumigateShift: r.fumigateShift || "",
               trailer: r.trailer || "",
               assignee: r.assignee || "",
               unpackSite: r.unpackSite || "",
@@ -4721,6 +4837,7 @@
           inspectAt: t.inspectAt || "",
           fumigate: t.fumigate || "none",
           fumigateAt: t.fumigateAt || "",
+          fumigateShift: t.fumigateShift || "",
           dock: t.dock || "",
           missingTelex: !!t.missingTelex,
           missingData: !!t.missingData,
@@ -4759,6 +4876,7 @@
           inspectAt: r.inspectAt || "",
           fumigate: r.fumigate || "none",
           fumigateAt: r.fumigateAt || "",
+          fumigateShift: r.fumigateShift || "",
           dock: r.dock || "",
           missingTelex: !!r.missingTelex,
           missingData: !!r.missingData,
@@ -4924,6 +5042,145 @@
         return names;
       }
       return ["自行拆櫃"];
+    },
+    /** 舊資料整理：每一櫃的去向，方便勾選拿掉測試或已拆完的。 */
+    listImportCleanup() {
+      ensureState();
+      const own = new Set(["二崙", "油一", "油二", "油三", "周", "大庄", "新湖"]);
+      const cabBy = new Map((state.importCabinets || []).map((c) => [c.uha, c]));
+      const relBy = new Map((state.importReleased || []).map((r) => [r.uha, r]));
+      const keys = [];
+      const seen = new Set();
+      for (const r of state.importReleased || []) {
+        if (!r.uha || seen.has(r.uha)) continue;
+        seen.add(r.uha);
+        keys.push(r.uha);
+      }
+      for (const c of state.importCabinets || []) {
+        if (!c.uha || seen.has(c.uha)) continue;
+        seen.add(c.uha);
+        keys.push(c.uha);
+      }
+      return keys.map((uha) => {
+        const rel = relBy.get(uha) || {};
+        const cab = cabBy.get(uha) || {};
+        const site = String(rel.unpackSite || "").trim();
+        const dock = String(rel.dock || "").trim();
+        const note = String(rel.note || (cab.track && cab.track.note) || "").trim();
+        const dispatched = !!rel.dispatched;
+        const customer =
+          /交/.test(site) ||
+          /交櫃|交客戶/.test(note) ||
+          (!!site && !own.has(site) && site !== dock);
+        let bucket = "open";
+        let lab = "還在作業";
+        if (dispatched) {
+          bucket = "done";
+          lab = "已派工";
+        } else if (customer) {
+          bucket = "customer";
+          lab = "交客戶";
+        }
+        return {
+          key: uha,
+          uha,
+          containerNo: rel.containerNo || cab.containerNo || "",
+          product: String(rel.product || cab.product || "").replace(/\s+/g, " ").trim(),
+          dock,
+          site,
+          note,
+          trailer: rel.trailer || "",
+          dispatched,
+          customer,
+          bucket,
+          lab,
+        };
+      });
+    },
+    /** 已從追蹤拿掉的櫃子。清單還在，合計才對得起來。 */
+    listImportRemoved() {
+      ensureState();
+      if (!Array.isArray(state.importRemoved)) state.importRemoved = [];
+      return state.importRemoved.map((r) => ({
+        uha: r.uha || "",
+        containerNo: r.containerNo || "",
+        product: r.product || "",
+        seller: r.seller || "",
+        arriveDay: r.arriveDay || "",
+        note: r.note || "",
+        removedAt: r.removedAt || "",
+      }));
+    },
+    /** 從進口追蹤拿掉，但記入已刪除清單。不刪拆櫃回報、不刪進庫紀錄。 */
+    removeImportTracking(uhas) {
+      ensureState();
+      if (!Array.isArray(state.importRemoved)) state.importRemoved = [];
+      const set = new Set((Array.isArray(uhas) ? uhas : []).map((u) => String(u || "").trim()).filter(Boolean));
+      if (!set.size) return 0;
+      const had = new Set();
+      for (const c of state.importCabinets || []) if (set.has(c.uha)) had.add(c.uha);
+      for (const r of state.importReleased || []) if (set.has(r.uha)) had.add(r.uha);
+      if (!had.size) return 0;
+      for (const uha of had) {
+        const cab = (state.importCabinets || []).find((c) => c.uha === uha) || {};
+        const rel = (state.importReleased || []).find((r) => r.uha === uha) || {};
+        const whenMs = Math.max(Date.now(), Number(cab.updatedAt) || 0, Number(rel.updatedAt) || 0) + 1;
+        const when = new Date(whenMs).toISOString();
+        const snap = {
+          uha,
+          containerNo: rel.containerNo || cab.containerNo || "",
+          product: rel.product || cab.product || "",
+          seller: rel.seller || cab.seller || "",
+          arriveDay: rel.arriveDay || cab.arriveDay || "",
+          dock: rel.dock || "",
+          note: rel.note || (cab.track && cab.track.note) || "",
+          removedAt: when,
+          cabinet: cab.uha ? cab : null,
+          releasedRow: rel.uha ? rel : null,
+        };
+        state.importRemoved = state.importRemoved.filter((r) => r.uha !== uha);
+        state.importRemoved.unshift(snap);
+      }
+      state.importCabinets = (state.importCabinets || []).filter((c) => !had.has(c.uha));
+      state.importReleased = (state.importReleased || []).filter((r) => !had.has(r.uha));
+      if (Array.isArray(state.importParseDrafts)) {
+        state.importParseDrafts = state.importParseDrafts.filter((d) => !had.has(d.uha) && !had.has(d.key));
+      }
+      if (typeof save === "function") save();
+      if (typeof setStatus === "function") setStatus(`已記入刪除清單 ${had.size} 櫃。合計仍算在內。`);
+      return had.size;
+    },
+    /** 從已刪除清單放回追蹤。 */
+    restoreImportTracking(uha) {
+      ensureState();
+      if (!Array.isArray(state.importRemoved)) state.importRemoved = [];
+      const key = String(uha || "").trim();
+      const snap = state.importRemoved.find((r) => r.uha === key);
+      if (!snap) return false;
+      const backAt = Date.now();
+      if (snap.cabinet && !(state.importCabinets || []).some((c) => c.uha === key)) {
+        state.importCabinets.push({ ...snap.cabinet, updatedAt: backAt });
+      } else if (!snap.cabinet && !(state.importCabinets || []).some((c) => c.uha === key)) {
+        state.importCabinets.push({
+          uha: key,
+          containerNo: snap.containerNo || "",
+          product: snap.product || "",
+          seller: snap.seller || "",
+          arriveDay: snap.arriveDay || "",
+          updatedAt: backAt,
+        });
+      } else {
+        for (const c of state.importCabinets || []) if (c.uha === key) c.updatedAt = backAt;
+      }
+      if (snap.releasedRow && !(state.importReleased || []).some((r) => r.uha === key)) {
+        state.importReleased.push({ ...snap.releasedRow, updatedAt: backAt });
+      } else {
+        for (const r of state.importReleased || []) if (r.uha === key) r.updatedAt = backAt;
+      }
+      state.importRemoved = state.importRemoved.filter((r) => r.uha !== key);
+      if (typeof save === "function") save();
+      if (typeof setStatus === "function") setStatus(`${key} 已放回進口清單。`);
+      return true;
     },
     deliverySiteHints() {
       ensureState();

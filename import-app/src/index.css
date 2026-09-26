@@ -637,4 +637,65 @@ button.imp-chip-warn {
 .imp-tw .imp-inline-table .imp-excel-cell {
   max-width: 100%;
 }
+.imp-fume-when {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.imp-fume-shifts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.15rem;
+  max-width: 100%;
+}
+button.imp-fume-shift {
+  width: auto;
+  margin: 0;
+  padding: 0.08rem 0.28rem;
+  border: 1px solid #ddd6fe;
+  border-radius: 0.3rem;
+  background: #f5f3ff;
+  color: #5b21b6;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+button.imp-fume-shift.is-on {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+}
+.imp-just-added {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #6ee7b7;
+  border-radius: 0.6rem;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.imp-just-added p {
+  margin: 0;
+}
+.imp-just-added.is-existing {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+.imp-row-fresh {
+  background: #ecfdf5 !important;
+  box-shadow: inset 4px 0 0 #059669;
+}
+.imp-row-existing {
+  background: #fffbeb !important;
+  box-shadow: inset 4px 0 0 #d97706;
+}
 

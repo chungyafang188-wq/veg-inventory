@@ -1,6 +1,7 @@
 import { DEST_OPTS, clearOptsFor } from "../constants";
 import { defaultPickupFromFt } from "../lib/dateChip";
 import { api } from "../bridge";
+import { FumeWhenFields } from "./FumeWhenFields";
 
 function Field({ label, children }) {
   return (
@@ -269,8 +270,8 @@ export function Drawer({
               </Field>
               <Field label="薰蒸">
                 {selectClear("fumigate", f.fumigate)}
-                <span className="mt-1 block text-[0.72rem] font-semibold text-imp-muted">薰蒸排定時間</span>
-                <input type="datetime-local" className={`${inputCls()} mt-0.5`} value={(f.fumigateAt || "").slice(0, 16)} onChange={(e) => onField("fumigateAt", e.target.value)} />
+                <span className="mt-1 block text-[0.72rem] font-semibold text-imp-muted">煙燻日與班次</span>
+                <FumeWhenFields at={f.fumigateAt} shift={f.fumigateShift} onAt={(v) => onField("fumigateAt", v)} onShift={(v) => onField("fumigateShift", v)} />
               </Field>
               <Field label="碼頭">
                 <input className={inputCls()} value={f.dock || ""} onChange={(e) => onField("dock", e.target.value)} placeholder="檢驗／卸貨碼頭" />
@@ -384,7 +385,7 @@ export function Drawer({
                   </Field>
                   <Field label="薰蒸結束">
                     {selectClear("fumigate", f.fumigate)}
-                    <input type="datetime-local" className={`${inputCls()} mt-1`} value={(f.fumigateAt || "").slice(0, 16)} onChange={(e) => onField("fumigateAt", e.target.value)} />
+                    <FumeWhenFields at={f.fumigateAt} shift={f.fumigateShift} onAt={(v) => onField("fumigateAt", v)} onShift={(v) => onField("fumigateShift", v)} />
                   </Field>
                   <Field label="備註">
                     <input className={inputCls()} value={f.note || ""} onChange={(e) => onField("note", e.target.value)} />

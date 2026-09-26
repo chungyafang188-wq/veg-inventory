@@ -70,6 +70,9 @@ export function trackNextStep(row) {
 
 export function trackStageBadge(row) {
   if (!row) return { lab: "—", cls: "bg-slate-100 text-slate-600" };
+  if (row.dispatched || row.trackFilter === "done") {
+    return { lab: "已派工", cls: "bg-slate-200 text-slate-700" };
+  }
   if (row.trackFilter === "arranged" || row.pickup) {
     return { lab: "已排櫃", cls: "bg-emerald-100 text-emerald-800" };
   }

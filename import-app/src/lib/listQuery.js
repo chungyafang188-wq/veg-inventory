@@ -62,12 +62,19 @@ export function getRowText(row, fields) {
   return parts.join(" ").toLowerCase();
 }
 
+function compactText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[\s\-_/.]/g, "");
+}
+
 export function rowMatchesQuery(row, query, fields) {
   const q = normalizeQuery(query);
   if (!q) return true;
   const hay = getRowText(row, fields);
+  const hayCompact = compactText(hay);
   const tokens = q.split(" ").filter(Boolean);
-  return tokens.every((t) => hay.includes(t));
+  return tokens.every((t) => hay.includes(t) || hayCompact.includes(compactText(t)));
 }
 
 export function filterRows(rows, query, fields) {

@@ -8,7 +8,24 @@ import { queryRows } from "../lib/listQuery";
 const chipIdle = "imp-chip flex-shrink-0";
 const chipOn = "imp-chip imp-chip-on flex-shrink-0";
 
-const SEARCH_FIELDS = ["uha", "containerNo", "product", "dock", "trailer", "assignee", "stageLab", "status"];
+const SEARCH_FIELDS = [
+  "uha",
+  "containerNo",
+  "product",
+  "dock",
+  "trailer",
+  "trailerPhone",
+  "assignee",
+  "unpackSite",
+  "seller",
+  "shipCo",
+  "broker",
+  "note",
+  "pickupDay",
+  "ftAt",
+  "stageLab",
+  "status",
+];
 
 function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
   const uha = row.uha || row.key;
@@ -181,7 +198,18 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState(() => new Set());
 
+  const searching = !!String(query || "").trim();
+
   const filtered = useMemo(() => {
+    if (searching) {
+      const all = api().listCabinetSearch?.() || rows || [];
+      return queryRows(all, {
+        query,
+        sortBy: "uha",
+        fields: SEARCH_FIELDS,
+        getters: { uha: (r) => r.uha || r.key },
+      });
+    }
     let list = rows || [];
     if (tab === "customs") list = list.filter((r) => r.trackFilter === "customs");
     else if (tab === "arrange") list = list.filter((r) => r.trackFilter === "arrange");
@@ -194,7 +222,7 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
         uha: (r) => r.uha || r.key,
       },
     });
-  }, [rows, tab, query]);
+  }, [rows, tab, query, searching]);
 
   const stats = counts || {
     all: (rows || []).length,
@@ -248,7 +276,24 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label className="mt-3 block">
+          <span className="mb-1 block text-[0.72rem] font-bold text-slate-500">全站搜尋</span>
+          <input
+            type="search"
+            className="imp-field w-full"
+            placeholder="櫃號、編號、品名、碼頭、拖車、拆工、賣方"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="全站搜尋貨櫃"
+          />
+        </label>
+        {searching ? (
+          <p className="m-0 mt-1.5 text-xs font-semibold text-teal-800">
+            全站找到 {filtered.length} 筆，含已派工與報關中。清空搜尋即回到目前分頁。
+          </p>
+        ) : null}
+
+        {searching ? null : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             ["all", "全部在追", stats.all, "border-slate-200/80 bg-slate-50/80", "text-slate-800"],
             ["customs", "報關／檢疫", stats.customs, "border-slate-200/80 bg-slate-50/80", "text-slate-800"],
@@ -265,8 +310,8 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
               <div className={`text-[0.7rem] font-semibold ${id === "arrange" && n > 0 ? "text-amber-950" : "text-slate-500"}`}>{lab}</div>
             </button>
           ))}
-        </div>
-        {stats.arrange > 0 ? (
+        </div>}
+        {!searching && stats.arrange > 0 ? (
           <button type="button" className="imp-remind" onClick={() => setTab("arrange")}>
             <span>
               <span className="imp-remind-n">待排櫃 {stats.arrange}</span>
@@ -276,7 +321,7 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
           </button>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        {searching ? null : <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap gap-1.5" role="tablist">
             {tabs.map(([id, lab, count]) => (
               <button
@@ -290,15 +335,7 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
               </button>
             ))}
           </div>
-          <input
-            type="search"
-            className="imp-field min-w-[12rem] flex-1 md:max-w-xs"
-            placeholder="搜尋編號、櫃號、品名、拖車、拆工…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="搜尋貨櫃"
-          />
-        </div>
+        </div>}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-500">
@@ -312,7 +349,7 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
       <div className="px-2 py-2 sm:px-3">
         {!filtered.length ? (
           <p className="m-0 py-12 text-center text-sm text-slate-400">
-            {(rows || []).length ? "沒有符合搜尋／篩選的貨櫃" : "目前沒有追蹤中的貨櫃"}
+            {searching ? `找不到「${query.trim()}」` : (rows || []).length ? "沒有符合這個分頁的貨櫃" : "目前沒有追蹤中的貨櫃"}
           </p>
         ) : (
           <>

@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=398" />
+    <link rel="stylesheet" href="./styles.css?v=408" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
     <link rel="stylesheet" href="./unpack-flow.css?v=10" />
     <link rel="stylesheet" href="./import-flow.css?v=25" />
@@ -172,7 +172,7 @@
         <form id="order-form" class="order-desk">
           <header class="order-desk-top">
             <h2 id="form-title" class="order-desk-sr">下單</h2>
-            <div class="order-desk-top-row">
+            <div class="order-desk-top-row order-desk-row-main">
               <label class="field order-who-field" for="customer">叫貨對象
                 <span class="cust-wrap">
                   <input id="customer" type="text" required placeholder="輸入姓名／電話…" autocomplete="off" spellcheck="false" lang="zh-Hant" />
@@ -182,7 +182,14 @@
               <label class="field order-date-field" for="ship-date">出貨日
                 <input id="ship-date" type="date" required />
               </label>
-              <button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
+              <label class="field order-paper-seq-field" for="paper-seq">單號
+                <span class="paper-seq-wrap">
+                  <span class="paper-seq-prefix" aria-hidden="true">U</span>
+                  <input id="paper-seq" type="text" inputmode="numeric" placeholder="後面數字，空白自動編" autocomplete="off" spellcheck="false" />
+                </span>
+              </label>
+              </div>
+            <div class="order-desk-top-row order-desk-row-tools"><button type="button" class="urgent-toggle" id="order-urgent-btn" aria-pressed="false" title="急單會排到已填單最前面">
                 <span class="urgent-toggle-ico" aria-hidden="true">!</span>
                 <span class="urgent-toggle-lab">急單</span>
               </button>
@@ -292,7 +299,7 @@
                   <input
                     id="orders-today-q"
                     type="text"
-                    placeholder="客戶名稱或訂單號碼"
+                    placeholder="客人、紙本流水、單號"
                     autocomplete="off"
                     spellcheck="false"
                     enterkeyhint="search"
@@ -391,7 +398,25 @@
       <section id="page-sitework" hidden>
         <div id="sw-root" class="sw-root"></div>
       </section>
-      <section id="page-cashday" hidden>
+            <section id="page-pending-books" hidden>
+        <section class="card pb-card">
+          <div class="head">
+            <h2>待入進銷存</h2>
+            <label class="date-inline">出貨日 <input id="pb-date" type="date" /></label>
+          </div>
+          <p class="hint">已確認出貨、還沒打進進銷存的單。紙本一本一本各自流水，對帳看本別＋流水號。</p>
+          <div class="pb-tools">
+            <label class="pb-q-lab" for="pb-q">搜尋
+              <input id="pb-q" type="search" placeholder="客人或流水號" autocomplete="off" spellcheck="false" />
+            </label>
+            <button type="button" class="ghost" id="pb-open-all">全部未入</button>
+            <label class="pb-done-lab"><input type="checkbox" id="pb-show-done" /> 含已入帳</label>
+          </div>
+          <p id="pb-extra" class="muted"></p>
+          <div id="pb-list" class="pb-list"></div>
+        </section>
+      </section>
+<section id="page-cashday" hidden>
         <div id="cd-root" class="cd-root"></div>
       </section>
       <section id="page-ar-remit" hidden>
@@ -625,12 +650,12 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=405"></script>
+    <script src="./app.js?v=413"></script>
     <script src="./ware-stock.js?v=7"></script>
     <script src="./unpack-flow.js?v=16"></script>
-    <script src="./import-flow.js?v=84"></script>
-    <link rel="stylesheet" href="./import-dist/import-app.css?v=88" />
-    <script type="module" src="./import-dist/import-app.js?v=88"></script>
+    <script src="./import-flow.js?v=85"></script>
+    <link rel="stylesheet" href="./import-dist/import-app.css?v=90" />
+    <script type="module" src="./import-dist/import-app.js?v=90"></script>
     <script src="./site-work.js?v=3"></script>
     <script src="./boss-stats.js?v=13"></script>
     <script src="./cash-day.js?v=11"></script>

@@ -4623,6 +4623,64 @@
 
       return rows;
     },
+    /** 全站貨櫃：追蹤中＋已派工。給貨櫃追蹤的搜尋用。 */
+    listCabinetSearch() {
+      ensureState();
+      const active = window.__importApi.listTrackBoard();
+      const seen = new Set(active.map((r) => r.uha));
+      const cabBy = new Map((state.importCabinets || []).map((c) => [c.uha, c]));
+      const enrich = (row, cab, rel) => ({
+        ...row,
+        seller: row.seller || (cab && cab.seller) || (rel && rel.seller) || "",
+        shipCo: row.shipCo || (cab && cab.shipCo) || "",
+        broker: row.broker || (cab && cab.broker) || (rel && rel.broker) || "",
+        note: row.note || (rel && rel.note) || (cab && cab.track && cab.track.note) || "",
+        trailerPhone: row.trailerPhone || (rel && rel.trailerPhone) || "",
+      });
+      const releasedBy = new Map(releaseWorkList().map((r) => [r.uha, r]));
+      const rows = active.map((row) => enrich(row, cabBy.get(row.uha), releasedBy.get(row.uha)));
+      for (const r of releaseWorkList()) {
+        if (!r.dispatched || seen.has(r.uha)) continue;
+        const cab = cabBy.get(r.uha) || {};
+        rows.push(
+          enrich(
+            {
+              key: r.uha,
+              uha: r.uha || "",
+              pendingUha: isPendingUha(r.uha),
+              containerNo: r.containerNo || cab.containerNo || "",
+              arriveDay: r.arriveDay || cab.arriveDay || "",
+              product: r.product || cab.product || "",
+              dock: r.dock || "",
+              inspect: r.inspect || "none",
+              inspectAt: r.inspectAt || "",
+              fumigate: r.fumigate || "none",
+              fumigateAt: r.fumigateAt || "",
+              trailer: r.trailer || "",
+              assignee: r.assignee || "",
+              unpackSite: r.unpackSite || "",
+              unpackAt: r.unpackAt || "",
+              unpackShift: !!r.unpackShift,
+              pickupDay: r.pickupDay || "",
+              ftAt: r.ftAt || "",
+              ftConfirmed: !!(r.ftConfirmed || r.ft),
+              missingTelex: !!r.missingTelex,
+              missingData: !!r.missingData,
+              released: true,
+              pickup: !!r.pickup,
+              dispatched: true,
+              trackFilter: "done",
+              dest: "release",
+              stageLab: "已派工",
+              status: "已派工",
+            },
+            cab,
+            r,
+          ),
+        );
+      }
+      return rows;
+    },
     trackBoardCounts() {
       ensureState();
       fixArriveDaysInState();

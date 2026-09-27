@@ -105,7 +105,7 @@
     if (!iAmUnpacker()) return false;
     const me = staffName();
     if (!me) return false;
-    return j.assignee === me && (j.status === "pending" || j.status === "reported");
+    return j.assignee === me && j.status === "reported";
   }
 
   function ensureState() {
@@ -337,6 +337,37 @@
     if (j.assignee !== me) return false;
     // 拆櫃工可開自己的待回報（填寫）與已回報／已確認（核對、唯讀）
     return j.status === "pending" || j.status === "reported" || j.status === "confirmed";
+  }
+
+  function shortMd(day) {
+    const m = String(day || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return day || "未排日";
+    return `${Number(m[2])}/${Number(m[3])}`;
+  }
+
+  function trailerOf(j) {
+    let name = String(j?.trailer || "").trim();
+    let phone = String(j?.trailerPhone || "").trim();
+    const uha = String(j?.sourceUha || j?.box || "").trim();
+    if ((!name || !phone) && uha && Array.isArray(state.importReleased)) {
+      const rel = state.importReleased.find((r) => r && r.uha === uha);
+      if (rel) {
+        if (!name) name = String(rel.trailer || "").trim();
+        if (!phone) phone = String(rel.trailerPhone || "").trim();
+      }
+    }
+    return { name, phone };
+  }
+
+  function trailerBlockHtml(j) {
+    const tr = trailerOf(j);
+    const phone = tr.phone
+      ? `<a href="tel:${esc(tr.phone)}">${esc(tr.phone)}</a>`
+      : "尚未填";
+    return `<section class="up-trailer">
+      <p><span>拖車</span>${esc(tr.name || "尚未填")}</p>
+      <p><span>拖車電話</span>${phone}</p>
+    </section>`;
   }
 
   function statusLabel(j) {
@@ -1073,7 +1104,7 @@
       list.innerHTML = `
         ${pathBack}
         <header class="up-head">
-          <h2>${iAmUnpacker() ? "我的拆櫃回報" : "拆櫃回報"}</h2>
+          <h2>${iAmUnpacker() ? `${esc(staffName() || "拆工")} / 拆櫃回報` : "拆櫃回報"}</h2>
           <p class="muted">回報明細清單僅顯示近 ${REPORTED_DETAIL_DAYS} 日已回報資料；有權限者可修改或刪除（異動會記入主管後台）。</p>
         </header>
         ${tabs}
@@ -1092,9 +1123,18 @@
     const pending = jobs.filter((j) => j.status === "pending");
     const reported = iAmUnpacker() ? [] : jobs.filter((j) => j.status === "reported");
     const card = (j, tone) => {
-      const codes = (j.codes || []).length;
+      const codeShow = (j.codes || []).filter(Boolean).join("、") || "尚無櫃號";
       const who = j.assignee ? `負責 ${esc(j.assignee)}` : "未指派";
       const custBits = [j.customer, j.unloadPoint].filter(Boolean).join(" · ");
+      const tr = trailerOf(j);
+      const qtyNeed =
+        j.assignQty != null && j.assignQty !== ""
+          ? `指派數量 ${esc(String(j.assignQty))}　須回報拆櫃數量、外箱`
+          : "須回報拆櫃數量、外箱";
+      const wrong =
+        j.assignError && !j.assignee
+          ? `<p class="up-card-warn">指派錯誤回報${j.assignErrorBy ? `（${esc(j.assignErrorBy)}）` : ""}</p>`
+          : "";
       const assign =
         manage && j.status === "pending"
           ? `<label class="up-assign" onclick="event.stopPropagation()">拆工
@@ -1116,13 +1156,52 @@
             <em>${esc(statusLabel(j))}</em>
           </div>
           <p class="up-card-name">${esc(j.name || "—")}${j.country ? ` · ${esc(j.country)}` : ""}</p>
-          <p class="up-card-meta">${esc(j.day)}　貨櫃號碼 ${codes} 組　${who}${
-            custBits ? `　交櫃 ${esc(custBits)}` : ""
-          }</p>
+          <p class="up-card-code">${esc(codeShow)}</p>
+          <p class="up-card-trailer">拖車 ${esc(tr.name || "尚未填")}　電話 ${esc(tr.phone || "尚未填")}</p>
+          <p class="up-card-meta">${qtyNeed}${custBits ? `　交櫃 ${esc(custBits)}` : ""}　${who}</p>
+          ${wrong}
         </button>
-        ${assign}
-        ${jobActionBar(j)}
+        ${
+          iAmUnpacker() && j.status === "pending"
+            ? `<div class="up-card-acts" role="group" aria-label="回報">
+                <button type="button" class="primary up-act" data-up-open="${esc(j.id)}">貨櫃拆卸回報</button>
+                <button type="button" class="ghost up-act" data-up-wrong="${esc(j.id)}">貨櫃指派錯誤回報</button>
+              </div>`
+            : `${assign}${jobActionBar(j)}`
+        }
       </div>`;
+    };
+    const pendingSections = () => {
+      if (!pending.length) {
+        return `<section class="up-sec">
+          <h3>${iAmUnpacker() ? "待回報" : "待回報"} ${pending.length}</h3>
+          <div class="up-cards"><p class="up-empty">${
+            iAmUnpacker() ? "目前沒有指派給你的貨櫃。" : "目前沒有待回報。可手動加入或先列印貨櫃標籤。"
+          }</p></div>
+        </section>`;
+      }
+      if (!iAmUnpacker()) {
+        return `<section class="up-sec">
+          <h3>待回報 ${pending.length}</h3>
+          <div class="up-cards">${pending.map((j) => card(j, "is-pending")).join("")}</div>
+        </section>`;
+      }
+      const groups = new Map();
+      for (const j of pending) {
+        const d = j.day || "";
+        if (!groups.has(d)) groups.set(d, []);
+        groups.get(d).push(j);
+      }
+      return [...groups.keys()]
+        .sort()
+        .map((d) => {
+          const rows = groups.get(d);
+          return `<section class="up-sec">
+            <h3>${esc(shortMd(d))}　須回報 ${rows.length}</h3>
+            <div class="up-cards">${rows.map((j) => card(j, "is-pending")).join("")}</div>
+          </section>`;
+        })
+        .join("");
     };
     const manual = manage
       ? `<section class="up-manual">
@@ -1150,23 +1229,16 @@
     list.innerHTML = `
       ${pathBack}
       <header class="up-head">
-        <h2>${iAmUnpacker() ? "我的拆櫃回報" : "拆櫃回報"}</h2>
+        <h2>${iAmUnpacker() ? `${esc(staffName() || "拆工")} / 拆櫃回報` : "拆櫃回報"}</h2>
         <p class="muted">${
           iAmUnpacker()
-            ? "只顯示指派給你的貨櫃。點開回報拆櫃數量、外箱、入庫與拆櫃位置。回報後可到「回報明細清單」核對。"
+            ? "依拆卸日列出要回報的貨櫃。貨櫃拆卸回報填數量、外箱和貨櫃號照片。指派錯誤只回報，貨櫃留在資料裡，改回未指派。"
             : "可從標籤彙整，或手動加入編號並指派拆工（阿宏／靜宜）。"
         }</p>
       </header>
       ${tabs}
       ${manual}
-      <section class="up-sec">
-        <h3>${iAmUnpacker() ? "待我回報" : "待回報"} ${pending.length}</h3>
-        <div class="up-cards">${
-          pending.length
-            ? pending.map((j) => card(j, "is-pending")).join("")
-            : `<p class="up-empty">${iAmUnpacker() ? "目前沒有指派給你的貨櫃。" : "目前沒有待回報。可手動加入或先列印貨櫃標籤。"}</p>`
-        }</div>
-      </section>
+      ${pendingSections()}
       ${
         iAmUnpacker()
           ? ""
@@ -1231,6 +1303,11 @@
     const j = jobById(id);
     if (!j || j.status !== "pending") return false;
     j.assignee = who || "";
+    if (who) {
+      j.assignError = false;
+      j.assignErrorBy = "";
+      j.assignErrorAt = 0;
+    }
     if (assignQty !== undefined && assignQty !== null && assignQty !== "") {
       const n = Number(assignQty);
       j.assignQty = Number.isFinite(n) && n >= 0 ? n : null;
@@ -1284,7 +1361,8 @@
       .map((n) => `<option value="${esc(n)}"${j.assignee === n ? " selected" : ""}>${esc(n)}</option>`)
       .join("");
     const manageActs = [];
-    if (!editing && canEditJob(j)) {
+    const unpackerFilling = iAmUnpacker() && j.status === "pending" && !editing;
+    if (!editing && canEditJob(j) && !unpackerFilling) {
       manageActs.push(
         `<button type="button" class="primary" data-up-edit="${esc(j.id)}">修改</button>`,
       );
@@ -1343,6 +1421,7 @@
         </div>
         ${manageActs.length ? `<div class="up-detail-acts">${manageActs.join("")}</div>` : ""}
       </header>
+      ${trailerBlockHtml(j)}
       ${identityBlock}
       <section class="up-form">
         <label>拆櫃編號
@@ -1353,9 +1432,9 @@
         <label>拆櫃數量
           <input id="up-unpack-qty" type="number" min="0" step="1" inputmode="decimal" value="${
             j.unpackQty != null ? esc(String(j.unpackQty)) : ""
-          }" placeholder="拆櫃數量" ${fieldsOpen ? "" : "readonly"} />
+          }" placeholder="這一櫃總數" ${fieldsOpen ? "" : "readonly"} />
         </label>
-        <label>外箱
+        <label>外箱拆卸數量
           <input id="up-qty" type="number" min="0" step="1" inputmode="decimal" value="${
             j.qty != null ? esc(String(j.qty)) : ""
           }" placeholder="外箱數" ${fieldsOpen ? "" : "readonly"} />
@@ -1380,13 +1459,13 @@
               : ""
           }
         </div>
-        <label>備註
-          <input id="up-note" type="text" value="${esc(j.note || "")}" placeholder="選填" ${
+        <label>回報備註
+          <input id="up-note" type="text" value="${esc(j.note || "")}" placeholder="總數以外若分尺寸，寫各尺寸數量" ${
             fieldsOpen ? "" : "readonly"
           } />
         </label>
         <div class="up-photo">
-          <p class="up-lab">拍照</p>
+          <p class="up-lab">拍攝貨櫃號</p>
           ${
             !fieldsOpen
               ? j.photo
@@ -1787,10 +1866,33 @@
     if (custEl) j.customerName = String(custEl.value || "").trim();
   }
 
+  function reportAssignWrong(id) {
+    const j = jobById(id);
+    const me = staffName();
+    if (!j || j.status !== "pending" || !iAmUnpacker() || !me || j.assignee !== me) {
+      if (typeof setStatus === "function") setStatus("這櫃不能回報指派錯誤。", true);
+      return;
+    }
+    const label = j.box || j.name || "此櫃";
+    if (!confirm(`回報「${label}」指派錯誤？\n貨櫃留在資料裡，改回未指派，請辦公室重派。`)) return;
+    j.assignError = true;
+    j.assignErrorBy = me;
+    j.assignErrorAt = Date.now();
+    j.assignee = "";
+    save();
+    unpackEditMode = false;
+    unpackPhase = "list";
+    unpackFocusId = "";
+    unpackPhotoDraft = "";
+    unpackListTab = "pending";
+    if (typeof setStatus === "function") setStatus(`${label} 已回報指派錯誤，貨櫃留著，已改回未指派。`);
+    renderUnpackList();
+  }
+
   function bindOnce() {
-    // v4: force rebind — earlier builds set upBound=1/3 without working edit/delete
-    if (document.body.dataset.upBound === "4") return;
-    document.body.dataset.upBound = "4";
+    // v5: 指派錯誤回報
+    if (document.body.dataset.upBound === "5") return;
+    document.body.dataset.upBound = "5";
     document.body.addEventListener("click", (e) => {
       if (e.target.closest("[data-up-go-home]")) {
         page = "home";
@@ -1820,6 +1922,13 @@
         e.preventDefault();
         e.stopPropagation();
         requestOrDeleteJob(delBtn.getAttribute("data-up-del") || "");
+        return;
+      }
+      const wrongBtn = e.target.closest("[data-up-wrong]");
+      if (wrongBtn && !wrongBtn.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        reportAssignWrong(wrongBtn.getAttribute("data-up-wrong") || "");
         return;
       }
       if (e.target.closest("[data-up-save-edit]")) {
@@ -2074,26 +2183,60 @@
     return true;
   }
 
+  function workWhen(j) {
+    const at = String((j && (j.unpackAt || j.day)) || "");
+    const m = at.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (!m) return at;
+    const md = `${Number(m[2])}/${Number(m[3])}`;
+    if (j && j.unpackShift) return `${md} 上班領`;
+    if (m[4] && !(m[4] === "00" && m[5] === "00")) return `${md} ${m[4]}:${m[5]}`;
+    return md;
+  }
+
+  function workOrderText(j) {
+    const customer = String((j && j.deliverTo) || "").trim();
+    const when = workWhen(j);
+    const trailer = String((j && j.trailer) || "").trim();
+    const site = String((j && (j.location || j.unloadPoint)) || "").trim();
+    const worker = String((j && j.assignee) || "").trim();
+    return [
+      customer ? `客戶 ${customer}` : "",
+      when,
+      trailer ? `拖車 ${trailer}` : "",
+      site,
+      worker,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
   function jobRowCells(j) {
-    const codes = (j.codes || []).filter(Boolean).join("、") || "—";
+    const codes = (j.codes || []).filter(Boolean).join("、");
     return {
       key: j.id,
-      cells: [
-        j.day || "—",
-        j.box || "—",
-        j.name || "—",
-        codes,
-        j.assignee || "未指派",
-        j.assignQty != null ? String(j.assignQty) : "—",
-        j.unpackQty != null ? String(j.unpackQty) : "—",
-        statusLabel(j),
-      ],
+      uha: j.box || j.sourceUha || "",
+      box: j.box || "",
+      sourceUha: j.sourceUha || j.box || "",
+      name: j.name || "",
+      product: j.name || "",
+      containerNo: codes,
+      deliverTo: j.deliverTo || "",
+      trailer: j.trailer || "",
+      location: j.location || j.unloadPoint || "",
+      unpackAt: j.unpackAt || "",
+      day: j.day || "",
+      assignee: j.assignee || "",
+      canAssign: false,
+      cells: [j.box || "", codes, j.name || "", workOrderText(j), statusLabel(j)],
     };
   }
 
   window.__unpackApi = {
     listJobs(tab) {
       ensureState();
+      if (window.__importApi && typeof window.__importApi.syncReleaseAssignees === "function") {
+        window.__importApi.syncReleaseAssignees();
+      }
       if (!iAmUnpacker()) syncJobsFromLabels();
       const t = tab || "pending";
       if (t === "reported") return reportedDetailJobs().map(jobRowCells);
@@ -2101,6 +2244,9 @@
     },
     tabCounts() {
       ensureState();
+      if (window.__importApi && typeof window.__importApi.syncReleaseAssignees === "function") {
+        window.__importApi.syncReleaseAssignees();
+      }
       if (!iAmUnpacker()) syncJobsFromLabels();
       return {
         pending: pendingJobs().length,
@@ -2128,6 +2274,12 @@
         reportBox: j.reportBox || j.box || "",
         stockIn: j.stockIn !== false,
         location: j.location || "",
+        deliverTo: j.deliverTo || "",
+        trailer: j.trailer || "",
+        unpackAt: j.unpackAt || "",
+        handoverLab: [j.deliverTo ? `客戶 ${j.deliverTo}` : "", workWhen(j) ? `交櫃 ${workWhen(j)}` : "", j.trailer ? `拖車 ${j.trailer}` : "", j.location || j.unloadPoint ? `位置 ${j.location || j.unloadPoint}` : ""]
+          .filter(Boolean)
+          .join(" · "),
         customerName: j.customerName || "",
         customer: j.customer || "",
         unloadPoint: j.unloadPoint || "",

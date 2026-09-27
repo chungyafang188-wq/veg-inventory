@@ -36,6 +36,12 @@
   max-width: none;
 }
 
+/* 清單很長時，抽屜若跟整頁一樣高，畫面上只會看到空白，按鈕被擠到最底。釘在視窗上。 */
+.imp-drawer-host {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
 /* 抽屜遮罩是 button，主站 button{} 會把它畫成白底，排程表會整片空白 */
 button.imp-drawer-backdrop {
   position: absolute;
@@ -52,6 +58,23 @@ button.imp-drawer-backdrop {
 }
 .imp-drawer-host aside {
   z-index: 1;
+  height: auto;
+  max-height: 100%;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .imp-drawer-host aside {
+    top: 0;
+    bottom: auto;
+  }
+}
+.imp-drawer-host .imp-drawer-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.imp-drawer-host .imp-drawer-foot {
+  flex-shrink: 0;
 }
 
 /* 主站 input/select 的大 padding 會把 h-8 文字裁掉；這裡強制可見 */
@@ -447,20 +470,39 @@ button.imp-chip-warn {
 }
 .imp-tw .imp-id-cont {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #334155;
 }
 .imp-tw .imp-uha-fix {
-  margin: 0.1rem 0 0;
+  margin: 0.15rem 0 0;
   width: auto;
-  padding: 0;
+  padding: 0.05rem 0;
   border: 0;
   background: transparent;
-  color: #047857;
-  font-size: 0.68rem;
-  font-weight: 750;
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 650;
   text-decoration: underline;
+  cursor: pointer;
+}
+.imp-tw .imp-uha-arm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+.imp-tw .imp-uha-arm button {
+  width: auto;
+  margin: 0;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
 }
 .imp-tw .imp-uha-edit {
@@ -668,6 +710,40 @@ button.imp-fume-shift.is-on {
   border-color: #6d28d9;
   color: #fff;
 }
+.imp-tw .imp-fume-unpack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+.imp-tw .imp-fume-unpack > span {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+}
+.imp-tw .imp-trailer-pick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.imp-tw .imp-trailer-pick select,
+.imp-tw .imp-trailer-pick input {
+  width: auto;
+  height: 1.7rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0.4rem;
+  font-size: 0.78rem;
+}
+.imp-tw .imp-trailer-pick select {
+  min-width: 5.2rem;
+}
+.imp-tw .imp-trailer-pick input {
+  width: 6.5rem;
+}
 .imp-just-added {
   display: flex;
   flex-wrap: wrap;
@@ -697,5 +773,815 @@ button.imp-fume-shift.is-on {
 .imp-row-existing {
   background: #fffbeb !important;
   box-shadow: inset 4px 0 0 #d97706;
+}
+.imp-tw .imp-desk-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.imp-tw .imp-desk-head p,
+.imp-tw .imp-desk-wait,
+.imp-tw .imp-desk-note,
+.imp-tw .imp-desk-meta {
+  margin: 0.35rem 0 0;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.imp-tw .imp-desk-sheets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+.imp-tw .imp-desk-sheets button {
+  width: auto;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.8rem;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.imp-tw .imp-desk-sheets button.is-on {
+  border-color: #047857;
+  background: #ecfdf5;
+}
+.imp-tw .imp-desk-sheets b {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: #0f172a;
+}
+.imp-tw .imp-desk-sheets span,
+.imp-tw .imp-desk-sheets small {
+  display: block;
+  color: #334155;
+}
+.imp-tw .imp-desk-sheets small {
+  color: #64748b;
+  font-size: 0.68rem;
+}
+.imp-tw .imp-desk-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+.imp-tw .imp-desk-export span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #047857;
+}
+.imp-tw button.imp-desk-btn {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.imp-tw button.imp-desk-btn.is-solid {
+  border-color: #047857;
+  background: #047857;
+  color: #fff;
+}
+.imp-tw .imp-desk h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+.imp-tw .imp-desk h3 span {
+  font-weight: 650;
+  color: #64748b;
+}
+.imp-tw .imp-desk-list {
+  display: grid;
+  gap: 0.55rem;
+}
+.imp-tw .imp-desk-row {
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.imp-tw .imp-desk-row.is-done {
+  background: #f8fafc;
+}
+.imp-tw .imp-release-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.imp-tw .imp-release-card {
+  padding: 0.55rem 0.7rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.7rem;
+  background: #fff;
+}
+.imp-tw .imp-release-card.is-wait {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+.imp-tw .imp-release-card.is-on {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+.imp-tw .imp-release-card input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.imp-tw .imp-release-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.imp-tw .imp-release-top > button,
+.imp-tw .imp-release-id button,
+.imp-tw .imp-release-grid button {
+  width: auto;
+  height: 1.7rem;
+  padding: 0 0.55rem;
+}
+.imp-tw .imp-release-id {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.45rem;
+  min-width: 0;
+}
+.imp-tw .imp-release-id strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.imp-tw .imp-release-product {
+  font-weight: 700;
+  color: #334155;
+}
+.imp-tw .imp-release-grid {
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  justify-content: start;
+  gap: 0.4rem 1.15rem;
+  margin-top: 0.45rem;
+}
+.imp-tw .imp-release-grid label > * {
+  justify-self: start;
+  width: auto;
+}
+.imp-tw .imp-release-grid label {
+  display: grid;
+  gap: 0.08rem;
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+}
+.imp-tw .imp-release-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+@media (max-width: 720px) {
+  .imp-tw .imp-release-grid {
+    grid-template-columns: max-content max-content;
+  }
+  .imp-tw .imp-release-grid label:nth-child(1),
+  .imp-tw .imp-release-grid label:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+}
+.imp-tw .imp-desk-find {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.7rem;
+}
+.imp-tw .imp-desk-find span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #64748b;
+}
+.imp-tw .imp-desk-find input {
+  width: 100%;
+  margin: 0;
+  height: 2.4rem;
+  min-height: 0;
+}
+.imp-tw .imp-desk-find-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+.imp-tw .imp-desk-row-top {
+  display: block;
+}
+.imp-tw .imp-desk-idline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+}
+.imp-tw .imp-desk-row-top strong {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #0f172a;
+  line-height: 1.15;
+}
+.imp-tw .imp-desk-box {
+  display: inline;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+}
+.imp-tw .imp-desk-box.is-empty {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.imp-tw .imp-desk-lab {
+  align-self: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+.imp-tw .imp-desk-lab.is-ready {
+  background: #d1fae5;
+  color: #065f46;
+}
+.imp-tw .imp-desk-lab.is-done {
+  background: #e2e8f0;
+  color: #334155;
+}
+.imp-tw .imp-desk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+.imp-tw .imp-desk-fields {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.imp-tw .imp-desk-dest {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+.imp-tw .imp-desk-line {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem 0.65rem;
+  align-items: end;
+}
+.imp-tw .imp-desk-line.is-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.imp-tw .imp-desk-line.is-shift {
+  grid-template-columns: minmax(7.5rem, 0.7fr) minmax(0, 1.8fr);
+}
+.imp-tw .imp-desk-time {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: end;
+}
+.imp-tw .imp-desk-fields label,
+.imp-tw label.imp-desk-who {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+}
+.imp-tw .imp-desk-fields label {
+  margin-top: 0;
+}
+.imp-tw select.imp-assign-who {
+  width: auto;
+  min-width: 6.5rem;
+  height: 2rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0.15rem 0.4rem;
+}
+.imp-tw .imp-desk-when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.imp-tw .imp-desk-when input[type="date"] {
+  flex: 1 1 7.5rem;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  height: 1.7rem;
+  min-height: 0;
+  padding: 0 0.4rem;
+  font-size: 0.78rem;
+}
+.imp-tw .imp-desk-when select {
+  flex: 0 0 3.15rem;
+  width: 3.15rem;
+  margin: 0;
+  height: 1.7rem;
+  min-height: 0;
+  padding: 0 0.2rem 0 0.3rem;
+  font-size: 0.78rem;
+}
+.imp-tw .imp-desk-fields input,
+.imp-tw .imp-desk-fields select,
+.imp-tw label.imp-desk-who input {
+  width: 100%;
+  margin: 0;
+  height: 1.7rem;
+  min-height: 0;
+  padding: 0 0.5rem;
+  border-radius: 0.45rem;
+  font-size: 0.78rem;
+  color: #0f172a;
+}
+.imp-tw .imp-desk-time > .imp-desk-btn {
+  height: 1.7rem;
+  padding: 0 0.65rem;
+  border-radius: 0.45rem;
+  font-size: 0.78rem;
+}
+@media (max-width: 720px) {
+  .imp-tw .imp-desk-line,
+  .imp-tw .imp-desk-line.is-two,
+  .imp-tw .imp-desk-line.is-shift,
+  .imp-tw .imp-desk-time {
+    grid-template-columns: 1fr;
+  }
+}
+.imp-tw button.imp-desk-lab {
+  width: auto;
+  margin: 0;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.imp-tw button.imp-desk-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.imp-tw .imp-desk-gapnote {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b45309;
+}
+.imp-tw .imp-desk-paste {
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.imp-tw .imp-sheet {
+  width: 100%;
+  min-width: 46rem;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.92rem;
+}
+.imp-tw .imp-sheet th,
+.imp-tw .imp-sheet td {
+  width: auto;
+  border: 1px solid #cbd5e1;
+  padding: 0.55rem 0.7rem;
+  text-align: center;
+  vertical-align: middle;
+}
+.imp-tw .imp-sheet th {
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.imp-tw .imp-sheet tbody tr {
+  cursor: pointer;
+}
+.imp-tw .imp-sheet tbody tr:hover td {
+  background: #f8fafc;
+}
+.imp-tw .imp-sheet .is-uha {
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.imp-tw .imp-sheet .is-handover {
+  color: #dc2626;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: left;
+  white-space: pre-line;
+}
+.imp-tw .imp-sheet .is-fume {
+  display: block;
+  color: #b45309;
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+.imp-tw .imp-sheet .is-worker {
+  color: #6d28d9;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.imp-tw .imp-sheet .is-act {
+  white-space: nowrap;
+}
+.imp-tw button.imp-sheet-act {
+  width: auto;
+  margin: 0 0.25rem 0 0;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.imp-tw button.imp-sheet-act.is-done {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+.imp-tw .imp-sheet .is-miss {
+  background: #fffbeb;
+}
+.imp-tw .imp-board-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+}
+.imp-tw .imp-board-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.imp-tw .imp-board-tools {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.imp-tw .imp-board-titleline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
+.imp-tw .imp-board-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #64748b;
+}
+.imp-tw .imp-board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.imp-tw .imp-find-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.imp-tw .imp-find-search {
+  display: block;
+}
+.imp-tw .imp-find-box {
+  position: relative;
+  display: block;
+}
+.imp-tw input.imp-find-input {
+  height: 2.55rem;
+  border: 1.5px solid #0f766e;
+  background: #f0fdfa;
+  font-size: 0.92rem;
+  font-weight: 650;
+  padding: 0.4rem 2.4rem 0.4rem 0.7rem;
+}
+.imp-tw input.imp-find-input::placeholder {
+  color: #64748b;
+  font-weight: 600;
+}
+.imp-tw button.imp-find-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.15rem 0.4rem;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.imp-tw .imp-find-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+}
+.imp-tw .imp-find-sort .imp-btn-primary,
+.imp-tw .imp-find-sort .imp-btn-ghost {
+  padding: 0.22rem 0.7rem;
+  font-size: 0.75rem;
+}
+.imp-tw .imp-cal {
+  width: 15.6rem;
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  padding: 0.3rem 0.4rem 0.25rem;
+}
+.imp-tw .imp-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+  font-size: 0.82rem;
+  color: #0f172a;
+}
+.imp-tw .imp-cal-head strong {
+  font-weight: 800;
+}
+.imp-tw button.imp-cal-nav,
+.imp-tw button.imp-cal-clear {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.1rem 0.45rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #0f766e;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.imp-tw button.imp-cal-clear {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
+}
+.imp-tw .imp-cal-note {
+  margin: 0.3rem 0 0;
+  text-align: center;
+  font-size: 0.62rem;
+  color: #64748b;
+}
+.imp-tw .imp-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.12rem;
+}
+.imp-tw .imp-cal-dow {
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.imp-tw button.imp-cal-day {
+  width: 1.45rem;
+  height: 1.45rem;
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #334155;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.45rem;
+}
+.imp-tw button.imp-cal-day.is-data {
+  border-color: #0f766e;
+  color: #0f766e;
+  font-weight: 800;
+}
+.imp-tw button.imp-cal-day.is-today:not(.is-on) {
+  background: #e2e8f0;
+}
+.imp-tw button.imp-cal-day.is-on {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+.imp-dup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.45);
+}
+.imp-dup {
+  width: min(36rem, 100%);
+  max-height: min(85vh, 32rem);
+  overflow: auto;
+  border-radius: 1rem;
+  background: #fff;
+  padding: 1rem 1rem 0.9rem;
+  box-shadow: 0 16px 40px rgb(15 23 42 / 0.2);
+}
+.imp-dup h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #9f1239;
+}
+.imp-dup p {
+  margin: 0.45rem 0 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #475569;
+}
+.imp-dup table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.imp-dup th,
+.imp-dup td {
+  width: auto;
+  border: 1px solid #e2e8f0;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.imp-dup thead th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+.imp-dup tbody th {
+  width: 4.2rem;
+  color: #64748b;
+  font-weight: 700;
+  background: #fff;
+}
+.imp-dup tr.is-hit td {
+  background: #fff1f2;
+  color: #9f1239;
+  font-weight: 800;
+}
+.imp-dup tr.is-diff td {
+  background: #fffbeb;
+}
+.imp-dup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+.imp-dup-actions button {
+  width: auto;
+}
+
+/* 手機進口：上方常用 + 更多。區塊切換在左側工作列，不佔內容高度。 */
+.imp-phone-shell {
+  height: calc(100dvh - 8.2rem - env(safe-area-inset-bottom));
+  min-height: 22rem;
+}
+.imp-phone-body {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.imp-phone-body > *,
+.imp-phone-body .grid > *,
+.imp-phone-body li {
+  min-width: 0;
+}
+.imp-phone-body .overflow-x-auto {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.imp-tw button.imp-more-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(15 23 42 / 0.28);
+}
+.imp-more-panel {
+  position: absolute;
+  top: 3.1rem;
+  right: 0.5rem;
+  left: 0.5rem;
+  z-index: 1;
+  max-height: min(70%, 24rem);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: #fff;
+  padding: 0.75rem 0.8rem 0.85rem;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.16);
+}
+.imp-tw button.imp-phone-rail-tab {
+  position: absolute;
+  left: 0;
+  bottom: 0.85rem;
+  z-index: 24;
+  width: 1.45rem;
+  min-height: 3.4rem;
+  margin: 0;
+  padding: 0.35rem 0.05rem;
+  border: 1px solid #d1d5db;
+  border-left: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: #fff;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+}
+.imp-phone-rail {
+  position: absolute;
+  top: 0.55rem;
+  bottom: auto;
+  left: 0.45rem;
+  z-index: 1;
+  display: flex;
+  width: min(12.5rem, 78%);
+  flex-direction: column;
+  gap: 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #fff;
+  padding: 0.55rem;
+  box-shadow: 8px 10px 28px rgb(15 23 42 / 0.16);
+}
+.imp-tw button.imp-phone-rail-btn {
+  width: 100%;
+  min-height: 2.7rem;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.7rem;
+  background: #f8fafc;
+  color: #334155;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+}
+.imp-tw button.imp-phone-rail-btn.is-on {
+  border-color: #047857;
+  background: #047857;
+  color: #fff;
 }
 

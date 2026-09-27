@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DupCompare } from "./DupCompare";
 import { api } from "../bridge";
 import { clearLab, clearOptsFor } from "../constants";
 import { DateChip } from "./DateChip";
@@ -7,6 +8,7 @@ import { ListQueryBar } from "./ListQueryBar";
 import { formatMd, isDayReached } from "../lib/dateChip";
 import { fumeWhenLab, needsFumeHold } from "../lib/fumeShift";
 import { FumeWhenFields } from "./FumeWhenFields";
+import { TrailerPick } from "./TrailerPick";
 import { queryRows, SEARCH_FIELDS, SORT_GETTERS, SORT_OPTS, uhaSortKey } from "../lib/listQuery";
 
 const VIEW_KEY = "imp-customs-view-v1";
@@ -55,25 +57,44 @@ function isRowPendingUha(r) {
 }
 
 /** 編號欄：待補顯示 UHA＋修正；已完成可按修正改號 */
-function ContainerNoField({ value, onSave }) {
+function ContainerNoField({ value, editing, onSave, onDone }) {
   const [draft, setDraft] = useState(String(value || ""));
-  const [focused, setFocused] = useState(false);
+  const ref = useRef(null);
+  const done = useRef(false);
   useEffect(() => {
-    if (!focused) setDraft(String(value || ""));
-  }, [value, focused]);
+    if (!editing) {
+      done.current = false;
+      return;
+    }
+    setDraft(String(value || ""));
+    ref.current?.focus();
+    ref.current?.select?.();
+  }, [editing, value]);
+  if (!editing) {
+    return <span className="imp-id-cont">{value || "尚無櫃號"}</span>;
+  }
+  const commit = () => {
+    if (done.current) return;
+    done.current = true;
+    if (draft.trim() !== String(value || "").trim()) onSave?.(draft);
+    onDone?.();
+  };
   return (
     <input
+      ref={ref}
       className="imp-inline-input imp-uha-input font-mono"
       value={draft}
-      placeholder="櫃號，打錯可改"
+      placeholder="櫃號"
       aria-label="櫃號"
-      onFocus={() => setFocused(true)}
       onChange={(e) => setDraft(e.target.value.toUpperCase())}
-      onBlur={() => {
-        setFocused(false);
-        if (draft.trim() !== String(value || "").trim()) onSave?.(draft);
-      }}
+      onBlur={commit}
       onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          done.current = true;
+          onDone?.();
+          return;
+        }
         if (e.key === "Enter") {
           e.preventDefault();
           e.currentTarget.blur();
@@ -83,39 +104,48 @@ function ContainerNoField({ value, onSave }) {
   );
 }
 
-function UhaCodeCell({ row, onAssigned, onContainer, openDrawer }) {
+function UhaCodeCell({ row, onAssigned, onContainer, onDuplicate, openDrawer }) {
   const uha = rowKey(row);
   const pending = isRowPendingUha(row);
-  const [editing, setEditing] = useState(pending);
+  const [mode, setMode] = useState(null);
   const [draft, setDraft] = useState(pending ? "UHA" : uha);
   const ref = useRef(null);
+  const stackRef = useRef(null);
 
   useEffect(() => {
-    if (!editing) setDraft(pending ? "UHA" : uha);
-  }, [uha, pending, editing]);
+    if (mode !== "uha") setDraft(pending ? "UHA" : uha);
+  }, [uha, pending, mode]);
 
   useEffect(() => {
-    if (editing) {
-      ref.current?.focus();
-      const el = ref.current;
-      if (el && pending) {
-        // 游標放在 UHA 後面，方便直接打數字
-        const n = String(el.value || "").length;
-        try {
-          el.setSelectionRange(n, n);
-        } catch {
-          /* ignore */
-        }
-      } else {
-        el?.select?.();
+    if (mode !== "uha") return;
+    ref.current?.focus();
+    const el = ref.current;
+    if (el && pending) {
+      const n = String(el.value || "").length;
+      try {
+        el.setSelectionRange(n, n);
+      } catch {
+        /* ignore */
       }
+    } else {
+      el?.select?.();
     }
-  }, [editing, pending]);
+  }, [mode, pending]);
+
+  useEffect(() => {
+    if (mode !== "pick") return;
+    const close = (e) => {
+      if (stackRef.current?.contains(e.target)) return;
+      setMode(null);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [mode]);
 
   const commit = () => {
     const raw = String(draft || "").trim();
     if (!raw || /^(UHA|NC)\s*$/i.test(raw)) {
-      setEditing(pending);
+      setMode(null);
       setDraft(pending ? "UHA" : uha);
       return;
     }
@@ -125,15 +155,19 @@ function UhaCodeCell({ row, onAssigned, onContainer, openDrawer }) {
       return;
     }
     const res = api().assignPortUha?.(uha, raw);
+    if (res?.duplicate) {
+      onDuplicate?.({ via: "編號", existing: res.duplicate, typed: res.typed });
+      return;
+    }
     if (!res?.ok) {
       alert(res?.error || "編號更新失敗");
       return;
     }
-    setEditing(false);
+    setMode(null);
     onAssigned?.(uha, res.uha);
   };
 
-  if (editing) {
+  if (mode === "uha") {
     return (
       <div className="imp-uha-edit">
         <input
@@ -147,7 +181,7 @@ function UhaCodeCell({ row, onAssigned, onContainer, openDrawer }) {
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              setEditing(false);
+              setMode(null);
               setDraft(pending ? "UHA" : uha);
               return;
             }
@@ -163,19 +197,42 @@ function UhaCodeCell({ row, onAssigned, onContainer, openDrawer }) {
   }
 
   return (
-    <div className={`imp-id-stack${pending ? " is-pending" : ""}`}>
+    <div ref={stackRef} className={`imp-id-stack${pending ? " is-pending" : ""}`}>
       <button
         type="button"
         className="imp-id-main"
-        onClick={() => (pending ? setEditing(true) : openDrawer?.(row.released || row.stageId === "release" ? "release" : "port", uha))}
+        onClick={() => (pending ? setMode("uha") : openDrawer?.(row.released || row.stageId === "release" ? "release" : "port", uha))}
       >
         <strong>{pending ? (/^NC/i.test(uha) ? "NC" : "UHA") : uha || "—"}</strong>
         {pending ? <em className="imp-uha-pending-tag">待補編碼</em> : null}
       </button>
-      <ContainerNoField value={row.containerNo || ""} onSave={(v) => onContainer?.(v)} />
-      <button type="button" className="imp-uha-fix" onClick={() => setEditing(true)}>
-        {pending ? "補編號" : "修正編號"}
-      </button>
+      <ContainerNoField
+        value={row.containerNo || ""}
+        editing={mode === "box"}
+        onSave={(v) => onContainer?.(v)}
+        onDone={() => setMode(null)}
+      />
+      {pending ? (
+        <button type="button" className="imp-uha-fix" onClick={() => setMode("uha")}>
+          補編號
+        </button>
+      ) : mode === "pick" ? (
+        <div className="imp-uha-arm">
+          <button type="button" onClick={() => setMode("uha")}>
+            改編號
+          </button>
+          <button type="button" onClick={() => setMode("box")}>
+            改櫃號
+          </button>
+          <button type="button" onClick={() => setMode(null)}>
+            取消
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="imp-uha-fix" onClick={() => setMode("pick")}>
+          修正
+        </button>
+      )}
     </div>
   );
 }
@@ -373,7 +430,7 @@ function StatusMini({ value, kind, onChange, displayLab, toneClass }) {
   );
 }
 
-function ClearanceStatusCell({ value, at, shift, kind, onStatus, onAt, onShift }) {
+function ClearanceStatusCell({ value, at, shift, kind, onStatus, onAt, onShift, unpackAt, unpackShift, onUnpackAt, onUnpackShift }) {
   const hasAt = !!String(at || "").trim();
   const hasShift = !!String(shift || "").trim();
   const showChip = value === "wait" || value === "done" || hasAt || (kind === "fumigate" && hasShift);
@@ -404,7 +461,17 @@ function ClearanceStatusCell({ value, at, shift, kind, onStatus, onAt, onShift }
       <StatusMini value={id} kind={kind} onChange={onStatus} displayLab={displayLab} toneClass={toneOverride} />
       {showChip && id !== "skip" ? (
         kind === "fumigate" ? (
-          <FumeWhenFields compact at={at} shift={shift} onAt={onAt} onShift={onShift} />
+          <FumeWhenFields
+            compact
+            at={at}
+            shift={shift}
+            onAt={onAt}
+            onShift={onShift}
+            unpackAt={unpackAt}
+            unpackShift={unpackShift}
+            onUnpackAt={onUnpackAt}
+            onUnpackShift={onUnpackShift}
+          />
         ) : (
           <DateChip
             value={at}
@@ -519,6 +586,7 @@ export function CustomsClearancePane({
   refresh,
   onAfterRelease,
   openDrawer,
+  trailers = [],
 }) {
   const [view, setView] = useState("table");
   const [filter, setFilter] = useState("all");
@@ -529,6 +597,7 @@ export function CustomsClearancePane({
   const [form, setForm] = useState(emptyForm);
   const [justAdded, setJustAdded] = useState("");
   const [addNotice, setAddNotice] = useState(null);
+  const [dup, setDup] = useState(null);
   const focusMap = useRef(new Map());
   /** 整表高速：欄位寫入後先本地合併，避免整頁 refresh 丟焦點 */
   const [overrides, setOverrides] = useState(() => ({}));
@@ -615,7 +684,11 @@ export function CustomsClearancePane({
 
   const patch = (uha, field, value, opts = {}) => {
     if (!uha) return;
-    api().patchPortField?.(uha, field, value);
+    const res = api().patchPortField?.(uha, field, value);
+    if (res && res.duplicate) {
+      setDup({ via: res.duplicate.via || "櫃號", existing: res.duplicate, typed: res.typed });
+      return;
+    }
     setOverrides((prev) => ({
       ...prev,
       [uha]: { ...(prev[uha] || {}), [field]: value },
@@ -680,6 +753,21 @@ export function CustomsClearancePane({
     const created = api().addManualPortRow?.(form);
     if (!created) {
       alert("新增失敗，請再試一次。");
+      return;
+    }
+    if (created.existing) {
+      setDup({
+        via: created.via,
+        existing: created,
+        typed: {
+          uha: form.uha,
+          containerNo: form.containerNo,
+          arriveDay: form.arriveDay,
+          product: form.product,
+          seller: form.seller || "",
+        },
+      });
+      setShowAdd(true);
       return;
     }
     const info =
@@ -806,6 +894,16 @@ export function CustomsClearancePane({
 
   return (
     <div className="imp-customs grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <DupCompare
+        notice={dup}
+        onClose={() => setDup(null)}
+        onJump={(uha) => {
+          setDup(null);
+          setJustAdded(uha);
+          setQuery("");
+          setFilter("all");
+        }}
+      />
       <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm lg:col-span-12">
         <div className="border-b border-slate-100 px-4 pb-3 pt-4">
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
@@ -892,7 +990,7 @@ export function CustomsClearancePane({
           <p className="mt-2 m-0 text-[0.7rem] text-slate-400">
             表格為 6 欄雙層緊湊：到港可改、有到港後可填 FT（填了階段以已FT為主）；藥檢／薰蒸需填時顯示時間。
           </p>
-          {addNotice?.existing || addedRow ? (
+          {addNotice ? (
             <div className={`imp-just-added mt-2${addNotice?.existing ? " is-existing" : ""}`}>
               {addNotice?.existing ? (
                 <p className="m-0">
@@ -982,7 +1080,7 @@ export function CustomsClearancePane({
                       <th className="px-1.5 py-2 text-center text-[0.7rem] font-bold text-slate-600">到港／FT</th>
                       <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">品名／往來</th>
                       <th className="px-1.5 py-2 text-center text-[0.7rem] font-bold text-slate-600">藥檢／薰蒸</th>
-                      <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">碼頭／備註／操作</th>
+                      <th className="px-1.5 py-2 text-left text-[0.7rem] font-bold text-slate-600">碼頭／拖車／預排</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1024,6 +1122,7 @@ export function CustomsClearancePane({
                               row={r}
                               onAssigned={onUhaAssigned}
                               onContainer={(v) => patch(uha, "containerNo", v)}
+                              onDuplicate={setDup}
                               openDrawer={openDrawer}
                             />
                           </td>
@@ -1079,6 +1178,10 @@ export function CustomsClearancePane({
                                 onStatus={(v) => patch(uha, "fumigate", v)}
                                 onAt={(v) => patch(uha, "fumigateAt", v)}
                                 onShift={(v) => patch(uha, "fumigateShift", v)}
+                                unpackAt={r.unpackAt}
+                                unpackShift={r.unpackShift}
+                                onUnpackAt={(v) => patch(uha, "unpackAt", v)}
+                                onUnpackShift={(v) => patch(uha, "unpackShift", v)}
                               />
                             </div>
                           </td>
@@ -1087,9 +1190,22 @@ export function CustomsClearancePane({
                               <span className="text-[0.58rem] font-bold text-slate-400">碼頭</span>
                               {cell("dock")}
                             </div>
+                            <div className="mb-1 grid grid-cols-[2.2rem_1fr] items-center gap-1">
+                              <span className="text-[0.58rem] font-bold text-slate-400">拖車</span>
+                              <TrailerPick value={r.trailer || ""} onChange={(v) => patch(uha, "trailer", v)} />
+                            </div>
                             <div className="mb-1.5 grid grid-cols-[2.2rem_1fr] items-center gap-1">
-                              <span className="text-[0.58rem] font-bold text-slate-400">備註</span>
-                              {cell("note")}
+                              <span className="text-[0.58rem] font-bold text-slate-400">客戶</span>
+                              <input
+                                className="imp-field h-7 min-h-0 px-1.5 text-xs"
+                                defaultValue={r.deliverTo || ""}
+                                placeholder="客戶名稱，有填就交客戶"
+                                onBlur={(e) => {
+                                  const next = e.target.value.trim();
+                                  if (next === String(r.deliverTo || "").trim()) return;
+                                  patch(uha, "deliverTo", next);
+                                }}
+                              />
                             </div>
                             {!released ? (
                               <button
@@ -1170,6 +1286,7 @@ export function CustomsClearancePane({
                           row={r}
                           onAssigned={onUhaAssigned}
                           onContainer={(v) => patch(uha, "containerNo", v)}
+                          onDuplicate={setDup}
                           openDrawer={openDrawer}
                         />
                         <input
@@ -1218,6 +1335,19 @@ export function CustomsClearancePane({
                             onBlur={(e) => patch(uha, "dock", e.target.value)}
                           />
                         </label>
+                        <label className="min-w-0 flex-1 basis-[6rem]">
+                          <span className="imp-field-lab">拖車</span>
+                          <TrailerPick value={r.trailer || ""} onChange={(v) => patch(uha, "trailer", v)} />
+                        </label>
+                        <label className="min-w-0 flex-1 basis-[6rem]">
+                          <span className="imp-field-lab">客戶</span>
+                          <input
+                            className="imp-field"
+                            defaultValue={r.deliverTo || ""}
+                            placeholder="可空白"
+                            onBlur={(e) => patch(uha, "deliverTo", e.target.value)}
+                          />
+                        </label>
                         <div className="min-w-0 flex-1 basis-[8.5rem]">
                           <span className="imp-field-lab">藥檢</span>
                           <ClearanceStatusCell
@@ -1238,6 +1368,10 @@ export function CustomsClearancePane({
                             onStatus={(v) => patch(uha, "fumigate", v)}
                             onAt={(v) => patch(uha, "fumigateAt", v)}
                             onShift={(v) => patch(uha, "fumigateShift", v)}
+                            unpackAt={r.unpackAt}
+                            unpackShift={r.unpackShift}
+                            onUnpackAt={(v) => patch(uha, "unpackAt", v)}
+                            onUnpackShift={(v) => patch(uha, "unpackShift", v)}
                           />
                         </div>
                       </div>

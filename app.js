@@ -796,6 +796,7 @@ function syncAllNqQty() {
 }
 
 const state = load();
+window.state = state;
 const migrated = migrate(state);
 for (const sku of SKUS) {
   if (!state.stock[sku.id]) state.stock[sku.id] = { qty: 0, processed: 0, safety: 0 };
@@ -1525,10 +1526,15 @@ function requireCan(action, msg) {
   return "";
 }
 const BOSS_PIN = "1227";
+const STAFF_PINS = { 雅芳: BOSS_PIN, 威誠: "1104" };
 let loginPinName = "";
 let loginPickerOpen = false;
+function staffPinFor(name) {
+  const n = String(name || "").trim();
+  return Object.prototype.hasOwnProperty.call(STAFF_PINS, n) ? STAFF_PINS[n] : "";
+}
 function staffNeedsPin(name) {
-  return staffByName(name)?.role === "boss";
+  return !!staffPinFor(name);
 }
 /** 全形數字→半形，並只留數字（避免手機輸入法造成密碼對了卻進不去） */
 function normalizePin(v) {
@@ -1567,7 +1573,7 @@ function showLoginPin(name) {
   const who = document.getElementById("login-pin-who");
   const err = document.getElementById("login-pin-err");
   const input = document.getElementById("login-pin-input");
-  if (who) who.textContent = `請輸入${loginPinName}的主管密碼`;
+  if (who) who.textContent = `請輸入${loginPinName}的密碼`;
   if (people) people.hidden = true;
   if (pin) {
     pin.hidden = false;
@@ -1624,21 +1630,22 @@ function submitLoginPin() {
   const err = document.getElementById("login-pin-err");
   const who = String(loginPinName || form?.dataset?.pinFor || "").trim();
   const pin = normalizePin(input?.value);
-  if (!who || !staffNeedsPin(who)) {
+  const expect = staffPinFor(who);
+  if (!who || !expect) {
     if (err) {
       err.hidden = false;
-      err.textContent = "請先選「雅芳」，再輸入密碼。";
+      err.textContent = "請先選擇要登入的人。";
     }
     return;
   }
   loginPinName = who;
-  if (pin === BOSS_PIN) {
+  if (pin === expect) {
     finishLogin(who);
     return;
   }
   if (err) {
     err.hidden = false;
-    err.textContent = "密碼不對，請再試一次（請用半形數字 1227）。";
+    err.textContent = "密碼不對，請再試一次（請用半形數字）。";
   }
   if (input) {
     input.value = "";
@@ -2099,7 +2106,7 @@ function renderHomeHub() {
   if (can("page-labels")) {
     labelBtns.push(hubLink('data-go="labels"', "tag", "標籤印製"));
   }
-  if (can("page-report")) {
+  if (can("report-prints")) {
     labelBtns.push(hubLink('data-go="label-prints"', "tag", "列印明細"));
   }
   const acct = [];
@@ -2338,7 +2345,7 @@ function renderHomeHub() {
       <button type="button" class="home-mod is-primary hub-ware" data-hub="unpack">
         <span class="home-mod-ico hub-mark has-pic" aria-hidden="true">${hubPic("box")}</span>
         <span class="home-mod-copy">
-          <strong>我的拆櫃回報</strong>
+          <strong>${esc(who)} / 拆櫃回報</strong>
           <em>${n ? `待回報 ${n} 櫃` : "點進去回報指派給你的貨櫃"}</em>
         </span>
         <span class="home-mod-go" aria-hidden="true">›</span>
@@ -2613,12 +2620,14 @@ function buildSalesBlocks() {
   if (wareTabs.length) blocks.push({ id: "ware", lab: "庫存管理", tabs: wareTabs });
 
   const financeTabs = [];
-  if (can("page-finance")) {
-    financeTabs.push(
-      { id: "cashday", lab: "現金日報", hint: "現場登錄", attrs: 'data-sales-pane="cashday"' },
-      { id: "help", lab: "貨運比對", hint: "帳務核對", attrs: 'data-sales-pane="help"' },
-      { id: "ar-remit", lab: "匯款沖帳", hint: "應收×銀行", attrs: 'data-sales-pane="ar-remit"' },
-    );
+  if (can("finance-cash")) {
+    financeTabs.push({ id: "cashday", lab: "現金日報", hint: "現場登錄", attrs: 'data-sales-pane="cashday"' });
+  }
+  if (can("page-help")) {
+    financeTabs.push({ id: "help", lab: "貨運比對", hint: "帳務核對", attrs: 'data-sales-pane="help"' });
+  }
+  if (can("finance-remit")) {
+    financeTabs.push({ id: "ar-remit", lab: "匯款沖帳", hint: "應收×銀行", attrs: 'data-sales-pane="ar-remit"' });
   }
   if (financeTabs.length) blocks.push({ id: "finance", lab: "財務核帳", tabs: financeTabs });
 
@@ -2633,10 +2642,10 @@ function buildSalesBlocks() {
 
   const reportTabs = [];
   if (can("page-report")) {
-    reportTabs.push(
-      { id: "ledger", lab: "進銷存清單", hint: "進出彙總", attrs: 'data-sales-pane="ledger"' },
-      { id: "label-prints", lab: "列印明細", hint: "列印紀錄", attrs: 'data-sales-pane="label-prints"' },
-    );
+    reportTabs.push({ id: "ledger", lab: "進銷存清單", hint: "進出彙總", attrs: 'data-sales-pane="ledger"' });
+    if (can("report-prints")) {
+      reportTabs.push({ id: "label-prints", lab: "列印明細", hint: "列印紀錄", attrs: 'data-sales-pane="label-prints"' });
+    }
   }
   if (can("page-stats")) {
     reportTabs.push({
@@ -2845,8 +2854,10 @@ function salesPaneDenied(paneId) {
     if (!can("page-plan")) return "沒有現場排程權限。";
   } else if (paneId === "labels") {
     if (!can("page-labels") && !can("page-orders") && !can("page-plan")) return "沒有列印權限。";
-  } else if (paneId === "label-prints" || paneId === "ledger") {
+  } else if (paneId === "ledger") {
     if (!can("page-report")) return "沒有報表權限。";
+  } else if (paneId === "label-prints") {
+    if (!can("report-prints")) return "沒有這個報表權限。";
   } else if (paneId === "sitework") {
     if (!can("page-sitework")) return "沒有調倉權限。";
   } else if (paneId === "stock") {
@@ -2859,8 +2870,12 @@ function salesPaneDenied(paneId) {
     if (!can("page-orders")) return "沒有出貨帳單權限。";
   } else if (paneId === "cust" || paneId === "vendor") {
     if (!can("page-master")) return "沒有基本資料權限。";
-  } else if (paneId === "cashday" || paneId === "ar-remit" || paneId === "help") {
-    if (!can("page-finance")) return "沒有財務權限。";
+  } else if (paneId === "help") {
+    if (!can("page-help")) return "沒有財務權限。";
+  } else if (paneId === "cashday") {
+    if (!can("finance-cash")) return "沒有這個權限。";
+  } else if (paneId === "ar-remit") {
+    if (!can("finance-remit")) return "沒有這個權限。";
   } else if (paneId === "stats") {
     if (!can("page-stats")) return "僅主管可看統計。";
   }
@@ -3073,7 +3088,7 @@ function goFromHub(btn) {
     const el = document.getElementById("label-date");
     if (el && !el.value) el.value = today();
   } else if (go === "label-prints") {
-    if (!can("page-books")) return setStatus("沒有倉管／帳款權限。", true);
+    if (!can("report-prints")) return setStatus("沒有這個報表權限。", true);
     page = "label-prints";
     const el = document.getElementById("label-prints-date");
     if (el && !el.value) el.value = today();
@@ -3101,6 +3116,27 @@ function solarDateText(ymd) {
 function padLabelSeq(n) {
   return String(Math.max(1, Number(n) || 1)).padStart(3, "0");
 }
+function openContainerLabel(prefill) {
+  if (typeof can === "function" && !can("page-orders") && !can("page-plan") && !can("page-books")) {
+    if (typeof setStatus === "function") setStatus("沒有列印權限。", true);
+    return false;
+  }
+  const p = prefill || {};
+  labelKind = "container";
+  labelContName = String(p.name || "").trim();
+  labelContNo = String(p.box || "").trim();
+  labelContCountry = String(p.country || "").trim();
+  labelContVendor = String(p.vendor || "").trim();
+  page = "labels";
+  hubOpen = "";
+  const el = document.getElementById("label-date");
+  const day = String(p.day || "").trim();
+  if (el) el.value = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : el.value || today();
+  render();
+  if (typeof setStatus === "function") setStatus(labelContNo ? `貨櫃標籤已帶入 ${labelContNo}。國別、廠商請再確認。` : "已開啟貨櫃標籤。");
+  return true;
+}
+window.openContainerLabel = openContainerLabel;
 function labelDateValue() {
   return document.getElementById("label-date")?.value || today();
 }
@@ -3393,7 +3429,7 @@ function labelPrintCss() {
   filter: none !important; opacity: 1 !important;
   -webkit-font-smoothing: none;
 }
-.label-sticker * {
+.label-sticker *:not(.sticker-cont-name) {
   transform: none !important;
 }`;
   const stickerBase = `width: ${w}mm; height: ${h}mm; max-height: ${h}mm;
@@ -3487,40 +3523,54 @@ ${frame}
   display: flex; flex-direction: column; align-items: center; gap: 0.3mm;
 }
 .sticker-ship-sku span { display: block; }
-.label-sticker.is-container { text-align: center; padding: 1mm 2mm 5mm; }
-.sticker-cont-main {
-  grid-row: 1; min-height: 0; max-height: 100%; width: 100%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1.4mm; overflow: hidden; padding: 0 0.2mm; color: #000;
+.label-sticker.is-container {
+  padding: 1.6mm 2.4mm 1.5mm;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch;
+  gap: 0.7mm; color: #000; overflow: hidden;
 }
 .sticker-cont-name {
-  flex: 0 1 auto; margin: 0; padding: 0 0.2mm; width: 100%;
-  font-size: 14mm; font-weight: 900; line-height: 0.9; letter-spacing: 0.02em;
-  white-space: nowrap; overflow: hidden; word-break: keep-all; color: #000;
+  margin: 0; align-self: flex-start; max-width: 100%;
+  font-size: 13mm; font-weight: 900; line-height: 1; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; color: #000;
+  -webkit-font-smoothing: none; paint-order: stroke fill;
+  -webkit-text-stroke: 0.22mm #000;
 }
-.sticker-cont-name.is-long { font-size: 10.5mm; letter-spacing: 0.012em; }
+.sticker-cont-name.is-mid { font-size: 11mm; -webkit-text-stroke: 0.18mm #000; }
+.sticker-cont-name.is-long { font-size: 9mm; -webkit-text-stroke: 0.15mm #000; }
+.sticker-cont-name.is-xlong { font-size: 7.2mm; -webkit-text-stroke: 0.12mm #000; }
+.sticker-cont-vendor {
+  margin: auto 0 0 auto; align-self: flex-end;
+  font-size: 5.2mm; font-weight: 900; line-height: 1; letter-spacing: 0;
+  white-space: nowrap; color: #000;
+  -webkit-font-smoothing: none; paint-order: stroke fill;
+  -webkit-text-stroke: 0.12mm #000;
+}
+.sticker-cont-vendor.is-mid { font-size: 4.6mm; }
+.sticker-cont-vendor.is-long { font-size: 4mm; }
 .label-sticker.is-container .sticker-box {
-  flex: 0 0 auto; margin: 0; padding: 0; width: 100%; max-width: 100%;
-  display: flex; align-items: center; justify-content: center; flex-wrap: nowrap;
-  gap: 0.35mm 0.5mm;
-  font-size: 9mm; font-weight: 900; letter-spacing: 0; line-height: 1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums; color: #000;
+  margin: 0; padding: 0; width: auto; max-width: 100%;
+  display: flex; align-items: flex-end; justify-content: flex-start; gap: 1.5mm;
+  font-weight: 900; line-height: 1; white-space: nowrap; overflow: hidden; color: #000;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 7.8mm; gap: 0.28mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 6.6mm; gap: 0.22mm; }
-.sticker-box-no, .sticker-box-md, .sticker-box-seq { display: inline-block; }
-.sticker-box-md, .sticker-box-seq { letter-spacing: 0.02em; }
-.sticker-cont-meta {
-  grid-row: 2; align-self: end;
-  margin: 0 0 0.8mm; padding-top: 0.3mm; max-height: 5.5mm;
-  display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: center;
-  gap: 1mm 1.4mm;
-  font-size: 4.5mm; font-weight: 700; line-height: 1.05; letter-spacing: 0.04em;
-  overflow: hidden; white-space: nowrap; color: #000;
+.sticker-box-no {
+  font-size: 8.6mm; font-weight: 900; letter-spacing: -0.02em; line-height: 1; color: #000;
+  -webkit-font-smoothing: none; paint-order: stroke fill; -webkit-text-stroke: 0.16mm #000;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.1mm; }
-.sticker-cont-country, .sticker-cont-vendor { font-size: 1em; font-weight: 700; }`;
+.sticker-box-md {
+  font-size: 7mm; font-weight: 900; letter-spacing: 0.01em; line-height: 1; color: #000;
+  -webkit-font-smoothing: none; paint-order: stroke fill; -webkit-text-stroke: 0.12mm #000;
+}
+.sticker-box-seq {
+  margin: 0; flex: 0 0 auto;
+  font-size: 6.2mm; font-weight: 900; letter-spacing: 0; line-height: 1; color: #000;
+  -webkit-font-smoothing: none; paint-order: stroke fill; -webkit-text-stroke: 0.1mm #000;
+}
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-no { font-size: 7.4mm; }
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-md,
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-seq { font-size: 6mm; }
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-no { font-size: 6.4mm; }
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-md,
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-seq { font-size: 5.2mm; }`;
 }
 function stickerFootHtml(left, right) {
   const L = String(left || "").trim();
@@ -3550,30 +3600,22 @@ function labelStickerHtml(item, forPrint) {
   }
   if (kind === "container") {
     const name = String(item.name || item.sku || "").trim();
-    const long = name.length > 4 ? " is-long" : "";
-    const country = String(item.country || "").trim();
     const vendor = String(item.vendor || "").trim();
-    const metaBits = [];
-    if (country) metaBits.push(`<span class="sticker-cont-country">${esc(country)}</span>`);
-    if (vendor) metaBits.push(`<span class="sticker-cont-vendor">${esc(vendor)}</span>`);
-    const meta = metaBits.length ? `<p class="sticker-cont-meta">${metaBits.join("")}</p>` : "";
+    const nameLen = [...name].length;
+    const vendorLen = [...vendor].length;
+    const nameFit = nameLen > 7 ? " is-xlong" : nameLen > 5 ? " is-long" : nameLen > 4 ? " is-mid" : "";
+    const vendorFit = vendorLen > 4 ? " is-long" : vendorLen > 2 ? " is-mid" : "";
     const parts = item.boxParts || null;
     const box = String(item.box || parts?.full || "").trim();
     const no = String(parts?.no || box).trim();
     const md = String(parts?.md || "").trim();
     const seq = String(parts?.seq || "").trim();
-    const codeHtml = parts && (md || seq)
-      ? `<span class="sticker-box-no">${esc(no)}</span>${md ? `<span class="sticker-box-md">${esc(md)}</span>` : ""}${seq ? `<span class="sticker-box-seq">${esc(seq)}</span>` : ""}`
-      : esc(box);
-    const fullLen = (parts?.full || box).length;
-    // 寬版 70mm: typical UHA223+MMDD+seq ≈ 12 fits large; scale only for longer codes
-    const boxWide = fullLen > 15 ? " is-xwide" : fullLen > 14 ? " is-wide" : "";
+    const wideLen = (no + md + seq).length;
+    const boxWide = wideLen > 14 ? " is-xwide" : wideLen > 12 ? " is-wide" : "";
     return `<article class="${cls}">
-      <div class="sticker-cont-main">
-        <p class="sticker-cont-name${long}">${esc(name)}</p>
-        <p class="sticker-box${boxWide}">${codeHtml}</p>
-    </div>
-      ${meta}
+      <p class="sticker-cont-name${nameFit}">${esc(name)}</p>
+      <p class="sticker-box${boxWide}"><span class="sticker-box-no">${esc(no)}</span>${md ? `<span class="sticker-box-md">${esc(md)}</span>` : ""}${seq ? `<span class="sticker-box-seq">${esc(seq)}</span>` : ""}</p>
+      ${vendor ? `<p class="sticker-cont-vendor${vendorFit}">${esc(vendor)}</p>` : ""}
     </article>`;
   }
   const cust = String(item.customer || "").trim() || "（未填客戶）";
@@ -4769,10 +4811,10 @@ function applyRoleUi() {
   if (can("page-sitework")) pages.push("sitework");
   if (can("page-stats")) pages.push("stats");
   if (can("page-help")) pages.push("help");
-  if (can("page-help") || can("page-books")) pages.push("ar-remit");
+  if (can("finance-remit")) pages.push("ar-remit");
   if (!isUnpackerRole()) pages.push("soon");
   if (can("page-orders") || can("page-plan") || can("page-books")) pages.push("labels");
-  if (can("page-books")) pages.push("label-prints");
+  if (can("report-prints")) pages.push("label-prints");
   document.querySelectorAll("#flow-tabs [data-ops]").forEach((b) => {
     b.hidden = true;
   });
@@ -6161,29 +6203,79 @@ function selectPickerBig(big) {
   syncSkuHotUi(big);
   syncSkuCountBadges();
 }
-/** 點品項：首次加入 1 件；再點同一品項連擊 +1。自行輸入改開編輯列 */
-function bumpOrAddBig(big) {
+/** 點品項只選起來並把件數欄準備好，不另加件。件數按「確認件數」才寫進本單。 */
+function selectItemForQty(big) {
   if (!big) return false;
-  if (isCustomFam(big)) {
-    selectPickerBig(big);
-    const row = document.querySelector("#ha-lines .item-line");
-    row?.querySelector("[data-custom-name]")?.focus();
-    syncOrderEntering();
-    return false;
-  }
-  if (isOnionFam(big)) return addOnionToTicket(big === "on-p");
-  if (big === "basil") return addBasilToTicket();
-  if (bumpTicketQtyByBig(big, 1)) {
-    syncSkuHotUi(big);
-    return true;
-  }
+  const row0 = document.querySelector("#ha-lines .item-line");
+  const prevBig = row0 ? pickVal(row0, "big") : "";
+  const prevQty = row0?.querySelector("[data-line-qty]")?.value || "";
   selectPickerBig(big);
   const row = document.querySelector("#ha-lines .item-line");
   if (!row) return false;
-  ensureFormQtyForQuickAdd(row);
-  const ok = pushPickerToTicket();
-  syncSkuHotUi(big);
-  return ok;
+  if (isCustomFam(big)) {
+    row.querySelector("[data-custom-name]")?.focus();
+    syncOrderEntering();
+    return false;
+  }
+  const same = ticketLines.filter((l) => lineBigOf(l) === big);
+  const qtyEl = row.querySelector("[data-line-qty]");
+  if (qtyEl) {
+    if (prevBig === big && Number(prevQty) > 0) qtyEl.value = prevQty;
+    else if (same.length === 1 && Number(same[0].qty) > 0) qtyEl.value = String(same[0].qty);
+    else qtyEl.value = "";
+    qtyEl.focus();
+    if (typeof qtyEl.select === "function") qtyEl.select();
+  }
+  if (same.length === 1 && lineBanQty(same[0]) > 0) setFormBanQty(row, lineBanQty(same[0]));
+  syncOrderEntering();
+  return true;
+}
+function bumpOrAddBig(big) {
+  return selectItemForQty(big);
+}
+/** 以欄位裡的件數寫入這一項：已在本單就改成這個數字，不另外加件。 */
+function commitFormItemQty() {
+  const row = document.querySelector("#ha-lines .item-line");
+  const big = row ? pickVal(row, "big") : "";
+  if (!big) {
+    setStatus("請先點選品項。", true);
+    return false;
+  }
+  const qtyEl = row.querySelector("[data-line-qty]");
+  const qty = Number(qtyEl?.value);
+  const banQty = Number(row.querySelector("[data-line-ban]")?.value);
+  if (!(qty > 0) && !(banQty > 0)) {
+    setStatus("請填這項的件數，再按確認件數。", true);
+    qtyEl?.focus();
+    return false;
+  }
+  const extra = unifiedLinesFromForm();
+  if (!extra.length) {
+    setStatus("請先點選品項，並填件數。", true);
+    return false;
+  }
+  const needLot = extra.find((l) => skuNeedsShipLot(l.skuId) && Number(l.qty) > 0 && !l.lotUha);
+  if (needLot) {
+    openLotModal({ skuId: needLot.skuId, qty: needLot.qty, selectedUha: formLot?.uha, addAfter: true });
+    return false;
+  }
+  const names = [];
+  for (const raw of extra) {
+    const line = applyFormShipWhToLine(applyDestToLine({ ...raw }));
+    const idx = ticketLines.findIndex(
+      (t) => t.skuId === line.skuId && String(t.labelName || "") === String(line.labelName || ""),
+    );
+    if (idx >= 0) Object.assign(ticketLines[idx], line);
+    else ticketLines.push(line);
+    const n = Number(line.qty) > 0 ? `${line.qty}` : `版${lineBanQty(line)}`;
+    names.push(`${ticketLineName(line)} ${n}`);
+  }
+  formLot = null;
+  renderItemSheet();
+  renderTicket();
+  renderCheck();
+  setStatus(`已確認 ${names.join("、")}。`, false);
+  return true;
 }
 /** @deprecated 改用 bumpOrAddBig；保留相容 */
 function quickAddBigToTicket(big) {
@@ -6779,7 +6871,7 @@ function handleItemLineEnter(e) {
   }
   if (t.closest?.("[data-line-qty]")) {
     e.preventDefault();
-    const ok = pushPickerToTicket();
+    const ok = commitFormItemQty();
     if (ok) requestAnimationFrame(() => focusItemLineStart());
     return true;
   }
@@ -6800,7 +6892,7 @@ function handleItemLineEnter(e) {
   }
   if (t.closest?.("[data-ticket-add]")) {
     e.preventDefault();
-    const ok = pushPickerToTicket();
+    const ok = commitFormItemQty();
     if (ok) requestAnimationFrame(() => focusItemLineStart());
     return true;
   }
@@ -6830,7 +6922,7 @@ function lineSubHtml(big, rec = {}) {
     const pack = rec.pack && PACK_OPTS.includes(rec.pack) ? rec.pack : "籃裝";
     bits.push(lineOptCell("裝箱", pickHtml("pack", PACK_OPTS.map((p) => [p, p]), pack)));
   } else if (big === "basil") {
-    bits.push(`<p class="line-opt-hint muted">點九層塔會先入本單（紅骨），紅骨／綠骨在右側待確認清單改。</p>`);
+    bits.push(`<p class="line-opt-hint muted">先點九層塔、填件數，再按確認件數。紅骨／綠骨可在右側清單改。</p>`);
   } else if (isHaVegFam(big)) {
     const def = HA_VEG[big];
     const cur = rec.skuId ? skuById(rec.skuId)?.vegOpt : rec.vegOpt;
@@ -6854,7 +6946,7 @@ function lineSubHtml(big, rec = {}) {
       );
     }
   } else if (big === "on" || big === "on-p") {
-    bits.push(`<p class="line-opt-hint muted">點洋蔥會先入本單（澳／12K／大球），國別、重量、尺寸在右側改。</p>`);
+    bits.push(`<p class="line-opt-hint muted">先點洋蔥、填件數，再按確認件數。國別、重量、尺寸可在右側清單改。</p>`);
   } else if (big === "pk" || big === "pk-b") {
     const variety = pkVarOf(rec);
     const weight = pkWeightOf(rec);
@@ -6995,7 +7087,7 @@ function unifiedLineHtml(rec = {}) {
       <input id="line-note" data-line-note type="text" value="${esc(rec.note || "")}" placeholder="可不填" autocomplete="off" spellcheck="false" />
     </label>
     <div class="item-add-bar">
-      <button type="button" class="primary" data-ticket-add>＋ 加入本單</button>
+      <button type="button" class="primary" data-ticket-add>確認件數</button>
     </div>
   </div>`;
 }
@@ -12205,7 +12297,10 @@ function render() {
   syncPhoneTabbar();
   document.body.classList.toggle("on-home", page === "home");
   document.body.classList.toggle("sales-workspace", page === "home" && hubDept === "sales");
-  document.getElementById("co-name").textContent =
+  const coName = document.getElementById("co-name");
+  if (coName && document.body.classList.contains("layout-phone")) {
+    coName.textContent = "鴻安";
+  } else if (coName) coName.textContent =
     page === "home"
       ? "鴻安"
       : page === "unpack"
@@ -12394,7 +12489,7 @@ document.getElementById("phone-tabbar")?.addEventListener("click", (e) => {
       return;
     }
     if (!can("page-import")) return setStatus("沒有進口權限。", true);
-    if (typeof window.openImport === "function") window.openImport("port");
+    if (typeof window.openImport === "function") window.openImport("desk");
   }
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
@@ -13403,7 +13498,7 @@ document.getElementById("sheet").addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest("[data-ticket-add]")) {
-    pushPickerToTicket();
+    commitFormItemQty();
     return;
   }
   if (e.target.closest("[data-lot-pick-form]")) {
@@ -13692,11 +13787,6 @@ function onFormBanFieldChange(e) {
 }
 document.getElementById("sheet").addEventListener("input", onFormBanFieldChange);
 document.getElementById("sheet").addEventListener("change", onFormBanFieldChange);
-document.getElementById("sheet").addEventListener("focusout", (e) => {
-  if (!e.target.closest("[data-line-qty]") && !e.target.closest("[data-line-ban]")) return;
-  const leftover = unifiedLinesFromForm();
-  if (leftover.length) pushPickerToTicket();
-});
 document.getElementById("order-form")?.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
     const pick = e.target.closest?.(".item-line .pick");
@@ -14192,7 +14282,7 @@ document.getElementById("order-form").onsubmit = (e) => {
   e.preventDefault();
   const leftover = unifiedLinesFromForm();
   if (leftover.length) {
-    if (!pushPickerToTicket()) return;
+    if (!commitFormItemQty()) return;
   }
   const lines = ticketLines.map(cleanLine).filter((l) => lineHasItem(l));
   if (!lines.length) return setStatus("請先加入至少一項到本單，齊了再確認送出。", true);
@@ -15621,6 +15711,13 @@ try {
   else if (layoutMq.addListener) layoutMq.addListener(onLayout);
 } catch (_) {}
 render();
+try {
+  if (new URLSearchParams(location.search).get("open") === "label") {
+    labelKind = "container";
+    page = "labels";
+    render();
+  }
+} catch (_) {}
 bootCloudSync();
 refreshLineDrafts();
 setInterval(healCloudSync, 8000);

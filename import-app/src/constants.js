@@ -7,6 +7,7 @@ export const BLOCKS = [
 
 /** 子頁（屬哪個模組；左側只顯示目前模組的子頁） */
 export const TABS = [
+  { id: "desk", lab: "工作台", block: "port" },
   { id: "track", lab: "貨櫃追蹤", block: "port" },
   { id: "parse", lab: "判讀", block: "port" },
   { id: "port", lab: "海關查驗", block: "port" },
@@ -24,6 +25,7 @@ export const TABS = [
 ];
 
 export const PANE_TITLE = {
+  desk: "追櫃工作台",
   track: "貨櫃追蹤",
   parse: "判讀",
   port: "海關查驗",

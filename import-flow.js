@@ -33,6 +33,7 @@
   }
 
   const PANE_TITLE = {
+    desk: "追櫃工作台",
     hub: "貨櫃追蹤",
     track: "貨櫃追蹤",
     parse: "判讀",
@@ -60,6 +61,7 @@
   ];
 
   const IMP_TABS = [
+    { id: "desk", lab: "工作台", block: "port" },
     { id: "track", lab: "貨櫃追蹤", block: "port" },
     { id: "parse", lab: "判讀", block: "port" },
     { id: "port", lab: "海關查驗", block: "port" },
@@ -200,6 +202,13 @@
     return Number(row && row.updatedAt) || 0;
   }
 
+  /** 有填交貨對象就是交客戶。去向沒另外改時，空白客戶維持自有冰庫。 */
+  function destTypeOf(row) {
+    if (!row) return "coldstore";
+    if (String(row.deliverTo || "").trim()) return "customer";
+    return row.destType === "customer" ? "customer" : "coldstore";
+  }
+
   function loadDrawerFields(kind, key) {
     ensureState();
     if (kind === "draft") {
@@ -265,7 +274,7 @@
         updatedAt: Math.max(rowUpdatedAt(cab), rowUpdatedAt(track)),
       };
     }
-    if (kind === "release") {
+    if (kind === "schedule" || kind === "release") {
       const row = findReleased(key);
       if (!row) return null;
       ensureClearanceShape(row);
@@ -289,6 +298,7 @@
         fumigateShift: row.fumigateShift || "",
         dock: row.dock || "",
         trailer: row.trailer || "",
+        deliverTo: row.deliverTo || "",
         note: row.note || "",
         ftConfirmed: !!(row.ftConfirmed || row.ft),
         ftAt: row.ftAt || "",
@@ -302,7 +312,7 @@
         trailerNote: row.trailerNote || "",
         assignee: row.assignee || "",
         assignQty: row.assignQty ?? "",
-        destType: row.destType || "coldstore",
+        destType: destTypeOf(row),
         dispatched: !!row.dispatched,
         notifyTrailer: !!row.notifyTrailer,
         notifyUnpacker: !!row.notifyUnpacker,
@@ -331,7 +341,7 @@
           seller: "",
           customsNo: "",
           note: j.note || "",
-          destType: j.destType || "coldstore",
+          destType: destTypeOf(findReleased(j.sourceUha || j.box)) === "customer" ? "customer" : destTypeOf(j),
           location: j.location || "",
           assignee: j.assignee || "",
           assignQty: j.assignQty != null ? j.assignQty : "",
@@ -402,7 +412,7 @@
         unpackAt: j.unpackAt || rel.unpackAt || "",
         unpackShift: !!(j.unpackShift || rel.unpackShift),
         pickupDay: rel.pickupDay || "",
-        destType: j.destType || "coldstore",
+        destType: destTypeOf(rel) === "customer" ? "customer" : destTypeOf(j),
         customerName: j.customerName || "",
         stockIn: j.stockIn !== false,
         note: j.note || "",
@@ -493,6 +503,22 @@
         fumigate: fields.fumigate || "none",
       });
       stampRow(d);
+    } else if (kind === "schedule") {
+      const row = findReleased(String(fields.storageKey || key || "").trim() || key);
+      if (!row) return false;
+      ensureClearanceShape(row);
+      row.unpackAt = String(fields.unpackAt || "").trim();
+      row.unpackShift = !!fields.unpackShift;
+      const unpackDay = String(row.unpackAt || "").slice(0, 10);
+      row.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(unpackDay) ? unpackDay : "";
+      row.deliverTo = String(fields.deliverTo || "").trim();
+      row.destType = row.deliverTo ? "customer" : "coldstore";
+      row.assignee = String(fields.assignee || "").trim();
+      row.trailer = String(fields.trailer || "").trim();
+      row.trailerPhone = String(fields.trailerPhone || "").trim();
+      syncUnpackDest(row);
+      mirrorReleaseToUnpack(row);
+      stampRow(row);
     } else if (kind === "port" || kind === "release") {
       const storageKey = String(fields.storageKey || key || "").trim() || key;
       const newUha = normUha(fields.uha);
@@ -500,6 +526,7 @@
       if (newUha && newUha !== storageKey) {
         const renamed = assignPortUha(storageKey, newUha);
         if (!renamed.ok) {
+          if (renamed.duplicate) return { ok: false, duplicate: renamed.duplicate, typed: renamed.typed };
           if (typeof setStatus === "function") setStatus(renamed.error || "編號更新失敗", true);
           return false;
         }
@@ -524,7 +551,6 @@
       track.note = String(fields.note || "").trim();
       if (kind === "release") {
         track.ftAt = String(fields.ftAt || "").slice(0, 10);
-        track.pickupDay = String(fields.pickupDay || "").slice(0, 10);
         if (track.ftAt) {
           track.ftConfirmed = true;
           track.ft = true;
@@ -535,6 +561,8 @@
         track.pickupReady = !!fields.pickupReady;
         track.unpackAt = String(fields.unpackAt || "").trim();
         track.unpackShift = !!fields.unpackShift;
+        const unpackDay = String(track.unpackAt || "").slice(0, 10);
+        track.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(unpackDay) ? unpackDay : "";
         track.unpackSite = String(fields.unpackSite || "").trim();
         track.trailerPhone = String(fields.trailerPhone || "").trim();
         track.trailerConfirmed = !!fields.trailerConfirmed;
@@ -542,7 +570,9 @@
         track.assignee = String(fields.assignee || "").trim();
         track.assignQty = fields.assignQty === "" || fields.assignQty == null ? "" : Number(fields.assignQty);
         if (!Number.isFinite(track.assignQty)) track.assignQty = fields.assignQty || "";
-        track.destType = fields.destType === "customer" ? "customer" : "coldstore";
+        track.deliverTo = String(fields.deliverTo || "").trim();
+        track.destType = track.deliverTo ? "customer" : fields.destType === "customer" ? "customer" : "coldstore";
+        syncUnpackDest(track);
         track.notifyTrailer = !!fields.notifyTrailer;
         track.notifyUnpacker = !!fields.notifyUnpacker;
         track.notifyCustomer = !!fields.notifyCustomer;
@@ -551,6 +581,7 @@
         track.assignQty2 = fields.assignQty2 === "" || fields.assignQty2 == null ? "" : Number(fields.assignQty2);
         if (!Number.isFinite(track.assignQty2)) track.assignQty2 = fields.assignQty2 || "";
         track.unpackSite2 = String(fields.unpackSite2 || "").trim();
+        mirrorReleaseToUnpack(track);
         if (fields.dispatchNow || (track.pickupReady && track.unpackAt)) {
           dispatchToUnpackBoard(track);
         }
@@ -1110,6 +1141,8 @@
       text.match(/\d{1,2}\s*[\/.\-月]\s*\d{1,2}[^\n]{0,20}到\s*([^\n\r，,]+)/) ||
       text.match(/(?:^|\n)\s*到\s*([^\s\n\r，,]{1,12})\s*(?:\n|$)/);
     if (siteM) unpackSite = String(siteM[1]).trim().replace(/\s{2,}/g, " ").slice(0, 40);
+    // 「到港」是到港，不是下貨點（例如 9/29中午到港還不能報關）
+    if (unpackSite && /^港/.test(unpackSite)) unpackSite = "";
 
     // 9/18 14:00到二崙 → 拆卸／到達時間
     let unpackAt = "";
@@ -1293,6 +1326,9 @@
 
     const noteBits = [];
     if (/已報關/.test(text)) noteBits.push("已報關");
+    else if (/還不能報關|不能報關|尚未報關|未報關/.test(text)) noteBits.push("還不能報關");
+    const arriveWhen = text.match(/(上午|中午|下午|晚上)到港/);
+    if (arriveWhen) noteBits.push(`${arriveWhen[1]}到港`);
     if (checkKind) noteBits.push(checkKind);
     if (voyageNote) noteBits.push(voyageNote);
     if (dock) noteBits.push(`靠${dock}碼頭`);
@@ -1779,7 +1815,28 @@
     if (oldUha === newUha) return { ok: true, uha: newUha };
 
     const clash = (state.importCabinets || []).find((c) => c !== cab && c.uha === newUha);
-    if (clash) return { ok: false, error: `${newUha} 已存在，請改用其他編號` };
+    if (clash) {
+      const hit = importPlaceOf(newUha) || {
+        where: "海關查驗",
+        uha: newUha,
+        containerNo: clash.containerNo || "",
+        product: clash.product || "",
+        seller: clash.seller || "",
+        arriveDay: clash.arriveDay || "",
+      };
+      return {
+        ok: false,
+        error: `${newUha} 已存在`,
+        duplicate: { existing: true, via: "編號", ...hit },
+        typed: {
+          uha: newUha,
+          containerNo: cab.containerNo || "",
+          product: cab.product || "",
+          seller: cab.seller || "",
+          arriveDay: cab.arriveDay || "",
+        },
+      };
+    }
 
     cab.uha = newUha;
     stampRow(cab);
@@ -2127,6 +2184,7 @@
       row.missingDocs = false;
     }
     if (row.trailer == null) row.trailer = "";
+    if (row.deliverTo == null) row.deliverTo = "";
     if (row.trailerPhone == null) row.trailerPhone = "";
     if (row.trailerConfirmed == null) row.trailerConfirmed = false;
     if (row.trailerNote == null) row.trailerNote = "";
@@ -2972,24 +3030,25 @@
     return null;
   }
 
-  /** 編號或櫃號已經在海關查驗、已放行或已刪除。 */
-  function findExistingImport(fields) {
+  /** 編號或櫃號已經在海關查驗、已放行或已刪除。exceptUha 是正在改的這一筆，不算重複。 */
+  function findExistingImport(fields, exceptUha) {
     ensureState();
+    const skip = String(exceptUha || "").trim();
     const uha = normUha(fields && fields.uha);
     const box = keepContainer(fields && fields.containerNo);
-    if (uha) {
+    if (uha && uha !== skip) {
       const hit = importPlaceOf(uha);
-      if (hit) return { existing: true, via: "編號", ...hit };
+      if (hit && hit.uha !== skip) return { existing: true, via: "編號", ...hit };
     }
     if (box) {
-      const cab = (state.importCabinets || []).find((c) => keepContainer(c.containerNo) === box);
-      const rel = (state.importReleased || []).find((r) => keepContainer(r.containerNo) === box);
+      const cab = (state.importCabinets || []).find((c) => c.uha !== skip && keepContainer(c.containerNo) === box);
+      const rel = (state.importReleased || []).find((r) => r.uha !== skip && keepContainer(r.containerNo) === box);
       const key = (cab && cab.uha) || (rel && rel.uha) || "";
-      if (key) {
+      if (key && key !== skip) {
         const hit = importPlaceOf(key);
         if (hit) return { existing: true, via: "櫃號", ...hit };
       }
-      const rem = (state.importRemoved || []).find((r) => keepContainer(r.containerNo) === box);
+      const rem = (state.importRemoved || []).find((r) => r.uha !== skip && keepContainer(r.containerNo) === box);
       if (rem) {
         return {
           existing: true,
@@ -3362,7 +3421,13 @@
         row.fumigate = "wait";
         row.fumigateManual = true;
       }
-    } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt" || field === "unpackAt") row[field] = value || "";
+    } else if (field === "inspectAt" || field === "fumigateAt" || field === "ftAt" || field === "unpackAt") {
+      row[field] = value || "";
+      if (field === "unpackAt") {
+        const d = String(row.unpackAt || "").slice(0, 10);
+        row.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(d) ? d : "";
+      }
+    }
     else if (field === "unpackShift") row.unpackShift = Boolean(value);
     else if (field === "pickupDay") {
       const d = String(value || "").trim();
@@ -3371,6 +3436,7 @@
       field === "customsNo" ||
       field === "note" ||
       field === "trailer" ||
+      field === "deliverTo" ||
       field === "dock" ||
       field === "trailerPhone" ||
       field === "trailerNote" ||
@@ -3381,6 +3447,10 @@
       field === "assignee2"
     )
       row[field] = String(value || "").trim();
+    if (field === "deliverTo") {
+      row.destType = String(row.deliverTo || "").trim() ? "customer" : "coldstore";
+      syncUnpackDest(row);
+    }
     else if (field === "containerNo") row.containerNo = keepContainer(value);
     if (field === "containerNo" || field === "product") {
       const cab = (state.importCabinets || []).find((c) => c.uha === row.uha);
@@ -3398,7 +3468,36 @@
     }
     stampRow(row);
     if (field === "unpackAt" || field === "unpackShift" || field === "pickupDay") syncDispatchedSchedule(row);
+    if (
+      field === "assignee" ||
+      field === "assignee2" ||
+      field === "trailer" ||
+      field === "deliverTo" ||
+      field === "unpackSite" ||
+      field === "unpackSite2" ||
+      field === "unpackAt" ||
+      field === "unpackShift" ||
+      field === "pickupDay" ||
+      field === "product" ||
+      field === "containerNo" ||
+      field === "dock"
+    ) {
+      mirrorReleaseToUnpack(row);
+    }
     if (typeof save === "function") save();
+  }
+
+  function syncUnpackDest(row) {
+    if (!row || !Array.isArray(state.unpackJobs)) return;
+    const uha = String(row.uha || "");
+    const dest = destTypeOf(row);
+    const name = String(row.deliverTo || "").trim();
+    for (const j of state.unpackJobs) {
+      if (String(j.sourceUha || j.box || "") !== uha) continue;
+      j.destType = dest;
+      j.deliverTo = name;
+      j.updatedAt = Date.now();
+    }
   }
 
   function syncDispatchedSchedule(row) {
@@ -3458,7 +3557,7 @@
       unpackAt: row.unpackAt || "",
       unpackShift: !!row.unpackShift,
       dock: row.dock || "",
-      destType: row.destType || "coldstore",
+      destType: destTypeOf(row),
       location: row.unpackSite || "",
       unloadPoint: row.unpackSite || "",
       sourceUha: row.uha,
@@ -3486,6 +3585,7 @@
         location: location || "",
         unloadPoint: location || "",
         status: j.status === "reported" || j.status === "confirmed" ? j.status : "pending",
+        mirrorAssign: false,
       });
       if (!Number.isFinite(j.assignQty)) j.assignQty = null;
       return j;
@@ -3523,17 +3623,7 @@
   }
 
   function trailerNames() {
-    ensureState();
-    const set = new Set();
-    for (const r of state.importReleased || []) {
-      const t = String(r.trailer || "").trim();
-      if (t) set.add(t);
-    }
-    for (const a of state.importArrivals || []) {
-      // no trailer usually
-    }
-    ["彬", "旭", "瑋", "瑋菘", "偉菘", "尚鴻", "旭興", "斌"].forEach((n) => set.add(n));
-    return [...set].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    return ["旭興", "瑋崧", "阿彬", "智行", "尚鴻"];
   }
 
   function blankUnpackJob() {
@@ -3553,6 +3643,146 @@
       vendor: "",
       assignee: "",
     };
+  }
+
+  function selfUnpackName(name) {
+    return String(name || "").trim() === "自行拆櫃";
+  }
+
+  function jobsForRelease(uha, part) {
+    return (state.unpackJobs || []).filter((j) => {
+      const src = String(j.sourceUha || "");
+      const box = String(j.box || "");
+      const key = String(j.dispatchKey || "");
+      const mine = src === uha || box === uha || key === `${uha}__1` || key === `${uha}__2`;
+      if (!mine) return false;
+      if (part === "2") return j.halfPart === "2" || key === `${uha}__2`;
+      return j.halfPart !== "2" && key !== `${uha}__2`;
+    });
+  }
+
+  /** 同一櫃若已有工作單，不另建第二張。只拿掉沒有數量、沒有備註的重複單。 */
+  function dropDuplicateAssignJobs(uha, part) {
+    const jobs = jobsForRelease(uha, part).filter((j) => j.status !== "reported" && j.status !== "confirmed");
+    if (jobs.length < 2) return false;
+    const keep = jobs.slice().sort((a, b) => (Number(a.updatedAt) || 0) - (Number(b.updatedAt) || 0))[0];
+    let changed = false;
+    for (const j of jobs) {
+      if (j === keep) continue;
+      if (j.unpackQty != null && j.unpackQty !== "") continue;
+      if (j.assignQty != null && j.assignQty !== "" && Number(j.assignQty) !== 0) continue;
+      if (String(j.photo || "").trim() || String(j.note || "").trim()) continue;
+      const idx = state.unpackJobs.indexOf(j);
+      if (idx < 0) continue;
+      state.unpackJobs.splice(idx, 1);
+      changed = true;
+    }
+    return changed;
+  }
+
+  function copyOntoUnpackJob(j, row, assignee, site) {
+    let changed = false;
+    const set = (key, value) => {
+      if (j[key] !== value) {
+        j[key] = value;
+        changed = true;
+      }
+    };
+    set("assignee", assignee);
+    set("trailer", String(row.trailer || ""));
+    set("unpackAt", String(row.unpackAt || ""));
+    set("unpackShift", !!row.unpackShift);
+    const day = unpackDayFromAt(row.unpackAt) || String(row.pickupDay || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) set("day", day);
+    set("location", site);
+    set("unloadPoint", site);
+    set("deliverTo", String(row.deliverTo || "").trim());
+    set("destType", destTypeOf(row));
+    if (row.product) set("name", String(row.product).trim());
+    if (row.containerNo && (!j.codes || j.codes[0] !== row.containerNo)) {
+      j.codes = [row.containerNo];
+      changed = true;
+    }
+    set("box", row.uha);
+    set("sourceUha", row.uha);
+    set("fromRelease", true);
+    if (j.assignQty === 0) {
+      j.assignQty = null;
+      changed = true;
+    }
+    if (j.status !== "reported" && j.status !== "confirmed") set("status", "pending");
+    if (j.mirrorAssign == null && (j.unpackQty == null || j.unpackQty === "") && j.status !== "reported" && j.status !== "confirmed") {
+      j.mirrorAssign = true;
+      changed = true;
+    }
+    if (changed) j.updatedAt = Date.now();
+    return changed;
+  }
+
+  /**
+   * 工作台那一列是唯一登打處。選了拆工就把這一列抄進拆櫃工作單。
+   * 不另開派工、不把列標成已派、不等煙燻結束。自行拆櫃不留給拆工。
+   */
+  function mirrorReleaseToUnpack(row) {
+    if (!row || !row.uha || row.deskUnpacked) return false;
+    if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
+    let changed = false;
+    const syncPart = (part, whoRaw, siteRaw) => {
+      if (dropDuplicateAssignJobs(row.uha, part)) changed = true;
+      const who = String(whoRaw || "").trim();
+      const jobs = jobsForRelease(row.uha, part);
+      const open = jobs.filter((j) => j.status !== "reported" && j.status !== "confirmed");
+      if (!who || selfUnpackName(who)) {
+        for (const j of open) {
+          const blank =
+            j.mirrorAssign &&
+            (j.unpackQty == null || j.unpackQty === "") &&
+            (j.assignQty == null || j.assignQty === "" || Number(j.assignQty) === 0) &&
+            !String(j.photo || "").trim() &&
+            !String(j.note || "").trim();
+          if (blank) {
+            const idx = state.unpackJobs.indexOf(j);
+            if (idx >= 0) state.unpackJobs.splice(idx, 1);
+            changed = true;
+            continue;
+          }
+          if (!j.assignee) continue;
+          j.assignee = "";
+          j.updatedAt = Date.now();
+          changed = true;
+        }
+        return;
+      }
+      let j = open.find((x) => x.dispatchKey === `${row.uha}__${part}`) || open[0];
+      if (!j) {
+        j = {
+          id: uid("up"),
+          printKey: `${row.uha}__${part}`,
+          dispatchKey: `${row.uha}__${part}`,
+          halfPart: part,
+          ...blankUnpackJob(),
+          status: "pending",
+          assignQty: null,
+          mirrorAssign: true,
+        };
+        state.unpackJobs.push(j);
+        changed = true;
+      }
+      if (copyOntoUnpackJob(j, row, who, String(siteRaw || "").trim())) changed = true;
+    };
+    syncPart("1", row.assignee, row.unpackSite || "");
+    if (row.halfSplit) syncPart("2", row.assignee2, row.unpackSite2 || row.unpackSite || "");
+    return changed;
+  }
+
+  function syncReleaseAssignees() {
+    ensureState();
+    let n = 0;
+    for (const row of state.importReleased || []) {
+      if (mirrorReleaseToUnpack(row)) n += 1;
+    }
+    if (n && typeof save === "function") save();
+    return n;
   }
 
   function markPortReleased(uha, opts) {
@@ -3659,6 +3889,26 @@
     if (!row) return false;
     patchReleased(uha, field, value);
     // 只存欄位，不自動派工（避免填拆工時整頁跳走／列消失）
+    return true;
+  }
+
+  /** 待排櫃完成：確認後改到已排櫃。不派工，缺的欄位可以後補。 */
+  function confirmArrangeRelease(uha) {
+    ensureState();
+    const row = findReleased(uha);
+    if (!row) {
+      if (typeof setStatus === "function") setStatus("找不到此櫃。", true);
+      return false;
+    }
+    ensureClearanceShape(row);
+    if (row.dispatched) {
+      if (typeof setStatus === "function") setStatus(`${uha} 已經在拆卸資料。`, true);
+      return false;
+    }
+    row.pickupReady = true;
+    stampRow(row);
+    if (typeof save === "function") save();
+    if (typeof setStatus === "function") setStatus(`${uha} 已確認，改到已排櫃。`);
     return true;
   }
 
@@ -4445,6 +4695,185 @@
     return (opts.find((o) => o.id === v) || {}).lab || v || "待確認";
   }
 
+  function unpackScheduleDay(unpackAt, day) {
+    const at = String(unpackAt || "");
+    if (/^\d{4}-\d{2}-\d{2}/.test(at)) return at.slice(0, 10);
+    const d = String(day || "");
+    return /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "";
+  }
+
+  /** 已預排拆卸：確認過、已派過，或已填拆櫃時間。煙燻沒結束也可以先排，不等燻完。 */
+  function isPrearrangedUnpack(row) {
+    if (!row) return false;
+    if (row.pickupReady || row.dispatched) return true;
+    if (String(row.unpackAt || "").trim()) return true;
+    if (row.unpackShift) return true;
+    return false;
+  }
+
+  /** 已經填了客戶名稱的，去向改成交客戶，不再留在自有冰庫。 */
+  function healCustomerDest() {
+    ensureState();
+    let n = 0;
+    const touch = (row) => {
+      if (!row || !String(row.deliverTo || "").trim() || row.destType === "customer") return;
+      row.destType = "customer";
+      n += 1;
+    };
+    for (const r of state.importReleased || []) touch(r);
+    for (const c of state.importCabinets || []) touch(c.track);
+    for (const j of state.unpackJobs || []) {
+      const uha = String(j.sourceUha || j.box || "");
+      const rel = (state.importReleased || []).find((r) => r.uha === uha);
+      const name = String(j.deliverTo || (rel && rel.deliverTo) || "").trim();
+      if (!name || j.destType === "customer") continue;
+      j.deliverTo = name;
+      j.destType = "customer";
+      n += 1;
+    }
+    if (n && typeof save === "function") save();
+  }
+
+  function scheduleDaysOf(days) {
+    const list = Array.isArray(days) ? days : [days];
+    return list.map((d) => String(d || "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  }
+
+  function scheduleToday() {
+    if (typeof today === "function") return today();
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  }
+
+  /** 拆櫃已回報，或工作台按過標成已拆櫃。光是已派、已確認還算在排程裡。 */
+  function isScheduleUnpacked(rel, job) {
+    const st = job && String(job.status || "");
+    if (st === "reported" || st === "confirmed") return true;
+    if (rel && rel.deskUnpacked) return true;
+    return false;
+  }
+
+  /** 沒選日期：今天以後、還沒確認拆完。選了日期：只留那幾天，含歷史。 */
+  function filterUnpackSchedule(rows, days) {
+    const picked = scheduleDaysOf(days);
+    if (picked.length) {
+      const set = new Set(picked);
+      return rows.filter((r) => set.has(r.day));
+    }
+    const start = scheduleToday();
+    return rows.filter((r) => !r.unpacked && (!r.day || r.day >= start));
+  }
+
+  /** 已預排拆卸：確認過、已派過，或已填拆櫃時間。日期空白＝全部。 */
+  function collectScheduledUnpack(day) {
+    ensureState();
+    if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
+    const want = String(day || "").trim();
+    const arrived = new Set((state.importArrivals || []).map((a) => a && a.uha).filter(Boolean));
+    const jobBy = new Map();
+    for (const j of state.unpackJobs) {
+      if (!(j.fromRelease || j.sourceUha) || j.halfPart === "2") continue;
+      const uha = String(j.sourceUha || j.box || "").trim();
+      if (!uha || jobBy.has(uha)) continue;
+      jobBy.set(uha, j);
+    }
+    const seen = new Set();
+    const out = [];
+
+    function pushRow(rel, job) {
+      const uha = String((rel && rel.uha) || (job && (job.sourceUha || job.box)) || "").trim();
+      if (!uha || seen.has(uha) || arrived.has(uha)) return;
+      const base = rel || {};
+      const planned = isPrearrangedUnpack(base) || !!(job && (job.fromRelease || jTime(job)));
+      if (!planned) return;
+      const unpackAt = (job && job.unpackAt) || base.unpackAt || "";
+      const shift = !!((job && job.unpackShift) || base.unpackShift);
+      const rowDay = unpackScheduleDay(unpackAt, job && job.day);
+      if (want && rowDay !== want) return;
+      seen.add(uha);
+      const dock = String((job && job.dock) || base.dock || "").trim();
+      const siteRaw = String((job && (job.location || job.unloadPoint)) || base.unpackSite || "").trim();
+      const site = siteRaw && siteRaw !== dock ? siteRaw : "";
+      const deliverTo = String(base.deliverTo || "").trim();
+      const handoff = base.destType === "customer" || !!deliverTo;
+      const customerLab = handoff ? deliverTo || "交櫃" : "自有冰庫";
+      const product = String((job && job.name) || base.product || "").replace(/\s+/g, " ").trim();
+      const containerNo = (job && job.codes && job.codes[0]) || base.containerNo || "";
+      const trailer = String((job && job.trailer) || base.trailer || "").trim();
+      const trailerPhone = String((job && job.trailerPhone) || base.trailerPhone || "").trim();
+      const assignee = String((job && job.assignee) || base.assignee || "").trim();
+      const qtyRaw = job && job.assignQty != null && job.assignQty !== "" ? job.assignQty : base.assignQty;
+      const assignQty = qtyRaw == null || qtyRaw === "" || Number(qtyRaw) === 0 ? "" : String(qtyRaw);
+      const note = String(base.note || "").replace(/\s+/g, " ").trim();
+      const phrase = schedulePhrase(rowDay, unpackAt, shift, site, base.ftAt);
+      const unpacked = isScheduleUnpacked(base, job);
+      out.push({
+        key: job && job.id ? job.id : "rel:" + uha,
+        jobId: job && job.id ? job.id : "",
+        fromJob: !!(job && job.id),
+        uha,
+        sourceUha: uha,
+        box: (job && job.box) || uha,
+        containerNo,
+        product,
+        name: product,
+        deliverTo,
+        customerKind: handoff ? "customer" : "coldstore",
+        customerLab,
+        trailer,
+        trailerPhone,
+        seller: String(base.seller || "").trim(),
+        assignee,
+        unpackShift: shift,
+        assignQty,
+        note,
+        location: site,
+        dock,
+        day: rowDay,
+        unpacked,
+        unpackAt,
+        fumigate: base.fumigate || "none",
+        fumigateAt: base.fumigateAt || "",
+        fumigateShift: base.fumigateShift || "",
+        warn: !trailerPhone || !trailer,
+        missPhone: !trailerPhone,
+        missTrailer: !trailer,
+        missUha: !uha,
+        missAssignee: !assignee,
+        cells: [
+          uha || "—",
+          containerNo || "—",
+          phrase || "—",
+          product || "—",
+          customerLab,
+          dock || "—",
+          trailer || "—",
+          site || "—",
+          assignee || "—",
+        ],
+      });
+    }
+
+    function jTime(job) {
+      return !!(job && (String(job.unpackAt || "").trim() || job.day || job.unpackShift));
+    }
+
+    for (const r of state.importReleased || []) {
+      if (!r || !r.uha) continue;
+      if (!isPrearrangedUnpack(r) && !jobBy.has(r.uha)) continue;
+      pushRow(r, jobBy.get(r.uha) || null);
+    }
+    for (const [uha, job] of jobBy) {
+      if (seen.has(uha)) continue;
+      pushRow(findReleased(uha) || { uha }, job);
+    }
+    out.sort(
+      (a, b) =>
+        String(a.unpackAt || a.day || "9999").localeCompare(String(b.unpackAt || b.day || "9999")) ||
+        String(a.uha).localeCompare(String(b.uha), "en", { numeric: true }),
+    );
+    return out;
+  }
+
   window.__importApi = {
     loadDrawerFields,
     commitDrawerSession,
@@ -4463,7 +4892,83 @@
     unmarkPortReleased,
     unmarkPortReleasedMany,
     patchReleaseField,
+    /** 已拆完：只要認得出櫃子（編號或櫃號，加上品名）就離開追櫃清單。不要求拖車、時間、位置、拆工，也不把數量寫成 0。 */
+    markDeskUnpacked(uha) {
+      ensureState();
+      const row = findReleased(uha);
+      if (!row) {
+        if (typeof setStatus === "function") setStatus("找不到此櫃。", true);
+        return false;
+      }
+      ensureClearanceShape(row);
+      const pending = typeof isPendingUha === "function" && isPendingUha(row.uha);
+      const uhaOk = String(row.uha || "").trim() && !pending;
+      const boxOk = !!keepContainer(row.containerNo);
+      const productOk = !!String(row.product || "").trim();
+      if (!(uhaOk || boxOk) || !productOk) {
+        if (typeof setStatus === "function") setStatus("要有編號或櫃號，再加上品名，才能標成已拆櫃。", true);
+        return false;
+      }
+      row.deskUnpacked = true;
+      if (!row.dispatched) {
+        row.released = true;
+        row.dispatched = true;
+        row.pickupReady = true;
+        if (row.assignQty === 0) row.assignQty = "";
+      }
+      stampRow(row);
+      if (typeof save === "function") save();
+      if (typeof setStatus === "function") setStatus(`${row.uha} 已標成已拆櫃，改到總表。缺的欄位之後再補。`);
+      return true;
+    },
+    /** 總表候補：只寫還沒填的格子，已有內容不蓋掉，數量不補成 0。 */
+    fillReleaseBlank(uha, field, value) {
+      ensureState();
+      const allow = { trailer: 1, deliverTo: 1, unpackAt: 1, unpackSite: 1, assignee: 1, containerNo: 1, product: 1 };
+      if (!allow[field]) return false;
+      const row = findReleased(uha);
+      if (!row) return false;
+      ensureClearanceShape(row);
+      const cur = String(row[field] == null ? "" : row[field]).trim();
+      if (cur) return false;
+      const next = field === "containerNo" ? keepContainer(value) : String(value || "").trim();
+      if (!next || next === "0") return false;
+      if (field === "containerNo") {
+        const dup = findExistingImport({ containerNo: next }, row.uha);
+        if (dup) {
+          return {
+            ok: false,
+            duplicate: dup,
+            typed: {
+              uha: row.uha || "",
+              containerNo: next,
+              product: row.product || "",
+              seller: row.seller || "",
+              arriveDay: row.arriveDay || "",
+            },
+          };
+        }
+      }
+      row[field] = next;
+      if (field === "unpackAt") {
+        const d = String(next).slice(0, 10);
+        row.pickupDay = /^\d{4}-\d{2}-\d{2}/.test(d) ? d : "";
+      }
+      if (field === "product" || field === "containerNo") {
+        const cab = (state.importCabinets || []).find((c) => c.uha === row.uha);
+        if (cab) {
+          cab[field] = next;
+          stampRow(cab);
+        }
+      }
+      stampRow(row);
+      mirrorReleaseToUnpack(row);
+      if (typeof save === "function") save();
+      return true;
+    },
     dispatchRelease,
+    confirmArrangeRelease,
+    syncReleaseAssignees,
     notifyReleaseMany,
     clearNotifyReleaseMany,
     confirmReleasePickup,
@@ -4521,7 +5026,10 @@
           missingTelex: !!track.missingTelex,
           missingData: !!track.missingData,
           trailer: track.trailer || "",
+          deliverTo: track.deliverTo || "",
           trailerPhone: track.trailerPhone || "",
+          unpackAt: track.unpackAt || "",
+          unpackShift: !!track.unpackShift,
           note: track.note || "",
           status: portStatusLabel(track),
           cells: [
@@ -4558,7 +5066,24 @@
         return true;
       }
       if (field === "containerNo") {
-        cab.containerNo = keepContainer(value);
+        const nextBox = keepContainer(value);
+        const prevBox = keepContainer(cab.containerNo);
+        if (nextBox && nextBox !== prevBox) {
+          const dup = findExistingImport({ containerNo: nextBox }, uha);
+          if (dup) {
+            return {
+              duplicate: dup,
+              typed: {
+                uha,
+                containerNo: nextBox,
+                product: cab.product || "",
+                seller: cab.seller || "",
+                arriveDay: cab.arriveDay || "",
+              },
+            };
+          }
+        }
+        cab.containerNo = nextBox;
         stampRow(cab);
         const track = findReleased(uha);
         if (track) {
@@ -4603,12 +5128,18 @@
         product: c.product || "",
         dock: c.dock || "",
         trailer: c.trailer || "",
+        deliverTo: c.deliverTo || "",
         trailerPhone: c.trailerPhone || "",
         pickupDay: c.pickupDay || "",
         unpackAt: c.unpackAt || "",
         unpackShift: !!c.unpackShift,
         unpackSite: c.unpackSite || "",
+        unpackSite2: c.unpackSite2 || "",
+        halfSplit: !!c.halfSplit,
         assignee: c.assignee || "",
+        assignee2: c.assignee2 || "",
+        trailerNote: c.trailerNote || "",
+        note: c.note || "",
         notifyTrailer: !!c.notifyTrailer,
         notifyCustomer: !!c.notifyCustomer,
         notifyTrailerAt: c.notifyTrailerAt || "",
@@ -4641,6 +5172,7 @@
     listTrackBoard() {
       ensureState();
       fixArriveDaysInState();
+      healCustomerDest();
       const cabBy = new Map((state.importCabinets || []).map((c) => [c.uha, c]));
       const rows = [];
 
@@ -4661,8 +5193,17 @@
           fumigateAt: t.fumigateAt || "",
           fumigateShift: t.fumigateShift || "",
           trailer: t.trailer || "",
+          deliverTo: t.deliverTo || "",
+          destType: destTypeOf(t),
+          trailerNote: t.trailerNote || "",
           assignee: t.assignee || "",
+          assignee2: t.assignee2 || "",
           unpackSite: t.unpackSite || "",
+          unpackSite2: t.unpackSite2 || "",
+          halfSplit: !!t.halfSplit,
+          unpackAt: t.unpackAt || "",
+          unpackShift: !!t.unpackShift,
+          note: t.note || "",
           pickupDay: t.pickupDay || "",
           ftAt: t.ftAt || "",
           ftConfirmed: !!(t.ftConfirmed || t.ft),
@@ -4697,10 +5238,17 @@
           fumigateAt: r.fumigateAt || "",
           fumigateShift: r.fumigateShift || "",
           trailer: r.trailer || "",
+          deliverTo: r.deliverTo || "",
+          destType: destTypeOf(r),
+          trailerNote: r.trailerNote || "",
           assignee: r.assignee || "",
+          assignee2: r.assignee2 || "",
           unpackSite: r.unpackSite || "",
+          unpackSite2: r.unpackSite2 || "",
+          halfSplit: !!r.halfSplit,
           unpackAt: r.unpackAt || "",
           unpackShift: !!r.unpackShift,
+          note: r.note || "",
           pickupDay: r.pickupDay || "",
           ftAt: r.ftAt || "",
           ftConfirmed: !!(r.ftConfirmed || r.ft),
@@ -4751,6 +5299,8 @@
         broker: row.broker || (cab && cab.broker) || (rel && rel.broker) || "",
         note: row.note || (rel && rel.note) || (cab && cab.track && cab.track.note) || "",
         trailerPhone: row.trailerPhone || (rel && rel.trailerPhone) || "",
+        notifyTrailer: !!(row.notifyTrailer || (rel && rel.notifyTrailer)),
+        notifyCustomer: !!(row.notifyCustomer || (rel && rel.notifyCustomer)),
       });
       const releasedBy = new Map(releaseWorkList().map((r) => [r.uha, r]));
       const rows = active.map((row) => enrich(row, cabBy.get(row.uha), releasedBy.get(row.uha)));
@@ -4773,10 +5323,16 @@
               fumigateAt: r.fumigateAt || "",
               fumigateShift: r.fumigateShift || "",
               trailer: r.trailer || "",
+              deliverTo: r.deliverTo || "",
+              trailerNote: r.trailerNote || "",
               assignee: r.assignee || "",
+              assignee2: r.assignee2 || "",
               unpackSite: r.unpackSite || "",
+              unpackSite2: r.unpackSite2 || "",
+              halfSplit: !!r.halfSplit,
               unpackAt: r.unpackAt || "",
               unpackShift: !!r.unpackShift,
+              note: r.note || "",
               pickupDay: r.pickupDay || "",
               ftAt: r.ftAt || "",
               ftConfirmed: !!(r.ftConfirmed || r.ft),
@@ -4843,8 +5399,11 @@
           missingData: !!t.missingData,
           note: t.note || "",
           trailer: t.trailer || "",
+          deliverTo: t.deliverTo || "",
           trailerPhone: t.trailerPhone || "",
-          pickupDay: "",
+          unpackAt: t.unpackAt || "",
+          unpackShift: !!t.unpackShift,
+          pickupDay: t.pickupDay || "",
           unpackSite: "",
           assignee: "",
           ftAt: t.ftAt || "",
@@ -4882,7 +5441,10 @@
           missingData: !!r.missingData,
           note: r.note || "",
           trailer: r.trailer || "",
+          deliverTo: r.deliverTo || "",
           trailerPhone: r.trailerPhone || "",
+          unpackAt: r.unpackAt || "",
+          unpackShift: !!r.unpackShift,
           pickupDay: r.pickupDay || "",
           unpackSite: r.unpackSite || "",
           assignee: r.assignee || "",
@@ -4927,13 +5489,18 @@
     listSum(tab) {
       ensureState();
       if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
-      let rows = state.unpackJobs.filter((j) => j.fromRelease || j.sourceUha);
+      const relBy = new Map((state.importReleased || []).map((r) => [r.uha, r]));
+      const isCustomer = (j) => {
+        const uha = String(j.sourceUha || j.box || "").trim();
+        return destTypeOf(j) === "customer" || destTypeOf(relBy.get(uha)) === "customer";
+      };
+      let rows = state.unpackJobs.filter((j) => (j.fromRelease || j.sourceUha) && !j.mirrorAssign);
       if (tab === "needQty") {
         rows = rows.filter((j) => j.unpackQty == null || j.unpackQty === "");
       } else if (tab === "customer") {
-        rows = rows.filter((j) => j.destType === "customer");
+        rows = rows.filter(isCustomer);
       } else if (tab === "coldstore") {
-        rows = rows.filter((j) => j.destType !== "customer");
+        rows = rows.filter((j) => !isCustomer(j));
       }
       rows = rows.slice().sort((a, b) => String(b.day || "").localeCompare(String(a.day || "")));
       return rows.map((j) => ({
@@ -4945,7 +5512,7 @@
           j.name || "—",
           j.unpackQty != null ? String(j.unpackQty) : "—",
           j.location || j.unloadPoint || "—",
-          j.destType === "customer" ? "交客戶" : "自有冰庫",
+          isCustomer(j) ? "交客戶" : "自有冰庫",
           j.assignee || "—",
           j.status === "reported" || j.status === "confirmed" ? "已回報" : "待補",
         ],
@@ -4954,84 +5521,36 @@
     sumTabCounts() {
       ensureState();
       if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
-      const all = state.unpackJobs.filter((j) => j.fromRelease || j.sourceUha);
+      const relBy = new Map((state.importReleased || []).map((r) => [r.uha, r]));
+      const isCustomer = (j) => {
+        const uha = String(j.sourceUha || j.box || "").trim();
+        return destTypeOf(j) === "customer" || destTypeOf(relBy.get(uha)) === "customer";
+      };
+      const all = state.unpackJobs.filter((j) => (j.fromRelease || j.sourceUha) && !j.mirrorAssign);
       return {
         open: all.length,
         needQty: all.filter((j) => j.unpackQty == null || j.unpackQty === "").length,
-        customer: all.filter((j) => j.destType === "customer").length,
-        coldstore: all.filter((j) => j.destType !== "customer").length,
+        customer: all.filter(isCustomer).length,
+        coldstore: all.filter((j) => !isCustomer(j)).length,
       };
     },
-    listUpBoard(day) {
-      ensureState();
-      if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
-      const d = day || (typeof today === "function" ? today() : "");
-      const rows = state.unpackJobs
-        .filter((j) => (j.fromRelease || j.sourceUha) && (!d || j.day === d))
-        .slice()
-        .sort((a, b) => String(a.unpackAt || "").localeCompare(String(b.unpackAt || "")) || String(a.box).localeCompare(String(b.box)));
-      return rows.map((j) => {
-        const uha = j.sourceUha || j.box || "";
-        const rel = findReleased(uha) || {};
-        const missPhone = !String(j.trailerPhone || "").trim();
-        const missTrailer = !String(j.trailer || "").trim();
-        const missUha = !String(uha).trim();
-        const missAssignee = !String(j.assignee || rel.assignee || "").trim();
-        const dock = String(j.dock || rel.dock || "").trim();
-        const siteRaw = String(j.location || j.unloadPoint || rel.unpackSite || "").trim();
-        const site = siteRaw && siteRaw !== dock ? siteRaw : "";
-        const unpackAt = j.unpackAt || rel.unpackAt || "";
-        const shift = !!(j.unpackShift || rel.unpackShift);
-        const product = String(j.name || rel.product || "").replace(/\s+/g, " ").trim();
-        const containerNo = (j.codes && j.codes[0]) || rel.containerNo || "";
-        const phrase = schedulePhrase(j.day, unpackAt, shift, site, rel.ftAt);
-        return {
-          key: j.id,
-          uha,
-          sourceUha: uha,
-          box: j.box || "",
-          containerNo,
-          product,
-          name: product,
-          trailer: j.trailer || "",
-          trailerPhone: j.trailerPhone || "",
-          assignee: j.assignee || rel.assignee || "",
-          location: site,
-          dock,
-          day: j.day || "",
-          unpackAt,
-          warn: missPhone || missTrailer || missUha,
-          missPhone,
-          missTrailer,
-          missUha,
-          missAssignee,
-          cells: [
-            uha || "—",
-            containerNo || "—",
-            phrase || "—",
-            product || "—",
-            dock || "—",
-            j.trailer || "—",
-            site || "—",
-            j.assignee || rel.assignee || "—",
-          ],
-        };
-      });
+    listUpBoard(days) {
+      syncReleaseAssignees();
+      return filterUnpackSchedule(collectScheduledUnpack(""), days);
     },
-    upBoardMeta(day) {
-      ensureState();
-      if (!Array.isArray(state.unpackJobs)) state.unpackJobs = [];
-      const d = day || (typeof today === "function" ? today() : "");
-      const rows = state.unpackJobs.filter((j) => (j.fromRelease || j.sourceUha) && (!d || j.day === d));
+    upBoardMeta(days) {
+      syncReleaseAssignees();
+      const all = collectScheduledUnpack("");
+      const marks = {};
+      for (const r of all) {
+        if (!r.day) continue;
+        marks[r.day] = (marks[r.day] || 0) + 1;
+      }
+      const rows = filterUnpackSchedule(all, days);
       return {
-        day: d,
         total: rows.length,
-        missingTrailer: rows.filter(
-          (j) =>
-            !String(j.trailer || "").trim() ||
-            !String(j.trailerPhone || "").trim() ||
-            !String(j.sourceUha || j.box || "").trim(),
-        ).length,
+        missingTrailer: rows.filter((r) => r.warn).length,
+        marks,
       };
     },
     unpackerNames() {
@@ -5110,6 +5629,56 @@
         note: r.note || "",
         removedAt: r.removedAt || "",
       }));
+    },
+    /**
+     * 刪畫面上這一列。同一編號下若櫃號不同，只拿掉對到的那一邊。
+     * 記入已刪除清單，不刪拆櫃回報、不刪進庫紀錄。
+     */
+    removeDisplayedImport(uha, containerNo) {
+      ensureState();
+      if (!Array.isArray(state.importRemoved)) state.importRemoved = [];
+      const key = String(uha || "").trim();
+      if (!key) return 0;
+      const box = keepContainer(containerNo);
+      const cab = (state.importCabinets || []).find((c) => c.uha === key) || null;
+      const rel = (state.importReleased || []).find((r) => r.uha === key) || null;
+      if (!cab && !rel) return 0;
+      const cabBox = keepContainer(cab && cab.containerNo);
+      const relBox = keepContainer(rel && rel.containerNo);
+      let dropCab = !!cab;
+      let dropRel = !!rel;
+      if (cab && rel && cabBox && relBox && cabBox !== relBox && box) {
+        dropCab = cabBox === box;
+        dropRel = relBox === box;
+        if (!dropCab && !dropRel) return 0;
+      }
+      const whenMs = Math.max(Date.now(), Number(cab && cab.updatedAt) || 0, Number(rel && rel.updatedAt) || 0) + 1;
+      const snap = {
+        uha: key,
+        containerNo: (dropRel && rel && rel.containerNo) || (dropCab && cab && cab.containerNo) || box,
+        product: (dropRel && rel && rel.product) || (dropCab && cab && cab.product) || "",
+        seller: (dropRel && rel && rel.seller) || (dropCab && cab && cab.seller) || "",
+        arriveDay: (dropRel && rel && rel.arriveDay) || (dropCab && cab && cab.arriveDay) || "",
+        dock: (dropRel && rel && rel.dock) || "",
+        note: (dropRel && rel && rel.note) || "",
+        removedAt: new Date(whenMs).toISOString(),
+        cabinet: dropCab && cab ? cab : null,
+        releasedRow: dropRel && rel ? rel : null,
+      };
+      const prev = state.importRemoved.find((r) => r.uha === key);
+      if (prev) {
+        if (snap.cabinet) prev.cabinet = snap.cabinet;
+        if (snap.releasedRow) prev.releasedRow = snap.releasedRow;
+        if (!prev.containerNo) prev.containerNo = snap.containerNo;
+        prev.removedAt = snap.removedAt;
+      } else {
+        state.importRemoved.unshift(snap);
+      }
+      if (dropCab) state.importCabinets = (state.importCabinets || []).filter((c) => c.uha !== key);
+      if (dropRel) state.importReleased = (state.importReleased || []).filter((r) => r.uha !== key);
+      if (typeof save === "function") save();
+      if (typeof setStatus === "function") setStatus(`${key} ${snap.containerNo || ""} 已記入刪除清單。`.replace(/\s+/g, " ").trim());
+      return 1;
     },
     /** 從進口追蹤拿掉，但記入已刪除清單。不刪拆櫃回報、不刪進庫紀錄。 */
     removeImportTracking(uhas) {

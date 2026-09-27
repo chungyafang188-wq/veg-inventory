@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { api } from "../bridge";
+import { api, setStatus } from "../bridge";
 import { DateChip } from "./DateChip";
 import { FumeWhenFields } from "./FumeWhenFields";
+import { TrailerPick } from "./TrailerPick";
+import { todayStamp } from "./HandoverTime";
 import { inspectFumeSummary, trackNextStep, trackStageBadge } from "../lib/trackNext";
-import { defaultPickupFromFt } from "../lib/dateChip";
 import { queryRows } from "../lib/listQuery";
 
 const chipIdle = "imp-chip flex-shrink-0";
@@ -52,6 +53,10 @@ function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
         shift={row.fumigateShift || ""}
         onAt={(v) => savePort("fumigateAt", v)}
         onShift={(v) => savePort("fumigateShift", v)}
+        unpackAt={row.unpackAt || ""}
+        unpackShift={!!row.unpackShift}
+        onUnpackAt={(v) => savePort("unpackAt", v)}
+        onUnpackShift={(v) => savePort("unpackShift", v)}
       />
     );
   } else if (next.step === "missing") {
@@ -91,31 +96,12 @@ function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
         emptyLab="填 FT"
         ariaLabel="免堆期 FT"
         onChange={(v) => {
-          const day = String(v || "").slice(0, 10);
-          api().patchReleaseField?.(uha, "ftAt", day);
-          if (day && !String(row.pickupDay || "").trim()) {
-            const def = defaultPickupFromFt(day);
-            if (def) api().patchReleaseField?.(uha, "pickupDay", def);
-          }
-          onPatched?.();
+          saveRelease("ftAt", String(v || "").slice(0, 10));
         }}
       />
     );
-  } else if (next.step === "pickup") {
-    control = (
-      <DateChip value={row.pickupDay || ""} emptyLab="填領櫃日" ariaLabel="領櫃日" onChange={(v) => saveRelease("pickupDay", String(v || "").slice(0, 10))} />
-    );
   } else if (next.step === "trailer") {
-    control = (
-      <select className="imp-field w-auto max-w-[8rem]" aria-label="拖車" value={row.trailer || ""} onChange={(e) => saveRelease("trailer", e.target.value)}>
-        <option value="">選拖車</option>
-        {trailers.map((n) => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
-      </select>
-    );
+    control = <TrailerPick value={row.trailer || ""} onChange={(v) => saveRelease("trailer", v)} />;
   } else if (next.step === "unpackAt") {
     const shift = !!row.unpackShift;
     control = (
@@ -134,8 +120,8 @@ function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
             const nextOn = !shift;
             api().patchReleaseField?.(uha, "unpackShift", nextOn);
             if (nextOn) {
-              const day = String(row.unpackAt || row.pickupDay || "").slice(0, 10);
-              if (/^\d{4}-\d{2}-\d{2}$/.test(day)) api().patchReleaseField?.(uha, "unpackAt", day);
+              const day = String(row.unpackAt || "").slice(0, 10);
+              api().patchReleaseField?.(uha, "unpackAt", /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : todayStamp());
             }
             onPatched?.();
           }}
@@ -171,18 +157,17 @@ function NextFill({ row, trailers = [], unpackers = [], onPatched }) {
         ))}
       </select>
     );
-  } else if (next.step === "dispatch") {
+  } else if (next.step === "confirm") {
     control = (
       <button
         type="button"
         className="imp-btn-primary px-2 py-1 text-xs"
         onClick={() => {
-          const ok = api().dispatchRelease?.(uha);
+          api().confirmArrangeRelease?.(uha);
           onPatched?.();
-          if (!ok) return;
         }}
       >
-        派工
+        確認
       </button>
     );
   }
@@ -260,6 +245,39 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
     const dest = r.dest === "release" || r.released ? "release" : "port";
     // 留在追蹤頁，用抽屜編這櫃（避免跳進舊清單整表）
     openDrawer?.(dest, uha);
+  };
+
+  const boxCount = useMemo(() => {
+    const counts = new Map();
+    for (const r of rows || []) {
+      const box = String(r.containerNo || "").trim().toUpperCase();
+      if (!box) continue;
+      counts.set(box, (counts.get(box) || 0) + 1);
+    }
+    return counts;
+  }, [rows]);
+
+  const isDup = (r) => {
+    const box = String(r.containerNo || "").trim().toUpperCase();
+    return !!box && (boxCount.get(box) || 0) > 1;
+  };
+
+  const removeDup = (r) => {
+    const uha = r.uha || r.key;
+    const box = String(r.containerNo || "").trim();
+    const others = (rows || []).filter((x) => (x.uha || x.key) !== uha && String(x.containerNo || "").trim().toUpperCase() === box.toUpperCase());
+    const otherLab = others.map((x) => x.pendingUha ? "編號待補" : x.uha || x.key).join("、");
+    const mine = r.pendingUha ? "編號待補" : uha;
+    const ok = window.confirm(
+      `刪除 ${mine} ${box} ${r.product || ""}？\n同一櫃號還有 ${otherLab || "另一筆"}。\n只拿掉這一筆，可到舊資料放回。`,
+    );
+    if (!ok) return;
+    const n = api().removeDisplayedImport?.(uha, box) || 0;
+    if (!n) {
+      setStatus("這一筆沒有刪掉。", true);
+      return;
+    }
+    refresh?.();
   };
 
   const tabs = [
@@ -389,8 +407,11 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
                           <input type="checkbox" checked={picked.has(uha)} onChange={() => toggle(uha)} aria-label={`選取 ${uha}`} />
                         </td>
                         <td className="px-2 py-2">
-                          <div className="font-bold tabular-nums text-slate-800">{uha}</div>
-                          <div className="font-mono text-[0.7rem] text-slate-400">{r.containerNo || "無櫃號"}</div>
+                          <div className="font-bold tabular-nums text-slate-800">{r.pendingUha ? "編號待補" : uha}</div>
+                          <div className={`font-mono text-[0.7rem] ${isDup(r) ? "font-bold text-rose-600" : "text-slate-400"}`}>
+                            {r.containerNo || "無櫃號"}
+                            {isDup(r) ? " 重複" : ""}
+                          </div>
                         </td>
                         <td className="px-2 py-2 font-semibold text-slate-800">{r.product || "—"}</td>
                         <td className="px-2 py-2">
@@ -404,9 +425,16 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
                           <NextFill row={r} trailers={trailers} unpackers={unpackers} onPatched={refresh} />
                         </td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                          <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => goHandle(r)}>
-                            處理
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => goHandle(r)}>
+                              處理
+                            </button>
+                            {isDup(r) ? (
+                              <button type="button" className="imp-btn-ghost px-2 py-1 text-xs text-rose-700" onClick={() => removeDup(r)}>
+                                刪除
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -429,10 +457,13 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
                       <div className="min-w-0 flex-1">
                         <button type="button" className="w-full border-0 bg-transparent p-0 text-left" onClick={() => goHandle(r)}>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <strong className="tabular-nums text-slate-800">{uha}</strong>
+                            <strong className="tabular-nums text-slate-800">{r.pendingUha ? "編號待補" : uha}</strong>
                             <span className={`inline-flex rounded px-1.5 py-0.5 text-[0.65rem] font-bold ${st.cls}`}>{st.lab}</span>
                           </div>
-                          <div className="mt-0.5 font-mono text-xs text-slate-400">{r.containerNo || "無櫃號"}</div>
+                          <div className={`mt-0.5 font-mono text-xs ${isDup(r) ? "font-bold text-rose-600" : "text-slate-400"}`}>
+                            {r.containerNo || "無櫃號"}
+                            {isDup(r) ? " 重複" : ""}
+                          </div>
                           <p className="m-0 mt-1 text-sm font-semibold text-slate-800">{r.product || "—"}</p>
                           <p className="m-0 mt-1 text-xs text-slate-500">
                             {clear.inspLab} · {clear.fumeLab}
@@ -442,9 +473,16 @@ export function TrackBoardPane({ title, rows, counts, setActiveTab, openDrawer, 
                           <NextFill row={r} trailers={trailers} unpackers={unpackers} onPatched={refresh} />
                         </div>
                       </div>
-                      <button type="button" className="imp-btn-primary shrink-0 px-2 py-1 text-xs" onClick={() => goHandle(r)}>
-                        處理
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <button type="button" className="imp-btn-primary px-2 py-1 text-xs" onClick={() => goHandle(r)}>
+                          處理
+                        </button>
+                        {isDup(r) ? (
+                          <button type="button" className="imp-btn-ghost px-2 py-1 text-xs text-rose-700" onClick={() => removeDup(r)}>
+                            刪除
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </li>
                 );

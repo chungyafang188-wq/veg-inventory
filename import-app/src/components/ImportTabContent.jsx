@@ -5,6 +5,7 @@ import { FilesPane } from "./FilesPane";
 import { ParsePane } from "./ParsePane";
 import { ReleasePane } from "./ReleasePane";
 import { TablePane } from "./TablePane";
+import { DeskPane } from "./DeskPane";
 import { TrackBoardPane } from "./TrackBoardPane";
 import { UnpackBoardPane, UnpackReportPane, UnpackSumPane } from "./UnpackBoardPane";
 
@@ -32,6 +33,17 @@ export function ImportTabContent({
 
   return (
     <div className={`min-h-0 flex-1 overflow-auto ${padClass}`}>
+      {activeTab === "desk" ? (
+        <DeskPane
+          title={PANE_TITLE.desk}
+          trackRows={lists.track}
+          allRows={lists.deskAll}
+          trailers={lists.trailers}
+          unpackers={lists.unpackers}
+          refresh={refresh}
+        />
+      ) : null}
+
       {activeTab === "track" ? (
         <TrackBoardPane
           title={PANE_TITLE.track}
@@ -60,6 +72,7 @@ export function ImportTabContent({
           refresh={refresh}
           openDrawer={openDrawer}
           onAfterRelease={() => setActiveTab?.("release")}
+          trailers={lists.trailers}
         />
       ) : null}
 
@@ -89,6 +102,7 @@ export function ImportTabContent({
           unpackTab={unpackTab}
           setUnpackTab={setUnpackTab}
           openDrawer={openDrawer}
+          refresh={refresh}
         />
       ) : null}
 

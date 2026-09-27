@@ -40,10 +40,6 @@ export function trackNextStep(row) {
     return { step: "ft", lab: "填 FT", hint: "已放行：先確認免堆期", kind: "action" };
   }
 
-  if (!String(row.pickupDay || "").trim()) {
-    return { step: "pickup", lab: "填領櫃日", hint: "建議預設 FT 前一天", kind: "action" };
-  }
-
   if (!String(row.trailer || "").trim()) {
     return { step: "trailer", lab: "選拖車", hint: "在這列選拖車", kind: "action" };
   }
@@ -58,12 +54,8 @@ export function trackNextStep(row) {
     return { step: "unpackSite", lab: "填拆卸位置", hint: "自己的倉，或客戶冰庫", kind: "action" };
   }
 
-  if (!String(row.assignee || "").trim()) {
-    return { step: "assignee", lab: "填拆工", hint: "填妥後即可派工", kind: "action" };
-  }
-
-  if (!row.dispatched) {
-    return { step: "dispatch", lab: "派工", hint: "時間、位置、拖車都有了就派上排程", kind: "action" };
+  if (!row.pickup && !row.dispatched) {
+    return { step: "confirm", lab: "確認", hint: "確認後改到已排櫃。拆工可以後補。", kind: "action" };
   }
 
   return { step: "done", lab: "已完成", hint: "", kind: "done" };

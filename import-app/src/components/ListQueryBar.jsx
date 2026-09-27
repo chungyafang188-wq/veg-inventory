@@ -10,8 +10,54 @@ export function ListQueryBar({
   placeholder = "搜尋編號、櫃號、品名…",
   resultCount,
   totalCount,
+  stack = false,
 }) {
   const showCount = typeof resultCount === "number" && typeof totalCount === "number" && normalize(query);
+  const sortRow = (
+    <div className={stack ? "imp-find-sort" : "flex flex-wrap items-center gap-1.5"}>
+      <span className="text-[0.7rem] font-bold text-slate-400">排序</span>
+      {sortOpts.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          className={sortBy === o.id ? "imp-btn-primary" : "imp-btn-ghost"}
+          onClick={() => onSort?.(o.id)}
+        >
+          {o.lab}
+        </button>
+      ))}
+      {showCount ? (
+        <span className="text-xs text-slate-400">
+          顯示 {resultCount}／{totalCount}
+        </span>
+      ) : null}
+    </div>
+  );
+  if (stack) {
+    return (
+      <div className="imp-find-stack">
+        <label className="imp-find-search">
+          <span className="imp-field-lab">搜尋</span>
+          <span className="imp-find-box">
+            <input
+              type="search"
+              className="imp-field imp-find-input"
+              value={query}
+              placeholder={placeholder}
+              onChange={(e) => onQuery?.(e.target.value)}
+              autoComplete="off"
+            />
+            {query ? (
+              <button type="button" className="imp-find-clear" onClick={() => onQuery?.("")} aria-label="清除搜尋">
+                清除
+              </button>
+            ) : null}
+          </span>
+        </label>
+        {sortRow}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-2">
       <label className="relative min-w-[12rem] flex-1">
@@ -35,24 +81,7 @@ export function ListQueryBar({
           </button>
         ) : null}
       </label>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[0.7rem] font-bold text-slate-400">排序</span>
-        {sortOpts.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            className={sortBy === o.id ? "imp-btn-primary" : "imp-btn-ghost"}
-            onClick={() => onSort?.(o.id)}
-          >
-            {o.lab}
-          </button>
-        ))}
-      </div>
-      {showCount ? (
-        <span className="ml-auto text-xs text-slate-400">
-          顯示 {resultCount}／{totalCount}
-        </span>
-      ) : null}
+      {sortRow}
     </div>
   );
 }

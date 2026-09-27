@@ -59,6 +59,16 @@ body.layout-phone.has-phone-tabs .phone-tabbar {
 body.layout-phone.has-phone-tabs .app {
   padding-bottom: calc(4.4rem + env(safe-area-inset-bottom));
 }
+body.layout-phone #home-btn,
+body.layout-phone .app-head-tools,
+body.layout-phone #sync-reload,
+body.layout-phone #sync-upload {
+  display: none !important;
+}
+body.layout-phone .app-head {
+  gap: 0;
+  padding-bottom: 0.2rem;
+}
 body.layout-phone.has-phone-tabs .shelf-switch-rack { display: none; }
 body.layout-phone .phone-tab {
   flex: 1 1 0;
@@ -918,6 +928,17 @@ th:not(:first-child), td:not(:first-child) { text-align: right; }
   background: #e4f0e4;
   white-space: pre-wrap;
   box-shadow: var(--shadow);
+}
+.status:not([hidden]) {
+  position: fixed;
+  z-index: 70;
+  top: 0.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(34rem, calc(100vw - 1.4rem));
+  margin: 0;
+  text-align: center;
+  font-weight: 800;
 }
 .status.err { background: #fff4e5; }
 .empty { margin: 0.45rem 0 0; }
@@ -6589,93 +6610,102 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 }
 .sticker-ship-sku span { display: block; }
 .label-sticker.is-container {
-  text-align: center;
-  padding: 1mm 2mm 5mm;
-}
-.sticker-cont-main {
-  grid-row: 1;
-  min-height: 0;
-  max-height: 100%;
-  width: 100%;
+  text-align: left;
+  padding: 1.6mm 2.4mm 1.5mm;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.4mm;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0.7mm;
   overflow: hidden;
-  padding: 0 0.2mm;
-  box-sizing: border-box;
+  color: #000;
 }
 .sticker-cont-name {
-  flex: 0 1 auto;
   margin: 0;
-  padding: 0 0.2mm;
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 14mm;
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 13mm;
   font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: 0.02em;
+  line-height: 1;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
-  word-break: keep-all;
+  color: #000;
+  -webkit-font-smoothing: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.22mm #000;
 }
-.sticker-cont-name.is-long {
-  font-size: 10.5mm;
-  letter-spacing: 0.012em;
+.sticker-cont-name.is-mid { font-size: 11mm; -webkit-text-stroke: 0.18mm #000; }
+.sticker-cont-name.is-long { font-size: 9mm; -webkit-text-stroke: 0.15mm #000; }
+.sticker-cont-name.is-xlong { font-size: 7.2mm; -webkit-text-stroke: 0.12mm #000; }
+.sticker-cont-vendor {
+  margin: auto 0 0 auto;
+  align-self: flex-end;
+  font-size: 5.2mm;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: #000;
+  -webkit-font-smoothing: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.12mm #000;
 }
+.sticker-cont-vendor.is-mid { font-size: 4.6mm; }
+.sticker-cont-vendor.is-long { font-size: 4mm; }
 .label-sticker.is-container .sticker-box {
-  flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  width: 100%;
+  width: auto;
   max-width: 100%;
-  box-sizing: border-box;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 0.35mm 0.5mm;
-  font-size: 9mm;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 1.5mm;
   font-weight: 900;
-  letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
+  color: #000;
 }
-.label-sticker.is-container .sticker-box.is-wide { font-size: 7.8mm; gap: 0.28mm; }
-.label-sticker.is-container .sticker-box.is-xwide { font-size: 6.6mm; gap: 0.22mm; }
-.sticker-box-no,
-.sticker-box-md,
-.sticker-box-seq { display: inline-block; }
-.sticker-box-md,
-.sticker-box-seq { letter-spacing: 0.02em; }
-.sticker-cont-meta {
-  grid-row: 2;
-  align-self: end;
-  margin: 0 0 0.8mm;
-  padding-top: 0.3mm;
-  max-height: 5.5mm;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 1mm 1.4mm;
-  font-size: 4.5mm;
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: 0.04em;
-  overflow: hidden;
-  white-space: nowrap;
+.sticker-box-no {
+  font-size: 8.6mm;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #000;
+  -webkit-font-smoothing: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.16mm #000;
 }
-.sticker-cont-main:has(.sticker-cont-name.is-long) ~ .sticker-cont-meta { font-size: 4.1mm; }
-.sticker-cont-country,
-.sticker-cont-vendor {
-  font-size: 1em;
-  font-weight: 700;
+.sticker-box-md {
+  font-size: 7mm;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: #000;
+  -webkit-font-smoothing: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.12mm #000;
 }
+.sticker-box-seq {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 6.2mm;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  color: #000;
+  -webkit-font-smoothing: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.1mm #000;
+}
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-no { font-size: 7.4mm; }
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-md,
+.label-sticker.is-container .sticker-box.is-wide .sticker-box-seq { font-size: 6mm; }
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-no { font-size: 6.4mm; }
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-md,
+.label-sticker.is-container .sticker-box.is-xwide .sticker-box-seq { font-size: 5.2mm; }
 @media (min-width: 720px) {
   .app { max-width: 72rem; }
   body:has(#page-home:not([hidden])) .app { max-width: 54rem; }

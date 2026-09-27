@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ensureImportState, saveState, setStatus, syncHostPane } from "./bridge";
-import { CLEAR_OPTS, normalizePane, todayYmd } from "./constants";
+import { CLEAR_OPTS, normalizePane } from "./constants";
 import { Drawer } from "./components/Drawer";
+import { DupCompare } from "./components/DupCompare";
 import { useLayoutMode } from "./hooks/useLayoutMode";
 import { PhoneShell } from "./shells/PhoneShell";
 import { WebShell } from "./shells/WebShell";
@@ -22,7 +23,8 @@ export default function ImportApp({ initialPane = "port" }) {
   const [portTab, setPortTab] = useState("open");
   const [unpackTab, setUnpackTab] = useState("pending");
   const [sumTab, setSumTab] = useState("open");
-  const [boardDay, setBoardDay] = useState(() => todayYmd());
+  const [boardDay, setBoardDay] = useState([]);
+  const [dup, setDup] = useState(null);
 
   useEffect(() => {
     if (releaseTab === "check") setReleaseTab("arrange");
@@ -101,6 +103,10 @@ export default function ImportApp({ initialPane = "port" }) {
     if (!draft?.fields) return;
     const payload = { ...draft, fields: { ...draft.fields, ...extra } };
     const result = api().commitDrawerSession?.(payload);
+    if (result && result.duplicate) {
+      setDup({ via: result.duplicate.via || "編號", existing: result.duplicate, typed: result.typed });
+      return;
+    }
     if (result === false) return;
     const newKey = result && typeof result === "object" && result.key ? String(result.key) : draft.key;
     const nextFields = api().loadDrawerFields?.(draft.kind, newKey) || { ...draft.fields, ...extra };
@@ -137,6 +143,7 @@ export default function ImportApp({ initialPane = "port" }) {
     const sum = a.listSum?.(sumTab) || [];
     const checklist = a.listClearanceSheet?.() || [];
     const track = a.listTrackBoard?.() || [];
+    const deskAll = a.listCabinetSearch?.() || track;
     const trackCounts = a.trackBoardCounts?.() || {
       all: track.length,
       customs: track.filter((r) => r.trackFilter === "customs").length,
@@ -151,6 +158,7 @@ export default function ImportApp({ initialPane = "port" }) {
       releaseCounts,
       checklist,
       track,
+      deskAll,
       trackCounts,
       stock,
       upBoard,
@@ -171,6 +179,7 @@ export default function ImportApp({ initialPane = "port" }) {
         unpack: unpackCounts.pending,
         sum: sumCounts.open,
         stock: stock.length,
+        desk: track.filter((r) => !r.pendingUha).length,
       },
     };
   }, [activeTab, releaseTab, portTab, unpackTab, sumTab, boardDay, tick]);
@@ -201,6 +210,7 @@ export default function ImportApp({ initialPane = "port" }) {
 
   return (
     <div className="relative">
+      <DupCompare notice={dup} onClose={() => setDup(null)} />
       {shell}
       {drawer && draft ? (
         <Drawer

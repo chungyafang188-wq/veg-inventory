@@ -131,7 +131,7 @@ export function queryRows(rows, { query, sortBy, fields, getters } = {}) {
 export const SEARCH_FIELDS = {
   port: ["uha", "containerNo", "product", "seller", "shipCo", "dock", "note", "status", "arriveDay", (r) => (r.missingTelex ? "缺電放" : ""), (r) => (r.missingData ? "缺資料" : "")],
   release: ["uha", "containerNo", "product", "dock", "trailer", "trailerPhone", "pickupDay", "unpackSite", "assignee"],
-  upBoard: ["uha", "box", "sourceUha", "containerNo", "product", "name", "trailer", "trailerPhone", "assignee", "location", "dock", "day", "unpackAt"],
+  upBoard: ["uha", "box", "sourceUha", "containerNo", "product", "name", "trailer", "trailerPhone", "assignee", "location", "dock", "day", "unpackAt", "customerLab", "deliverTo", "handover", "sheetWorker", "sheetProduct"],
 };
 
 export const SORT_OPTS = {
@@ -144,14 +144,13 @@ export const SORT_OPTS = {
   release: [
     { id: "uha", lab: "編號後三碼" },
     { id: "trailer", lab: "拖車" },
-    { id: "pickupDay", lab: "領櫃日" },
+    { id: "pickupDay", lab: "拆櫃時間" },
     { id: "product", lab: "品名" },
   ],
   upBoard: [
-    { id: "unpackAt", lab: "拆卸時間" },
-    { id: "uha", lab: "編號後三碼" },
-    { id: "trailer", lab: "拖車" },
-    { id: "product", lab: "品名" },
+    { id: "customer", lab: "客戶" },
+    { id: "assignee", lab: "拆工" },
+    { id: "unpackAt", lab: "時間" },
   ],
 };
 
@@ -165,12 +164,14 @@ export const SORT_GETTERS = {
   release: {
     uha: (r) => uhaSortKey(r.uha || r.key),
     trailer: (r) => r.trailer || "",
-    pickupDay: (r) => r.pickupDay || "",
+    pickupDay: (r) => r.unpackAt || r.pickupDay || "",
     product: (r) => r.product || "",
   },
   upBoard: {
     uha: (r) => uhaSortKey(r.uha || r.sourceUha || r.box || r.key),
-    unpackAt: (r) => r.unpackAt || r.day || "",
+    customer: (r) => `${r.customerKind === "customer" ? "0" : "1"} ${r.customerLab || ""}`,
+    assignee: (r) => r.assignee || "未指派",
+    unpackAt: (r) => r.unpackAt || r.day || "9999",
     trailer: (r) => r.trailer || "",
     product: (r) => r.product || r.name || "",
   },

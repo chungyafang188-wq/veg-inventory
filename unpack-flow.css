@@ -164,7 +164,64 @@
 }
 .up-card.is-reported .up-card-top em { color: #1a6843; }
 .up-card.is-confirmed .up-card-top em { color: #1a6843; }
-.up-card-name { margin: 0.35rem 0 0.15rem; font-weight: 700; }
+.up-card-top strong {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.up-card-code {
+  margin: 0.2rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.up-card-trailer {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.up-card-warn {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #b45309;
+}
+.up-sec h3 {
+  font-size: 1.05rem;
+}
+.up-card-acts button.up-act {
+  flex: 1 1 11rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+.up-trailer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin: 0.55rem 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.7rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.up-trailer p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.up-trailer span {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #334155;
+}
+.up-trailer a {
+  color: #047857;
+}
 .up-card-meta { margin: 0; font-size: 0.78rem; color: #6a7a72; }
 .up-detail-cust { margin: 0.15rem 0 0; font-size: 0.78rem; }
 .up-empty {

@@ -1,10 +1,22 @@
 import { DateChip } from "./DateChip";
+import { HandoverTime, todayStamp } from "./HandoverTime";
 import { FUME_SHIFTS } from "../lib/fumeShift";
 
-/** 煙燻：選日期，班次固定第一班到第四班。 */
-export function FumeWhenFields({ at, shift, onAt, onShift, compact = false }) {
+/** 煙燻：選日期和班次。需要時可同時預排拆櫃時間。 */
+export function FumeWhenFields({
+  at,
+  shift,
+  onAt,
+  onShift,
+  unpackAt,
+  unpackShift,
+  onUnpackAt,
+  onUnpackShift,
+  compact = false,
+}) {
   const day = String(at || "").slice(0, 10);
   const cur = String(shift || "");
+  const canUnpack = typeof onUnpackAt === "function";
   return (
     <div className={compact ? "imp-fume-when" : "grid gap-1"}>
       <DateChip
@@ -27,6 +39,23 @@ export function FumeWhenFields({ at, shift, onAt, onShift, compact = false }) {
           </button>
         ))}
       </div>
+      {canUnpack ? (
+        <div className="imp-fume-unpack">
+          <span>預排拆櫃</span>
+          <HandoverTime dateLabel="拆櫃日期" value={unpackAt || ""} onCommit={(v) => onUnpackAt(v)} />
+          <button
+            type="button"
+            className={`imp-fume-shift${unpackShift ? " is-on" : ""}`}
+            onClick={() => {
+              const next = !unpackShift;
+              onUnpackShift?.(next);
+              if (next && !String(unpackAt || "").trim()) onUnpackAt(todayStamp());
+            }}
+          >
+            上班領
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

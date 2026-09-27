@@ -15,9 +15,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=408" />
+    <link rel="stylesheet" href="./styles.css?v=425" />
     <link rel="stylesheet" href="./ware-stock.css?v=6" />
-    <link rel="stylesheet" href="./unpack-flow.css?v=10" />
+    <link rel="stylesheet" href="./unpack-flow.css?v=11" />
     <link rel="stylesheet" href="./import-flow.css?v=25" />
     <link rel="stylesheet" href="./site-work.css?v=3" />
     <link rel="stylesheet" href="./boss-stats.css?v=7" />
@@ -54,7 +54,7 @@
       <div id="login-gate" class="login-gate" hidden>
         <div class="login-card">
           <h2>請選取使用者</h2>
-          <p class="hint">同一台手機或電腦登入一次即可，之後會記住。現場共用「現場」。其他人暫時不用密碼。</p>
+          <p class="hint">同一台手機或電腦登入一次即可，之後會記住。現場共用「現場」。雅芳、威誠要輸入密碼，其他人暫時不用。</p>
           <div id="login-people"></div>
           <form id="login-pin" class="login-pin" hidden novalidate>
             <p class="login-pin-who" id="login-pin-who">請輸入主管密碼</p>
@@ -240,7 +240,7 @@
                 <h3 class="order-block-title" id="order-items-title">全品項快打</h3>
                 <label class="field sku-search-field" for="sku-quick-search">
                   <span class="sku-search-lab">搜尋</span>
-                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="🔍 輸入品項名稱或簡碼...（按 Enter 加入）" autocomplete="off" spellcheck="false" />
+                  <input id="sku-quick-search" type="search" list="sku-quick-list" placeholder="🔍 輸入品項名稱或簡碼...（按 Enter 選品項）" autocomplete="off" spellcheck="false" />
                   <datalist id="sku-quick-list"></datalist>
                 </label>
                 <div class="sku-hot" id="sku-hot-chips" role="group" aria-label="常用品項">
@@ -250,7 +250,7 @@
                   <button type="button" class="sku-mini" data-hot-big="cab"><span class="sku-mini-lab">高麗菜</span></button>
                 </div>
                 <div id="sheet" class="order-sheet"></div>
-                <p class="order-desk-tip muted">提示：點品項連擊加算；搜尋框 Enter 連續加入；右側可微調件數</p>
+                <p class="order-desk-tip muted">提示：先點品項，填件數，再按確認件數。點品項不會再加件。</p>
               </section>
             </div>
 
@@ -650,12 +650,12 @@
     <script src="./line-parse.js?v=95"></script>
     <script src="./racks.js?v=1"></script>
     <script src="./rack-png.js?v=1"></script>
-    <script src="./app.js?v=414"></script>
+    <script src="./app.js?v=437"></script>
     <script src="./ware-stock.js?v=7"></script>
-    <script src="./unpack-flow.js?v=16"></script>
-    <script src="./import-flow.js?v=95"></script>
-    <link rel="stylesheet" href="./import-dist/import-app.css?v=97" />
-    <script type="module" src="./import-dist/import-app.js?v=97"></script>
+    <script src="./unpack-flow.js?v=21"></script>
+    <script src="./import-flow.js?v=114"></script>
+    <link rel="stylesheet" href="./import-dist/import-app.css?v=135" />
+    <script type="module" src="./import-dist/import-app.js?v=138"></script>
     <script src="./site-work.js?v=3"></script>
     <script src="./boss-stats.js?v=13"></script>
     <script src="./cash-day.js?v=11"></script>

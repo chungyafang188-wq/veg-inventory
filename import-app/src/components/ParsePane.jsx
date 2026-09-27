@@ -14,6 +14,7 @@ import { RegionCropOverlay } from "./RegionCropOverlay";
  */
 export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
   const [text, setText] = useState("");
+  const [askNew, setAskNew] = useState(null);
   const [shot, setShot] = useState(null); // { dataUrl, name }
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -34,15 +35,31 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             const d = a.parseImportDocText?.(text);
             return d ? [d] : [];
           })();
-    const state = ensureImportState();
-    if (!list?.length || !state) {
+    if (!list?.length) {
       setStatus("解析不到欄位，請檢查文字或改手動填。", true);
+      return;
+    }
+    const state = ensureImportState();
+    if (!state) {
+      setStatus("找不到資料，沒有寫入。", true);
+      return;
+    }
+    const missingBoxes = list.filter((d) => {
+      const cno = String(d.containerNo || "").trim();
+      if (!cno || String(d.uha || "").trim()) return false;
+      return !a.findTrackByContainer?.(cno);
+    });
+    if (missingBoxes.length) {
+      setAskNew({ list, boxes: missingBoxes });
+      const names = missingBoxes.map((d) => d.containerNo).join("、");
+      setStatus(`沒有 ${names}。請確認要不要新增這櫃。`);
       return;
     }
     for (let i = list.length - 1; i >= 0; i--) {
       state.importParseDrafts.unshift(list[i]);
     }
     if (state.importParseDrafts.length > 40) state.importParseDrafts.length = 40;
+    setAskNew(null);
     setText("");
     saveState();
     const first = list[0];
@@ -56,6 +73,35 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
     );
     onParsed?.();
     onOpenDraft?.(first.id || 0);
+  };
+
+  const confirmAddNew = () => {
+    const list = askNew?.list || [];
+    const state = ensureImportState();
+    if (!state || !list.length) {
+      setStatus("找不到資料，沒有新增。", true);
+      return;
+    }
+    for (let i = list.length - 1; i >= 0; i--) state.importParseDrafts.unshift(list[i]);
+    if (state.importParseDrafts.length > 40) state.importParseDrafts.length = 40;
+    saveState();
+    const a = api();
+    let n = 0;
+    for (const d of list) {
+      const r = a.confirmParseDraft?.(d.id, { quiet: true });
+      if (r && r.ok) n += 1;
+    }
+    const names = (askNew.boxes || []).map((d) => d.containerNo).filter(Boolean).join("、");
+    setAskNew(null);
+    setText("");
+    setStatus(n ? `已新增 ${names || `${n} 櫃`}。編號可後補，在海關查驗。` : "沒有新增。", !n);
+    onParsed?.();
+    if (n) window.dispatchEvent(new CustomEvent("import-set-pane", { detail: "port" }));
+  };
+
+  const declineAddNew = () => {
+    setAskNew(null);
+    setStatus("沒有新增這櫃。");
   };
 
   const applyShot = useCallback(async (dataUrl, name) => {
@@ -351,6 +397,30 @@ export function ParsePane({ title = "判讀", drafts, onParsed, onOpenDraft }) {
             }}
           />
         </label>
+
+        {askNew ? (
+          <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3">
+            <p className="m-0 text-sm font-bold text-amber-950">沒有這櫃。要新增嗎？</p>
+            <ul className="m-0 grid list-none gap-1 p-0 text-sm text-amber-950">
+              {askNew.boxes.map((d) => (
+                <li key={d.id || d.containerNo}>
+                  <span className="font-bold">{d.containerNo}</span>
+                  {d.arriveDay ? ` · 到港 ${d.arriveDay}` : ""}
+                  {d.note ? ` · ${d.note}` : ""}
+                </li>
+              ))}
+            </ul>
+            <p className="m-0 text-xs text-amber-800">編號、品名可以後補。</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white" onClick={confirmAddNew}>
+                新增這櫃
+              </button>
+              <button type="button" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700" onClick={declineAddNew}>
+                先不要
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <button
           type="button"

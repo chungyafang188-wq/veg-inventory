@@ -1002,15 +1002,24 @@ export function CustomsClearancePane({
                           ，編號是 <strong>{isRowPendingUha(addNotice) ? "編號待補" : addNotice.uha}</strong>
                         </>
                       ) : null}
-                      ，位置在「{addNotice.where}」。
+                      ，狀態是「{addNotice.status || addNotice.where}」
+                      {addNotice.places && addNotice.places.length ? `。去改：${addNotice.places.join("；")}` : `，位置在「${addNotice.where}」`}
+                      。
                     </>
                   ) : (
                     <>
-                      編號 <strong>{isRowPendingUha(addNotice) ? "編號待補" : addNotice.uha}</strong> 已經在「{addNotice.where}」清單裡。
+                      編號 <strong>{isRowPendingUha(addNotice) ? "編號待補" : addNotice.uha}</strong>{" "}
+                      狀態是「{addNotice.status || addNotice.where}」
+                      {addNotice.places && addNotice.places.length ? `。去改：${addNotice.places.join("；")}` : `，已經在「${addNotice.where}」清單裡`}
+                      。
                     </>
                   )}
                   這次沒有再新增一筆。
-                  {addNotice.where === "已刪除" ? " 資料還在已刪除清單，要找回請到舊資料按放回。" : " 這一列已移到最上面，方便核對。"}
+                  {addNotice.where === "已刪除"
+                    ? " 資料還在已刪除清單，要找回請到舊資料按放回。"
+                    : addNotice.where === "已拆櫃"
+                      ? " 海關查驗這頁已經看不到，請到上面標的位置去改。"
+                      : " 這一列已移到最上面，方便核對。"}
                   {existingDetail ? ` 清單上是：${existingDetail}。` : ""}
                 </p>
               ) : (

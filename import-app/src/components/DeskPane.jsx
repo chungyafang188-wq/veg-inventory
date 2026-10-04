@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { api } from "../bridge";
+import { api, setStatus } from "../bridge";
 import { formatMd } from "../lib/dateChip";
 import { HandoverTime, todayStamp } from "./HandoverTime";
 import { TrailerPick } from "./TrailerPick";
@@ -78,6 +78,23 @@ function whenLab(row) {
   return formatMd(row?.unpackAt || row?.pickupDay || row?.ftAt || "") || "";
 }
 
+const PATCH_LAB = {
+  trailer: "拖車",
+  deliverTo: "客戶",
+  unpackSite: "拆卸位置",
+  assignee: "拆工",
+  unpackAt: "交櫃時間",
+};
+
+function savedBit(field, value) {
+  const lab = PATCH_LAB[field] || "內容";
+  const raw = String(value ?? "").trim();
+  if (!raw) return `${lab}已清空`;
+  const m = field === "unpackAt" ? raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/) : null;
+  if (m) return `${lab} ${Number(m[2])}/${Number(m[3])}${m[4] ? ` ${m[4]}:${m[5]}` : ""}`;
+  return `${lab} ${raw}`;
+}
+
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -111,8 +128,20 @@ function DeskRow({ row, unpackers, onSaved }) {
   const workers = unpackers?.length ? unpackers : ["阿宏", "靜宜", "自行拆櫃"];
 
   const patch = (field, value) => {
-    if (row.released) api().patchReleaseField?.(row.uha, field, value);
-    else if (api().patchPortField?.(row.uha, field, value) === false) api().patchReleaseField?.(row.uha, field, value);
+    const prev = field === "unpackAt" ? String(row.unpackAt || row.pickupDay || "").trim() : String(row[field] || "").trim();
+    const next = String(value ?? "").trim();
+    if (prev === next) return;
+    let ok = row.released ? api().patchReleaseField?.(row.uha, field, value) : api().patchPortField?.(row.uha, field, value);
+    if (ok === false) ok = api().patchReleaseField?.(row.uha, field, value);
+    if (!ok) {
+      const fail = `${uhaLab(row)} 沒有寫進去。`;
+      setNote(fail);
+      setStatus(fail, true);
+      return;
+    }
+    const msg = `已更新 ${uhaLab(row)}：${savedBit(field, next)}`;
+    setNote(msg);
+    setStatus(msg);
     onSaved?.();
   };
   const fill = (field, value) => {
@@ -135,7 +164,9 @@ function DeskRow({ row, unpackers, onSaved }) {
       api().patchReleaseField?.(row.uha, "unpackAt", todayStamp());
     }
     api().patchReleaseField?.(row.uha, "unpackShift", true);
-    setNote("交櫃時間記成上班領。");
+    const msg = `已更新 ${uhaLab(row)}：交櫃時間上班領`;
+    setNote(msg);
+    setStatus(msg);
     onSaved?.();
   };
   const mark = () => {
@@ -305,7 +336,7 @@ function DeskRow({ row, unpackers, onSaved }) {
         <p className="imp-desk-wait">藥檢、薰蒸仍在左邊的海關查驗。這裡可先填，還沒放行也能標成已拆櫃。</p>
       )}
       {open && text ? <pre className="imp-desk-paste">{text}</pre> : null}
-      {note ? <p className="imp-desk-note">{note}</p> : null}
+      {note ? <p className={`imp-desk-note${note.startsWith("已") ? " is-ok" : ""}`}>{note}</p> : null}
     </article>
   );
 }
@@ -367,7 +398,7 @@ export function DeskPane({ title, trackRows, allRows, trailers = [], unpackers =
       </datalist>
       <header className="imp-desk-head">
         <h2>{title || "追櫃工作台"}</h2>
-        <p>編號還沒補的留在海關查驗，補完才進這裡。還沒放行可先填拖車、預排客戶、交櫃時間、拆卸位置、拆工。放行後交貨對象仍可改。已拆櫃留在總表，缺的再補。</p>
+        <p>編號還沒補的留在海關查驗，補完才進這裡。還沒放行可先填拖車、預排客戶、交櫃時間、拆卸位置、拆工。填完點到別處就會存，這一櫃下方會顯示「已更新」，不用再按確認。放行後交貨對象仍可改。已拆櫃留在總表，缺的再補。</p>
         <label className="imp-desk-find">
           <span>全站搜尋</span>
           <input

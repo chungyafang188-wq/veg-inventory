@@ -780,6 +780,10 @@ button.imp-fume-shift.is-on {
   font-weight: 800;
   color: #0f172a;
 }
+.imp-tw .imp-desk-note.is-ok {
+  color: #047857;
+  font-weight: 800;
+}
 .imp-tw .imp-desk-head p,
 .imp-tw .imp-desk-wait,
 .imp-tw .imp-desk-note,
@@ -1436,6 +1440,26 @@ button.imp-fume-shift.is-on {
   font-size: 0.82rem;
   line-height: 1.45;
   color: #475569;
+}
+.imp-dup-place {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #fdba74;
+  border-radius: 0.7rem;
+  background: #fff7ed;
+}
+.imp-dup-place p {
+  margin: 0;
+  color: #9a3412;
+  font-weight: 700;
+}
+.imp-dup-place ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
+  color: #7c2d12;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.45;
 }
 .imp-dup table {
   width: 100%;

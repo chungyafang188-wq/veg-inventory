@@ -2991,43 +2991,84 @@
     return { added, updated, skipped, total, n: total };
   }
 
-  /** 海關查驗：手動新增一筆（編號可後補） */
+  function shortPlaceDay(day) {
+    const m = String(day || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${Number(m[2])}/${Number(m[3])}` : "";
+  }
+
+  function unpackJobFor(uhaKey, containerNo) {
+    const jobs = state.unpackJobs || [];
+    const box = keepContainer(containerNo);
+    return (
+      jobs.find((j) => {
+        if (!j) return false;
+        if (j.sourceUha === uhaKey || j.box === uhaKey) return true;
+        if (!box || !Array.isArray(j.codes)) return false;
+        return j.codes.some((c) => keepContainer(c) === box);
+      }) || null
+    );
+  }
+
+  /** 這櫃現在出現在哪些頁、什麼狀態。重複時用來告訴人去哪裡改。 */
   function importPlaceOf(uhaKey) {
     const cab = (state.importCabinets || []).find((c) => c.uha === uhaKey) || null;
     const rel = (state.importReleased || []).find((r) => r.uha === uhaKey) || null;
     const rem = (state.importRemoved || []).find((r) => r.uha === uhaKey) || null;
-    if (rel && rel.released !== false) {
-      return {
-        where: "已放行",
-        uha: uhaKey,
-        containerNo: rel.containerNo || (cab && cab.containerNo) || "",
-        product: rel.product || (cab && cab.product) || "",
-        seller: rel.seller || (cab && cab.seller) || "",
-        arriveDay: rel.arriveDay || (cab && cab.arriveDay) || "",
-      };
+    const released = !!(rel && rel.released !== false);
+    const unpacked = !!(rel && (rel.dispatched || rel.deskUnpacked));
+    const src = (released ? rel : cab || rel) || rem;
+    if (!src) return null;
+    const containerNo = (rel && rel.containerNo) || (cab && cab.containerNo) || (rem && rem.containerNo) || "";
+    const job = unpackJobFor(uhaKey, containerNo);
+    const track = (cab && cab.track) || rel || {};
+    const places = [];
+    let where = "海關查驗";
+    let status = "海關查驗中";
+    if (!cab && !rel && rem) {
+      where = "已刪除";
+      status = "已刪除";
+      places.push("舊資料 · 已刪除（頁面最下面，可按放回）");
+    } else if (unpacked) {
+      where = "已拆櫃";
+      status = "已拆櫃";
+      places.push("工作台 · 總表（含已拆櫃，不在追櫃清單）");
+    } else if (released) {
+      where = "已放行";
+      status = "已放行，還在追櫃";
+      places.push("工作台 · 追櫃清單（還沒結束）");
+    } else {
+      const bits = [];
+      if (track.inspect === "wait") bits.push("待藥檢");
+      if (track.fumigate === "wait") bits.push("待煙燻");
+      if (bits.length) status = bits.join("、");
+      places.push("海關查驗");
     }
-    if (cab || rel) {
-      const src = cab || rel;
-      return {
-        where: "海關查驗",
-        uha: uhaKey,
-        containerNo: (cab && cab.containerNo) || (rel && rel.containerNo) || "",
-        product: (src && src.product) || "",
-        seller: (src && src.seller) || "",
-        arriveDay: (src && src.arriveDay) || "",
-      };
+    if (released && !unpacked) {
+      const arr = typeof arrivalByUha === "function" ? arrivalByUha() : new Map();
+      if (!arr.has(uhaKey)) places.push("已放行");
     }
-    if (rem) {
-      return {
-        where: "已刪除",
-        uha: rem.uha || uhaKey,
-        containerNo: rem.containerNo || "",
-        product: rem.product || "",
-        seller: rem.seller || "",
-        arriveDay: rem.arriveDay || "",
-      };
+    const site = (job && (job.location || job.unloadPoint)) || (rel && rel.unpackSite) || "";
+    const who = (job && job.assignee) || (rel && rel.assignee) || "";
+    const when = shortPlaceDay((job && (job.day || job.unpackAt)) || (rel && rel.unpackAt));
+    const trailer = (rel && rel.trailer) || (job && job.trailer) || "";
+    if (job || unpacked) {
+      const bits = [when, site ? `位置 ${site}` : "", who ? `拆工 ${who}` : "", trailer ? `拖車 ${trailer}` : ""].filter(Boolean);
+      places.push(bits.length ? `貨櫃拆卸排程 · ${bits.join(" · ")}` : "貨櫃拆卸排程");
     }
-    return null;
+    return {
+      where,
+      status,
+      places,
+      uha: (src && src.uha) || uhaKey,
+      containerNo,
+      product: (src && src.product) || (cab && cab.product) || "",
+      seller: (src && src.seller) || (cab && cab.seller) || "",
+      arriveDay: (src && src.arriveDay) || (cab && cab.arriveDay) || "",
+      unpackSite: site,
+      assignee: who,
+      trailer,
+      unpackAt: (rel && rel.unpackAt) || (job && (job.unpackAt || job.day)) || "",
+    };
   }
 
   /** 編號或櫃號已經在海關查驗、已放行或已刪除。exceptUha 是正在改的這一筆，不算重複。 */
@@ -3050,16 +3091,17 @@
       }
       const rem = (state.importRemoved || []).find((r) => r.uha !== skip && keepContainer(r.containerNo) === box);
       if (rem) {
-        return {
-          existing: true,
-          via: "櫃號",
+        const hit = importPlaceOf(rem.uha) || {
           where: "已刪除",
+          status: "已刪除",
+          places: ["舊資料 · 已刪除（頁面最下面，可按放回）"],
           uha: rem.uha || "",
           containerNo: rem.containerNo || box,
           product: rem.product || "",
           seller: rem.seller || "",
           arriveDay: rem.arriveDay || "",
         };
+        return { existing: true, via: "櫃號", ...hit };
       }
     }
     return null;
@@ -4978,6 +5020,9 @@
     downloadImportTemplate,
     importTemplateFile,
     addManualPortRow,
+    locateImport(fields, exceptUha) {
+      return findExistingImport(fields, exceptUha);
+    },
     templateMeta,
     setHostPane(pane) {
       importPane = normalizePane(pane || "port");

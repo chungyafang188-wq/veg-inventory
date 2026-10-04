@@ -32,11 +32,20 @@ export function DupCompare({ notice, onClose, onJump }) {
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="imp-dup-title">{via || "資料"}重複</h3>
-        <p>
-          清單上已經有這筆。請比對是不是重複填寫。這次沒有再新增。
-          {have.where ? ` 原來那筆在「${have.where}」。` : ""}
-          {have.where === "已刪除" ? " 要找回請到舊資料按放回。" : ""}
-        </p>
+        <p>清單上已經有這筆。請比對是不是重複填寫。這次沒有再新增。請到下面標出的位置去改原來那筆。</p>
+        <div className="imp-dup-place">
+          <p>
+            狀態：<strong>{have.status || have.where || "清單上"}</strong>
+            {have.uha ? ` · ${have.uha}` : ""}
+            {have.containerNo ? ` · ${have.containerNo}` : ""}
+          </p>
+          <ul>
+            {(have.places && have.places.length ? have.places : [have.where].filter(Boolean)).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {have.where === "已刪除" ? <p>要找回請到舊資料按放回。</p> : null}
+        </div>
         <table>
           <thead>
             <tr>

@@ -1474,11 +1474,11 @@ function workPanesFor(id) {
   if (id === "people") {
     return [
       { id: "attend", lab: "每日到班", hint: "上班下班，時薪與調工分開算" },
+      { id: "labor-bill", lab: "工時費用單", hint: "給調工老闆的工時費用清單" },
       { id: "accounts", lab: "系統帳號", hint: "登入、角色、權限" },
       { id: "bosses", lab: "工人老闆", hint: "調工跟誰結工錢" },
       { id: "workers", lab: "工人名單", hint: "現場工人歸哪位老闆" },
       { id: "dispatch", lab: "調工單", hint: "先留著" },
-      { id: "labor-bill", lab: "調工帳務", hint: "給工人老闆的工時費用清單" },
     ];
   }
   return [];
@@ -12538,12 +12538,17 @@ document.getElementById("home-hub")?.addEventListener("change", (e) => {
   }
   if (e.target.matches("[data-bill-month]") && typeof attendBillPick === "function") {
     attendBillPick("month", e.target.value);
+    return;
+  }
+  const off = e.target.closest("[data-bill-off]");
+  if (off && typeof attendBillEdit === "function") {
+    attendBillEdit(off.dataset.billDay || "", off.dataset.billCrew || "", "off", off.checked);
   }
 });
 document.getElementById("home-hub")?.addEventListener("input", (e) => {
-  const price = e.target.closest("[data-bill-price]");
-  if (price && typeof attendBillSetPrice === "function") {
-    attendBillSetPrice(price.dataset.billDay || "", price.dataset.billCrew || "", price.value);
+  const bill = e.target.closest("[data-bill-field]");
+  if (bill && typeof attendBillEdit === "function") {
+    attendBillEdit(bill.dataset.billDay || "", bill.dataset.billCrew || "", bill.dataset.billField || "", bill.value);
     return;
   }
   const field = e.target.closest("[data-attend-field]");

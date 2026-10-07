@@ -1367,6 +1367,7 @@ body.on-home .hub.hub-pick.hub-shelf {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  width: auto;
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--home-line);
   border-radius: 999px;
@@ -1407,6 +1408,70 @@ body.on-home .hub.hub-pick.hub-shelf {
 }
 .shelf-switch-head .shelf-rack-label {
   margin: 0;
+}
+.shelf-home-back {
+  width: auto;
+  margin: 0;
+}
+body:not(.layout-phone) .shelf-switch-rack {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #fff;
+  box-shadow: none;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-rack-label,
+body:not(.layout-phone) .shelf-switch-rack .shelf-ledge {
+  display: none;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch-head {
+  flex: 0 0 auto;
+  margin: 0;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-home-back {
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-board,
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch-wrap,
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch-bar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch {
+  flex: 0 0 auto;
+  justify-content: center;
+  min-width: max-content;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch-ico {
+  display: none;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch-lab {
+  overflow: visible;
+  text-overflow: unset;
+}
+body:not(.layout-phone) .shelf-switch-rack .shelf-switch.is-on {
+  border-color: #166534;
+  background: #166534;
+  color: #fff;
 }
 
 /* —— 銷貨三欄工作區（對齊進口殼） —— */
@@ -6774,8 +6839,11 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .attend-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
 .attend-groups { display: grid; gap: 0.7rem; }
 .attend-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
-.attend-pill { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px; padding: 0.28rem 0.75rem; cursor: pointer; }
+.attend-pill { width: auto; margin: 0; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px; padding: 0.28rem 0.75rem; cursor: pointer; }
 .attend-pill.is-on { border: 2px solid #1d4ed8; color: var(--ink); }
+.people-nav, .people-jump, .attend-day, .attend-cal-nav .ghost { width: auto; margin-top: 0; }
+.people-nav { width: 100%; }
+.attend-result-line { white-space: nowrap; }
 .attend-block { margin-top: 1rem; }
 .attend-block h3 { margin: 0 0 0.2rem; font-size: 1rem; }
 .attend-head, .attend-row {

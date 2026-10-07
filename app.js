@@ -2059,6 +2059,12 @@ function renderHomeHub() {
     if (lead) lead.textContent = "登入後開始今天的出貨。";
     return;
   }
+  queueMicrotask(() => {
+    const on = box.querySelector(".shelf-switch.is-on");
+    const wrap = on && on.closest(".shelf-switch-wrap");
+    if (!on || !wrap || wrap.scrollWidth <= wrap.clientWidth + 1) return;
+    wrap.scrollLeft = Math.max(0, on.offsetLeft - 8);
+  });
   const role = currentRole();
   const who = currentStaff();
   if (lead) lead.hidden = true;
@@ -2260,7 +2266,7 @@ function renderHomeHub() {
     return `<section class="shelf-rack shelf-switch-rack">
       <div class="shelf-switch-head">
         <p class="shelf-rack-label">層架切換</p>
-        <button type="button" class="ghost hub-back shelf-home-back" data-hub-back>回總覽</button>
+        <button type="button" class="ghost hub-back shelf-home-back" data-hub-back>← 總覽</button>
       </div>
       <div class="shelf-board">
         <div class="shelf-switch-wrap">${deptRow}${toolRow}</div>

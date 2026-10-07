@@ -1478,7 +1478,7 @@ function workPanesFor(id) {
       { id: "bosses", lab: "工人老闆", hint: "調工跟誰結工錢" },
       { id: "workers", lab: "工人名單", hint: "現場工人歸哪位老闆" },
       { id: "dispatch", lab: "調工單", hint: "先留著" },
-      { id: "labor-bill", lab: "工錢對帳", hint: "依老闆彙總應付" },
+      { id: "labor-bill", lab: "調工帳務", hint: "給工人老闆的工時費用清單" },
     ];
   }
   return [];
@@ -2394,7 +2394,12 @@ function renderHomeHub() {
           `<button type="button" class="people-nav${p.id === hubWorkPane ? " is-on" : ""}" data-people-pane="${esc(p.id)}">${esc(p.lab)}</button>`,
       )
       .join("");
-    const main = hubWorkPane === "attend" && typeof attendPageHtml === "function" ? attendPageHtml() : workStubHtml("people", hubWorkPane);
+    const main =
+      hubWorkPane === "attend" && typeof attendPageHtml === "function"
+        ? attendPageHtml()
+        : hubWorkPane === "labor-bill" && typeof attendBillHtml === "function"
+          ? attendBillHtml()
+          : workStubHtml("people", hubWorkPane);
     box.innerHTML = `${topLevelSwitch("people")}<div class="people-shell"><nav class="people-side" aria-label="人員管理">${side}</nav><div class="people-main">${main}</div></div>`;
     return;
   }
@@ -12523,10 +12528,24 @@ document.getElementById("phone-tabbar")?.addEventListener("click", (e) => {
 });
 document.getElementById("home-hub")?.addEventListener("change", (e) => {
   const el = e.target.closest("input[data-attend-toggle]");
-  if (!el || typeof attendToggle !== "function") return;
-  attendToggle(attendActiveIso(), el.dataset.attendToggle || "", el.dataset.attendId || "", el.dataset.attendCrew || "", el.checked);
+  if (el && typeof attendToggle === "function") {
+    attendToggle(attendActiveIso(), el.dataset.attendToggle || "", el.dataset.attendId || "", el.dataset.attendCrew || "", el.checked);
+    return;
+  }
+  if (e.target.matches("[data-bill-boss]") && typeof attendBillPick === "function") {
+    attendBillPick("boss", e.target.value);
+    return;
+  }
+  if (e.target.matches("[data-bill-month]") && typeof attendBillPick === "function") {
+    attendBillPick("month", e.target.value);
+  }
 });
 document.getElementById("home-hub")?.addEventListener("input", (e) => {
+  const price = e.target.closest("[data-bill-price]");
+  if (price && typeof attendBillSetPrice === "function") {
+    attendBillSetPrice(price.dataset.billDay || "", price.dataset.billCrew || "", price.value);
+    return;
+  }
   const field = e.target.closest("[data-attend-field]");
   if (!field || typeof attendField !== "function") return;
   attendField(attendActiveIso(), field.dataset.attendField || "", field.dataset.attendId || "", field.dataset.attendCrew || "", field.value);

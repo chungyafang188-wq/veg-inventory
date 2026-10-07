@@ -6845,3 +6845,14 @@ body.layout-phone .attend-split { grid-area: split; }
 body.layout-phone .attend-crew { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 body.layout-phone .attend-crew-name { grid-column: 1 / -1; }
 
+.bill-page h2 { margin: 0 0 0.25rem; font-size: 1.15rem; }
+.bill-filters { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 0.6rem 0; }
+.bill-filters select { width: auto; padding: 0.35rem 0.5rem; }
+.bill-title { margin: 0.2rem 0 0.45rem; font-weight: 700; }
+.bill-sheet { width: 100%; border-collapse: collapse; background: #fff; }
+.bill-sheet th, .bill-sheet td { border: 1px solid var(--line); padding: 0.35rem 0.45rem; text-align: left; vertical-align: middle; }
+.bill-sheet th { background: #f4f7f4; font-weight: 700; }
+.bill-sheet tfoot td { font-weight: 700; }
+.bill-sheet .bill-price { width: 4.5rem; padding: 0.25rem 0.4rem; }
+
+

@@ -349,3 +349,159 @@ function attendField(iso, field, id, crewId, value) {
   save();
   attendRefresh(iso);
 }
+
+let billBoss = "wu";
+let billMonth = "2026-09";
+const BILL_SEP_WU = [
+  ["9/6 13.5-18", "2人", "800", "1600", ""],
+  ["9/7 13-18", "2人", "900", "1800", ""],
+  ["9/8、9/9休", "", "", "", ""],
+  ["9/21 13-18", "2人", "900", "1800", ""],
+  ["9/22 13-17.5", "2人", "800", "1600", ""],
+  ["9/23 13-17.5", "2人", "800", "1600", ""],
+  ["9/24 13-18", "2人", "900", "1800", ""],
+  ["9/25休", "", "", "", ""],
+  ["9/26 13-18", "2人", "900", "1800", ""],
+  ["9/27休", "", "", "", ""],
+  ["9/28 13-18", "2人", "900", "1800", ""],
+  ["9/29 13-18", "2人", "900", "1800", ""],
+  ["9/30 13-18", "2人", "900", "1800", ""],
+];
+
+function attendSlipClock(raw) {
+  const mins = attendClock(raw);
+  if (mins == null) return "";
+  const h = Math.floor(mins / 60);
+  const min = mins % 60;
+  if (min === 0) return String(h);
+  if (min === 30) return String(h + 0.5).replace(".0", "");
+  return `${h}:${String(min).padStart(2, "0")}`;
+}
+function attendBillMoney(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v === 0) return "";
+  return String(Math.round(v));
+}
+function attendBillLive(bossId, ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const days = [];
+  for (let d = 1; d <= last; d += 1) {
+    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const saved = attendBag()[iso]?.crews?.[bossId];
+    if (!saved || typeof saved !== "object") continue;
+    const off = !!saved.off;
+    const n = attendWhole(saved.people);
+    const hasTime = String(saved.start || "").trim() || String(saved.end || "").trim();
+    if (!off && n <= 0 && !hasTime) continue;
+    days.push({ iso, d, off: off || n <= 0, n, start: saved.start || "", end: saved.end || "", price: saved.price || "", note: saved.note || "" });
+  }
+  const rows = [];
+  let rest = [];
+  const flush = () => {
+    if (!rest.length) return;
+    rows.push({ kind: "off", label: `${rest.map((x) => `${m}/${x.d}`).join("、")}休`, qty: "", price: "", amt: "", note: "", iso: "" });
+    rest = [];
+  };
+  for (const day of days) {
+    if (day.off) {
+      rest.push(day);
+      continue;
+    }
+    flush();
+    const a = attendSlipClock(day.start);
+    const b = attendSlipClock(day.end);
+    const range = a && b ? ` ${a}-${b}` : "";
+    const priceNum = Number(day.price);
+    const amt = day.price !== "" && Number.isFinite(priceNum) ? day.n * priceNum : "";
+    rows.push({
+      kind: "work",
+      iso: day.iso,
+      label: `${m}/${day.d}${range}`,
+      qty: `${day.n}人`,
+      price: day.price,
+      amt,
+      note: day.note,
+    });
+  }
+  flush();
+  return rows;
+}
+function attendBillExampleRows() {
+  return BILL_SEP_WU.map(([label, qty, price, amt]) => ({ kind: price ? "work" : "off", label, qty, price, amt, note: "", iso: "" }));
+}
+function attendBillTable(rows, crewId, editable) {
+  const body = rows
+    .map((row) => {
+      const priceCell = editable && row.kind === "work"
+        ? `<input class="attend-in bill-price" data-bill-price="1" data-bill-day="${esc(row.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(row.price || ""))}" inputmode="numeric">`
+        : esc(String(row.price || ""));
+      const amt = row.amt === "" || row.amt == null ? "" : attendBillMoney(row.amt);
+      return `<tr>
+        <td>${esc(row.label)}</td>
+        <td>${esc(row.qty || "")}</td>
+        <td>${priceCell}</td>
+        <td data-bill-amt="${esc(row.iso || "")}">${esc(amt)}</td>
+        <td>${esc(row.note || "")}</td>
+      </tr>`;
+    })
+    .join("");
+  const total = rows.reduce((sum, row) => sum + (Number(row.amt) || 0), 0);
+  return `<table class="bill-sheet">
+    <thead><tr><th>品名</th><th>數量</th><th>單價</th><th>金額</th><th>備註</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr><td colspan="3">合計</td><td id="bill-total">${total ? attendBillMoney(total) : ""}</td><td></td></tr></tfoot>
+  </table>`;
+}
+function attendBillHtml() {
+  const boss = ATTEND_CREWS.some((c) => c.id === billBoss) ? billBoss : "wu";
+  billBoss = boss;
+  if (!/^\d{4}-\d{2}$/.test(billMonth)) billMonth = "2026-09";
+  const [y, m] = billMonth.split("-").map(Number);
+  const live = attendBillLive(boss, billMonth);
+  const example = boss === "wu" && billMonth === "2026-09" && !live.length;
+  const rows = example ? attendBillExampleRows() : live;
+  const bossOpts = ATTEND_CREWS.map((c) => `<option value="${esc(c.id)}"${c.id === boss ? " selected" : ""}>${esc(c.boss)}</option>`).join("");
+  const monthOpts = [7, 8, 9, 10, 11, 12]
+    .map((mm) => {
+      const value = `2026-${String(mm).padStart(2, "0")}`;
+      return `<option value="${value}"${value === billMonth ? " selected" : ""}>${2026 - 1911}年${mm}月</option>`;
+    })
+    .join("");
+  const note = example
+    ? "這張是 115年9月 吳幸蓉的手寫單。每日到班有登記後，人數和時段改由到班帶出，單價在這頁填。"
+    : live.length
+      ? "人數和時段來自每日到班。單價在這頁填，金額＝人數×單價。連續休假併成一列。"
+      : "這個月還沒有這位老闆的到班紀錄。請先到每日到班填人數、時間，或勾休。";
+  return `<section class="bill-page">
+    <h2>調工帳務</h2>
+    <p class="attend-note">${esc(note)}</p>
+    <div class="bill-filters">
+      <label>老闆 <select data-bill-boss>${bossOpts}</select></label>
+      <label>月份 <select data-bill-month>${monthOpts}</select></label>
+    </div>
+    <p class="bill-title">${y - 1911}年${m}月　${esc(ATTEND_CREWS.find((c) => c.id === boss)?.boss || "")}</p>
+    ${rows.length ? attendBillTable(rows, boss, !example) : `<table class="bill-sheet"><thead><tr><th>品名</th><th>數量</th><th>單價</th><th>金額</th><th>備註</th></tr></thead><tbody></tbody></table>`}
+  </section>`;
+}
+function attendBillSetPrice(iso, crewId, price) {
+  const rec = attendEnsure(iso);
+  const crew = ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId };
+  const base = attendCrew(iso, crew);
+  base.price = price;
+  rec.crews[crewId] = base;
+  save();
+  const n = attendWhole(base.people);
+  const priceNum = Number(price);
+  const amt = price !== "" && Number.isFinite(priceNum) ? n * priceNum : "";
+  const cell = document.querySelector(`[data-bill-amt="${CSS.escape(iso)}"]`);
+  if (cell) cell.textContent = amt === "" ? "" : attendBillMoney(amt);
+  const total = attendBillLive(crewId, String(iso).slice(0, 7)).reduce((sum, row) => sum + (Number(row.amt) || 0), 0);
+  const totalEl = document.getElementById("bill-total");
+  if (totalEl) totalEl.textContent = total ? attendBillMoney(total) : "";
+}
+function attendBillPick(kind, value) {
+  if (kind === "boss") billBoss = value;
+  if (kind === "month") billMonth = value;
+  renderHomeHub();
+}

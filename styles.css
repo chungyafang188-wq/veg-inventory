@@ -6728,3 +6728,120 @@ body.layout-web .order-desk-cart .ticket-list--slim {
   body:has(#page-home:not([hidden])) .app { max-width: 78rem; }
   .hub.hub-pick { grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; }
 }
+
+.people-shell {
+  display: grid;
+  grid-template-columns: 8.6rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  margin-top: 0.75rem;
+}
+.people-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: #f4f7f4;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.4rem;
+}
+.people-nav {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.people-nav.is-on { background: var(--green); color: #fff; font-weight: 700; }
+.attend-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16.5rem;
+  gap: 0.8rem;
+  align-items: start;
+}
+.attend-kicker, .attend-note, .attend-mini { margin: 0; color: var(--muted); font-size: 0.78rem; }
+.attend-date { margin: 0.1rem 0 0.35rem; font-weight: 700; }
+.attend-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; margin-bottom: 0.3rem; font-size: 0.85rem; }
+.attend-cal-nav .ghost { padding: 0.15rem 0.4rem; }
+.attend-cal { display: grid; grid-template-columns: repeat(7, 1.7rem); gap: 0.15rem; width: max-content; }
+.attend-cal span, .attend-day { height: 1.7rem; display: grid; place-items: center; font-size: 0.78rem; }
+.attend-day { border: 1px solid transparent; border-radius: 999px; background: transparent; padding: 0; cursor: pointer; color: var(--ink); }
+.attend-day.is-today { border: 2px solid #1d4ed8; }
+.attend-day.is-marked { border: 2px solid var(--green); }
+.attend-day.is-sel:not(.is-today) { border-color: var(--ink); }
+.attend-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
+.attend-groups { display: grid; gap: 0.7rem; }
+.attend-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
+.attend-pill { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px; padding: 0.28rem 0.75rem; cursor: pointer; }
+.attend-pill.is-on { border: 2px solid #1d4ed8; color: var(--ink); }
+.attend-block { margin-top: 1rem; }
+.attend-block h3 { margin: 0 0 0.2rem; font-size: 1rem; }
+.attend-head, .attend-row {
+  display: grid;
+  grid-template-columns: 5.6rem minmax(4.2rem, 1fr) minmax(4.2rem, 1fr) 3.4rem 2.6rem auto auto;
+  gap: 0.35rem 0.45rem;
+  align-items: center;
+}
+.attend-head { color: var(--muted); font-size: 0.78rem; padding: 0.35rem 0; }
+.attend-mini { display: none; }
+.attend-row { padding: 0.35rem 0; border-top: 1px solid var(--line); }
+.attend-page input.attend-in { width: 100%; min-width: 0; padding: 0.32rem 0.45rem; border-radius: 0.55rem; font-size: 0.95rem; }
+.attend-worker-name b { font-size: 1.05rem; }
+.attend-worker-name label, .attend-check { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.attend-check input, .attend-worker-name input { width: auto; padding: 0; }
+.attend-start, .attend-end, .attend-rest { display: grid; gap: 0.25rem; }
+.attend-crew {
+  display: grid;
+  grid-template-columns: 4.2rem 4.2rem auto 4rem minmax(3.4rem, 1fr) minmax(3.8rem, 1fr) 3.6rem auto auto;
+  gap: 0.35rem;
+  align-items: end;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+}
+.attend-crew label { display: grid; gap: 0.15rem; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+.attend-crew-name { align-self: center; }
+.attend-result { background: var(--card); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.8rem 0.85rem; }
+.attend-result-kicker { margin: 0; font-size: 0.82rem; font-weight: 700; }
+.attend-result-line { margin: 0.25rem 0 0.55rem; color: #1d4ed8; font-size: 1.15rem; font-weight: 750; line-height: 1.35; }
+.attend-name-list { display: grid; gap: 0.35rem; }
+.attend-name-row { display: grid; grid-template-columns: 4.4rem minmax(0, 1fr); gap: 0.35rem; align-items: start; color: var(--muted); font-size: 0.86rem; }
+.attend-name-row b { color: var(--ink); }
+.attend-bento-num { margin: 0.7rem 0 0; text-align: center; color: var(--green); font-size: 1.8rem; font-weight: 750; }
+.attend-bento-lab, .attend-bento-math { margin: 0; text-align: center; color: var(--muted); font-size: 0.82rem; }
+.attend-extra { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.45rem; font-size: 0.85rem; }
+.attend-extra .attend-in { width: 4rem; }
+@media (max-width: 860px) {
+  .attend-layout, .attend-top, .people-shell { grid-template-columns: minmax(0, 1fr); }
+  .people-side { flex-direction: row; flex-wrap: wrap; }
+  .attend-head { display: none; }
+  .attend-mini { display: block; }
+  .attend-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "name hours" "start end" "rest bento" "split split"; }
+  .attend-worker-name { grid-area: name; }
+  .attend-hours { grid-area: hours; justify-self: end; }
+  .attend-start { grid-area: start; }
+  .attend-end { grid-area: end; }
+  .attend-rest { grid-area: rest; }
+  .attend-check { grid-area: bento; }
+  .attend-split { grid-area: split; }
+  .attend-crew { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .attend-crew-name { grid-column: 1 / -1; }
+}
+body.layout-phone .attend-layout,
+body.layout-phone .attend-top,
+body.layout-phone .people-shell { grid-template-columns: minmax(0, 1fr); }
+body.layout-phone .people-side { flex-direction: row; flex-wrap: wrap; }
+body.layout-phone .attend-head { display: none; }
+body.layout-phone .attend-mini { display: block; }
+body.layout-phone .attend-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "name hours" "start end" "rest bento" "split split"; }
+body.layout-phone .attend-worker-name { grid-area: name; }
+body.layout-phone .attend-hours { grid-area: hours; justify-self: end; }
+body.layout-phone .attend-start { grid-area: start; }
+body.layout-phone .attend-end { grid-area: end; }
+body.layout-phone .attend-rest { grid-area: rest; }
+body.layout-phone .attend-check { grid-area: bento; }
+body.layout-phone .attend-split { grid-area: split; }
+body.layout-phone .attend-crew { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+body.layout-phone .attend-crew-name { grid-column: 1 / -1; }
+

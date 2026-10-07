@@ -404,7 +404,7 @@
     const inherit = !f.open.from
       ? `<p class="cd-note" id="cd-inherit">第一天請先填各家昨日現金，之後會沿用。合計＝穠全＋鴻安，改了就以今天為準。</p>`
       : carry.length
-        ? `<p class="cd-note" id="cd-inherit">${esc(carry.join("、"))}昨日現金沿用 ${esc(roc(f.open.from))} 結餘。改數字就以今天為準。</p>`
+        ? `<p class="cd-note" id="cd-inherit">${esc(carry.join("、"))}昨日現金沿用 ${esc(roc(f.open.from))} 結餘。改成實際點到的現金後，今天之後從這個數字往下算，不再沿用這天。</p>`
         : `<p class="cd-note" id="cd-inherit">昨日現金合計＝穠全＋鴻安。改數字就以今天為準。</p>`;
     const moveNote =
       Math.abs(f.moveGap) >= 0.01
@@ -717,7 +717,7 @@
         if (!f.open.setNq && f.open.from) carry.push("穠全");
         if (!f.open.setHa && f.open.from) carry.push("鴻安");
         note.textContent = carry.length
-          ? `${carry.join("、")}昨日現金沿用 ${roc(f.open.from)} 結餘。改數字就以今天為準。`
+          ? `${carry.join("、")}昨日現金沿用 ${roc(f.open.from)} 結餘。改成實際點到的現金後，今天之後從這個數字往下算，不再沿用這天。`
           : "昨日現金合計＝穠全＋鴻安。改數字就以今天為準。";
       }
     }
@@ -785,6 +785,9 @@
     }
     save();
     paintClose();
+    if (typeof setStatus === "function") {
+      setStatus("已改成今天的起算現金。今天之後從這個數字往下算，不再沿用先前結餘。");
+    }
   }
   function bind() {
     if (bound) return;

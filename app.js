@@ -2383,7 +2383,23 @@ function renderHomeHub() {
     return;
   }
 
-  if (hubDept === "fields" || hubDept === "people" || hubDept === "board") {
+  if (hubDept === "people") {
+    box.classList.remove("hub-pick");
+    box.classList.add("home-app", "hub-shelf");
+    const panes = workPanesFor("people");
+    if (!panes.some((p) => p.id === hubWorkPane)) hubWorkPane = "attend";
+    const side = panes
+      .map(
+        (p) =>
+          `<button type="button" class="people-nav${p.id === hubWorkPane ? " is-on" : ""}" data-people-pane="${esc(p.id)}">${esc(p.lab)}</button>`,
+      )
+      .join("");
+    const main = hubWorkPane === "attend" && typeof attendPageHtml === "function" ? attendPageHtml() : workStubHtml("people", hubWorkPane);
+    box.innerHTML = `${topLevelSwitch("people")}<div class="people-shell"><nav class="people-side" aria-label="人員管理">${side}</nav><div class="people-main">${main}</div></div>`;
+    return;
+  }
+
+  if (hubDept === "fields" || hubDept === "board") {
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
     const pane = hubDept === "fields" ? "contract" : hubDept === "people" ? "attend" : "all";
@@ -2625,6 +2641,7 @@ function buildSalesBlocks() {
   }
   if (can("page-help")) {
     financeTabs.push({ id: "help", lab: "貨運比對", hint: "帳務核對", attrs: 'data-sales-pane="help"' });
+    financeTabs.push({ id: "auction-pay", lab: "拍賣帳款核對", hint: "鴻安×貨款", attrs: 'data-sales-pane="auction-pay"' });
   }
   if (can("finance-remit")) {
     financeTabs.push({ id: "ar-remit", lab: "匯款沖帳", hint: "應收×銀行", attrs: 'data-sales-pane="ar-remit"' });
@@ -2789,7 +2806,7 @@ function restoreSalesMount() {
 function salesPaneBlockId(paneId) {
   if (["form", "today", "line", "pending-books", "short", "ship", "sales-bill"].includes(paneId)) return "ship";
   if (["in", "stock", "sitework", "rack"].includes(paneId)) return "ware";
-  if (["cashday", "help", "ar-remit"].includes(paneId)) return "finance";
+  if (["cashday", "help", "auction-pay", "ar-remit"].includes(paneId)) return "finance";
   if (["cust", "vendor"].includes(paneId)) return "master";
   if (["ledger", "label-prints", "stats"].includes(paneId)) return "report";
   return "ship";
@@ -2840,6 +2857,8 @@ function pageElForSalesPane(paneId) {
       return document.getElementById("page-cashday");
     case "ar-remit":
       return document.getElementById("page-ar-remit");
+    case "auction-pay":
+      return document.getElementById("page-auction-pay");
     default:
       return null;
   }
@@ -2870,7 +2889,7 @@ function salesPaneDenied(paneId) {
     if (!can("page-orders")) return "沒有出貨帳單權限。";
   } else if (paneId === "cust" || paneId === "vendor") {
     if (!can("page-master")) return "沒有基本資料權限。";
-  } else if (paneId === "help") {
+  } else if (paneId === "help" || paneId === "auction-pay") {
     if (!can("page-help")) return "沒有財務權限。";
   } else if (paneId === "cashday") {
     if (!can("finance-cash")) return "沒有這個權限。";
@@ -2972,6 +2991,8 @@ function runSalesPaneRenderers(paneId) {
       run(renderCashDay);
     } else if (vpage === "ar-remit" && typeof renderArRemit === "function") {
       run(renderArRemit);
+    } else if (vpage === "auction-pay" && typeof renderAuctionPay === "function") {
+      run(renderAuctionPay);
     } else if (vpage === "pending-books") {
       run(renderPendingBooks);
     } else if (vpage === "soon") {
@@ -4810,7 +4831,10 @@ function applyRoleUi() {
   if (can("page-unpack")) pages.push("unpack");
   if (can("page-sitework")) pages.push("sitework");
   if (can("page-stats")) pages.push("stats");
-  if (can("page-help")) pages.push("help");
+  if (can("page-help")) {
+    pages.push("help");
+    pages.push("auction-pay");
+  }
   if (can("finance-remit")) pages.push("ar-remit");
   if (!isUnpackerRole()) pages.push("soon");
   if (can("page-orders") || can("page-plan") || can("page-books")) pages.push("labels");
@@ -12333,6 +12357,8 @@ function render() {
             ? "小幫手"
           : page === "ar-remit"
             ? "匯款沖帳"
+          : page === "auction-pay"
+            ? "拍賣帳款核對"
           : page === "labels"
             ? "標籤貼紙"
           : page === "label-prints"
@@ -12371,6 +12397,8 @@ function render() {
   if (pageCashDay) pageCashDay.hidden = page !== "cashday";
   const pageArRemit = document.getElementById("page-ar-remit");
   if (pageArRemit) pageArRemit.hidden = page !== "ar-remit";
+  const pageAuctionPay = document.getElementById("page-auction-pay");
+  if (pageAuctionPay) pageAuctionPay.hidden = page !== "auction-pay";
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = !(onBooks && booksPart === "stock");
@@ -12398,6 +12426,7 @@ function render() {
   if (page === "home") run(renderHomeHub);
   if (page === "help") run(renderHelpFreight);
   if (page === "ar-remit" && typeof renderArRemit === "function") run(renderArRemit);
+  if (page === "auction-pay" && typeof renderAuctionPay === "function") run(renderAuctionPay);
   if (page === "labels") run(renderLabels);
   if (page === "label-prints") run(renderLabelPrints);
   if (page === "unpack" && typeof renderUnpackPage === "function") run(renderUnpackPage);
@@ -12492,7 +12521,46 @@ document.getElementById("phone-tabbar")?.addEventListener("click", (e) => {
     if (typeof window.openImport === "function") window.openImport("desk");
   }
 });
+document.getElementById("home-hub")?.addEventListener("change", (e) => {
+  const el = e.target.closest("input[data-attend-toggle]");
+  if (!el || typeof attendToggle !== "function") return;
+  attendToggle(attendActiveIso(), el.dataset.attendToggle || "", el.dataset.attendId || "", el.dataset.attendCrew || "", el.checked);
+});
+document.getElementById("home-hub")?.addEventListener("input", (e) => {
+  const field = e.target.closest("[data-attend-field]");
+  if (!field || typeof attendField !== "function") return;
+  attendField(attendActiveIso(), field.dataset.attendField || "", field.dataset.attendId || "", field.dataset.attendCrew || "", field.value);
+});
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
+  const peoplePane = e.target.closest("[data-people-pane]");
+  if (peoplePane && hubDept === "people") {
+    hubWorkPane = peoplePane.dataset.peoplePane || "attend";
+    renderHomeHub();
+    return;
+  }
+  const attendMonth = e.target.closest("[data-attend-month]");
+  if (attendMonth && typeof attendShiftMonth === "function") {
+    attendIso = attendShiftMonth(attendActiveIso(), Number(attendMonth.dataset.attendMonth) || 0);
+    renderHomeHub();
+    return;
+  }
+  const attendDayBtn = e.target.closest("[data-attend-day]");
+  if (attendDayBtn) {
+    attendIso = attendDayBtn.dataset.attendDay || attendActiveIso();
+    renderHomeHub();
+    return;
+  }
+  const attendToggleBtn = e.target.closest("button[data-attend-toggle]");
+  if (attendToggleBtn && typeof attendToggle === "function") {
+    attendToggle(
+      attendActiveIso(),
+      attendToggleBtn.dataset.attendToggle || "",
+      attendToggleBtn.dataset.attendId || "",
+      attendToggleBtn.dataset.attendCrew || "",
+      !attendToggleBtn.classList.contains("is-on"),
+    );
+    return;
+  }
   if (e.target.closest("[data-hub-back]")) {
     if (e.target.closest(".shelf-home-back") || e.target.closest("[data-sales-home]") || (!hubOpen && hubDept)) {
       restoreSalesMount();

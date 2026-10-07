@@ -13,13 +13,13 @@
   const CROPS = [
     ["高麗", /高麗|甘藍/],
     ["大白菜", /大白菜/],
-    ["朝天椒", /朝天|辣椒.{0,4}小(?!紅)/],
     ["辣椒紅小", /辣椒紅小|紅小/],
+    ["朝天椒", /朝天|辣椒小/],
     ["南瓜", /南瓜/],
     ["牛蒡", /牛蒡/],
     ["青花", /青花/],
     ["洋蔥本產", /洋蔥.*本產|本產.*洋蔥/],
-    ["洋蔥進口", /洋蔥.*進口|進口.*洋蔥/],
+    ["洋蔥進口", /洋蔥.*(進口|紐西蘭|日本)|進口.*洋蔥/],
   ];
   const LS_KEY = "auction-pay-confirm-v1";
 
@@ -47,7 +47,7 @@
       return ymd(new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000));
     }
     const s = String(v || "").trim();
-    let m = s.match(/^(\d{2,4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);
+    let m = s.match(/(\d{2,4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);
     if (m) {
       let y = Number(m[1]);
       if (y < 200) y += 1911;
@@ -71,6 +71,7 @@
     const t = String(s || "");
     if (/鐵架/.test(t)) return "";
     for (const [name, re] of CROPS) if (re.test(t)) return name;
+    if (/洋蔥/.test(t)) return /本產/.test(t) ? "洋蔥本產" : "洋蔥進口";
     return "";
   }
   function qtyOf(v) {
@@ -116,19 +117,46 @@
     return j;
   }
 
+  function sheetText(sheets) {
+    return (sheets || [])
+      .map((sh) =>
+        (sh.rows || [])
+          .slice(0, 20)
+          .map((r) => (r || []).join(" "))
+          .join(" "),
+      )
+      .join(" ");
+  }
+  function looksPay(name, sheets) {
+    const n = String(name || "");
+    const t = sheetText(sheets);
+    if (/貨款|付款單|拍賣結算/.test(n + t)) return true;
+    if (/銷售明細|單據日期|品名規格/.test(t)) return false;
+    return /市場/.test(t) && /品名/.test(t) && /件數/.test(t);
+  }
+  function looksHongan(name, sheets) {
+    const n = String(name || "");
+    const t = sheetText(sheets);
+    return /鴻安|銷售明細|單據日期|品名規格/.test(n + t);
+  }
+
   function parseHongan(sheets) {
     const out = [];
     for (const sh of sheets || []) {
+      let cur = "";
       for (const r of sh.rows || []) {
-        const dtRaw = parseDate(cell(r, 0));
-        if (!dtRaw) continue;
-        const spec = String(cell(r, 4) || cell(r, 3) || "");
+        const rowText = (r || []).map((c) => String(c ?? "")).join(" ");
+        const dayHit = parseDate(rowText);
+        if (/單據日期|日期別/.test(rowText) && dayHit) cur = dayHit;
+        const spec = String(cell(r, 4) || "");
         const crop = cropOf(spec);
-        if (!crop) continue;
-        let mk = marketOf(spec) || marketOf(cell(r, 3));
+        if (!crop || !cur) continue;
+        let mk = marketOf(spec) || marketOf(cell(r, 3)) || marketOf(rowText);
         if (!mk && crop === "高麗") mk = "一市";
         if (!mk) continue;
-        out.push({ dt: addDay(dtRaw), mk, crop, qty: qtyOf(cell(r, 5) || cell(r, 6)) });
+        const q = qtyOf(cell(r, 5));
+        if (!q) continue;
+        out.push({ dt: addDay(cur), mk, crop, qty: q });
       }
     }
     return out;
@@ -139,7 +167,7 @@
     for (const sh of sheets || []) {
       const data = sh.rows || [];
       let header = -1;
-      for (let i = 0; i < Math.min(30, data.length); i++) {
+      for (let i = 0; i < Math.min(40, data.length); i++) {
         const line = (data[i] || []).join(" ");
         if (/日期/.test(line) && /市場/.test(line) && /品名/.test(line)) {
           header = i;
@@ -151,7 +179,7 @@
       const iDate = heads.findIndex((h) => h.includes("日期"));
       const iMk = heads.findIndex((h) => h.includes("市場"));
       const iName = heads.findIndex((h) => h.includes("品名"));
-      const iQty = heads.findIndex((h) => /件|數量/.test(h));
+      const iQty = heads.findIndex((h) => /件數|數量/.test(h));
       for (let i = header + 1; i < data.length; i++) {
         const r = data[i] || [];
         const dt = parseDate(cell(r, iDate));
@@ -159,7 +187,9 @@
         const mk = marketOf(cell(r, iMk));
         const crop = cropOf(cell(r, iName));
         if (!mk || !crop) continue;
-        out.push({ dt, mk, crop, qty: qtyOf(cell(r, iQty >= 0 ? iQty : 5)) });
+        const q = qtyOf(cell(r, iQty >= 0 ? iQty : 4));
+        if (!q) continue;
+        out.push({ dt, mk, crop, qty: q });
       }
     }
     return out;
@@ -222,15 +252,24 @@
     renderAuctionPay();
     try {
       loadConfirms();
-      honganName = hf.name;
-      payName = pf.name;
-      const [hj, pj] = await Promise.all([uploadParse(hf), uploadParse(pf)]);
-      const hList = parseHongan(hj.sheets);
-      const pList = parsePay(pj.sheets);
+      const parsed = await Promise.all([uploadParse(hf), uploadParse(pf)]);
+      const packs = [
+        { file: hf, json: parsed[0] },
+        { file: pf, json: parsed[1] },
+      ];
+      let hPack = packs.find((p) => looksHongan(p.file.name, p.json.sheets) && !looksPay(p.file.name, p.json.sheets));
+      let pPack = packs.find((p) => looksPay(p.file.name, p.json.sheets));
+      if (!hPack) hPack = packs.find((p) => p !== pPack) || packs[0];
+      if (!pPack) pPack = packs.find((p) => p !== hPack) || packs[1];
+      honganName = hPack.file.name;
+      payName = pPack.file.name;
+      const hList = parseHongan(hPack.json.sheets);
+      const pList = parsePay(pPack.json.sheets);
       rows = buildDiffs(hList, pList);
       view = "pending";
       saveConfirms();
-      msg = `鴻安 ${hList.length} 列、貨款 ${pList.length} 列。差異 ${rows.length} 筆。勾「沒問題」後，剩下給對方核對。`;
+      const swapped = hPack.file !== hf;
+      msg = `${swapped ? "已自動對調檔案。" : ""}鴻安 ${hList.length} 列、貨款 ${pList.length} 列。差異 ${rows.length} 筆。勾「沒問題」後，剩下給對方核對。`;
     } catch (err) {
       msg = String(err.message || err);
     }
@@ -301,7 +340,7 @@
       root.innerHTML = `
       <header class="ap-head">
         <h2>拍賣帳款核對</h2>
-        <p>上傳鴻安與貨款。鴻安當日＝貨款隔日（8/31＝9/1）。差＝貨款−鴻安。鐵架不列入。勾「沒問題」後，剩下可匯出給對方核對。有問題整列紅底＋「有問題」字樣。</p>
+        <p>上傳鴻安銷售明細與貨款付款單（放反會自動對調）。鴻安當日＝貨款隔日（8/31＝9/1）。差＝貨款−鴻安。鐵架不列入。勾「沒問題」後，剩下可匯出給對方核對。有問題整列紅底＋「有問題」字樣。</p>
       </header>
       <div class="ap-files">
         <label class="ap-file">鴻安 XLS

@@ -1,0 +1,90 @@
+.ap-root { padding-bottom: 1.5rem; }
+.ap-head h2 { margin: 0 0 0.25rem; font-size: 1.15rem; }
+.ap-head p { margin: 0 0 0.75rem; color: #5a6a62; font-size: 0.82rem; line-height: 1.45; }
+.ap-files {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.7rem;
+}
+.ap-file {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5a6a62;
+}
+.ap-file input[type="file"] { font-weight: 500; }
+.ap-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+.ap-msg { min-height: 1.2rem; color: #5a6a62; font-size: 0.8rem; margin: 0 0 0.5rem; }
+.ap-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.65rem;
+}
+.ap-kpi {
+  border: 1px solid #d5e4da;
+  background: #f7fbf8;
+  border-radius: 0.55rem;
+  padding: 0.35rem 0.55rem;
+  min-width: 5.5rem;
+}
+.ap-kpi strong { display: block; font-size: 1rem; }
+.ap-kpi span { font-size: 0.68rem; color: #5a6a62; }
+.ap-kpi.is-bad {
+  border-color: #e8b4ae;
+  background: #fdecea;
+}
+.ap-kpi.is-bad strong { color: #9b1c1c; }
+.ap-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.55rem; }
+.ap-sheet-wrap { overflow: auto; max-height: min(70vh, 42rem); border: 1px solid #d5e4da; border-radius: 0.55rem; background: #fff; }
+.ap-sheet { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+.ap-sheet th, .ap-sheet td {
+  border-bottom: 1px solid #e8eee9;
+  padding: 0.4rem 0.45rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.ap-sheet th { position: sticky; top: 0; background: #f4f7f5; z-index: 1; }
+.ap-sheet .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ap-sheet tr.is-ok { background: #eef8f1; }
+.ap-sheet tr.is-bad { background: #fdecea; }
+.ap-sheet tr.is-bad td { color: #7a1212; font-weight: 600; }
+.ap-mark {
+  display: inline-block;
+  background: #9b1c1c;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.3rem;
+}
+.ap-okmark {
+  display: inline-block;
+  background: #1a6843;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.3rem;
+}
+.ap-diff { font-weight: 800; font-size: 0.95rem; }
+.ap-note {
+  width: 8.5rem;
+  border: 1px solid #c5d5cb;
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.35rem;
+  font: inherit;
+}
+.ap-check { width: 1.1rem; height: 1.1rem; }
+@media print {
+  .ap-files, .ap-tools, .noprint { display: none !important; }
+  .ap-sheet-wrap { max-height: none; overflow: visible; border: none; }
+  .ap-sheet tr.is-ok { display: none; }
+}

@@ -227,6 +227,151 @@
     return rows;
   }
 
+  function tableHeaders() {
+    return ["貨款日", "市場", "品項", "鴻安件", "貨款件", "差", "備註"];
+  }
+  function tableCells(r) {
+    return [md(r.dt), r.mk, r.crop, String(r.h), String(r.p), String(r.d), r.note || ""];
+  }
+  function tableTsv(list) {
+    return [tableHeaders().join("\t"), ...list.map((r) => tableCells(r).join("\t"))].join("\n");
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    return Promise.resolve();
+  }
+  async function copyTable(kind) {
+    const list = kind === "all" ? rows : rows.filter((r) => !r.ok);
+    if (!list.length) {
+      msg = kind === "all" ? "目前沒有表格可複製。" : "沒有待核對列可複製。";
+      renderAuctionPay();
+      return;
+    }
+    const title = kind === "all" ? "拍賣帳款核對" : "拍賣帳款待對方核對";
+    const text = `${title}\n${tableTsv(list)}`;
+    try {
+      await copyText(text);
+      msg = `已複製 ${list.length} 列，可直接貼到 LINE。`;
+    } catch (_) {
+      msg = "這台無法自動複製，請用下面框手動全選。";
+      const box = document.getElementById("ap-paste");
+      if (box) {
+        box.value = text;
+        box.focus();
+        box.select();
+      }
+    }
+    renderAuctionPay();
+  }
+  function splitCells(line) {
+    const s = String(line || "").replace(/\r/g, "").trim();
+    if (!s) return [];
+    if (s.includes("\t")) return s.split("\t").map((x) => x.trim());
+    if (s.includes("|")) return s.split("|").map((x) => x.replace(/^\s*[-:]+\s*$/g, "").trim()).filter((x) => x !== "");
+    if (s.includes(",")) return s.split(",").map((x) => x.trim());
+    return s.split(/\s{2,}/).map((x) => x.trim()).filter(Boolean);
+  }
+  function headerIndex(cells) {
+    const n = cells.map((c) => String(c || "").replace(/\s+/g, ""));
+    const find = (...keys) => n.findIndex((h) => keys.some((k) => h.includes(k)));
+    return {
+      dt: find("貨款日", "日期"),
+      mk: find("市場"),
+      crop: find("品項", "品名"),
+      h: find("鴻安"),
+      p: find("貨款"),
+      d: find("差"),
+      note: find("備註"),
+    };
+  }
+  function yearOf(iso) {
+    const y = Number(String(iso || "").slice(0, 4));
+    return y > 2000 ? y : new Date().getFullYear();
+  }
+  function pasteDate(v, yearHint) {
+    const raw = parseDate(v);
+    if (raw) return raw;
+    const s = String(v || "").trim();
+    const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})$/);
+    if (!m) return "";
+    const y = yearHint || new Date().getFullYear();
+    return ymd(new Date(Date.UTC(y, Number(m[1]) - 1, Number(m[2]))));
+  }
+  function applyPasted(text) {
+    const lines = String(text || "")
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !/^拍賣帳款/.test(l));
+    if (!lines.length) {
+      msg = "貼上區是空的。";
+      renderAuctionPay();
+      return;
+    }
+    let start = 0;
+    let idx = { dt: 0, mk: 1, crop: 2, h: 3, p: 4, d: 5, note: 6 };
+    const head = splitCells(lines[0]);
+    const mapped = headerIndex(head);
+    if (mapped.mk >= 0 && mapped.crop >= 0) {
+      idx = mapped;
+      start = 1;
+    }
+    const yearHint = rows[0]?.dt ? yearOf(rows[0].dt) : new Date().getFullYear();
+    const got = [];
+    for (const line of lines.slice(start)) {
+      const c = splitCells(line);
+      if (c.length < 3) continue;
+      const dt = pasteDate(idx.dt >= 0 ? c[idx.dt] : c[0], yearHint);
+      const mk = marketOf(idx.mk >= 0 ? c[idx.mk] : "") || marketOf(line);
+      const crop = cropOf(idx.crop >= 0 ? c[idx.crop] : "") || cropOf(line);
+      if (!dt || !mk || !crop) continue;
+      const h = idx.h >= 0 ? qtyOf(c[idx.h]) : 0;
+      const p = idx.p >= 0 ? qtyOf(c[idx.p]) : 0;
+      const d = idx.d >= 0 && c[idx.d] != null && String(c[idx.d]).trim() !== "" ? qtyOf(c[idx.d]) : p - h;
+      const note = idx.note >= 0 ? String(c[idx.note] || "").trim() : "";
+      const saved = confirms[`${dt}|${mk}|${crop}`] || {};
+      got.push({ dt, mk, crop, h, p, d, ok: !!saved.ok, note: note || saved.note || "" });
+    }
+    if (!got.length) {
+      msg = "貼上的文字讀不成表格。請用「複製表格給 LINE」再貼回來試試。";
+      renderAuctionPay();
+      return;
+    }
+    const by = new Map(rows.map((r) => [keyOf(r), r]));
+    for (const r of got) {
+      const k = keyOf(r);
+      const old = by.get(k);
+      if (old) {
+        old.note = r.note || old.note;
+        if (r.h || r.p) {
+          old.h = r.h;
+          old.p = r.p;
+          old.d = r.d;
+        }
+      } else {
+        by.set(k, r);
+      }
+    }
+    rows = [...by.values()].sort((a, b) => a.dt.localeCompare(b.dt) || a.mk.localeCompare(b.mk) || a.crop.localeCompare(b.crop));
+    view = "pending";
+    saveConfirms();
+    msg = `已從 LINE／表格貼上 ${got.length} 列。`;
+    const box = document.getElementById("ap-paste");
+    if (box) box.value = "";
+    renderAuctionPay();
+  }
+
   function pendingCsv() {
     const pend = rows.filter((r) => !r.ok);
     const lines = ["貨款日,市場,品項,鴻安件,貨款件,差,備註"];
@@ -302,11 +447,30 @@
         renderAuctionPay();
         return;
       }
+      if (e.target.closest("#ap-copy-pending")) {
+        copyTable("pending");
+        return;
+      }
+      if (e.target.closest("#ap-copy-all")) {
+        copyTable("all");
+        return;
+      }
+      if (e.target.closest("#ap-paste-go")) {
+        applyPasted(document.getElementById("ap-paste")?.value || "");
+        return;
+      }
       const f = e.target.closest("[data-ap-view]");
       if (f) {
         view = f.dataset.apView || "pending";
         renderAuctionPay();
       }
+    });
+    root.addEventListener("paste", (e) => {
+      if (e.target.id !== "ap-paste") return;
+      setTimeout(() => {
+        const v = document.getElementById("ap-paste")?.value || "";
+        if (v.trim()) applyPasted(v);
+      }, 0);
     });
     root.addEventListener("change", (e) => {
       if (e.target.id === "ap-hongan") {
@@ -357,6 +521,15 @@
         <button type="button" class="ghost noprint" id="ap-ok-all">目前畫面全標沒問題</button>
         <button type="button" class="ghost noprint" id="ap-csv">匯出待核對 CSV</button>
         <button type="button" class="ghost noprint" id="ap-print">列印待核對（可存 PDF）</button>
+        <button type="button" class="ghost noprint" id="ap-copy-pending">複製待核對到 LINE</button>
+        <button type="button" class="ghost noprint" id="ap-copy-all">複製全部表格</button>
+      </div>
+      <div class="ap-linebox noprint">
+        <label for="ap-paste">LINE 複製表格後貼這裡（或從 Excel 貼上）</label>
+        <textarea id="ap-paste" placeholder="在 LINE 長按複製表格，貼到這裡後按「貼上成表格」。"></textarea>
+        <div class="ap-tools" style="margin:0">
+          <button type="button" class="primary" id="ap-paste-go">貼上成表格</button>
+        </div>
       </div>
       <p class="ap-msg" id="ap-msg"></p>
       <div id="ap-body"></div>`;

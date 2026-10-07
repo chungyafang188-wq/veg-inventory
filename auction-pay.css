@@ -83,6 +83,28 @@
   font: inherit;
 }
 .ap-check { width: 1.1rem; height: 1.1rem; }
+.ap-linebox {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+}
+.ap-linebox label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5a6a62;
+}
+.ap-linebox textarea {
+  width: 100%;
+  min-height: 6.5rem;
+  border: 1px solid #c5d5cb;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  resize: vertical;
+  background: #fff;
+}
 @media print {
   .ap-files, .ap-tools, .noprint { display: none !important; }
   .ap-sheet-wrap { max-height: none; overflow: visible; border: none; }

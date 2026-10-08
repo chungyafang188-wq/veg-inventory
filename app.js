@@ -4806,6 +4806,10 @@ function renderLoginPeople() {
 }
 function preferredLayoutMode() {
   try {
+    const saved = localStorage.getItem(LAYOUT_MODE_KEY);
+    if (saved === "web" || saved === "phone") return saved;
+  } catch (_) {}
+  try {
     if (window.matchMedia("(min-width: 900px)").matches) return "web";
   } catch (_) {}
   return "phone";
@@ -4814,6 +4818,7 @@ function applyLayoutMode(mode) {
   const next = mode === "web" ? "web" : "phone";
   document.body.classList.toggle("layout-web", next === "web");
   document.body.classList.toggle("layout-phone", next === "phone");
+  document.querySelectorAll(".layout-btn").forEach((b) => b.classList.toggle("on", b.dataset.layout === next));
   syncPhoneTabbar();
   // 銷貨殼手機／網頁結構不同，切換時整殼重建
   if (page === "home" && hubDept === "sales") {
@@ -12546,6 +12551,15 @@ function render() {
   }
 }
 
+document.querySelector(".layout-mode")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-layout]");
+  if (!btn) return;
+  const mode = btn.dataset.layout === "web" ? "web" : "phone";
+  try {
+    localStorage.setItem(LAYOUT_MODE_KEY, mode);
+  } catch (_) {}
+  applyLayoutMode(mode);
+});
 document.getElementById("home-btn")?.addEventListener("click", goHome);
 document.getElementById("sync-reload")?.addEventListener("click", () => {
   reloadFromCloud();
@@ -12598,9 +12612,18 @@ document.getElementById("home-hub")?.addEventListener("change", (e) => {
     attendBillPick("month", e.target.value);
     return;
   }
+  if ((e.target.matches("[data-bill-from]") || e.target.matches("[data-bill-to]")) && typeof attendBillRange === "function") {
+    attendBillRange(e.target.matches("[data-bill-from]") ? "from" : "to", e.target.value);
+    return;
+  }
   const off = e.target.closest("[data-bill-off]");
   if (off && typeof attendBillEdit === "function") {
     attendBillEdit(off.dataset.billDay || "", off.dataset.billCrew || "", "off", off.checked);
+    return;
+  }
+  const showHours = e.target.closest("[data-bill-show-hours]");
+  if (showHours && typeof attendBillEdit === "function") {
+    attendBillEdit(showHours.dataset.billDay || "", showHours.dataset.billCrew || "", "showHours", showHours.checked);
   }
 });
 document.getElementById("home-hub")?.addEventListener("input", (e) => {
@@ -12644,13 +12667,33 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     renderHomeHub();
     return;
   }
+  const attendFoldBtn = e.target.closest("[data-attend-fold-btn]");
+  if (attendFoldBtn && typeof attendFold === "function") {
+    attendFold(attendFoldBtn.dataset.attendFoldBtn || "");
+    return;
+  }
+  const billCopy = e.target.closest("[data-bill-copy]");
+  if (billCopy && typeof attendBillCopyImage === "function") {
+    attendBillCopyImage();
+    return;
+  }
+  const billPdf = e.target.closest("[data-bill-pdf]");
+  if (billPdf && typeof attendBillPrintPdf === "function") {
+    attendBillPrintPdf();
+    return;
+  }
+  const billPick = e.target.closest("[data-bill-pick]");
+  if (billPick && typeof attendBillPickDay === "function") {
+    attendBillPickDay(billPick.dataset.billPick || "");
+    return;
+  }
   const attendMonth = e.target.closest("[data-attend-month]");
   if (attendMonth && typeof attendShiftMonth === "function") {
     attendIso = attendShiftMonth(attendActiveIso(), Number(attendMonth.dataset.attendMonth) || 0);
     renderHomeHub();
     return;
   }
-  const attendDayBtn = e.target.closest("[data-attend-day]");
+  const attendDayBtn = e.target.closest("button[data-attend-day]");
   if (attendDayBtn) {
     attendIso = attendDayBtn.dataset.attendDay || attendActiveIso();
     renderHomeHub();

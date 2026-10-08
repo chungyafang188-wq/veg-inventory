@@ -11,15 +11,15 @@
     ["屏東", /屏東/],
   ];
   const CROPS = [
-    ["高麗", /高麗|甘藍/],
-    ["大白菜", /大白菜/],
-    ["辣椒紅小", /辣椒紅小|紅小/],
-    ["朝天椒", /朝天|辣椒小/],
+    ["高麗/甘藍", /高麗|甘藍/],
+    ["大白菜", /大白菜|包心白/],
+    ["辣椒紅小", /紅小/],
+    ["朝天椒", /朝天/],
     ["南瓜", /南瓜/],
     ["牛蒡", /牛蒡/],
     ["青花", /青花/],
     ["洋蔥本產", /洋蔥.*本產|本產.*洋蔥/],
-    ["洋蔥進口", /洋蔥.*(進口|紐西蘭|日本)|進口.*洋蔥/],
+    ["洋蔥進口", /洋蔥.*(進口|紐西蘭|日本|澳洲|韓國)|進口.*洋蔥/],
   ];
   const LS_KEY = "auction-pay-confirm-v1";
 
@@ -71,7 +71,15 @@
   function cropOf(s) {
     const t = String(s || "");
     if (/鐵架/.test(t)) return "";
-    for (const [name, re] of CROPS) if (re.test(t)) return name;
+    if (/高麗|甘藍/.test(t)) return "高麗/甘藍";
+    if (/大白菜|包心白/.test(t)) return "大白菜";
+    if (/紅小/.test(t)) return "辣椒紅小";
+    if (/朝天/.test(t)) return "朝天椒";
+    if (/辣椒/.test(t) && /小/.test(t) && !/大/.test(t)) return "朝天椒";
+    if (/辣椒/.test(t)) return "辣椒紅小";
+    if (/南瓜/.test(t)) return "南瓜";
+    if (/牛蒡/.test(t)) return "牛蒡";
+    if (/青花/.test(t)) return "青花";
     if (/洋蔥/.test(t)) return /本產/.test(t) ? "洋蔥本產" : "洋蔥進口";
     return "";
   }
@@ -184,7 +192,7 @@
         }
         if (!crop || !cur) continue;
         let mk = marketOf(spec) || marketOf(cell(r, 3)) || marketOf(rowText);
-        if (!mk && crop === "高麗") mk = "一市";
+        if (!mk && /高麗/.test(crop)) mk = "一市";
         if (!mk) continue;
         const q = qtyOf(cell(r, iQty)) || qtyOf(cell(r, iSpec + 1));
         if (!q) continue;

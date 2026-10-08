@@ -6822,24 +6822,20 @@ body.layout-web .order-desk-cart .ticket-list--slim {
   color: #fff;
 }
 .people-rail-tab {
-  position: absolute;
-  left: 0;
-  bottom: 0.85rem;
-  z-index: 26;
-  width: 1.45rem;
-  min-height: 3.4rem;
-  margin: 0;
-  padding: 0.35rem 0.05rem;
+  position: static;
+  width: auto;
+  min-height: 0;
+  margin: 0 0 0.4rem;
+  padding: 0.35rem 0.75rem;
   border: 1px solid #d1d5db;
-  border-left: 0;
-  border-radius: 0 0.5rem 0.5rem 0;
+  border-radius: 999px;
   background: #fff;
   color: #334155;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: 0.08em;
-  writing-mode: vertical-rl;
+  line-height: 1.2;
+  letter-spacing: 0;
+  writing-mode: horizontal-tb;
 }
 .people-rail { position: absolute; inset: 0; z-index: 30; }
 .people-rail[hidden] { display: none; }
@@ -6921,9 +6917,13 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .attend-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16.5rem;
+  grid-template-areas: "top result" "form result";
   gap: 0.8rem;
   align-items: start;
 }
+.attend-top { grid-area: top; }
+.attend-form { grid-area: form; }
+.attend-result { grid-area: result; }
 .attend-kicker, .attend-note, .attend-mini { margin: 0; color: var(--muted); font-size: 0.78rem; }
 .attend-date { margin: 0.1rem 0 0.35rem; font-weight: 700; }
 .attend-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; margin-bottom: 0.3rem; font-size: 0.85rem; }
@@ -6983,18 +6983,48 @@ body.layout-web .order-desk-cart .ticket-list--slim {
   .people-side .people-nav { width: auto; }
   .attend-head { display: none; }
   .attend-mini { display: block; }
+  .attend-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "result" "form"; }
   .attend-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "name hours" "start end" "rest bento" "split split"; }
   .attend-worker-name { grid-area: name; }
   .attend-hours { grid-area: hours; justify-self: end; }
   .attend-start { grid-area: start; }
   .attend-end { grid-area: end; }
   .attend-rest { grid-area: rest; }
-  .attend-check { grid-area: bento; }
-  .attend-split { grid-area: split; }
-  .attend-crew { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .attend-crew-name { grid-column: 1 / -1; }
+  .attend-row > .attend-check { grid-area: bento; }
+  .attend-row > .attend-split { grid-area: split; }
+  .attend-crew {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "name off" "plan people" "start end" "rest rest" "hours bento";
+    gap: 0.45rem 0.5rem;
+    align-items: end;
+    padding: 0.75rem 0.1rem 0.9rem;
+  }
+  .attend-crew-name { grid-area: name; align-self: center; font-size: 1.05rem; white-space: nowrap; }
+  .attend-crew > label:nth-child(2) { grid-area: plan; }
+  .attend-crew > .attend-check {
+    grid-area: off;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: auto;
+    justify-self: end;
+    align-self: center;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    white-space: nowrap;
+  }
+  .attend-crew > label:nth-child(4) { grid-area: people; }
+  .attend-crew > label:nth-child(5) { grid-area: start; }
+  .attend-crew > label:nth-child(6) { grid-area: end; }
+  .attend-crew > label:nth-child(7) { grid-area: rest; }
+  .attend-crew-hours { grid-area: hours; }
+  .attend-crew-bento { grid-area: bento; }
+  .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05rem; }
 }
-body.layout-phone .attend-layout,
+body.layout-phone .attend-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "result" "form"; }
+body.layout-phone .attend-result-line { white-space: normal; }
 body.layout-phone .attend-top,
 body.layout-phone .people-shell { grid-template-columns: minmax(0, 1fr); }
 body.layout-phone .people-side { flex-direction: row; flex-wrap: wrap; }
@@ -7007,10 +7037,38 @@ body.layout-phone .attend-hours { grid-area: hours; justify-self: end; }
 body.layout-phone .attend-start { grid-area: start; }
 body.layout-phone .attend-end { grid-area: end; }
 body.layout-phone .attend-rest { grid-area: rest; }
-body.layout-phone .attend-check { grid-area: bento; }
-body.layout-phone .attend-split { grid-area: split; }
-body.layout-phone .attend-crew { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-body.layout-phone .attend-crew-name { grid-column: 1 / -1; }
+body.layout-phone .attend-row > .attend-check { grid-area: bento; }
+body.layout-phone .attend-row > .attend-split { grid-area: split; }
+body.layout-phone .attend-crew {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: "name off" "plan people" "start end" "rest rest" "hours bento";
+  gap: 0.45rem 0.5rem;
+  align-items: end;
+  padding: 0.75rem 0.1rem 0.9rem;
+}
+body.layout-phone .attend-crew-name { grid-area: name; align-self: center; font-size: 1.05rem; white-space: nowrap; }
+body.layout-phone .attend-crew > label:nth-child(2) { grid-area: plan; }
+body.layout-phone .attend-crew > .attend-check {
+  grid-area: off;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: auto;
+  justify-self: end;
+  align-self: center;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  white-space: nowrap;
+}
+body.layout-phone .attend-crew > label:nth-child(4) { grid-area: people; }
+body.layout-phone .attend-crew > label:nth-child(5) { grid-area: start; }
+body.layout-phone .attend-crew > label:nth-child(6) { grid-area: end; }
+body.layout-phone .attend-crew > label:nth-child(7) { grid-area: rest; }
+body.layout-phone .attend-crew-hours { grid-area: hours; }
+body.layout-phone .attend-crew-bento { grid-area: bento; }
+body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05rem; }
 
 .people-jump { border: 1px solid var(--green); background: #fff; color: var(--green); border-radius: 999px; padding: 0.28rem 0.75rem; margin-right: 0.45rem; cursor: pointer; font-weight: 700; }
 .bill-page h2 { margin: 0 0 0.25rem; font-size: 1.15rem; }

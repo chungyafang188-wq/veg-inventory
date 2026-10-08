@@ -278,24 +278,25 @@ function attendPageHtml() {
     .join("");
   return `<div class="attend-page" data-attend-root data-attend-day="${iso}">
     <div class="attend-layout">
-      <div class="attend-form">
-        <div class="attend-top">
-          <div>
-            <p class="attend-kicker">日期</p>
-            <p class="attend-date">${esc(iso)}</p>
-            <div class="attend-cal-nav">
-              <button type="button" class="ghost" data-attend-month="-1">上一月</button>
-              <span>${y}年${m}月</span>
-              <button type="button" class="ghost" data-attend-month="1">下一月</button>
-            </div>
-            <div class="attend-cal">${week}${days}</div>
-            <p class="attend-note">藍圈是今天。綠圈是已登記。</p>
+      <div class="attend-top">
+        <div>
+          <p class="attend-kicker">日期</p>
+          <p class="attend-date">${esc(iso)}</p>
+          <div class="attend-cal-nav">
+            <button type="button" class="ghost" data-attend-month="-1">上一月</button>
+            <span>${y}年${m}月</span>
+            <button type="button" class="ghost" data-attend-month="1">下一月</button>
           </div>
-          <div class="attend-groups">
-            <div><p class="attend-kicker">辦公室</p><div class="attend-pills">${pills("辦公室")}</div></div>
-            <div><p class="attend-kicker">司機</p><div class="attend-pills">${pills("司機")}</div></div>
-          </div>
+          <div class="attend-cal">${week}${days}</div>
+          <p class="attend-note">藍圈是今天。綠圈是已登記。</p>
         </div>
+        <div class="attend-groups">
+          <div><p class="attend-kicker">辦公室</p><div class="attend-pills">${pills("辦公室")}</div></div>
+          <div><p class="attend-kicker">司機</p><div class="attend-pills">${pills("司機")}</div></div>
+        </div>
+      </div>
+      <aside class="attend-result" id="attend-result">${attendResultInner(iso)}</aside>
+      <div class="attend-form">
         <section class="attend-block">
           <h3>雅芳工人</h3>
           <p class="attend-note">平常填一組時間。偶爾要分段，勾最右邊的分段。</p>
@@ -309,7 +310,6 @@ function attendPageHtml() {
           <p class="attend-note"><button type="button" class="people-jump" data-people-pane="labor-bill">填工時費用單</button>給調工老闆的清單在這裡填單價。</p>
         </section>
       </div>
-      <aside class="attend-result" id="attend-result">${attendResultInner(iso)}</aside>
     </div>
   </div>`;
 }

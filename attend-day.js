@@ -489,7 +489,7 @@ function attendBillForm(days, crewId) {
         <label><span class="bill-mini">開始</span><input class="attend-in" data-bill-field="start" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.start))}"></label>
         <label><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end))}"></label>
         <label><span class="bill-mini">單價</span><input class="attend-in" data-bill-field="price" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.price))}" inputmode="numeric"></label>
-        <span class="bill-amt" data-bill-amt="${esc(day.iso)}">${esc(amt)}</span>
+        <span class="bill-amt" data-bill-amt="${esc(day.iso)}"><span class="bill-mini">金額</span><b class="bill-amt-num">${esc(amt)}</b></span>
         <label class="bill-off"><input type="checkbox" data-bill-off="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}"${day.off ? " checked" : ""}>休</label>
         <label><span class="bill-mini">備註</span><input class="attend-in" data-bill-field="note" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.note))}"></label>
       </div>`;
@@ -575,7 +575,7 @@ function attendBillEdit(iso, crewId, field, value) {
   const n = attendWhole(base.people);
   const priceNum = Number(base.price);
   const amt = !base.off && String(base.price || "").trim() !== "" && Number.isFinite(priceNum) ? n * priceNum : "";
-  const cell = row ? row.querySelector("[data-bill-amt]") : null;
+  const cell = row ? row.querySelector("[data-bill-amt] .bill-amt-num") : null;
   if (cell) cell.textContent = amt === "" ? "" : attendBillMoney(amt);
   const days = attendBillDays(crewId, String(iso).slice(0, 7));
   const total = days.reduce((sum, day) => sum + (Number(day.amt) || 0), 0);

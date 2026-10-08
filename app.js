@@ -2393,20 +2393,70 @@ function renderHomeHub() {
     box.classList.remove("hub-pick");
     box.classList.add("home-app", "hub-shelf");
     const panes = workPanesFor("people");
-    if (!panes.some((p) => p.id === hubWorkPane)) hubWorkPane = "attend";
-    const side = panes
-      .map(
-        (p) =>
-          `<button type="button" class="people-nav${p.id === hubWorkPane ? " is-on" : ""}" data-people-pane="${esc(p.id)}">${esc(p.lab)}</button>`,
-      )
-      .join("");
+    const phone = document.body.classList.contains("layout-phone");
+    const phonePaneIds = ["attend", "labor-bill"];
+    if (!panes.some((p) => p.id === hubWorkPane) || (phone && !phonePaneIds.includes(hubWorkPane))) hubWorkPane = "attend";
     const main =
       hubWorkPane === "attend" && typeof attendPageHtml === "function"
         ? attendPageHtml()
         : hubWorkPane === "labor-bill" && typeof attendBillHtml === "function"
           ? attendBillHtml()
           : workStubHtml("people", hubWorkPane);
-    box.innerHTML = `${topLevelSwitch("people")}<div class="people-shell"><nav class="people-side" aria-label="人員管理">${side}</nav><div class="people-main">${main}</div></div>`;
+    if (!phone) {
+      const blocks = buildSalesBlocks();
+      const blockChips = blocks
+        .map((b) => `<button type="button" class="sales-block-chip" data-sales-block="${esc(b.id)}">${esc(b.lab)}</button>`)
+        .join("");
+      const sideHtml = panes
+        .map((p) => {
+          const on = p.id === hubWorkPane ? " is-on" : "";
+          return `<button type="button" class="sales-side${on}" data-people-pane="${esc(p.id)}"><span class="sales-side-lab">${esc(p.lab)}</span><em class="sales-side-hint">${esc(p.hint || "")}</em></button>`;
+        })
+        .join("");
+      box.innerHTML = `<section class="sales-shell sales-shell--web people-work">
+        <header class="sales-shell-head">
+          <button type="button" class="sales-block-chip sales-home-chip" data-hub-back data-sales-home>← 總覽</button>
+          <nav class="sales-block-nav" aria-label="層架切換">${blockChips}<button type="button" class="sales-block-chip is-on" data-hub-dept="people">人員管理</button></nav>
+        </header>
+        <div class="sales-shell-body">
+          <aside class="sales-shell-side" aria-label="人員管理">
+            <div class="sales-side-title">人員管理</div>
+            <nav class="sales-side-nav">${sideHtml}</nav>
+          </aside>
+          <section class="sales-shell-main">${main}</section>
+        </div>
+      </section>`;
+      return;
+    }
+    const railDepts = DEPT_DEFS.filter((d) => (typeof d.show === "function" ? d.show() : true))
+      .map(
+        (d) =>
+          `<button type="button" class="people-rail-btn${d.id === "people" ? " is-on" : ""}" data-hub-dept="${esc(d.id)}">${esc(d.title)}</button>`,
+      )
+      .join("");
+    const railLabels = labelBtns.length
+      ? `<button type="button" class="people-rail-btn" data-hub="labels">標籤列印</button>`
+      : "";
+    const phoneChips = panes
+      .filter((p) => phonePaneIds.includes(p.id))
+      .map(
+        (p) =>
+          `<button type="button" class="people-phone-chip${p.id === hubWorkPane ? " is-on" : ""}" data-people-pane="${esc(p.id)}">${esc(p.lab)}</button>`,
+      )
+      .join("");
+    box.innerHTML = `<div class="people-frame">
+      <button type="button" class="people-rail-tab" data-people-rail aria-expanded="false">區塊</button>
+      <div class="people-rail" hidden>
+        <button type="button" class="people-rail-mask" data-people-rail-close aria-label="關閉工作列"></button>
+        <nav class="people-rail-panel" aria-label="總覽">
+          <button type="button" class="people-rail-btn" data-hub-back>← 總覽</button>
+          ${railDepts}
+          ${railLabels}
+        </nav>
+      </div>
+      <nav class="people-phone-nav" aria-label="人員管理">${phoneChips}</nav>
+      <div class="people-main">${main}</div>
+    </div>`;
     return;
   }
 
@@ -4774,6 +4824,8 @@ function applyLayoutMode(mode) {
     if (shell) shell.remove();
     if (keepPane) activateSalesPane(keepPane);
     else renderHomeHub();
+  } else if (page === "home" && hubDept === "people") {
+    renderHomeHub();
   }
 }
 function phoneTabId() {
@@ -12562,6 +12614,30 @@ document.getElementById("home-hub")?.addEventListener("input", (e) => {
   attendField(attendActiveIso(), field.dataset.attendField || "", field.dataset.attendId || "", field.dataset.attendCrew || "", field.value);
 });
 document.getElementById("home-hub")?.addEventListener("click", (e) => {
+  const railTab = e.target.closest("[data-people-rail]");
+  if (railTab) {
+    const frame = railTab.closest(".people-frame");
+    const rail = frame?.querySelector(".people-rail");
+    const open = !!rail?.hasAttribute("hidden");
+    if (rail) {
+      if (open) rail.removeAttribute("hidden");
+      else rail.setAttribute("hidden", "");
+    }
+    railTab.setAttribute("aria-expanded", open ? "true" : "false");
+    railTab.textContent = open ? "收合" : "區塊";
+    return;
+  }
+  if (e.target.closest("[data-people-rail-close]")) {
+    const frame = e.target.closest(".people-frame");
+    const rail = frame?.querySelector(".people-rail");
+    const tab = frame?.querySelector("[data-people-rail]");
+    rail?.setAttribute("hidden", "");
+    if (tab) {
+      tab.setAttribute("aria-expanded", "false");
+      tab.textContent = "區塊";
+    }
+    return;
+  }
   const peoplePane = e.target.closest("[data-people-pane]");
   if (peoplePane && hubDept === "people") {
     hubWorkPane = peoplePane.dataset.peoplePane || "attend";

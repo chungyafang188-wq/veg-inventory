@@ -6794,6 +6794,102 @@ body.layout-web .order-desk-cart .ticket-list--slim {
   .hub.hub-pick { grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; }
 }
 
+.people-work.sales-shell { min-height: 0; overflow: visible; background: transparent; border: 0; box-shadow: none; }
+.people-work .sales-shell-body { overflow: visible; align-items: stretch; }
+.people-work .sales-shell-main { overflow: visible; background: transparent; padding: 0.35rem 0.15rem 0.5rem 0.55rem; }
+.people-frame { position: relative; }
+.people-phone-nav {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.55rem;
+}
+.people-phone-chip {
+  flex: 1 1 0;
+  width: auto;
+  margin: 0;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #1e293b;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+}
+.people-phone-chip.is-on {
+  border-color: #166534;
+  background: #166534;
+  color: #fff;
+}
+.people-rail-tab {
+  position: absolute;
+  left: 0;
+  bottom: 0.85rem;
+  z-index: 26;
+  width: 1.45rem;
+  min-height: 3.4rem;
+  margin: 0;
+  padding: 0.35rem 0.05rem;
+  border: 1px solid #d1d5db;
+  border-left: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: #fff;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+}
+.people-rail { position: absolute; inset: 0; z-index: 30; }
+.people-rail[hidden] { display: none; }
+.people-rail-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(15 23 42 / 0.28);
+}
+.people-rail-panel {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.45rem;
+  z-index: 1;
+  display: flex;
+  width: min(12.5rem, 78%);
+  max-height: min(70%, 28rem);
+  flex-direction: column;
+  gap: 0.45rem;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #fff;
+  padding: 0.55rem;
+  box-shadow: 8px 10px 28px rgb(15 23 42 / 0.16);
+}
+.people-rail-btn {
+  width: 100%;
+  min-height: 2.7rem;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.7rem;
+  background: #f8fafc;
+  color: #334155;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+}
+.people-rail-btn.is-on {
+  border-color: #047857;
+  background: #047857;
+  color: #fff;
+}
 .people-shell {
   display: grid;
   grid-template-columns: 8.6rem minmax(0, 1fr);
@@ -6811,6 +6907,8 @@ body.layout-web .order-desk-cart .ticket-list--slim {
   padding: 0.4rem;
 }
 .people-nav {
+  width: 100%;
+  margin: 0;
   text-align: left;
   border: 0;
   background: transparent;
@@ -6841,8 +6939,7 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .attend-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
 .attend-pill { width: auto; margin: 0; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 999px; padding: 0.28rem 0.75rem; cursor: pointer; }
 .attend-pill.is-on { border: 2px solid #1d4ed8; color: var(--ink); }
-.people-nav, .people-jump, .attend-day, .attend-cal-nav .ghost { width: auto; margin-top: 0; }
-.people-nav { width: 100%; }
+.people-jump, .attend-day, .attend-cal-nav .ghost { width: auto; margin-top: 0; }
 .attend-result-line { white-space: nowrap; }
 .attend-block { margin-top: 1rem; }
 .attend-block h3 { margin: 0 0 0.2rem; font-size: 1rem; }
@@ -6883,6 +6980,7 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 @media (max-width: 860px) {
   .attend-layout, .attend-top, .people-shell { grid-template-columns: minmax(0, 1fr); }
   .people-side { flex-direction: row; flex-wrap: wrap; }
+  .people-side .people-nav { width: auto; }
   .attend-head { display: none; }
   .attend-mini { display: block; }
   .attend-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "name hours" "start end" "rest bento" "split split"; }
@@ -6900,6 +6998,7 @@ body.layout-phone .attend-layout,
 body.layout-phone .attend-top,
 body.layout-phone .people-shell { grid-template-columns: minmax(0, 1fr); }
 body.layout-phone .people-side { flex-direction: row; flex-wrap: wrap; }
+body.layout-phone .people-side .people-nav { width: auto; }
 body.layout-phone .attend-head { display: none; }
 body.layout-phone .attend-mini { display: block; }
 body.layout-phone .attend-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "name hours" "start end" "rest bento" "split split"; }
@@ -6936,27 +7035,53 @@ body.layout-phone .attend-crew-name { grid-column: 1 / -1; }
 .bill-sheet tfoot td { font-weight: 700; }
 @media (max-width: 860px) {
   .bill-head { display: none; }
-  .bill-mini { display: block; font-size: 0.72rem; color: var(--muted); }
-  .bill-line { grid-template-columns: 3.2rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "date people start end" "date price amt off" "note note note note"; }
-  .bill-line > b { grid-area: date; }
+  .bill-form { display: flex; flex-direction: column; gap: 0.6rem; }
+  .bill-mini { display: block; margin-bottom: 0.12rem; font-size: 0.78rem; color: var(--muted); }
+  .bill-line {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "date off" "people start" "end price" "amt amt" "note note";
+    gap: 0.45rem 0.55rem;
+    margin: 0;
+    padding: 0.7rem 0.75rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.9rem;
+    background: #fff;
+  }
+  .bill-line > b { grid-area: date; align-self: center; font-size: 1.05rem; }
   .bill-line > label:nth-child(2) { grid-area: people; }
   .bill-line > label:nth-child(3) { grid-area: start; }
   .bill-line > label:nth-child(4) { grid-area: end; }
   .bill-line > label:nth-child(5) { grid-area: price; }
-  .bill-line > .bill-amt { grid-area: amt; align-self: end; }
-  .bill-line > label:nth-child(7) { grid-area: off; }
+  .bill-line > .bill-amt { grid-area: amt; }
+  .bill-line > label:nth-child(7) { grid-area: off; justify-self: end; align-self: center; }
   .bill-line > label:nth-child(8) { grid-area: note; }
+  .bill-line .attend-in { min-height: 2.55rem; padding: 0.45rem 0.6rem; font-size: 1.05rem; }
+  .bill-off { min-height: 2.4rem; padding: 0.25rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }
+  .bill-off input { width: 1.15rem; height: 1.15rem; }
 }
 body.layout-phone .bill-head { display: none; }
-body.layout-phone .bill-mini { display: block; font-size: 0.72rem; color: var(--muted); }
-body.layout-phone .bill-line { grid-template-columns: 3.2rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "date people start end" "date price amt off" "note note note note"; }
-body.layout-phone .bill-line > b { grid-area: date; }
+body.layout-phone .bill-form { display: flex; flex-direction: column; gap: 0.6rem; }
+body.layout-phone .bill-mini { display: block; margin-bottom: 0.12rem; font-size: 0.78rem; color: var(--muted); }
+body.layout-phone .bill-line {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "date off" "people start" "end price" "amt amt" "note note";
+  gap: 0.45rem 0.55rem;
+  margin: 0;
+  padding: 0.7rem 0.75rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: #fff;
+}
+body.layout-phone .bill-line > b { grid-area: date; align-self: center; font-size: 1.05rem; }
 body.layout-phone .bill-line > label:nth-child(2) { grid-area: people; }
 body.layout-phone .bill-line > label:nth-child(3) { grid-area: start; }
 body.layout-phone .bill-line > label:nth-child(4) { grid-area: end; }
 body.layout-phone .bill-line > label:nth-child(5) { grid-area: price; }
-body.layout-phone .bill-line > .bill-amt { grid-area: amt; align-self: end; }
-body.layout-phone .bill-line > label:nth-child(7) { grid-area: off; }
+body.layout-phone .bill-line > .bill-amt { grid-area: amt; }
+body.layout-phone .bill-line > label:nth-child(7) { grid-area: off; justify-self: end; align-self: center; }
 body.layout-phone .bill-line > label:nth-child(8) { grid-area: note; }
+body.layout-phone .bill-line .attend-in { min-height: 2.55rem; padding: 0.45rem 0.6rem; font-size: 1.05rem; }
+body.layout-phone .bill-off { min-height: 2.4rem; padding: 0.25rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }
+body.layout-phone .bill-off input { width: 1.15rem; height: 1.15rem; }
 
 

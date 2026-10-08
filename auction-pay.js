@@ -243,21 +243,38 @@
     return /鴻安|銷售明細|單據日期|品名規格/.test(n + t);
   }
 
+  function isKgUnit(s) {
+    return /公斤|kg|公噸|重量/i.test(String(s || ""));
+  }
+  function isPieceUnit(s) {
+    return /件|包|籃|箱|袋/.test(String(s || ""));
+  }
+  function honganQty(r, cols) {
+    if (cols.iPcs >= 0) {
+      const pcs = qtyOf(cell(r, cols.iPcs));
+      if (pcs) return pcs;
+    }
+    const unit = cols.iUnit >= 0 ? String(cell(r, cols.iUnit) || "") : "";
+    if (isKgUnit(unit)) return 0;
+    const q = cols.iQty >= 0 ? qtyOf(cell(r, cols.iQty)) : qtyOf(cell(r, cols.iSpec + 1));
+    if (!q) return 0;
+    if (!unit || isPieceUnit(unit)) return q;
+    return 0;
+  }
   function parseHongan(sheets) {
     const out = [];
     for (const sh of sheets || []) {
       const data = sh.rows || [];
-      let iSpec = 4;
-      let iQty = 5;
+      let cols = { iSpec: 4, iQty: 5, iPcs: -1, iUnit: -1 };
       for (const r of data.slice(0, 12)) {
         const heads = (r || []).map((x) => String(x || "").replace(/\s+/g, ""));
         const s = heads.findIndex((h) => /品名規格|品名/.test(h));
-        const q = heads.findIndex((h) => /數量|件數/.test(h) && !/金額/.test(h));
-        if (s >= 0) {
-          iSpec = s;
-          if (q >= 0) iQty = q;
-          break;
-        }
+        if (s < 0) continue;
+        const iPcs = heads.findIndex((h) => /件數|包裝數|包數/.test(h) && !/金額|單價/.test(h));
+        const iQty = heads.findIndex((h) => /數量/.test(h) && !/金額/.test(h));
+        const iUnit = heads.findIndex((h) => /單位/.test(h));
+        cols = { iSpec: s, iQty: iQty >= 0 ? iQty : s + 1, iPcs, iUnit };
+        break;
       }
       let cur = "";
       for (const r of data) {
@@ -265,7 +282,7 @@
         const dayHit = parseDate(rowText);
         if (/單據日期/.test(rowText) && dayHit) cur = dayHit;
         else if (!cur && /日期/.test(rowText) && dayHit && !/區間|製表/.test(rowText)) cur = dayHit;
-        let spec = String(cell(r, iSpec) || "");
+        let spec = String(cell(r, cols.iSpec) || "");
         let crop = cropOf(spec);
         if (!crop) {
           spec = (r || []).map((c) => String(c ?? "")).find((x) => cropOf(x)) || "";
@@ -275,7 +292,7 @@
         let mk = marketOf(spec) || marketOf(cell(r, 3)) || marketOf(rowText);
         if (!mk && /高麗/.test(crop)) mk = "一市";
         if (!mk) continue;
-        const q = qtyOf(cell(r, iQty)) || qtyOf(cell(r, iSpec + 1));
+        const q = honganQty(r, cols);
         if (!q) continue;
         out.push({ dt: addDay(cur), mk, crop, qty: q });
       }

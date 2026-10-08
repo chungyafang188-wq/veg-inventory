@@ -42,6 +42,7 @@ function pickDataDir() {
 const DATA_DIR = pickDataDir();
 const DATA_FILE = path.join(DATA_DIR, "sync.json");
 const LINE_FILE = path.join(DATA_DIR, "line-drafts.json");
+const AUCTION_PAY_FILE = path.join(DATA_DIR, "auction-pay-history.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -535,6 +536,69 @@ function handleApi(req, res) {
         const code = msg === "too large" ? 413 : 400;
         send(res, code, JSON.stringify({ ok: false, error: msg === "too large" ? "檔案太大" : "解析失敗" }), TYPES[".json"]);
       });
+    return true;
+  }
+  if (urlPath === "/api/auction-pay/history") {
+    const loadSessions = () => {
+      try {
+        const j = JSON.parse(fs.readFileSync(AUCTION_PAY_FILE, "utf8"));
+        return Array.isArray(j?.sessions) ? j.sessions : Array.isArray(j) ? j : [];
+      } catch (_) {
+        return [];
+      }
+    };
+    const saveSessions = (sessions) => {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      const tmp = `${AUCTION_PAY_FILE}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ sessions }));
+      fs.renameSync(tmp, AUCTION_PAY_FILE);
+    };
+    if (req.method === "GET") {
+      send(res, 200, JSON.stringify({ ok: true, sessions: loadSessions() }), TYPES[".json"]);
+      return true;
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      readBody(req, 5e6)
+        .then((raw) => {
+          const body = JSON.parse(raw);
+          if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("bad");
+          const sessions = loadSessions();
+          const rows = Array.isArray(body.rows)
+            ? body.rows.map((r) => ({
+                dt: String(r.dt || ""),
+                mk: String(r.mk || ""),
+                crop: String(r.crop || ""),
+                h: Number(r.h) || 0,
+                p: Number(r.p) || 0,
+                d: Number(r.d) || 0,
+                ok: !!r.ok,
+                note: String(r.note || ""),
+              }))
+            : [];
+          const id = String(body.id || "").trim() || `ap-${Date.now()}`;
+          const rec = {
+            id,
+            at: Number(body.at) || Date.now(),
+            by: String(body.by || "").slice(0, 40),
+            honganName: String(body.honganName || "").slice(0, 160),
+            payName: String(body.payName || "").slice(0, 160),
+            hCount: Number(body.hCount) || 0,
+            pCount: Number(body.pCount) || 0,
+            rows,
+          };
+          const i = sessions.findIndex((s) => s && s.id === id);
+          if (i >= 0) {
+            rec.at = Number(sessions[i].at) || rec.at;
+            sessions[i] = { ...sessions[i], ...rec };
+          } else sessions.push(rec);
+          sessions.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+          saveSessions(sessions.slice(0, 300));
+          send(res, 200, JSON.stringify({ ok: true, id }), TYPES[".json"]);
+        })
+        .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
+      return true;
+    }
+    send(res, 405, "Method not allowed");
     return true;
   }
   if (urlPath === "/api/racks-txns") {

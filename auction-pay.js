@@ -31,6 +31,13 @@
   let confirms = {};
   let msg = "";
   let pickKeys = new Set();
+  let pageMode = "work";
+  let sessionId = "";
+  let hCount = 0;
+  let pCount = 0;
+  let hist = [];
+  let histQ = { month: "", mk: "", crop: "", st: "all", text: "", latest: true };
+  let histOpen = "";
 
   function esc(s) {
     return String(s ?? "")
@@ -109,6 +116,80 @@
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(confirms));
     } catch (_) {}
+  }
+  function whoNow() {
+    try {
+      return typeof currentStaff === "function" ? String(currentStaff() || "").trim() : "";
+    } catch (_) {
+      return "";
+    }
+  }
+  function sessionPayload() {
+    return {
+      id: sessionId || `ap-${Date.now()}`,
+      at: Date.now(),
+      by: whoNow(),
+      honganName,
+      payName,
+      hCount,
+      pCount,
+      rows: rows.map((r) => ({ dt: r.dt, mk: r.mk, crop: r.crop, h: r.h, p: r.p, d: r.d, ok: !!r.ok, note: r.note || "" })),
+    };
+  }
+  async function saveSession() {
+    if (!rows.length) return;
+    const payload = sessionPayload();
+    sessionId = payload.id;
+    try {
+      const r = await fetch("./api/auction-pay/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j.id) sessionId = j.id;
+    } catch (_) {}
+  }
+  async function loadHistory() {
+    try {
+      const r = await fetch("./api/auction-pay/history");
+      const j = await r.json().catch(() => ({}));
+      hist = Array.isArray(j.sessions) ? j.sessions : [];
+    } catch (_) {
+      hist = [];
+    }
+  }
+  function whenTxt(at) {
+    const n = Number(at) || 0;
+    if (!n) return "";
+    const d = new Date(n);
+    const p = (x) => String(x).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function histFlat() {
+    const list = [];
+    const seen = new Set();
+    for (const s of hist) {
+      for (const r of s.rows || []) {
+        const k = `${r.dt}|${r.mk}|${r.crop}`;
+        if (histQ.latest && seen.has(k)) continue;
+        seen.add(k);
+        list.push({ ...r, sid: s.id, at: s.at, by: s.by, honganName: s.honganName, payName: s.payName });
+      }
+    }
+    return list.filter((r) => {
+      if (histQ.month && String(r.dt || "").slice(0, 7) !== histQ.month) return false;
+      if (histQ.mk && r.mk !== histQ.mk) return false;
+      if (histQ.crop && r.crop !== histQ.crop) return false;
+      if (histQ.st === "ok" && !r.ok) return false;
+      if (histQ.st === "pending" && r.ok) return false;
+      if (histQ.text) {
+        const t = histQ.text.toLowerCase();
+        const blob = `${r.dt} ${r.mk} ${r.crop} ${r.note || ""} ${r.by || ""} ${r.honganName || ""} ${r.payName || ""}`.toLowerCase();
+        if (!blob.includes(t)) return false;
+      }
+      return true;
+    });
   }
 
   function toB64(buf) {
@@ -292,10 +373,31 @@
     ta.remove();
     return Promise.resolve();
   }
+  function hideCopyOut() {
+    const wrap = document.getElementById("ap-copy-wrap");
+    const box = document.getElementById("ap-copy-out");
+    if (wrap) wrap.hidden = true;
+    if (box) {
+      box.value = "";
+      box.hidden = true;
+    }
+  }
+  function showCopyOut(text) {
+    const wrap = document.getElementById("ap-copy-wrap");
+    const box = document.getElementById("ap-copy-out");
+    if (wrap) wrap.hidden = false;
+    if (box) {
+      box.hidden = false;
+      box.value = text;
+      box.focus();
+      box.select();
+    }
+  }
   async function copyTable(kind) {
     const list = kind === "all" ? rows : rows.filter((r) => !r.ok);
     if (!list.length) {
       msg = kind === "all" ? "目前沒有表格可複製。" : "沒有待核對列可複製。";
+      hideCopyOut();
       renderAuctionPay();
       return;
     }
@@ -304,30 +406,34 @@
     try {
       await copyText(text);
       msg = `已複製 ${list.length} 列，可直接貼到 LINE。`;
+      hideCopyOut();
     } catch (_) {
-      msg = `已備妥 ${list.length} 列，請在下方框全選後貼到 LINE。`;
+      msg = `已備妥 ${list.length} 列，請在框裡全選後貼到 LINE，或按取消關掉。`;
+      showCopyOut(text);
     }
     renderAuctionPay();
-    const box = document.getElementById("ap-copy-out");
-    if (box) {
-      box.hidden = false;
-      box.value = text;
-      box.focus();
-      box.select();
-    }
+    if (msg.includes("備妥")) showCopyOut(text);
+    else hideCopyOut();
   }
 
-  function pendingCsv() {
-    const pend = rows.filter((r) => !r.ok);
-    const lines = ["貨款日,市場,品項,鴻安件,貨款件,差,備註"];
-    for (const r of pend) {
-      lines.push([md(r.dt), r.mk, r.crop, r.h, r.p, r.d, String(r.note || "").replace(/,/g, "，")].join(","));
+  function downloadXls(list, filename) {
+    if (!list.length) {
+      msg = "沒有可下載的列。";
+      renderAuctionPay();
+      return;
     }
-    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const th = tableHeaders().map((h) => `<th>${esc(h)}</th>`).join("");
+    const trs = list
+      .map((r) => `<tr>${tableCells(r).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`)
+      .join("");
+    const html = `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><tr>${th}</tr>${trs}</table></body></html>`;
+    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "拍賣帳款-待對方核對.csv";
+    a.download = filename.endsWith(".xls") ? filename : `${filename}.xls`;
     a.click();
+    msg = `已下載 Excel（${list.length} 列），可直接用 Excel 打開。`;
+    renderAuctionPay();
   }
 
   async function runCompare() {
@@ -357,8 +463,13 @@
       const hList = hPack.h;
       const pList = pPack.p;
       rows = buildDiffs(hList, pList);
+      hCount = hList.length;
+      pCount = pList.length;
+      sessionId = `ap-${Date.now()}`;
       view = "pending";
+      pageMode = "work";
       saveConfirms();
+      await saveSession();
       const swapped = hPack.file !== hf;
       if (!hList.length || !pList.length) {
         const hint = scored
@@ -384,8 +495,19 @@
         runCompare();
         return;
       }
-      if (e.target.closest("#ap-csv")) {
-        pendingCsv();
+      if (e.target.closest(".ap-xls-btn")) {
+        const sess = pageMode === "hist" && histOpen ? hist.find((s) => s.id === histOpen) : null;
+        const list = pageMode === "hist" ? (sess ? sess.rows || [] : histFlat()) : visible();
+        downloadXls(
+          list,
+          pageMode === "hist"
+            ? sess
+              ? `拍賣帳款-${whenTxt(sess.at).replace(/[: ]/g, "")}`
+              : "拍賣帳款-歷史反查"
+            : view === "ok"
+              ? "拍賣帳款-已確認"
+              : "拍賣帳款-待對方核對",
+        );
         return;
       }
       if (e.target.closest("#ap-print")) {
@@ -415,6 +537,20 @@
         }
         saveConfirms();
         msg = `已確認 ${picked.length} 列沒問題。剩下給對方核對。`;
+        saveSession();
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.closest("[data-ap-mode]")) {
+        pageMode = e.target.closest("[data-ap-mode]").dataset.apMode || "work";
+        if (pageMode === "hist") loadHistory().then(renderAuctionPay);
+        else renderAuctionPay();
+        return;
+      }
+      const openSess = e.target.closest("[data-ap-open]");
+      if (openSess) {
+        const id = openSess.dataset.apOpen || "";
+        histOpen = histOpen === id ? "" : id;
         renderAuctionPay();
         return;
       }
@@ -426,6 +562,10 @@
         copyTable("all");
         return;
       }
+      if (e.target.closest("#ap-copy-close")) {
+        hideCopyOut();
+        return;
+      }
       const f = e.target.closest("[data-ap-view]");
       if (f) {
         view = f.dataset.apView || "pending";
@@ -433,6 +573,31 @@
       }
     });
     root.addEventListener("change", (e) => {
+      if (e.target.id === "ap-hist-month") {
+        histQ.month = e.target.value || "";
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.id === "ap-hist-mk") {
+        histQ.mk = e.target.value || "";
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.id === "ap-hist-crop") {
+        histQ.crop = e.target.value || "";
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.id === "ap-hist-st") {
+        histQ.st = e.target.value || "all";
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.id === "ap-hist-latest") {
+        histQ.latest = e.target.checked;
+        renderAuctionPay();
+        return;
+      }
       if (e.target.id === "ap-hongan") {
         honganName = e.target.files?.[0]?.name || "";
         const lab = document.getElementById("ap-hongan-lab");
@@ -460,40 +625,176 @@
       if (e.target.classList.contains("ap-note")) {
         r.note = e.target.value.trim();
         saveConfirms();
+        saveSession();
       }
+    });
+    root.addEventListener("input", (e) => {
+      if (e.target.id !== "ap-hist-q") return;
+      histQ.text = e.target.value.trim();
+      renderAuctionPay();
     });
   }
 
+  function fillSelect(id, values, current, allLab) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const opts = [`<option value="">${allLab}</option>`]
+      .concat(values.map((v) => `<option value="${esc(v)}"${v === current ? " selected" : ""}>${esc(v)}</option>`))
+      .join("");
+    if (el.innerHTML !== opts) el.innerHTML = opts;
+    el.value = current || "";
+  }
+  function fillHistFilters() {
+    const allRows = hist.flatMap((s) => s.rows || []);
+    const months = [...new Set(allRows.map((r) => String(r.dt || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+    const mks = [...new Set(allRows.map((r) => r.mk).filter(Boolean))].sort();
+    const crops = [...new Set(allRows.map((r) => r.crop).filter(Boolean))].sort();
+    fillSelect("ap-hist-month", months, histQ.month, "全部月份");
+    fillSelect("ap-hist-mk", mks, histQ.mk, "全部市場");
+    fillSelect("ap-hist-crop", crops, histQ.crop, "全部品項");
+    const st = document.getElementById("ap-hist-st");
+    if (st) st.value = histQ.st || "all";
+    const q = document.getElementById("ap-hist-q");
+    if (q && document.activeElement !== q) q.value = histQ.text || "";
+    const latest = document.getElementById("ap-hist-latest");
+    if (latest) latest.checked = !!histQ.latest;
+  }
+  function histBodyHtml() {
+    const sess = histOpen ? hist.find((s) => s.id === histOpen) : null;
+    const sessCards = hist.length
+      ? `<div class="ap-sess-list">${hist
+          .map((s) => {
+            const n = (s.rows || []).length;
+            const okN = (s.rows || []).filter((r) => r.ok).length;
+            const on = s.id === histOpen ? " on" : "";
+            return `<button type="button" class="ap-sess${on}" data-ap-open="${esc(s.id)}">
+              <strong>${esc(whenTxt(s.at))}</strong>
+              <span>${esc(s.by || "未登入")} · 差異 ${n} · 已確認 ${okN}</span>
+              <span class="muted">${esc(s.honganName || "")} × ${esc(s.payName || "")}</span>
+            </button>`;
+          })
+          .join("")}</div>`
+      : `<p class="muted">還沒有存過比對。先在「本次比對」按開始比對，整次會自動存到伺服器。</p>`;
+    if (sess) {
+      const vis = sess.rows || [];
+      const table = vis.length
+        ? `<div class="ap-sheet-wrap"><table class="ap-sheet">
+        <thead><tr>
+          <th>狀態</th><th>貨款日</th><th>市場</th><th>品項</th>
+          <th>鴻安件</th><th>貨款件</th><th>差</th><th>備註</th>
+        </tr></thead>
+        <tbody>${vis
+          .map((r) => {
+            const dtxt = `${r.d > 0 ? "+" : ""}${r.d}`;
+            return `<tr class="${r.ok ? "is-ok" : "is-bad"}">
+              <td>${r.ok ? '<span class="ap-okmark">沒問題</span>' : '<span class="ap-mark">有問題</span>'}</td>
+              <td>${esc(md(r.dt))}</td>
+              <td>${esc(r.mk)}</td>
+              <td>${esc(r.crop)}</td>
+              <td class="num">${r.h}</td>
+              <td class="num">${r.p}</td>
+              <td class="num ap-diff">${dtxt}</td>
+              <td>${esc(r.note || "")}</td>
+            </tr>`;
+          })
+          .join("")}</tbody></table></div>`
+        : `<p class="muted">這次比對沒有差異列。</p>`;
+      return `${sessCards}<p class="muted">這是 ${esc(whenTxt(sess.at))} 整次比對（${esc(sess.by || "未登入")}）。再點同一筆可收合。</p>${table}`;
+    }
+    const vis = histFlat();
+    const table = vis.length
+      ? `<div class="ap-sheet-wrap"><table class="ap-sheet">
+        <thead><tr>
+          <th>狀態</th><th>貨款日</th><th>市場</th><th>品項</th>
+          <th>鴻安件</th><th>貨款件</th><th>差</th><th>備註</th><th>存檔時間</th><th>人員</th>
+        </tr></thead>
+        <tbody>${vis
+          .map((r) => {
+            const dtxt = `${r.d > 0 ? "+" : ""}${r.d}`;
+            return `<tr class="${r.ok ? "is-ok" : "is-bad"}">
+              <td>${r.ok ? '<span class="ap-okmark">沒問題</span>' : '<span class="ap-mark">有問題</span>'}</td>
+              <td>${esc(md(r.dt))}</td>
+              <td>${esc(r.mk)}</td>
+              <td>${esc(r.crop)}</td>
+              <td class="num">${r.h}</td>
+              <td class="num">${r.p}</td>
+              <td class="num ap-diff">${dtxt}</td>
+              <td>${esc(r.note || "")}</td>
+              <td>${esc(whenTxt(r.at))}</td>
+              <td>${esc(r.by || "")}</td>
+            </tr>`;
+          })
+          .join("")}</tbody></table></div>`
+      : hist.length
+        ? `<p class="muted">這個篩選沒有列。點上方某一次比對可看整份。</p>`
+        : "";
+    return `${sessCards}${table}`;
+  }
   function renderAuctionPay() {
     bindOnce();
     const root = document.getElementById("ap-root");
     if (!root) return;
-    if (!root.querySelector("#ap-ui-v6")) {
+    if (!root.querySelector("#ap-ui-v9")) {
       root.innerHTML = `
       <header class="ap-head">
-        <span id="ap-ui-v6" hidden></span>
+        <span id="ap-ui-v9" hidden></span>
         <h2>拍賣帳款核對</h2>
-        <p>上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。</p>
+        <p>上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。歷史反查會把整次比對存在伺服器，各台平板登入後看到同一份。</p>
       </header>
-      <div class="ap-files">
-        <label class="ap-file">鴻安 XLS
-          <input type="file" id="ap-hongan" accept=".xls,.xlsx" />
-          <span class="muted" id="ap-hongan-lab">尚未選檔</span>
-        </label>
-        <label class="ap-file">貨款 XLSX
-          <input type="file" id="ap-pay" accept=".xls,.xlsx" />
-          <span class="muted" id="ap-pay-lab">尚未選檔</span>
-        </label>
+      <nav class="ap-filters noprint" id="ap-mode-nav">
+        <button type="button" class="pick" data-ap-mode="work">本次比對</button>
+        <button type="button" class="pick" data-ap-mode="hist">歷史反查</button>
+      </nav>
+      <div id="ap-work-pane">
+        <div class="ap-files">
+          <label class="ap-file">鴻安 XLS
+            <input type="file" id="ap-hongan" accept=".xls,.xlsx" />
+            <span class="muted" id="ap-hongan-lab">尚未選檔</span>
+          </label>
+          <label class="ap-file">貨款 XLSX
+            <input type="file" id="ap-pay" accept=".xls,.xlsx" />
+            <span class="muted" id="ap-pay-lab">尚未選檔</span>
+          </label>
+        </div>
+        <div class="ap-tools">
+          <button type="button" class="primary" id="ap-run">開始比對</button>
+          <button type="button" class="ghost noprint" id="ap-ok-all">全選目前畫面</button>
+          <button type="button" class="ghost noprint ap-xls-btn">下載 Excel</button>
+          <button type="button" class="ghost noprint" id="ap-print">列印待核對</button>
+          <button type="button" class="ghost noprint" id="ap-copy-pending">複製待對方核對</button>
+          <button type="button" class="ghost noprint" id="ap-copy-all">複製全部差異</button>
+        </div>
       </div>
-      <div class="ap-tools">
-        <button type="button" class="primary" id="ap-run">開始比對</button>
-        <button type="button" class="ghost noprint" id="ap-ok-all">全選目前畫面</button>
-        <button type="button" class="ghost noprint" id="ap-csv">下載待核對 CSV</button>
-        <button type="button" class="ghost noprint" id="ap-print">列印待核對</button>
-        <button type="button" class="ghost noprint" id="ap-copy-pending">複製待對方核對</button>
-        <button type="button" class="ghost noprint" id="ap-copy-all">複製全部差異</button>
+      <div id="ap-hist-bar" class="ap-hist-bar noprint" hidden>
+        <label>月份
+          <select id="ap-hist-month"></select>
+        </label>
+        <label>市場
+          <select id="ap-hist-mk"></select>
+        </label>
+        <label>品項
+          <select id="ap-hist-crop"></select>
+        </label>
+        <label>狀態
+          <select id="ap-hist-st">
+            <option value="all">全部</option>
+            <option value="pending">待核對</option>
+            <option value="ok">已確認</option>
+          </select>
+        </label>
+        <label>搜尋
+          <input id="ap-hist-q" type="search" placeholder="日期／品項／檔名／人員" />
+        </label>
+        <label class="ap-hist-latest"><input id="ap-hist-latest" type="checkbox" checked />跨次搜尋只看最近一次</label>
+        <button type="button" class="ghost ap-xls-btn">下載 Excel</button>
       </div>
-      <textarea id="ap-copy-out" class="noprint" hidden readonly></textarea>
+      <div id="ap-copy-wrap" class="ap-copy-wrap noprint" hidden>
+        <div class="ap-copy-head">
+          <span>複製內容（可貼到 LINE）</span>
+          <button type="button" class="ghost" id="ap-copy-close">取消</button>
+        </div>
+        <textarea id="ap-copy-out" readonly></textarea>
+      </div>
       <p class="ap-msg" id="ap-msg"></p>
       <div id="ap-body"></div>`;
     }
@@ -501,10 +802,22 @@
     const pLab = document.getElementById("ap-pay-lab");
     if (hLab) hLab.textContent = honganName || "尚未選檔";
     if (pLab) pLab.textContent = payName || "尚未選檔";
+    const workPane = document.getElementById("ap-work-pane");
+    const histBar = document.getElementById("ap-hist-bar");
+    if (workPane) workPane.hidden = pageMode === "hist";
+    if (histBar) histBar.hidden = pageMode !== "hist";
+    root.querySelectorAll("[data-ap-mode]").forEach((b) => {
+      b.classList.toggle("on", b.dataset.apMode === pageMode);
+    });
+    if (pageMode === "hist") fillHistFilters();
     const msgEl = document.getElementById("ap-msg");
     if (msgEl) msgEl.textContent = msg;
     const body = document.getElementById("ap-body");
     if (!body) return;
+    if (pageMode === "hist") {
+      body.innerHTML = histBodyHtml();
+      return;
+    }
     const okN = rows.filter((r) => r.ok).length;
     const pendN = rows.length - okN;
     const vis = visible();

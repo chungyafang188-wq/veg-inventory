@@ -56,6 +56,16 @@
 .ap-sheet tr.is-ok { background: #eef8f1; }
 .ap-sheet tr.is-bad { background: #fdecea; }
 .ap-sheet tr.is-bad td { color: #7a1212; font-weight: 600; }
+.ap-sheet tr.is-pick { background: #fff4d6; }
+.ap-sheet tr.is-pick td { color: #5c4a12; font-weight: 600; }
+.ap-submit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin: 0.55rem 0 0.35rem;
+}
+.ap-submit-bar .primary { min-height: 2.4rem; font-weight: 700; }
 .ap-mark {
   display: inline-block;
   background: #9b1c1c;
@@ -83,26 +93,16 @@
   font: inherit;
 }
 .ap-check { width: 1.1rem; height: 1.1rem; }
-.ap-linebox {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0 0 0.75rem;
-}
-.ap-linebox label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #5a6a62;
-}
-.ap-linebox textarea {
+#ap-copy-out {
   width: 100%;
-  min-height: 6.5rem;
+  min-height: 5.5rem;
+  margin: 0 0 0.65rem;
   border: 1px solid #c5d5cb;
   border-radius: 0.55rem;
   padding: 0.45rem 0.55rem;
   font: inherit;
   font-size: 0.78rem;
   line-height: 1.4;
-  resize: vertical;
   background: #fff;
 }
 @media print {

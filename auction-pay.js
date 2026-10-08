@@ -30,6 +30,7 @@
   let rows = [];
   let confirms = {};
   let msg = "";
+  let pickKeys = new Set();
 
   function esc(s) {
     return String(s ?? "")
@@ -247,6 +248,7 @@
       const [dt, mk, crop] = k.split("|");
       const saved = confirms[k] || {};
       diff.push({ dt, mk, crop, h, p, d: p - h, ok: !!saved.ok, note: saved.note || "" });
+      if (saved.ok) pickKeys.delete(`${dt}|${mk}|${crop}`);
     }
     diff.sort((a, b) => a.dt.localeCompare(b.dt) || a.mk.localeCompare(b.mk) || a.crop.localeCompare(b.crop));
     return diff;
@@ -295,112 +297,16 @@
       await copyText(text);
       msg = `已複製 ${list.length} 列，可直接貼到 LINE。`;
     } catch (_) {
-      msg = "這台無法自動複製，請用下面框手動全選。";
-      const box = document.getElementById("ap-paste");
-      if (box) {
-        box.value = text;
-        box.focus();
-        box.select();
-      }
+      msg = `已備妥 ${list.length} 列，請在下方框全選後貼到 LINE。`;
     }
     renderAuctionPay();
-  }
-  function splitCells(line) {
-    const s = String(line || "").replace(/\r/g, "").trim();
-    if (!s) return [];
-    if (s.includes("\t")) return s.split("\t").map((x) => x.trim());
-    if (s.includes("|")) return s.split("|").map((x) => x.replace(/^\s*[-:]+\s*$/g, "").trim()).filter((x) => x !== "");
-    if (s.includes(",")) return s.split(",").map((x) => x.trim());
-    return s.split(/\s{2,}/).map((x) => x.trim()).filter(Boolean);
-  }
-  function headerIndex(cells) {
-    const n = cells.map((c) => String(c || "").replace(/\s+/g, ""));
-    const find = (...keys) => n.findIndex((h) => keys.some((k) => h.includes(k)));
-    return {
-      dt: find("貨款日", "日期"),
-      mk: find("市場"),
-      crop: find("品項", "品名"),
-      h: find("鴻安"),
-      p: find("貨款"),
-      d: find("差"),
-      note: find("備註"),
-    };
-  }
-  function yearOf(iso) {
-    const y = Number(String(iso || "").slice(0, 4));
-    return y > 2000 ? y : new Date().getFullYear();
-  }
-  function pasteDate(v, yearHint) {
-    const raw = parseDate(v);
-    if (raw) return raw;
-    const s = String(v || "").trim();
-    const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})$/);
-    if (!m) return "";
-    const y = yearHint || new Date().getFullYear();
-    return ymd(new Date(Date.UTC(y, Number(m[1]) - 1, Number(m[2]))));
-  }
-  function applyPasted(text) {
-    const lines = String(text || "")
-      .replace(/\r/g, "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !/^拍賣帳款/.test(l));
-    if (!lines.length) {
-      msg = "貼上區是空的。";
-      renderAuctionPay();
-      return;
+    const box = document.getElementById("ap-copy-out");
+    if (box) {
+      box.hidden = false;
+      box.value = text;
+      box.focus();
+      box.select();
     }
-    let start = 0;
-    let idx = { dt: 0, mk: 1, crop: 2, h: 3, p: 4, d: 5, note: 6 };
-    const head = splitCells(lines[0]);
-    const mapped = headerIndex(head);
-    if (mapped.mk >= 0 && mapped.crop >= 0) {
-      idx = mapped;
-      start = 1;
-    }
-    const yearHint = rows[0]?.dt ? yearOf(rows[0].dt) : new Date().getFullYear();
-    const got = [];
-    for (const line of lines.slice(start)) {
-      const c = splitCells(line);
-      if (c.length < 3) continue;
-      const dt = pasteDate(idx.dt >= 0 ? c[idx.dt] : c[0], yearHint);
-      const mk = marketOf(idx.mk >= 0 ? c[idx.mk] : "") || marketOf(line);
-      const crop = cropOf(idx.crop >= 0 ? c[idx.crop] : "") || cropOf(line);
-      if (!dt || !mk || !crop) continue;
-      const h = idx.h >= 0 ? qtyOf(c[idx.h]) : 0;
-      const p = idx.p >= 0 ? qtyOf(c[idx.p]) : 0;
-      const d = idx.d >= 0 && c[idx.d] != null && String(c[idx.d]).trim() !== "" ? qtyOf(c[idx.d]) : p - h;
-      const note = idx.note >= 0 ? String(c[idx.note] || "").trim() : "";
-      const saved = confirms[`${dt}|${mk}|${crop}`] || {};
-      got.push({ dt, mk, crop, h, p, d, ok: !!saved.ok, note: note || saved.note || "" });
-    }
-    if (!got.length) {
-      msg = "貼上的文字讀不成表格。請用「複製表格給 LINE」再貼回來試試。";
-      renderAuctionPay();
-      return;
-    }
-    const by = new Map(rows.map((r) => [keyOf(r), r]));
-    for (const r of got) {
-      const k = keyOf(r);
-      const old = by.get(k);
-      if (old) {
-        old.note = r.note || old.note;
-        if (r.h || r.p) {
-          old.h = r.h;
-          old.p = r.p;
-          old.d = r.d;
-        }
-      } else {
-        by.set(k, r);
-      }
-    }
-    rows = [...by.values()].sort((a, b) => a.dt.localeCompare(b.dt) || a.mk.localeCompare(b.mk) || a.crop.localeCompare(b.crop));
-    view = "pending";
-    saveConfirms();
-    msg = `已從 LINE／表格貼上 ${got.length} 列。`;
-    const box = document.getElementById("ap-paste");
-    if (box) box.value = "";
-    renderAuctionPay();
   }
 
   function pendingCsv() {
@@ -481,8 +387,26 @@
         return;
       }
       if (e.target.closest("#ap-ok-all")) {
-        for (const r of visible()) r.ok = true;
+        for (const r of visible()) {
+          if (!r.ok) pickKeys.add(keyOf(r));
+        }
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.closest("#ap-submit-ok")) {
+        const picked = rows.filter((r) => !r.ok && pickKeys.has(keyOf(r)));
+        if (!picked.length) {
+          msg = "請先勾選沒問題的列，再按確認送出。";
+          renderAuctionPay();
+          return;
+        }
+        if (!window.confirm(`確認送出 ${picked.length} 列為沒問題？送出後才會從待核對拿掉。`)) return;
+        for (const r of picked) {
+          r.ok = true;
+          pickKeys.delete(keyOf(r));
+        }
         saveConfirms();
+        msg = `已確認 ${picked.length} 列沒問題。剩下給對方核對。`;
         renderAuctionPay();
         return;
       }
@@ -494,22 +418,11 @@
         copyTable("all");
         return;
       }
-      if (e.target.closest("#ap-paste-go")) {
-        applyPasted(document.getElementById("ap-paste")?.value || "");
-        return;
-      }
       const f = e.target.closest("[data-ap-view]");
       if (f) {
         view = f.dataset.apView || "pending";
         renderAuctionPay();
       }
-    });
-    root.addEventListener("paste", (e) => {
-      if (e.target.id !== "ap-paste") return;
-      setTimeout(() => {
-        const v = document.getElementById("ap-paste")?.value || "";
-        if (v.trim()) applyPasted(v);
-      }, 0);
     });
     root.addEventListener("change", (e) => {
       if (e.target.id === "ap-hongan") {
@@ -528,10 +441,18 @@
       if (!tr) return;
       const r = rows.find((x) => keyOf(x) === tr.dataset.apK);
       if (!r) return;
-      if (e.target.classList.contains("ap-check")) r.ok = e.target.checked;
-      if (e.target.classList.contains("ap-note")) r.note = e.target.value.trim();
-      saveConfirms();
-      renderAuctionPay();
+      if (e.target.classList.contains("ap-check")) {
+        const k = keyOf(r);
+        if (e.target.checked) pickKeys.add(k);
+        else pickKeys.delete(k);
+        tr.classList.toggle("is-pick", e.target.checked);
+        tr.classList.toggle("is-bad", !e.target.checked);
+        return;
+      }
+      if (e.target.classList.contains("ap-note")) {
+        r.note = e.target.value.trim();
+        saveConfirms();
+      }
     });
   }
 
@@ -539,11 +460,12 @@
     bindOnce();
     const root = document.getElementById("ap-root");
     if (!root) return;
-    if (!root.querySelector("#ap-run") || !root.querySelector("#ap-paste")) {
+    if (!root.querySelector("#ap-ui-v6")) {
       root.innerHTML = `
       <header class="ap-head">
+        <span id="ap-ui-v6" hidden></span>
         <h2>拍賣帳款核對</h2>
-        <p>上傳鴻安銷售明細與貨款付款單（放反會自動對調）。鴻安當日＝貨款隔日（8/31＝9/1）。差＝貨款−鴻安。鐵架不列入。勾「沒問題」後，剩下可匯出給對方核對。有問題整列紅底＋「有問題」字樣。</p>
+        <p>上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。</p>
       </header>
       <div class="ap-files">
         <label class="ap-file">鴻安 XLS
@@ -557,19 +479,13 @@
       </div>
       <div class="ap-tools">
         <button type="button" class="primary" id="ap-run">開始比對</button>
-        <button type="button" class="ghost noprint" id="ap-ok-all">目前畫面全標沒問題</button>
-        <button type="button" class="ghost noprint" id="ap-csv">匯出待核對 CSV</button>
-        <button type="button" class="ghost noprint" id="ap-print">列印待核對（可存 PDF）</button>
-        <button type="button" class="ghost noprint" id="ap-copy-pending">複製待核對到 LINE</button>
-        <button type="button" class="ghost noprint" id="ap-copy-all">複製全部表格</button>
+        <button type="button" class="ghost noprint" id="ap-ok-all">全選目前畫面</button>
+        <button type="button" class="ghost noprint" id="ap-csv">下載待核對 CSV</button>
+        <button type="button" class="ghost noprint" id="ap-print">列印待核對</button>
+        <button type="button" class="ghost noprint" id="ap-copy-pending">複製待對方核對</button>
+        <button type="button" class="ghost noprint" id="ap-copy-all">複製全部差異</button>
       </div>
-      <div class="ap-linebox noprint">
-        <label for="ap-paste">LINE 複製表格後貼這裡（或從 Excel 貼上）</label>
-        <textarea id="ap-paste" placeholder="在 LINE 長按複製表格，貼到這裡後按「貼上成表格」。"></textarea>
-        <div class="ap-tools" style="margin:0">
-          <button type="button" class="primary" id="ap-paste-go">貼上成表格</button>
-        </div>
-      </div>
+      <textarea id="ap-copy-out" class="noprint" hidden readonly></textarea>
       <p class="ap-msg" id="ap-msg"></p>
       <div id="ap-body"></div>`;
     }
@@ -594,7 +510,7 @@
     const table = vis.length
       ? `<div class="ap-sheet-wrap"><table class="ap-sheet">
         <thead><tr>
-          <th class="noprint">沒問題</th>
+          <th class="noprint">勾選</th>
           <th>狀態</th>
           <th>貨款日</th><th>市場</th><th>品項</th>
           <th>鴻安件</th><th>貨款件</th><th>差</th>
@@ -604,9 +520,11 @@
           .map((r) => {
             const k = keyOf(r);
             const dtxt = `${r.d > 0 ? "+" : ""}${r.d}`;
-            return `<tr class="${r.ok ? "is-ok" : "is-bad"}" data-ap-k="${esc(k)}">
-              <td class="noprint"><input class="ap-check" type="checkbox" ${r.ok ? "checked" : ""} /></td>
-              <td>${r.ok ? '<span class="ap-okmark">沒問題</span>' : '<span class="ap-mark">有問題</span>'}</td>
+            const picked = pickKeys.has(k);
+            const cls = r.ok ? "is-ok" : picked ? "is-pick" : "is-bad";
+            return `<tr class="${cls}" data-ap-k="${esc(k)}">
+              <td class="noprint">${r.ok ? "" : `<input class="ap-check" type="checkbox" ${picked ? "checked" : ""} />`}</td>
+              <td>${r.ok ? '<span class="ap-okmark">沒問題</span>' : picked ? '<span class="ap-okmark" style="background:#b8860b">已勾、未送出</span>' : '<span class="ap-mark">有問題</span>'}</td>
               <td>${esc(md(r.dt))}</td>
               <td>${esc(r.mk)}</td>
               <td>${esc(r.crop)}</td>
@@ -628,6 +546,10 @@
               <button type="button" class="pick${view === "pending" ? " on" : ""}" data-ap-view="pending">待對方核對</button>
               <button type="button" class="pick${view === "ok" ? " on" : ""}" data-ap-view="ok">已確認沒問題</button>
               <button type="button" class="pick${view === "all" ? " on" : ""}" data-ap-view="all">全部差異</button>
+            </div>
+            <div class="ap-submit-bar noprint">
+              <button type="button" class="primary" id="ap-submit-ok">確認送出無誤</button>
+              <span class="muted">勾選後列還在，按確認才會標沒問題。</span>
             </div>`
           : ""
       }

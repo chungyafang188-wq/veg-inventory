@@ -6916,8 +6916,8 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .people-nav.is-on { background: var(--green); color: #fff; font-weight: 700; }
 .attend-layout {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 16.5rem;
-  grid-template-areas: "date pills result" "form form result";
+  grid-template-columns: auto minmax(0, 1fr) minmax(16rem, 20rem);
+  grid-template-areas: "date pills result" "form form form";
   gap: 0.8rem;
   align-items: start;
 }
@@ -6967,7 +6967,8 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 }
 .attend-crew label { display: grid; gap: 0.15rem; font-size: 0.75rem; color: var(--muted); min-width: 0; }
 .attend-crew-name { align-self: center; }
-.attend-result { background: var(--card); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.8rem 0.85rem; }
+.attend-result { background: var(--card); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.8rem 0.85rem; word-break: keep-all; min-width: 0; }
+.attend-form { min-width: 0; }
 .attend-result-kicker { margin: 0; font-size: 0.82rem; font-weight: 700; }
 .attend-result-line { margin: 0.25rem 0 0.55rem; color: #1d4ed8; font-size: 1.15rem; font-weight: 750; line-height: 1.35; }
 .attend-name-list { display: grid; gap: 0.35rem; }
@@ -6977,7 +6978,8 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .attend-names span { white-space: nowrap; }
 .attend-bento-num { margin: 0.7rem 0 0; text-align: center; color: var(--green); font-size: 1.8rem; font-weight: 750; }
 .attend-bento-lab, .attend-bento-math { margin: 0; text-align: center; color: var(--muted); font-size: 0.82rem; }
-.attend-extra { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.45rem; font-size: 0.85rem; }
+.attend-bento-math span { white-space: nowrap; }
+.attend-extra { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.45rem; font-size: 0.85rem; flex-wrap: nowrap; white-space: nowrap; }
 .attend-extra .attend-in { width: 4rem; }
 body.layout-phone .attend-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "date" "result" "pills" "form"; gap: 0.7rem; }
 body.layout-phone .attend-cal { grid-template-columns: repeat(7, 2rem); }

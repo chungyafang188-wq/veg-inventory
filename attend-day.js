@@ -9,6 +9,14 @@ const ATTEND_CREWS = [
   { id: "yao", boss: "耀輝" },
   { id: "zhen", boss: "小珍" },
 ];
+const ATTEND_FIXED_FIELDS = ["on", "start", "end", "start2", "end2", "rest", "split", "noBento"];
+const ATTEND_CREW_FIELDS = ["plan", "people", "start", "end", "rest", "off", "showHours", "price", "pay", "note"];
+function attendMark(rec, field) {
+  if (!rec || !field) return rec;
+  if (!rec.at || typeof rec.at !== "object" || Array.isArray(rec.at)) rec.at = {};
+  rec.at[field] = Date.now();
+  return rec;
+}
 let attendIso = "";
 const attendOpen = new Set();
 
@@ -363,14 +371,26 @@ function attendToggle(iso, kind, id, crewId, checked) {
   const rec = attendEnsure(iso);
   if (crewId) {
     const base = attendCrew(iso, ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId });
-    if (kind === "off") base.off = checked;
+    if (kind === "off") {
+      base.off = checked;
+      attendMark(base, "off");
+    }
     rec.crews[crewId] = base;
   } else if (id) {
     const person = ATTEND_ROSTER.find((p) => p.id === id);
     const base = attendFixed(iso, person || { id });
-    if (kind === "on") base.on = checked;
-    if (kind === "split") base.split = checked;
-    if (kind === "nobento") base.noBento = checked;
+    if (kind === "on") {
+      base.on = checked;
+      attendMark(base, "on");
+    }
+    if (kind === "split") {
+      base.split = checked;
+      attendMark(base, "split");
+    }
+    if (kind === "nobento") {
+      base.noBento = checked;
+      attendMark(base, "noBento");
+    }
     rec.fixed[id] = base;
   }
   save();
@@ -378,19 +398,24 @@ function attendToggle(iso, kind, id, crewId, checked) {
 }
 function attendField(iso, field, id, crewId, value) {
   const rec = attendEnsure(iso);
-  if (field === "extra") rec.extra = value;
-  else if (crewId) {
+  if (field === "extra") {
+    rec.extra = value;
+    rec.extraAt = Date.now();
+  } else if (crewId) {
     const base = attendCrew(iso, ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId });
-    if (field === "plan") base.plan = value;
-    if (field === "people") base.people = value;
-    if (field === "cstart") base.start = value;
-    if (field === "cend") base.end = value;
-    if (field === "crest") base.rest = value;
+    const crewField = field === "cstart" ? "start" : field === "cend" ? "end" : field === "crest" ? "rest" : field;
+    if (field === "plan" || field === "people" || field === "cstart" || field === "cend" || field === "crest") {
+      base[crewField] = value;
+      attendMark(base, crewField);
+    }
     rec.crews[crewId] = base;
   } else if (id) {
     const person = ATTEND_ROSTER.find((p) => p.id === id);
     const base = attendFixed(iso, person || { id });
-    if (field === "start" || field === "end" || field === "start2" || field === "end2" || field === "rest") base[field] = value;
+    if (field === "start" || field === "end" || field === "start2" || field === "end2" || field === "rest") {
+      base[field] = value;
+      attendMark(base, field);
+    }
     rec.fixed[id] = base;
   }
   save();
@@ -467,6 +492,13 @@ function attendBillHoursNote(day) {
   if (!n || hours == null || !Number.isFinite(hours)) return "";
   const total = Math.round(n * hours * 10) / 10;
   return `${n}人*${hours}小時=${total}H`;
+}
+function attendBillTotalHours(people, hours, off) {
+  if (off) return "";
+  const n = attendWhole(people);
+  const h = hours === "" || hours == null ? null : Number(hours);
+  if (!n || h == null || !Number.isFinite(h)) return "";
+  return `${Math.round(n * h * 10) / 10}小時`;
 }
 function attendBillSlipNote(day) {
   return [attendBillHoursNote(day), String(day.note || "").trim()].filter(Boolean).join(" ");
@@ -604,6 +636,7 @@ function attendBillForm(days, crewId, opts) {
         <label class="bill-end"><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end))}"></label>
         <label class="bill-rest"><span class="bill-mini">午休</span><input class="attend-in" data-bill-field="rest" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${cross ? esc(String(day.rest)) : ""}" placeholder="${cross ? "60" : "—"}" inputmode="numeric"${cross ? "" : " disabled"}></label>
         <span class="bill-hours"><span class="bill-mini">時數</span><b class="bill-hours-num" data-bill-hours="${esc(day.iso)}">${esc(day.hours)}</b></span>
+        <span class="bill-total-hours"><span class="bill-mini">總工時</span><b data-bill-total-hours="${esc(day.iso)}">${esc(attendBillTotalHours(day.people, day.hours, day.off))}</b></span>
         <label class="bill-price"><span class="bill-mini">時薪</span><input class="attend-in" data-bill-field="price" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.price))}" inputmode="numeric"></label>
         <span class="bill-estimate"><span class="bill-mini">預計</span><b class="bill-estimate-num" data-bill-estimate="${esc(day.iso)}">${esc(day.estimate)}</b></span>
         <label class="bill-pay"><span class="bill-mini">實發</span><input class="attend-in" data-bill-field="pay" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.pay))}" inputmode="numeric"></label>
@@ -621,7 +654,7 @@ function attendBillForm(days, crewId, opts) {
   const total = days.reduce((sum, day) => sum + (Number(day.amt) || 0), 0);
   const foot = opts && opts.foot === false ? "" : `<div class="bill-foot"><span>合計</span><b id="bill-total">${total ? attendBillMoney(total) : ""}</b></div>`;
   return `<div class="bill-form">
-    <div class="bill-head"><span>日期</span><span>人數</span><span>開始</span><span>結束</span><span>午休</span><span>時數</span><span>時薪</span><span>預計</span><span>實發</span><span>金額</span><span>休</span><span>備註</span></div>
+    <div class="bill-head"><span>日期</span><span>人數</span><span>開始</span><span>結束</span><span>午休</span><span>時數</span><span>總工時</span><span>時薪</span><span>預計</span><span>實發</span><span>金額</span><span>休</span><span>備註</span></div>
     ${lines}
     ${foot}
   </div>`;
@@ -870,7 +903,7 @@ function attendBillHtml() {
   const one = days.filter((day) => day.iso === focus);
   return `<section class="bill-page">
     <h2>工時費用單</h2>
-    <p class="attend-note">人數和時間會記到每日到班。跨中午可填午休分鐘，空白扣 60 分，填 0 不扣。預計＝時數×時薪，是一人的估計。實發自己填，改時間不會蓋掉。金額＝實發×人數。</p>
+    <p class="attend-note">人數和時間會記到每日到班。跨中午可填午休分鐘，空白扣 60 分，填 0 不扣。總工時＝人數×時數，單位小時，兩邊都有才顯示。預計＝時數×時薪，是一人的估計。實發自己填，改時間不會蓋掉。金額＝實發×人數。</p>
     <div class="bill-filters">
       <label>老闆 <select data-bill-boss>${bossOpts}</select></label>
       <label>月份 <select data-bill-month>${monthOpts}</select></label>
@@ -887,9 +920,18 @@ function attendBillEdit(iso, crewId, field, value) {
   const rec = attendEnsure(iso);
   const crew = ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId };
   const base = attendCrew(iso, crew);
-  if (field === "off") base.off = !!value;
-  if (field === "showHours") base.showHours = !!value;
-  if (field === "people" || field === "start" || field === "end" || field === "rest" || field === "price" || field === "pay" || field === "note") base[field] = value;
+  if (field === "off") {
+    base.off = !!value;
+    attendMark(base, "off");
+  }
+  if (field === "showHours") {
+    base.showHours = !!value;
+    attendMark(base, "showHours");
+  }
+  if (field === "people" || field === "start" || field === "end" || field === "rest" || field === "price" || field === "pay" || field === "note") {
+    base[field] = value;
+    attendMark(base, field);
+  }
   rec.crews[crewId] = base;
   save();
   const amt = attendBillAmount(base);
@@ -898,8 +940,11 @@ function attendBillEdit(iso, crewId, field, value) {
     row.classList.toggle("is-off", !!base.off);
     const cell = row.querySelector("[data-bill-amt] .bill-amt-num");
     if (cell) cell.textContent = amt === "" ? "" : attendBillMoney(amt);
+    const hoursText = attendBillHoursText(base);
     const hoursEl = row.querySelector("[data-bill-hours]");
-    if (hoursEl) hoursEl.textContent = attendBillHoursText(base);
+    if (hoursEl) hoursEl.textContent = hoursText;
+    const totalHoursEl = row.querySelector("[data-bill-total-hours]");
+    if (totalHoursEl) totalHoursEl.textContent = attendBillTotalHours(base.people, hoursText, base.off);
     const estimateEl = row.querySelector("[data-bill-estimate]");
     if (estimateEl) estimateEl.textContent = attendBillEstimate(base);
     const hoursNote = row.querySelector("[data-bill-hours-note]");

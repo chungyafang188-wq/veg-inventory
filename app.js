@@ -4805,14 +4805,16 @@ function renderLoginPeople() {
     .join("");
 }
 function preferredLayoutMode() {
+  let wide = false;
+  try {
+    wide = window.matchMedia("(min-width: 900px)").matches;
+  } catch (_) {}
+  if (!wide) return "phone";
   try {
     const saved = localStorage.getItem(LAYOUT_MODE_KEY);
     if (saved === "web" || saved === "phone") return saved;
   } catch (_) {}
-  try {
-    if (window.matchMedia("(min-width: 900px)").matches) return "web";
-  } catch (_) {}
-  return "phone";
+  return "web";
 }
 function applyLayoutMode(mode) {
   const next = mode === "web" ? "web" : "phone";
@@ -15448,6 +15450,7 @@ function bundleHasData(b) {
   if (Array.isArray(b.importArrivals) && b.importArrivals.length) return true;
   if (Array.isArray(b.importReleased) && b.importReleased.length) return true;
   if (cashDaysHaveData(b.cashDays)) return true;
+  if (attendanceHasData(b.attendance)) return true;
   return stockHasData(b.orders?.stock);
 }
 function cashDaysHaveData(days) {
@@ -15469,7 +15472,100 @@ function localHasData() {
   if ((state.importArrivals || []).length) return true;
   if ((state.importReleased || []).length) return true;
   if (cashDaysHaveData(state.cashDays)) return true;
+  if (attendanceHasData(state.attendance)) return true;
   return stockHasData(state.stock);
+}
+function attendanceHasData(bag) {
+  if (!bag || typeof bag !== "object" || Array.isArray(bag)) return false;
+  return Object.keys(bag).some((k) => /^\d{4}-\d{2}-\d{2}$/.test(k));
+}
+function attendanceSig(bag) {
+  const walk = (v) => {
+    if (Array.isArray(v)) return `[${v.map(walk).join(",")}]`;
+    if (v && typeof v === "object") {
+      return `{${Object.keys(v)
+        .sort()
+        .map((k) => `${JSON.stringify(k)}:${walk(v[k])}`)
+        .join(",")}}`;
+    }
+    return JSON.stringify(v);
+  };
+  try {
+    return walk(bag && typeof bag === "object" && !Array.isArray(bag) ? bag : {});
+  } catch (_) {
+    return "";
+  }
+}
+function attendMergeFields(kind) {
+  if (kind === "fixed") {
+    return typeof ATTEND_FIXED_FIELDS !== "undefined" ? ATTEND_FIXED_FIELDS : ["on", "start", "end", "start2", "end2", "rest", "split", "noBento"];
+  }
+  return typeof ATTEND_CREW_FIELDS !== "undefined"
+    ? ATTEND_CREW_FIELDS
+    : ["plan", "people", "start", "end", "rest", "off", "showHours", "price", "pay", "note"];
+}
+function attendFieldAt(rec, field) {
+  const t = rec && rec.at && Number(rec.at[field]);
+  return Number.isFinite(t) ? t : 0;
+}
+function mergeAttendRecord(localRec, remoteRec, fields) {
+  const local = localRec && typeof localRec === "object" && !Array.isArray(localRec) ? localRec : null;
+  const remote = remoteRec && typeof remoteRec === "object" && !Array.isArray(remoteRec) ? remoteRec : null;
+  if (!local && !remote) return null;
+  const out = {};
+  const at = {};
+  for (const field of fields) {
+    const hasL = !!(local && Object.prototype.hasOwnProperty.call(local, field));
+    const hasR = !!(remote && Object.prototype.hasOwnProperty.call(remote, field));
+    const lt = attendFieldAt(local, field);
+    const rt = attendFieldAt(remote, field);
+    const pickRemote = (rt > lt && hasR) || (!hasL && hasR);
+    const src = pickRemote ? remote : local;
+    if (!src || !Object.prototype.hasOwnProperty.call(src, field)) continue;
+    out[field] = src[field];
+    const stamp = pickRemote ? rt : lt;
+    if (stamp) at[field] = stamp;
+  }
+  if (Object.keys(at).length) out.at = at;
+  return out;
+}
+function mergeAttendMap(localMap, remoteMap, fields) {
+  const local = localMap && typeof localMap === "object" && !Array.isArray(localMap) ? localMap : {};
+  const remote = remoteMap && typeof remoteMap === "object" && !Array.isArray(remoteMap) ? remoteMap : {};
+  const out = {};
+  for (const id of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    const row = mergeAttendRecord(local[id], remote[id], fields);
+    if (row) out[id] = row;
+  }
+  return out;
+}
+function mergeAttendDay(localDay, remoteDay) {
+  const local = localDay && typeof localDay === "object" && !Array.isArray(localDay) ? localDay : {};
+  const remote = remoteDay && typeof remoteDay === "object" && !Array.isArray(remoteDay) ? remoteDay : {};
+  const lt = Number(local.extraAt) || 0;
+  const rt = Number(remote.extraAt) || 0;
+  const pickRemoteExtra = rt > lt || (local.extra == null && remote.extra != null && rt >= lt);
+  const extra = pickRemoteExtra ? remote.extra : local.extra;
+  const day = {
+    fixed: mergeAttendMap(local.fixed, remote.fixed, attendMergeFields("fixed")),
+    crews: mergeAttendMap(local.crews, remote.crews, attendMergeFields("crew")),
+    extra: extra == null ? "0" : extra,
+  };
+  const extraAt = pickRemoteExtra ? rt : lt;
+  if (extraAt) day.extraAt = extraAt;
+  return day;
+}
+function mergeAttendance(localBag, remoteBag) {
+  const remoteOk = remoteBag && typeof remoteBag === "object" && !Array.isArray(remoteBag);
+  const localOk = localBag && typeof localBag === "object" && !Array.isArray(localBag);
+  if (!remoteOk) return localOk ? localBag : {};
+  if (!localOk) return remoteBag;
+  const out = {};
+  for (const iso of new Set([...Object.keys(localBag), ...Object.keys(remoteBag)])) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) continue;
+    out[iso] = mergeAttendDay(localBag[iso], remoteBag[iso]);
+  }
+  return out;
 }
 function collectBundle() {
   return {
@@ -15485,6 +15581,7 @@ function collectBundle() {
     importReleased: state.importReleased || [],
     importRemoved: state.importRemoved || [],
     cashDays: state.cashDays || {},
+    attendance: state.attendance && typeof state.attendance === "object" && !Array.isArray(state.attendance) ? state.attendance : {},
   };
 }
 function applyBundle(b) {
@@ -15539,6 +15636,12 @@ function applyBundle(b) {
     if (b.cashDays && typeof b.cashDays === "object" && !Array.isArray(b.cashDays)) {
       state.cashDays =
         typeof mergeCashDays === "function" ? mergeCashDays(state.cashDays, b.cashDays) : b.cashDays;
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (_) {}
+    }
+    if (Object.prototype.hasOwnProperty.call(b, "attendance") && b.attendance && typeof b.attendance === "object" && !Array.isArray(b.attendance)) {
+      state.attendance = mergeAttendance(state.attendance, b.attendance);
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
       } catch (_) {}
@@ -15768,13 +15871,23 @@ async function pushCloud(force, retry) {
   try {
     const remote = await pullCloud();
     const remoteAt = Number(remote.updatedAt) || 0;
+    const beforeAtt = attendanceSig(state.attendance);
+    if (remote && Object.prototype.hasOwnProperty.call(remote, "attendance") && remote.attendance && typeof remote.attendance === "object" && !Array.isArray(remote.attendance)) {
+      state.attendance = mergeAttendance(state.attendance, remote.attendance);
+    }
+    const attendanceChanged = attendanceSig(state.attendance) !== beforeAtt;
     if (bundleHasData(remote) && remoteAt > basedOn) {
       const before = orderSig(state.orders);
       const beforeImp = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
       takeRemoteOrders(remote);
       const afterImp = importBundleSig(state.importCabinets, state.importArrivals, state.importReleased);
-      if (orderSig(state.orders) !== before || afterImp !== beforeImp) render();
+      if (orderSig(state.orders) !== before || afterImp !== beforeImp || attendanceChanged || attendanceSig(state.attendance) !== beforeAtt) render();
       basedOn = remoteAt;
+    } else if (attendanceChanged) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch (_) {}
+      render();
     }
   } catch (_) {}
   const bundle = collectBundle();
@@ -15836,11 +15949,14 @@ async function healCloudSync() {
       );
       const importLocalGap = mergedImpSig !== localImpSig;
       const importRemoteGap = mergedImpSig !== remoteImpSig;
-      if (remoteAt > localAt && !localGap && !remoteGap && !importLocalGap && !importRemoteGap) {
+      const mergedAtt = mergeAttendance(state.attendance, remote.attendance);
+      const attLocalGap = attendanceSig(mergedAtt) !== attendanceSig(state.attendance);
+      const attRemoteGap = attendanceSig(mergedAtt) !== attendanceSig(remote.attendance);
+      if (remoteAt > localAt && !localGap && !remoteGap && !importLocalGap && !importRemoteGap && !attLocalGap && !attRemoteGap) {
         applyBundle(remote);
         render();
         setSyncNote("已從手機／共用載入最新資料。");
-      } else if (localGap || remoteGap || importLocalGap || importRemoteGap) {
+      } else if (localGap || remoteGap || importLocalGap || importRemoteGap || attLocalGap || attRemoteGap) {
         const bundle = remoteAt >= localAt ? { ...remote } : collectBundle();
         bundle.orders = bundle.orders || {};
         bundle.orders.orders = mergedOrders;
@@ -15851,6 +15967,7 @@ async function healCloudSync() {
         bundle.importArrivals = mergedImp.importArrivals;
         bundle.importReleased = mergedImp.importReleased;
         bundle.importRemoved = mergedImp.importRemoved;
+        bundle.attendance = mergedAtt;
         bundle.updatedAt = Date.now();
         applyBundle(bundle);
         render();

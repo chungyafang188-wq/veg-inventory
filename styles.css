@@ -7052,6 +7052,23 @@ body.layout-phone .attend-crew > label:nth-child(7) { grid-area: rest; }
 body.layout-phone .attend-crew-hours { grid-area: hours; }
 body.layout-phone .attend-crew-bento { grid-area: bento; }
 body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05rem; }
+@media (max-width: 899px) {
+  body.layout-web .people-work .sales-shell-body { flex-direction: column; }
+  body.layout-web .people-work .sales-shell-side { width: 100%; border-right: 0; border-bottom: 1px solid #e2e8f0; }
+  body.layout-web .people-work .sales-side-nav { flex-direction: row; overflow-x: auto; }
+  body.layout-web .people-work .sales-side { width: auto; flex-shrink: 0; }
+  body.layout-web .people-work .sales-side[data-people-pane="accounts"],
+  body.layout-web .people-work .sales-side[data-people-pane="bosses"],
+  body.layout-web .people-work .sales-side[data-people-pane="workers"],
+  body.layout-web .people-work .sales-side[data-people-pane="dispatch"] { display: none; }
+  body.layout-web .attend-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "date" "result" "pills" "form";
+  }
+  body.layout-web .attend-result-line { display: flex; flex-wrap: wrap; gap: 0.1rem 0.45rem; white-space: normal; }
+  body.layout-web .attend-result-line span,
+  body.layout-web .attend-extra { white-space: nowrap; }
+}
 
 .people-jump { border: 1px solid var(--green); background: #fff; color: var(--green); border-radius: 999px; padding: 0.28rem 0.75rem; margin-right: 0.45rem; cursor: pointer; font-weight: 700; }
 .bill-page h2 { margin: 0 0 0.25rem; font-size: 1.15rem; }
@@ -7059,14 +7076,15 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-filters { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 0.6rem 0; }
 .bill-filters select { width: auto; padding: 0.35rem 0.5rem; }
 .bill-title { margin: 0.2rem 0 0.45rem; font-weight: 700; }
-.bill-head, .bill-line { display: grid; grid-template-columns: 3rem 3rem 3.4rem 3.4rem 2.8rem 2.4rem 3rem 3rem 3.2rem 3.2rem 2rem 5.4rem; gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
+.bill-head, .bill-line { display: grid; grid-template-columns: 3rem 3rem 3.4rem 3.4rem 2.8rem 2.4rem 4.6rem 3rem 3rem 3.2rem 3.2rem 2rem 5.4rem; gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
 .bill-head { color: var(--muted); font-size: 0.78rem; }
 .bill-mini { display: none; }
 .bill-line label { display: grid; gap: 0.1rem; min-width: 0; }
 .bill-line .attend-in { width: 100%; padding: 0.28rem 0.35rem; }
 .bill-off { display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
 .bill-off input { width: auto; padding: 0; }
-.bill-hours, .bill-estimate { color: var(--ink); font-variant-numeric: tabular-nums; }
+.bill-hours, .bill-total-hours, .bill-estimate { color: var(--ink); font-variant-numeric: tabular-nums; }
+.bill-total-hours b { font-weight: 700; white-space: nowrap; }
 .bill-hours-num, .bill-estimate-num { font-weight: 700; }
 .bill-note .attend-in { max-width: 6.2rem; }
 .bill-line .bill-show-hours { display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem; color: var(--muted); font-size: 0.78rem; white-space: nowrap; font-weight: 700; }
@@ -7102,7 +7120,7 @@ body.layout-phone .bill-form { display: flex; flex-direction: column; gap: 0.6re
 body.layout-phone .bill-mini { display: block; margin-bottom: 0.12rem; font-size: 0.78rem; color: var(--muted); }
 body.layout-phone .bill-line {
   grid-template-columns: 1fr 1fr;
-  grid-template-areas: "date off" "people start" "end hours" "rest rest" "price estimate" "pay amt" "note note";
+  grid-template-areas: "date off" "people start" "end hours" "total rest" "price estimate" "pay amt" "note note";
   gap: 0.45rem 0.55rem;
   margin: 0;
   padding: 0.7rem 0.75rem 0.8rem;
@@ -7115,6 +7133,7 @@ body.layout-phone .bill-line > .bill-people { grid-area: people; }
 body.layout-phone .bill-line > .bill-start { grid-area: start; }
 body.layout-phone .bill-line > .bill-end { grid-area: end; }
 body.layout-phone .bill-line > .bill-hours { grid-area: hours; align-self: end; }
+body.layout-phone .bill-line > .bill-total-hours { grid-area: total; align-self: end; }
 body.layout-phone .bill-line > .bill-rest { grid-area: rest; }
 body.layout-phone .bill-line > .bill-price { grid-area: price; }
 body.layout-phone .bill-line > .bill-estimate { grid-area: estimate; align-self: end; }

@@ -669,14 +669,39 @@ function handleApi(req, res) {
           if (lines) rec.lines = lines;
           if (typeof body.billText === "string") rec.billText = body.billText.slice(0, 20000);
           if (typeof body.note === "string") rec.note = body.note.slice(0, 200);
+          if (typeof body.inner === "string") rec.inner = body.inner.slice(0, 200);
           const i = sessions.findIndex((s) => s && s.id === id);
+          const prev = i >= 0 ? sessions[i] : null;
+          const houseId = rec.house;
+          const ship = rec.shipDate;
+          let seq = "";
+          if (prev && /^\d{5}$/.test(String(prev.seq || ""))) seq = String(prev.seq);
+          else {
+            const want = String(body.seq || "").replace(/\D/g, "").slice(0, 5);
+            const clash = /^\d{5}$/.test(want) && sessions.some((s) => s && s.id !== id && String(s.seq || "") === want);
+            const digit = houseId === "xinfeng" ? "1" : houseId === "yongfang" ? "2" : houseId === "dazhuang" ? "3" : houseId === "erlun" ? "4" : "9";
+            const dd = String(ship || "").slice(-2).padStart(2, "0");
+            if (/^\d{5}$/.test(want) && !clash) seq = want;
+            else {
+              const used = new Set();
+              sessions.forEach((s) => {
+                if (!s || s.id === id || s.house !== houseId || s.shipDate !== ship) return;
+                const n = Number(String(s.seq || "").slice(-2));
+                if (n) used.add(n);
+              });
+              let n = 1;
+              while (used.has(n) && n < 99) n += 1;
+              seq = `${digit}${dd}${String(n).padStart(2, "0")}`;
+            }
+          }
+          rec.seq = seq;
           if (i >= 0) {
             rec.at = Number(sessions[i].at) || rec.at;
             sessions[i] = { ...sessions[i], ...rec };
           } else sessions.push(rec);
           sessions.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
           saveSessions(sessions.slice(0, 300));
-          send(res, 200, JSON.stringify({ ok: true, id }), TYPES[".json"]);
+          send(res, 200, JSON.stringify({ ok: true, id, seq }), TYPES[".json"]);
         })
         .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
       return true;

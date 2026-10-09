@@ -13,7 +13,7 @@
   const MK_KEYS = MARKETS.map((x) => x[0]);
   const HOUSES = [
     { id: "xinfeng", lab: "新豐" },
-    { id: "yongfang", lab: "永芳" },
+    { id: "yongfang", lab: "金芳" },
     { id: "dazhuang", lab: "大庄" },
     { id: "erlun", lab: "二崙果菜" },
   ];
@@ -44,14 +44,19 @@
       rows: [],
       title: "",
       note: "",
+      inner: "",
       saved: false,
     };
   }
   let slips = [freshSlip()];
   let cur = 0;
+  let listDay = "";
+  let listMonth = "";
+  let listQ = "";
   let lines = slips[0].lines;
   let billText = "";
   let note = "";
+  let inner = "";
   let rows = [];
 
   function esc(s) {
@@ -179,13 +184,78 @@
     }
     return blocks;
   }
+  const HOUSE_NO = { xinfeng: "1", yongfang: "2", dazhuang: "3", erlun: "4" };
+  function slipNo(s) {
+    const raw = String(s?.seq || "").replace(/\D/g, "");
+    return /^\d{5}$/.test(raw) ? raw : "";
+  }
+  function allocSeq(s) {
+    const had = slipNo(s);
+    if (had) return had;
+    const h = HOUSE_NO[s.house] || "9";
+    const dd = String(s.shipDate || "").slice(-2).padStart(2, "0");
+    const used = new Set();
+    for (const o of slips) {
+      if (o === s || o.house !== s.house || o.shipDate !== s.shipDate) continue;
+      const n = Number(String(o.seq || "").slice(-2));
+      if (n) used.add(n);
+    }
+    let n = 1;
+    while (used.has(n) && n < 99) n += 1;
+    s.seq = `${h}${dd}${String(n).padStart(2, "0")}`;
+    return s.seq;
+  }
+  function slipOrd(s) {
+    const n = Number(String(s?.seq || "").slice(-2));
+    if (n) return n;
+    const mates = slips.filter((x) => x.house && x.house === s.house && x.shipDate === s.shipDate);
+    const i = mates.indexOf(s);
+    return i >= 0 ? i + 1 : 1;
+  }
+  function openAnother(houseId) {
+    syncCurrent();
+    const id = houseId || house;
+    if (!id) return;
+    const day = shipDate || localYmd();
+    let draft = slips.findIndex((s) => !s.saved && s.house === id && s.shipDate === day && !slipBits(s).total);
+    if (draft < 0) {
+      const blank = freshSlip();
+      blank.house = id;
+      blank.shipDate = day;
+      slips.push(blank);
+      draft = slips.length - 1;
+    }
+    applySlip(draft);
+    house = id;
+    shipDate = day;
+    slips[cur].house = id;
+    slips[cur].shipDate = day;
+    const savedN = slips.filter((s) => s.saved && s.house === id && s.shipDate === day).length;
+    msg = savedN ? `${houseLab(id)}今天已存 ${savedN} 張，這張是第 ${savedN + 1} 張。` : "";
+    pane = "key";
+    renderDailyQty();
+  }
+  function slipNoticeText(s, kind) {
+    const sum = slipBits(s);
+    const no = slipNo(s);
+    const head = `【${houseLab(s.house) || "未選社場"}】寄送 ${s.shipDate || ""}`;
+    const headLine = no ? `${head}  ${no}` : head;
+    const freight = String(s.note || "").trim();
+    const batch = String(s.inner || "").trim();
+    const tails = [];
+    if (freight) tails.push(`收貨：${freight}`);
+    if (kind !== "freight" && batch) tails.push(`批次：${batch}`);
+    if (!sum.blocks.length) return [headLine, "沒有件數", ...tails].filter(Boolean).join("\n");
+    const body = sum.blocks.map((b) =>
+      [b.label, ...b.markets.map((m) => `${m.mk} ${m.qty}件`), `合計 ${b.sub}件`].join("\n"),
+    );
+    return [headLine, "", body.join("\n\n"), tails.length ? `\n${tails.join("\n")}` : ""].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
   function noticeText() {
-    const blocks = noticeBlocks();
-    const head = houseName() ? `【${houseName()}】寄送 ${shipDate || localYmd()}` : "尚未選社場";
-    const noteLine = String(note || "").trim();
-    const body = [blocks.join("\n\n"), noteLine ? `備註：${noteLine}` : ""].filter(Boolean);
-    if (!body.length) return head;
-    return `${head}\n\n${body.join("\n\n")}`;
+    syncCurrent();
+    const s = slips[cur];
+    if (!s || !houseName()) return "尚未選社場";
+    return slipNoticeText(s);
   }
   function syncCurrent() {
     const s = slips[cur];
@@ -195,6 +265,7 @@
     s.lines = lines;
     s.billText = billText;
     s.note = note;
+    s.inner = inner;
     s.rows = rows;
     s.title = title;
     s.id = sessionId || s.id;
@@ -209,6 +280,7 @@
     s.lines = lines;
     billText = s.billText || "";
     note = s.note || "";
+    inner = s.inner || "";
     rows = Array.isArray(s.rows) ? s.rows : [];
     title = s.title || "";
     sessionId = s.id;
@@ -230,113 +302,205 @@
         lines: Array.isArray(s.lines) && s.lines.length ? s.lines : [freshLine()],
         billText: s.billText || "",
         note: s.note || "",
+        inner: s.inner || "",
         rows: Array.isArray(s.rows) ? s.rows : [],
         title: s.title || "",
         saved: !!s.saved,
+        seq: s.seq || "",
       }));
       if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
       applySlip(Math.min(Number(j.cur) || 0, slips.length - 1));
     } catch (_) {}
   }
   function slipBits(s) {
-    const parts = [];
+    const blocks = [];
     let total = 0;
     for (const line of s.lines || []) {
-      const bits = [];
+      const markets = [];
       let sub = 0;
       for (const slot of line.slots || []) {
         const q = qtyOf(slot.qty);
         if (!slot.mk || !q) continue;
-        bits.push(`${slot.mk} ${q}件`);
+        markets.push({ mk: String(slot.mk).trim(), qty: q });
         sub += q;
         total += q;
       }
-      if (!bits.length) continue;
-      parts.push(`${itemLabel(line)}　${bits.join("、")}　合計 ${sub}件`);
+      if (!markets.length) continue;
+      blocks.push({ label: itemLabel(line), markets, sub });
     }
-    return { parts, total };
+    return { blocks, total };
   }
   function slipPlainText(s) {
-    const sum = slipBits(s);
-    const head = [houseLab(s.house) || "未選社場", s.shipDate || ""].filter(Boolean).join(" ");
-    const body = sum.parts.length ? sum.parts.map((p) => `• ${p}`) : ["沒有件數"];
-    return [head, ...body].join("\n");
+    return slipNoticeText(s);
+  }
+  function shiftMonth(ym, dir) {
+    const [y, m] = String(ym || "").split("-").map(Number);
+    const dt = new Date(y || 2026, (m || 1) - 1 + dir, 1);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  }
+  function catalogRows() {
+    const rows = [];
+    for (const s of slips) {
+      if (!s.saved) continue;
+      const slipIndex = slips.indexOf(s);
+      const bits = slipBits(s);
+      let first = true;
+      for (const b of bits.blocks) {
+        for (const m of b.markets) {
+          rows.push({
+            id: s.id,
+            slipIndex,
+            date: s.shipDate || "",
+            house: houseLab(s.house) || "未選社場",
+            seq: slipNo(s),
+            item: b.label,
+            mk: m.mk,
+            qty: m.qty,
+            lead: first,
+          });
+          first = false;
+        }
+      }
+    }
+    return rows;
+  }
+  function rowHit(r, q) {
+    const words = String(q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const hay = `${r.date} ${r.seq} ${r.house} ${r.item} ${r.mk} ${r.qty}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  }
+  function gridTable(rows, opts) {
+    const showDate = !!opts.showDate;
+    const withAct = !!opts.actions;
+    const cols = (showDate ? 6 : 5) + (withAct ? 1 : 0);
+    const head = `${showDate ? "<th>日期</th>" : ""}<th>單號</th><th>社場</th><th>品項</th><th>市場</th><th>件數</th>${withAct ? "<th>操作</th>" : ""}`;
+    if (!rows.length) {
+      return `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr>${head}</tr></thead><tbody><tr><td class="dq-none" colspan="${cols}">沒有資料</td></tr></tbody></table></div>`;
+    }
+    const span = {};
+    rows.forEach((r) => {
+      span[r.id] = (span[r.id] || 0) + 1;
+    });
+    const seen = new Set();
+    const body = rows
+      .map((r) => {
+        let act = "";
+        if (withAct && !seen.has(r.id)) {
+          seen.add(r.id);
+          act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-open="${r.slipIndex}">修改</button><button type="button" class="primary" data-dq-match="${esc(r.id)}">回對</button></td>`;
+        }
+        return `<tr>${showDate ? `<td>${esc(r.date)}</td>` : ""}<td class="num">${esc(r.seq)}</td><td>${esc(r.house)}</td><td>${esc(r.item)}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
+      })
+      .join("");
+    const total = rows.reduce((n, r) => n + Number(r.qty || 0), 0);
+    const lead = showDate ? 5 : 4;
+    return `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td colspan="${lead}">合計</td><td class="num">${total}</td>${withAct ? "<td></td>" : ""}</tr></tfoot></table></div>`;
+  }
+  function dqCalHtml() {
+    const iso = listDay || localYmd();
+    const month = listMonth || iso.slice(0, 7);
+    const [y, m] = month.split("-").map(Number);
+    const first = new Date(y, m - 1, 1);
+    const lead = (first.getDay() + 6) % 7;
+    const count = new Date(y, m, 0).getDate();
+    const today = localYmd();
+    const marked = new Set(slips.filter((s) => s.saved && s.shipDate).map((s) => s.shipDate));
+    const week = ["一", "二", "三", "四", "五", "六", "日"].map((name) => `<span>${name}</span>`).join("");
+    let days = "";
+    for (let i = 0; i < lead; i += 1) days += "<span></span>";
+    for (let d = 1; d <= count; d += 1) {
+      const cell = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const cls = ["dq-day", marked.has(cell) ? "is-data" : "", cell === today ? "is-today" : "", cell === iso ? "is-sel" : ""]
+        .filter(Boolean)
+        .join(" ");
+      days += `<button type="button" class="${cls}" data-dq-day="${cell}">${d}</button>`;
+    }
+    return `<div class="dq-calbox">
+      <div class="dq-cal-nav">
+        <button type="button" class="ghost" data-dq-shift="-1">上一月</button>
+        <b>${y}年${m}月</b>
+        <button type="button" class="ghost" data-dq-shift="1">下一月</button>
+      </div>
+      <div class="dq-cal">${week}${days}</div>
+      <p class="dq-cal-note">綠底是有拍賣資料。點日期看當天。</p>
+    </div>`;
+  }
+  function slipBlockHtml(blocks) {
+    if (!blocks.length) return "<li>沒有件數</li>";
+    return blocks
+      .map((b) => {
+        const markets = b.markets.map((m) => `<span>${esc(m.mk)} ${m.qty}件</span>`).join("");
+        return `<li><b>${esc(b.label)}</b><span class="dq-mkts">${markets}</span><em>合計 ${b.sub}件</em></li>`;
+      })
+      .join("");
   }
   function slipFileName(s) {
     const base = `${houseLab(s.house) || "單據"}_${s.shipDate || "寄貨"}`;
     return `${base.replace(/[\\/:*?"<>|\s\u3000]+/g, "_")}.png`;
   }
   function setCardMsg(id, text) {
+    const box = document.getElementById("dq-list-msg");
+    if (box) box.textContent = text;
     document.querySelectorAll("[data-dq-card-msg]").forEach((el) => {
       if (el.dataset.dqCardMsg === id) el.textContent = text;
     });
   }
-  function wrapCanvasLines(ctx, text, max) {
-    const raw = String(text || "");
-    if (!raw) return [""];
-    const out = [];
-    let line = "";
-    for (const ch of raw) {
-      const next = line + ch;
-      if (ctx.measureText(next).width <= max) {
-        line = next;
-        continue;
-      }
-      if (line) out.push(line);
-      line = ch.trim() ? ch : "";
-    }
-    if (line) out.push(line);
-    return out.length ? out : [""];
-  }
-  function slipPngBlob(s) {
+  function slipPngBlob(s, kind) {
     const font = '"Microsoft JhengHei","Noto Sans TC",sans-serif';
     const sum = slipBits(s);
-    const title = houseLab(s.house) || "未選社場";
-    const date = s.shipDate || "";
-    const parts = sum.parts.length ? sum.parts : ["沒有件數"];
-    const width = 720;
-    const padX = 28;
-    const padY = 24;
-    const titleSize = 22;
-    const dateSize = 16;
-    const bodySize = 17;
-    const bulletW = 22;
-    const lineH = 30;
-    const titleBlock = 40;
-    const measure = document.createElement("canvas").getContext("2d");
-    measure.font = `600 ${bodySize}px ${font}`;
-    const maxW = width - padX * 2 - bulletW;
-    const wrapped = parts.map((p) => wrapCanvasLines(measure, p, maxW));
-    const rows = wrapped.reduce((n, lines) => n + lines.length, 0);
-    const height = padY + titleBlock + rows * lineH + padY;
+    const no = slipNo(s);
+    const head = `【${houseLab(s.house) || "未選社場"}】寄送 ${s.shipDate || ""}`;
+    const drawn = [];
+    if (!sum.blocks.length) drawn.push({ t: "沒有件數", strong: true });
+    sum.blocks.forEach((b, i) => {
+      if (i) drawn.push(null);
+      drawn.push({ t: b.label, strong: true });
+      b.markets.forEach((m) => drawn.push({ t: `${m.mk} ${m.qty}件`, strong: false }));
+      drawn.push({ t: `合計 ${b.sub}件`, strong: true });
+    });
+    const freight = String(s.note || "").trim();
+    const batch = String(s.inner || "").trim();
+    const tails = [];
+    if (freight) tails.push(`收貨：${freight}`);
+    if (kind !== "freight" && batch) tails.push(`批次：${batch}`);
+    if (tails.length) {
+      drawn.push(null);
+      tails.forEach((t) => drawn.push({ t, strong: false }));
+    }
+    const width = 760;
+    const padX = 36;
+    const padY = 28;
+    const headSize = 28;
+    const bodySize = 26;
+    const lineH = 40;
+    const headBlock = 58;
+    const height = padY + headBlock + drawn.length * lineH + padY;
     const scale = 2;
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(width * scale);
     canvas.height = Math.round(height * scale);
     const ctx = canvas.getContext("2d");
     ctx.scale(scale, scale);
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#e7f6ee";
     ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = "#d5e4da";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, width - 2, height - 2);
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#163024";
-    ctx.font = `700 ${titleSize}px ${font}`;
-    ctx.fillText(title, padX, padY + 14);
-    const titleW = ctx.measureText(title).width;
-    ctx.fillStyle = "#3d5c4a";
-    ctx.font = `600 ${dateSize}px ${font}`;
-    ctx.fillText(date, padX + titleW + 12, padY + 15);
-    ctx.fillStyle = "#163024";
-    ctx.font = `600 ${bodySize}px ${font}`;
-    let y = padY + titleBlock + lineH / 2;
-    wrapped.forEach((lines) => {
-      lines.forEach((line, i) => {
-        if (i === 0) ctx.fillText("•", padX, y);
-        ctx.fillText(line, padX + bulletW, y);
-        y += lineH;
-      });
+    ctx.fillStyle = "#14633a";
+    ctx.font = `700 ${headSize}px ${font}`;
+    ctx.fillText(head, padX, padY + 22);
+    if (no) {
+      ctx.textAlign = "right";
+      ctx.fillText(no, width - padX, padY + 22);
+      ctx.textAlign = "left";
+    }
+    let y = padY + headBlock + lineH / 2;
+    drawn.forEach((line) => {
+      if (line && line.t) {
+        ctx.font = `${line.strong ? 700 : 600} ${bodySize}px ${font}`;
+        ctx.fillStyle = "#14633a";
+        ctx.fillText(line.t, padX, y);
+      }
+      y += lineH;
     });
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
   }
@@ -487,7 +651,9 @@
       lines: s.lines || [],
       billText: s.billText || "",
       note: s.note || "",
+      inner: s.inner || "",
       rows: s.rows || [],
+      seq: slipNo(s),
       saved: !!s.saved,
     };
     try {
@@ -498,6 +664,7 @@
       });
       const j = await r.json().catch(() => ({}));
       if (j.id) s.id = j.id;
+      if (j.seq) s.seq = String(j.seq);
     } catch (_) {}
     persistLocal();
   }
@@ -531,12 +698,13 @@
       return;
     }
     const savedName = houseName();
+    allocSeq(slips[cur]);
     slips[cur].saved = true;
     slips[cur].title = slips[cur].title || `${savedName}-${shipDate}`;
     title = slips[cur].title;
     await saveSlip(slips[cur]);
-    if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
-    applySlip(slips.findIndex((s) => !s.saved));
+    if (!slips.some((s) => !s.saved && !s.house)) slips.push(freshSlip());
+    applySlip(slips.findIndex((s) => !s.saved && !s.house));
     pane = "key";
     msg = `已儲存${savedName}。可以選下一個社場，繼續下一張。`;
     renderDailyQty();
@@ -586,6 +754,12 @@
   async function copySlipText(id) {
     const s = slips.find((x) => x.id === id && x.saved);
     if (!s) return;
+    if (!slipNo(s)) {
+      allocSeq(s);
+      try {
+        await saveSlip(s);
+      } catch (_) {}
+    }
     try {
       await writePlain(slipPlainText(s));
       setCardMsg(id, "已複製這張單據的文字。");
@@ -593,13 +767,20 @@
       setCardMsg(id, "複製文字失敗，請再試一次。");
     }
   }
-  async function copySlipImage(id) {
+  async function copySlipImage(id, kind) {
     const s = slips.find((x) => x.id === id && x.saved);
     if (!s) return;
-    setCardMsg(id, "正在做成圖片…");
+    if (!slipNo(s)) {
+      allocSeq(s);
+      try {
+        await saveSlip(s);
+      } catch (_) {}
+    }
+    const lab = kind === "freight" ? "通知貨運" : "出單";
+    setCardMsg(id, `正在做成${lab}圖片…`);
     let blob;
     try {
-      blob = await slipPngBlob(s);
+      blob = await slipPngBlob(s, kind === "freight" ? "freight" : "ship");
     } catch (_) {
       blob = null;
     }
@@ -607,10 +788,13 @@
       setCardMsg(id, "做成圖片失敗。");
       return;
     }
+    const okMsg = kind === "freight"
+      ? "已複製通知貨運圖片，沒有內部批次。可直接貼到 LINE。"
+      : "已複製出單圖片，可列印或貼到 LINE。";
     try {
       if (navigator.clipboard && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setCardMsg(id, "已複製這張單據的圖片，可直接貼到 LINE。");
+        setCardMsg(id, okMsg);
         return;
       }
     } catch (_) {}
@@ -618,7 +802,7 @@
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: `${houseLab(s.house) || "單據"} ${s.shipDate || ""}`.trim() });
-        setCardMsg(id, "已打開分享，請選 LINE 傳送這張圖片。");
+        setCardMsg(id, `已打開分享，請選 LINE 傳送${lab}圖片。`);
         return;
       } catch (err) {
         if (err && err.name === "AbortError") {
@@ -634,7 +818,51 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    setCardMsg(id, "這台不能直接貼圖，已把這張單據存成圖片檔。");
+    setCardMsg(id, "這台不能直接貼圖，已把圖片存成檔案。");
+  }
+  async function copyDraftImage(kind) {
+    syncCurrent();
+    const s = slips[cur];
+    const lab = kind === "freight" ? "通知貨運" : "出單";
+    if (!s || !slipBits(s).total) {
+      msg = "請先填寄送件數。";
+      const msgEl = document.getElementById("dq-msg");
+      if (msgEl) msgEl.textContent = msg;
+      return;
+    }
+    let blob;
+    try {
+      blob = await slipPngBlob(s, kind === "freight" ? "freight" : "ship");
+    } catch (_) {
+      blob = null;
+    }
+    const msgEl = document.getElementById("dq-msg");
+    if (!blob) {
+      msg = "做成圖片失敗。";
+      if (msgEl) msgEl.textContent = msg;
+      return;
+    }
+    const ok = kind === "freight"
+      ? "已複製通知貨運圖片，沒有內部批次，可直接貼上 LINE。"
+      : "已複製出單圖片，可列印或貼上 LINE。";
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        msg = ok;
+        if (msgEl) msgEl.textContent = msg;
+        return;
+      }
+    } catch (_) {}
+    const file = new File([blob], slipFileName(s), { type: "image/png" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    msg = `這台不能直接貼圖，已把${lab}存成圖片檔。`;
+    if (msgEl) msgEl.textContent = msg;
   }
 
   const NAME_CATS = ["全部", "根莖", "葉菜", "花果", "菇蕈", "醃漬", "水果"];
@@ -1175,6 +1403,24 @@
     const root = document.getElementById("dq-root");
     if (!root) return;
     root.addEventListener("click", (e) => {
+      if (e.target.closest("[data-dq-home]")) {
+        window.scrollTo(0, 0);
+        if (typeof goHome === "function") goHome();
+        return;
+      }
+      if (e.target.closest("[data-dq-day]")) {
+        listDay = e.target.closest("[data-dq-day]").dataset.dqDay || listDay;
+        listMonth = String(listDay || "").slice(0, 7);
+        pane = "list";
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-shift]")) {
+        const dir = Number(e.target.closest("[data-dq-shift]").dataset.dqShift) || 0;
+        listMonth = shiftMonth(listMonth || (listDay || localYmd()).slice(0, 7), dir);
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("[data-dq-pane]")) {
         syncCurrent();
         pane = e.target.closest("[data-dq-pane]").dataset.dqPane || "key";
@@ -1197,8 +1443,12 @@
         copySlipText(e.target.closest("[data-dq-copy-text]").dataset.dqCopyText || "");
         return;
       }
-      if (e.target.closest("[data-dq-copy-img]")) {
-        copySlipImage(e.target.closest("[data-dq-copy-img]").dataset.dqCopyImg || "");
+      if (e.target.closest("[data-dq-copy-ship]")) {
+        copySlipImage(e.target.closest("[data-dq-copy-ship]").dataset.dqCopyShip || "", "ship");
+        return;
+      }
+      if (e.target.closest("[data-dq-copy-freight]")) {
+        copySlipImage(e.target.closest("[data-dq-copy-freight]").dataset.dqCopyFreight || "", "freight");
         return;
       }
       if (e.target.closest("[data-dq-open]")) {
@@ -1216,28 +1466,23 @@
         renderDailyQty();
         return;
       }
+      if (e.target.closest("[data-dq-another]")) {
+        openAnother(house);
+        return;
+      }
       if (e.target.closest("[data-dq-house]")) {
         const id = e.target.closest("[data-dq-house]").dataset.dqHouse || "";
         syncCurrent();
         const day = shipDate || localYmd();
-        const other = slips.findIndex((s, i) => i !== cur && s.saved && s.house === id && s.shipDate === day);
-        if (other >= 0) {
-          applySlip(other);
-          msg = `${houseLab(id)}這張已儲存，可直接修改，改完再確認儲存。`;
-        } else if (slips[cur].saved && slips[cur].house && slips[cur].house !== id) {
-          let draft = slips.findIndex((s) => !s.saved);
-          if (draft < 0) {
-            slips.push(freshSlip());
-            draft = slips.length - 1;
-          }
-          applySlip(draft);
-          house = id;
-          slips[cur].house = id;
-          shipDate = slips[cur].shipDate || day;
-        } else {
-          house = id;
-          slips[cur].house = id;
+        if (slips[cur].saved) {
+          openAnother(id);
+          return;
         }
+        house = id;
+        slips[cur].house = id;
+        slips[cur].shipDate = slips[cur].shipDate || day;
+        const mates = slips.filter((s, i) => i !== cur && s.house === id && s.shipDate === (shipDate || day) && s.saved);
+        msg = mates.length ? `${houseLab(id)}今天已存 ${mates.length} 張，這張是第 ${mates.length + 1} 張。` : "";
         renderDailyQty();
         return;
       }
@@ -1293,6 +1538,14 @@
         copyNotice();
         return;
       }
+      if (e.target.closest("#dq-img-ship")) {
+        copyDraftImage("ship");
+        return;
+      }
+      if (e.target.closest("#dq-img-freight")) {
+        copyDraftImage("freight");
+        return;
+      }
       if (e.target.closest("#dq-bill-pick")) {
         document.getElementById("dq-bill-file")?.click();
         return;
@@ -1325,6 +1578,18 @@
     });
     function readField(e) {
       const t = e.target;
+      if (t.id === "dq-q") {
+        listQ = t.value;
+        const pos = t.selectionStart;
+        renderDailyQty();
+        const again = document.getElementById("dq-q");
+        if (again) {
+          again.focus();
+          const n = Math.min(pos == null ? again.value.length : pos, again.value.length);
+          again.setSelectionRange(n, n);
+        }
+        return;
+      }
       if (t.hasAttribute?.("data-dq-read")) {
         const s = matchSlip();
         if (!s) return;
@@ -1361,6 +1626,12 @@
       }
       if (t.id === "dq-note") {
         note = t.value;
+        paintSlip();
+        persistLocal();
+        return;
+      }
+      if (t.id === "dq-inner") {
+        inner = t.value;
         paintSlip();
         persistLocal();
         return;
@@ -1516,33 +1787,43 @@
     </nav>`;
     const slipTabs = slips
       .map((s, i) => {
-        const lab = s.house ? houseLab(s.house) : `第${i + 1}張`;
-        return `<button type="button" class="dq-tab${i === cur ? " on" : ""}" data-dq-slip="${i}">${esc(lab)}<small>${s.saved ? "已存" : "填寫中"}</small></button>`;
+        const day = s.shipDate || "";
+        const savedN = slips.filter((x) => x.saved && x.house && x.house === s.house && x.shipDate === day).length;
+        const ord = slipOrd(s);
+        const lab = s.house ? `${houseLab(s.house)} 第${ord}張` : `第${i + 1}張`;
+        const badge = s.saved && s.house
+          ? `<small>已存</small><em class="dq-slip-n">${savedN}張單</em>`
+          : `<small>填寫中</small>`;
+        return `<button type="button" class="dq-tab${i === cur ? " on" : ""}" data-dq-slip="${i}">${esc(lab)}${badge}</button>`;
       })
       .join("");
     const savedSlips = slips.filter((s) => s.saved);
     let body = "";
     if (pane === "list") {
-      const cards = savedSlips.length
-        ? savedSlips
-            .map((s) => {
-              const i = slips.indexOf(s);
-              const sum = slipBits(s);
-              return `<article class="dq-card">
-                <header><b>${esc(houseLab(s.house) || "未選社場")}</b><span>${esc(s.shipDate || "")}</span></header>
-                <ul>${sum.parts.map((p) => `<li>${esc(p)}</li>`).join("") || "<li>沒有件數</li>"}</ul>
-                <div class="dq-tools">
-                  <button type="button" class="ghost" data-dq-copy-text="${esc(s.id)}">複製文字</button>
-                  <button type="button" class="ghost" data-dq-copy-img="${esc(s.id)}">複製圖片</button>
-                  <button type="button" class="ghost" data-dq-open="${i}">修改這張</button>
-                  <button type="button" class="primary" data-dq-match="${esc(s.id)}">拿去回對</button>
-                </div>
-                <p class="dq-card-msg" data-dq-card-msg="${esc(s.id)}"></p>
-              </article>`;
-            })
-            .join("")
-        : `<p class="dq-empty">還沒有確認儲存的單。請先到鍵單，選社場、填件數，再按確認儲存。</p>`;
-      body = `<div class="dq-list">${cards}</div>`;
+      if (!listDay) listDay = localYmd();
+      if (!listMonth) listMonth = listDay.slice(0, 7);
+      const all = catalogRows();
+      const dayRows = all.filter((r) => r.date === listDay);
+      const found = all.filter((r) => rowHit(r, listQ));
+      const [, mm, dd] = listDay.split("-");
+      const dayTable = dayRows.length
+        ? gridTable(dayRows, { actions: true })
+        : `<p class="dq-empty">${Number(mm)}/${Number(dd)} 沒有拍賣資料。</p>`;
+      body = `<div class="dq-board">
+        ${dqCalHtml()}
+        <section class="dq-block">
+          <h3>${Number(mm)}/${Number(dd)} 入單資料</h3>
+          ${dayTable}
+        </section>
+        <section class="dq-block">
+          <h3>總清單</h3>
+          <label class="dq-q">快速搜尋
+            <input id="dq-q" type="search" placeholder="單號、日期、社場、品項、市場" value="${esc(listQ)}" />
+          </label>
+          ${gridTable(found, { showDate: true })}
+          <p class="dq-card-msg" id="dq-list-msg"></p>
+        </section>
+      </div>`;
     } else if (pane === "match") {
       const picked = savedSlips.find((s) => s.id === matchId) || savedSlips[0];
       if (picked && picked.id !== matchId) matchId = picked.id;
@@ -1569,7 +1850,7 @@
               <select id="dq-match-pick">${opts}</select>
             </label>
             <p class="dq-sum">${esc(houseLab(picked.house))}</p>
-            <ul class="dq-sum-list">${sum.parts.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+            <ul class="dq-sum-list">${slipBlockHtml(sum.blocks)}</ul>
             <label class="dq-paste">貼上明細：文字或照片都可以（日期、市場、品名、件數）
               <textarea id="dq-bill" placeholder="直接貼文字，或在這裡貼上拍賣單照片">${esc(picked.billText || "")}</textarea>
             </label>
@@ -1590,20 +1871,25 @@
         <div class="dq-form">
           <div class="dq-slips">${slipTabs}</div>
           <div class="dq-top">
-            <p class="dq-top-lab">第 ${cur + 1} 張${house ? " · " + esc(houseName()) : " · 請先選社場"}</p>
-            <div class="dq-houses">${houseBtns}</div>
+            <p class="dq-top-lab">第 ${house ? slipOrd(slips[cur]) : 1} 張${house ? " · " + esc(houseName()) : " · 請先選社場"}</p>
+            <div class="dq-houses">${houseBtns}${house ? `<button type="button" class="ghost dq-another" data-dq-another>＋再一張</button>` : ""}</div>
             <label class="dq-date">寄送日 <input id="dq-date" type="date" value="${esc(shipDate)}" /></label>
           </div>
           ${lineHtml}
           <button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>
-          <label class="dq-note">備註
-            <input id="dq-note" placeholder="選填，會印在 LINE 單據" value="${esc(note)}" />
+          <label class="dq-note">社場／貨運看（是否收貨）
+            <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(note)}" />
+          </label>
+          <label class="dq-note">內部出貨（品項批次）
+            <input id="dq-inner" placeholder="例如：#UHA770 新鮮L" value="${esc(inner)}" />
           </label>
         </div>
         <aside class="dq-side">
-          <p class="dq-side-lab">LINE 單據</p>
+          <p class="dq-side-lab">出單預覽</p>
           <pre class="dq-slip" id="dq-slip"></pre>
-          <button type="button" class="primary" id="dq-copy">複製單據，貼上 LINE</button>
+          <button type="button" class="primary" id="dq-img-ship">出單圖片</button>
+          <button type="button" class="primary" id="dq-img-freight">通知貨運</button>
+          <button type="button" class="ghost" id="dq-copy">複製文字</button>
           <button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>
           <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
         </aside>
@@ -1611,6 +1897,7 @@
     }
     root.innerHTML = `
       <header class="dq-head">
+        <button type="button" class="ghost dq-home" data-dq-home>← 總覽</button>
         <h2>拍賣寄貨</h2>
       </header>
       ${rack}
@@ -1618,6 +1905,42 @@
     `;
     if (pane === "key") paintSlip();
     persistLocal();
+    pullHistory();
+  }
+  let historyPulled = false;
+  function sessionToSlip(rec) {
+    return {
+      id: String(rec.id),
+      house: rec.house || "",
+      shipDate: rec.shipDate || "",
+      lines: Array.isArray(rec.lines) && rec.lines.length ? rec.lines : [freshLine()],
+      billText: rec.billText || "",
+      note: rec.note || "",
+      inner: rec.inner || "",
+      rows: Array.isArray(rec.rows) ? rec.rows : [],
+      title: rec.title || "",
+      seq: rec.seq || "",
+      saved: rec.saved !== false,
+    };
+  }
+  function pullHistory() {
+    if (historyPulled) return;
+    historyPulled = true;
+    fetch("./api/daily-qty/history", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const sessions = Array.isArray(j?.sessions) ? j.sessions : [];
+        let changed = false;
+        for (const rec of sessions) {
+          if (!rec || !rec.id || rec.saved === false) continue;
+          if (slips.some((s) => s.id === rec.id)) continue;
+          slips.push(sessionToSlip(rec));
+          changed = true;
+        }
+        if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
+        if (changed) renderDailyQty();
+      })
+      .catch(() => {});
   }
 
   window.renderDailyQty = renderDailyQty;

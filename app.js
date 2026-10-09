@@ -1664,6 +1664,7 @@ function goHome() {
   hubSalesBlock = "ship";
   hubSalesPane = "";
   render();
+  try { window.scrollTo(0, 0); } catch (_) {}
 }
 window.goHome = goHome;
 

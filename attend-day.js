@@ -19,6 +19,7 @@ function attendMark(rec, field) {
 }
 let attendIso = "";
 const attendOpen = new Set();
+const attendExtra = new Set();
 
 function attendTodayIso() {
   const d = new Date();
@@ -357,9 +358,16 @@ function attendPageHtml() {
         <label>休息<input class="attend-in" data-attend-field="crest" data-attend-crew="${esc(c.id)}" value="${cross ? esc(c.rest) : ""}" placeholder="${cross ? "60" : "—"}"${cross ? "" : " disabled"}></label>
         <span class="attend-crew-hours">時數 <b data-crew-hours="${esc(c.id)}">${c.off || hours == null ? "—" : hours}</b></span>
         <span class="attend-crew-bento">便當 <b data-crew-bento="${esc(c.id)}">${bento}</b></span>
-        <label>另一組<input class="attend-in" data-attend-field="people2" data-attend-crew="${esc(c.id)}" value="${esc(c.people2 || "")}" inputmode="numeric" placeholder="人數"${dis}></label>
-        <label>開始<input class="attend-in" data-attend-field="cstart2" data-attend-crew="${esc(c.id)}" value="${esc(c.start2 || "")}" placeholder="13"${dis}></label>
-        <label>結束<input class="attend-in" data-attend-field="cend2" data-attend-crew="${esc(c.id)}" value="${esc(c.end2 || "")}" placeholder="18"${dis}></label>
+        <div class="attend-more${attendShowCrewExtra(c) ? " is-open" : ""}">
+          <button type="button" class="ghost attend-add" data-attend-add="${esc(c.id)}"${attendShowCrewExtra(c) ? " hidden" : ""}>＋加一組</button>
+          <div class="attend-extra-shift"${attendShowCrewExtra(c) ? "" : " hidden"}>
+            <span class="attend-extra-lab">另一組</span>
+            <label>人數<input class="attend-in" data-attend-field="people2" data-attend-crew="${esc(c.id)}" value="${esc(c.people2 || "")}" inputmode="numeric"${dis}></label>
+            <label>開始<input class="attend-in" data-attend-field="cstart2" data-attend-crew="${esc(c.id)}" value="${esc(c.start2 || "")}"${dis}></label>
+            <label>結束<input class="attend-in" data-attend-field="cend2" data-attend-crew="${esc(c.id)}" value="${esc(c.end2 || "")}"${dis}></label>
+            <button type="button" class="ghost attend-drop" data-attend-drop="${esc(c.id)}">拿掉</button>
+          </div>
+        </div>
         </div>
       </div>`;
     })
@@ -391,13 +399,90 @@ function attendPageHtml() {
         </section>
         <section class="attend-block">
           <h3>外調</h3>
-          <p class="attend-note">人數、開始、結束。兩個人下班不一樣，下面「另一組」再填一人。跨中午才填休息，時數自動算。</p>
+          <p class="attend-note">人數、開始、結束。兩個人下班不一樣，按＋加一組再填另一人。跨中午才填休息，時數自動算。</p>
           ${crewRows}
           <p class="attend-note"><button type="button" class="people-jump" data-people-pane="labor-bill">填工時費用單</button>給調工老闆的清單在這裡填單價。</p>
         </section>
       </div>
     </div>
   </div>`;
+}
+function attendShowCrewExtra(c) {
+  return attendExtra.has(`crew:${c.id}`) || !!String(c.people2 || "").trim() || !!String(c.start2 || "").trim() || !!String(c.end2 || "").trim();
+}
+function attendOpenCrewExtra(crewId) {
+  attendExtra.add(`crew:${crewId}`);
+  const more = document.querySelector(`[data-attend-add="${CSS.escape(crewId)}"]`)?.closest(".attend-more");
+  if (!more) return;
+  more.classList.add("is-open");
+  const add = more.querySelector("[data-attend-add]");
+  const box = more.querySelector(".attend-extra-shift");
+  if (add) add.hidden = true;
+  if (box) box.hidden = false;
+  box?.querySelector("input")?.focus();
+}
+function attendDropCrewExtra(crewId) {
+  attendExtra.delete(`crew:${crewId}`);
+  const iso = attendActiveIso();
+  const rec = attendEnsure(iso);
+  const base = attendCrew(iso, ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId });
+  base.people2 = "";
+  base.start2 = "";
+  base.end2 = "";
+  base.rest2 = "";
+  attendMark(base, "people2");
+  rec.crews[crewId] = base;
+  save();
+  attendRefresh(iso);
+  const more = document.querySelector(`[data-attend-add="${CSS.escape(crewId)}"]`)?.closest(".attend-more");
+  if (!more) return;
+  more.classList.remove("is-open");
+  const add = more.querySelector("[data-attend-add]");
+  const box = more.querySelector(".attend-extra-shift");
+  if (add) add.hidden = false;
+  if (box) box.hidden = true;
+  box?.querySelectorAll("input").forEach((el) => {
+    el.value = "";
+  });
+}
+function attendShowBillExtra(day) {
+  return attendExtra.has(`bill:${day.iso}`) || !!String(day.people2 || "").trim() || !!String(day.start2 || "").trim() || !!String(day.end2 || "").trim();
+}
+function attendOpenBillExtra(iso) {
+  attendExtra.add(`bill:${iso}`);
+  document.querySelectorAll(`[data-bill-row="${CSS.escape(iso)}"]`).forEach((row) => {
+    const more = row.querySelector(".bill-more");
+    if (more) more.classList.add("is-open");
+    const add = row.querySelector("[data-bill-add]");
+    const split = row.querySelector(".bill-split");
+    if (add) add.hidden = true;
+    if (split) split.hidden = false;
+    split?.querySelector("input")?.focus();
+  });
+}
+function attendDropBillExtra(iso, crewId) {
+  attendExtra.delete(`bill:${iso}`);
+  const rec = attendEnsure(iso);
+  const base = attendCrew(iso, ATTEND_CREWS.find((c) => c.id === crewId) || { id: crewId });
+  base.people2 = "";
+  base.start2 = "";
+  base.end2 = "";
+  base.rest2 = "";
+  attendMark(base, "people2");
+  rec.crews[crewId] = base;
+  save();
+  attendBillEdit(iso, crewId, "people2", "");
+  document.querySelectorAll(`[data-bill-row="${CSS.escape(iso)}"]`).forEach((row) => {
+    const more = row.querySelector(".bill-more");
+    if (more) more.classList.remove("is-open");
+    const add = row.querySelector("[data-bill-add]");
+    const split = row.querySelector(".bill-split");
+    if (add) add.hidden = false;
+    if (split) split.hidden = true;
+    split?.querySelectorAll("input").forEach((el) => {
+      el.value = "";
+    });
+  });
 }
 function attendFold(key) {
   const open = attendOpen.has(key);
@@ -681,6 +766,7 @@ function attendBillForm(days, crewId, opts) {
       const amt = day.amt === "" ? "" : attendBillMoney(day.amt);
       const cross = !day.off && attendCross(day.start, day.end);
       const cross2 = !day.off && attendCross(day.start2, day.end2);
+      const show2 = attendShowBillExtra(day);
       return `<div class="bill-line${day.off ? " is-off" : ""}" data-bill-row="${esc(day.iso)}">
         <b>${day.m}/${day.d}</b>
         <label class="bill-people"><span class="bill-mini">人數</span><input class="attend-in" data-bill-field="people" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.people))}" inputmode="numeric"></label>
@@ -688,13 +774,6 @@ function attendBillForm(days, crewId, opts) {
         <label class="bill-end"><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end))}"></label>
         <label class="bill-rest"><span class="bill-mini">午休</span><input class="attend-in" data-bill-field="rest" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${cross ? esc(String(day.rest)) : ""}" placeholder="${cross ? "60" : "—"}" inputmode="numeric"${cross ? "" : " disabled"}></label>
         <span class="bill-hours"><span class="bill-mini">時數</span><b class="bill-hours-num" data-bill-hours="${esc(day.iso)}">${esc(day.hours)}</b></span>
-        <div class="bill-split">
-          <label class="bill-people"><span class="bill-mini">另一組</span><input class="attend-in" data-bill-field="people2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.people2 || ""))}" inputmode="numeric" placeholder="人數"></label>
-          <label class="bill-start"><span class="bill-mini">開始</span><input class="attend-in" data-bill-field="start2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.start2 || ""))}"></label>
-          <label class="bill-end"><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end2 || ""))}"></label>
-          <span class="bill-hours"><span class="bill-mini">時數</span><b data-bill-hours2="${esc(day.iso)}">${esc(day.hours2 || "")}</b></span>
-          <label class="bill-rest"><span class="bill-mini">午休</span><input class="attend-in" data-bill-field="rest2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${cross2 ? esc(String(day.rest2 || "")) : ""}" placeholder="${cross2 ? "60" : "—"}" inputmode="numeric"${cross2 ? "" : " disabled"}></label>
-        </div>
         <span class="bill-total-hours"><span class="bill-mini">總工時</span><b data-bill-total-hours="${esc(day.iso)}">${esc(attendBillTotalText(day))}</b></span>
         <label class="bill-price"><span class="bill-mini">時薪</span><input class="attend-in" data-bill-field="price" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.price))}" inputmode="numeric"></label>
         <span class="bill-estimate"><span class="bill-mini">預計</span><b class="bill-estimate-num" data-bill-estimate="${esc(day.iso)}">${esc(day.estimate)}</b></span>
@@ -706,6 +785,18 @@ function attendBillForm(days, crewId, opts) {
           <input class="attend-in" data-bill-field="note" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.note))}">
           <label class="bill-show-hours"><input type="checkbox" data-bill-show-hours="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}"${day.showHours ? " checked" : ""}>工時</label>
           <span class="bill-hours-note" data-bill-hours-note="${esc(day.iso)}">${esc(attendBillHoursNote(day))}</span>
+        </div>
+        <div class="bill-more${show2 ? " is-open" : ""}">
+          <button type="button" class="ghost bill-add" data-bill-add="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}"${show2 ? " hidden" : ""}>＋加一組</button>
+          <div class="bill-split"${show2 ? "" : " hidden"}>
+            <span class="bill-extra-lab">另一組</span>
+            <label class="bill-people"><span class="bill-mini">人數</span><input class="attend-in" data-bill-field="people2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.people2 || ""))}" inputmode="numeric"></label>
+            <label class="bill-start"><span class="bill-mini">開始</span><input class="attend-in" data-bill-field="start2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.start2 || ""))}"></label>
+            <label class="bill-end"><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end2 || ""))}"></label>
+            <label class="bill-rest"><span class="bill-mini">午休</span><input class="attend-in" data-bill-field="rest2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${cross2 ? esc(String(day.rest2 || "")) : ""}" placeholder="${cross2 ? "60" : "—"}" inputmode="numeric"${cross2 ? "" : " disabled"}></label>
+            <span class="bill-hours"><span class="bill-mini">時數</span><b data-bill-hours2="${esc(day.iso)}">${esc(day.hours2 || "")}</b></span>
+            <button type="button" class="ghost bill-drop" data-bill-drop="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}">拿掉</button>
+          </div>
         </div>
       </div>`;
     })

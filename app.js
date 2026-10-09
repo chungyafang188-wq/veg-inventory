@@ -12701,6 +12701,26 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     renderHomeHub();
     return;
   }
+  const attendAdd = e.target.closest("[data-attend-add]");
+  if (attendAdd && typeof attendOpenCrewExtra === "function") {
+    attendOpenCrewExtra(attendAdd.dataset.attendAdd || "");
+    return;
+  }
+  const attendDrop = e.target.closest("[data-attend-drop]");
+  if (attendDrop && typeof attendDropCrewExtra === "function") {
+    attendDropCrewExtra(attendDrop.dataset.attendDrop || "");
+    return;
+  }
+  const billAdd = e.target.closest("[data-bill-add]");
+  if (billAdd && typeof attendOpenBillExtra === "function") {
+    attendOpenBillExtra(billAdd.dataset.billDay || "");
+    return;
+  }
+  const billDrop = e.target.closest("[data-bill-drop]");
+  if (billDrop && typeof attendDropBillExtra === "function") {
+    attendDropBillExtra(billDrop.dataset.billDay || "", billDrop.dataset.billCrew || "");
+    return;
+  }
   const attendFoldBtn = e.target.closest("[data-attend-fold-btn]");
   if (attendFoldBtn && typeof attendFold === "function") {
     attendFold(attendFoldBtn.dataset.attendFoldBtn || "");

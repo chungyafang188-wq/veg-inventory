@@ -7024,7 +7024,7 @@ body.layout-phone .attend-row > .attend-check { grid-area: bento; }
 body.layout-phone .attend-row > .attend-split { grid-area: split; }
 body.layout-phone .attend-crew {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: "name off" "plan people" "start end" "rest rest" "hours bento";
+  grid-template-areas: "name off" "plan people" "start end" "rest rest" "hours bento" "more more";
   gap: 0.45rem 0.5rem;
   align-items: end;
   padding: 0.75rem 0.1rem 0.9rem;
@@ -7051,6 +7051,24 @@ body.layout-phone .attend-crew > label:nth-child(6) { grid-area: end; }
 body.layout-phone .attend-crew > label:nth-child(7) { grid-area: rest; }
 body.layout-phone .attend-crew-hours { grid-area: hours; }
 body.layout-phone .attend-crew-bento { grid-area: bento; }
+body.layout-phone .attend-more { grid-area: more; }
+.attend-more { grid-column: 1 / -1; }
+.attend-extra-shift {
+  display: grid;
+  grid-template-columns: 4.2rem 4rem minmax(3.4rem, 1fr) minmax(3.8rem, 1fr) auto;
+  gap: 0.35rem;
+  align-items: end;
+  margin: 0.1rem 0 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px dashed #b7d7c4;
+  border-radius: 0.7rem;
+  background: #f3faf6;
+}
+.attend-extra-lab { align-self: center; font-weight: 800; color: #1a6843; font-size: 0.82rem; }
+body.layout-phone .attend-extra-shift { grid-template-columns: 1fr 1fr; }
+body.layout-phone .attend-extra-lab,
+body.layout-phone .attend-drop { grid-column: 1 / -1; }
+body.layout-phone .attend-more { grid-area: more; }
 body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05rem; }
 @media (max-width: 899px) {
   body.layout-web .people-work .sales-shell-body { flex-direction: column; }
@@ -7076,8 +7094,11 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-filters { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 0.6rem 0; }
 .bill-filters select { width: auto; padding: 0.35rem 0.5rem; }
 .bill-title { margin: 0.2rem 0 0.45rem; font-weight: 700; }
-.bill-head, .bill-line { display: grid; grid-template-columns: 3rem 3rem 3.4rem 3.4rem 2.8rem 2.4rem 4.6rem 3rem 3rem 3.2rem 3.2rem 2rem 5.4rem; gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
-.bill-split { grid-column: 1 / -1; display: grid; grid-template-columns: 3rem 3.4rem 3.4rem 2.4rem 2.8rem; gap: 0.28rem; align-items: center; }
+.bill-head, .bill-line { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem 3.4rem 2.2rem minmax(5.4rem, 1fr); gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
+.bill-more { grid-column: 1 / -1; }
+.bill-add, .bill-drop, .attend-add, .attend-drop { width: auto; margin: 0.05rem 0 0.15rem; padding: 0.12rem 0.55rem; }
+.bill-split { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem max-content; justify-content: start; width: max-content; max-width: 100%; gap: 0.28rem; align-items: center; margin: 0 0 0.2rem; }
+.bill-extra-lab { font-size: 0.78rem; font-weight: 800; color: #1a6843; }
 .bill-head { color: var(--muted); font-size: 0.78rem; }
 .bill-mini { display: none; }
 .bill-line label { display: grid; gap: 0.1rem; min-width: 0; }
@@ -7142,7 +7163,10 @@ body.layout-phone .bill-line > .bill-pay { grid-area: pay; }
 body.layout-phone .bill-line > .bill-amt { grid-area: amt; align-self: end; }
 body.layout-phone .bill-line > .bill-off { grid-area: off; justify-self: end; align-self: center; }
 body.layout-phone .bill-line > .bill-note { grid-area: note; }
-body.layout-phone .bill-split { grid-area: split; grid-column: auto; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem; }
+body.layout-phone .bill-line > .bill-more { grid-area: split; grid-column: auto; }
+body.layout-phone .bill-split { width: 100%; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem; }
+body.layout-phone .bill-extra-lab,
+body.layout-phone .bill-drop { grid-column: 1 / -1; }
 body.layout-phone .bill-note .attend-in { max-width: none; }
 body.layout-phone .bill-line .attend-in { min-height: 2.55rem; padding: 0.45rem 0.6rem; font-size: 1.05rem; }
 body.layout-phone .bill-off { min-height: 2.4rem; padding: 0.25rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }

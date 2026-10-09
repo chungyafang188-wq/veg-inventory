@@ -8,6 +8,7 @@
     ["桃園", /桃園|桃農/],
     ["台中", /台中|臺中/],
     ["高雄", /高雄/],
+    ["鳳山", /鳳山/],
     ["屏東", /屏東/],
   ];
   const MK_KEYS = MARKETS.map((x) => x[0]);
@@ -212,13 +213,99 @@
     s.seq = `${h}${dd}${String(n).padStart(2, "0")}`;
     return s.seq;
   }
+  function slipTitleName(s) {
+    const line = (s?.lines || []).find((l) => String(l?.crop || l?.kind || l?.sku || "").trim());
+    if (!line) return "";
+    const name = [line.kind, line.crop].filter(Boolean).join("") || String(line.sku || "").trim();
+    return name.replace(/\s+/g, "");
+  }
+  function slipTabText(s) {
+    const name = slipTitleName(s);
+    const no = slipNo(s);
+    const tail = [name, no].filter(Boolean).join("-");
+    return `第${slipOrd(s)}張${tail ? " " + tail : ""}`;
+  }
   function slipOrd(s) {
-    const seq = String(s?.seq || "");
-    const n = /^\d{5}$/.test(seq) ? Number(seq.slice(-2)) : 0;
-    if (n) return n;
     const mates = slips.filter((x) => x.house && x.house === s.house && x.shipDate === s.shipDate);
     const i = mates.indexOf(s);
     return i >= 0 ? i + 1 : 1;
+  }
+  function houseSlips(id, day) {
+    const d = day || shipDate || localYmd();
+    return slips
+      .map((s, i) => ({ s, i }))
+      .filter((x) => x.s.house === id && x.s.shipDate === d);
+  }
+  function openHouse(id) {
+    syncCurrent();
+    const day = shipDate || localYmd();
+    if (!id) return;
+    const mates = houseSlips(id, day);
+    const stay = mates.find((x) => x.i === cur);
+    if (stay) {
+      house = id;
+      shipDate = day;
+      msg = "";
+      pane = "key";
+      renderDailyQty();
+      return;
+    }
+    if (mates.length) {
+      applySlip(mates[0].i);
+      house = id;
+      shipDate = day;
+      msg = "";
+      pane = "key";
+      renderDailyQty();
+      return;
+    }
+    if (slips[cur] && !slips[cur].saved && !slipHasBody(slips[cur])) {
+      house = id;
+      shipDate = day;
+      slips[cur].house = id;
+      slips[cur].shipDate = day;
+      msg = "";
+      pane = "key";
+      renderDailyQty();
+      return;
+    }
+    openAnother(id);
+  }
+  function canDropSlip(s) {
+    if (!s || s.saved) return false;
+    if (s.house || slipHasBody(s)) return true;
+    return slips.filter((x) => !x.saved && !x.house).length > 1;
+  }
+  function dropDraft(index) {
+    const s = slips[index];
+    if (!canDropSlip(s)) return;
+    const id = s.id;
+    const houseId = s.house || house;
+    const day = s.shipDate || shipDate || localYmd();
+    slips.splice(index, 1);
+    if (!slips.length) slips.push(freshSlip());
+    const mates = slips
+      .map((x, i) => ({ s: x, i }))
+      .filter((x) => houseId && x.s.house === houseId && x.s.shipDate === day);
+    if (mates.length) applySlip(mates[0].i);
+    else {
+      let blank = slips.findIndex((x) => !x.saved && !x.house);
+      if (blank < 0) {
+        slips.push(freshSlip());
+        blank = slips.length - 1;
+      }
+      applySlip(blank);
+      house = "";
+    }
+    msg = "已刪除這張還沒送出的單。";
+    pane = "key";
+    droppedIds.add(id);
+    fetch("./api/daily-qty/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, drop: true }),
+    }).catch(() => {});
+    renderDailyQty();
   }
   function openAnother(houseId) {
     syncCurrent();
@@ -1528,6 +1615,14 @@
         renderDailyQty();
         return;
       }
+      if (e.target.closest("[data-dq-drop]")) {
+        const index = Number(e.target.closest("[data-dq-drop]").dataset.dqDrop);
+        const s = slips[index];
+        if (!canDropSlip(s)) return;
+        if (slipHasBody(s) && !window.confirm("刪除這張還沒送出的單？已送出的單不會被刪。")) return;
+        dropDraft(index);
+        return;
+      }
       if (e.target.closest("[data-dq-slip]")) {
         syncCurrent();
         applySlip(Number(e.target.closest("[data-dq-slip]").dataset.dqSlip));
@@ -1568,19 +1663,7 @@
         return;
       }
       if (e.target.closest("[data-dq-house]")) {
-        const id = e.target.closest("[data-dq-house]").dataset.dqHouse || "";
-        syncCurrent();
-        const day = shipDate || localYmd();
-        if (slips[cur].saved) {
-          openAnother(id);
-          return;
-        }
-        house = id;
-        slips[cur].house = id;
-        slips[cur].shipDate = slips[cur].shipDate || day;
-        const mates = slips.filter((s, i) => i !== cur && s.house === id && s.shipDate === (shipDate || day) && s.saved);
-        msg = mates.length ? `${houseLab(id)}今天已存 ${mates.length} 張，這張是第 ${mates.length + 1} 張。` : "";
-        renderDailyQty();
+        openHouse(e.target.closest("[data-dq-house]").dataset.dqHouse || "");
         return;
       }
       if (e.target.closest("[data-dq-hit]")) {
@@ -1740,10 +1823,26 @@
         title = t.value.trim();
         return;
       }
+      if (t.id === "dq-seq") {
+        const next = cleanSeq(t.value);
+        if (String(t.value || "").trim() && next == null) {
+          msg = "單號請用英數，12碼以內。";
+          const msgEl = document.getElementById("dq-msg");
+          if (msgEl) msgEl.textContent = msg;
+          return;
+        }
+        if (slips[cur]) slips[cur].seq = next || "";
+        paintSlip();
+        persistLocal(!!(next && slipHasBody(slips[cur])));
+        return;
+      }
       if (t.id === "dq-date") {
         shipDate = t.value || localYmd();
-        paintSlip();
-        persistLocal(true);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(shipDate)) renderDailyQty();
+        else {
+          paintSlip();
+          persistLocal(true);
+        }
         return;
       }
       const lineEl = t.closest("[data-dq-line]");
@@ -1815,6 +1914,8 @@
     const empty = !shipList().length;
     box.textContent = empty ? "左邊填市場件數後，這裡會顯示要貼到 LINE 的單據。" : noticeText();
     box.classList.toggle("is-empty", empty);
+    const tab = document.querySelector("#dq-root .dq-tab.on");
+    if (tab && slips[cur]) tab.textContent = slipTabText(slips[cur]);
   }
 
   let booted = false;
@@ -1833,9 +1934,12 @@
     }
     if (!shipDate) shipDate = localYmd();
     syncCurrent();
-    const houseBtns = HOUSES.map(
-      (h) => `<button type="button" class="pick${house === h.id ? " on" : ""}" data-dq-house="${esc(h.id)}">${esc(h.lab)}</button>`,
-    ).join("");
+    const houseDay = shipDate || localYmd();
+    const houseBtns = HOUSES.map((h) => {
+      const n = houseSlips(h.id, houseDay).length;
+      const badge = n ? `<em class="dq-house-n">${n}</em>` : "";
+      return `<button type="button" class="pick${house === h.id ? " on" : ""}" data-dq-house="${esc(h.id)}">${esc(h.lab)}${badge}</button>`;
+    }).join("");
     const lineHtml = lines
       .map((line, i) => {
         const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
@@ -1888,18 +1992,23 @@
       <button type="button" data-dq-pane="list"${pane === "list" ? ' class="on"' : ""}><b>2</b><span>入單總資料</span></button>
       <button type="button" data-dq-pane="match"${pane === "match" ? ' class="on"' : ""}><b>3</b><span>拍賣回對</span></button>
     </nav>`;
-    const slipTabs = slips
-      .map((s, i) => {
-        const day = s.shipDate || "";
-        const savedN = slips.filter((x) => x.saved && x.house && x.house === s.house && x.shipDate === day).length;
-        const ord = slipOrd(s);
-        const lab = s.house ? `${houseLab(s.house)} 第${ord}張` : `第${i + 1}張`;
-        const badge = s.saved && s.house
-          ? `<small>已存</small><em class="dq-slip-n">${savedN}張單</em>`
-          : `<small>填寫中</small>`;
-        return `<button type="button" class="dq-tab${i === cur ? " on" : ""}" data-dq-slip="${i}">${esc(lab)}${badge}</button>`;
+    const slipRows = []
+      .concat(house ? houseSlips(house, houseDay) : [])
+      .concat(
+        slips
+          .map((s, i) => ({ s, i }))
+          .filter((x) => !x.s.house && canDropSlip(x.s)),
+      );
+    const slipTabs = slipRows
+      .map(({ s, i }) => {
+        const lab = s.house ? slipTabText(s) : "未選社場";
+        const drop = canDropSlip(s) ? `<button type="button" class="dq-tab-x" data-dq-drop="${i}">刪除</button>` : "";
+        return `<span class="dq-slip-tab"><button type="button" class="dq-tab${i === cur ? " on" : ""}" data-dq-slip="${i}">${esc(lab)}</button>${drop}</span>`;
       })
       .join("");
+    const dropCurrent = canDropSlip(slips[cur])
+      ? `<button type="button" class="ghost dq-drop" data-dq-drop="${cur}">刪除這張未送出</button>`
+      : "";
     const savedSlips = slips.filter((s) => s.saved);
     let body = "";
     if (pane === "list") {
@@ -1971,11 +2080,16 @@
     } else {
       body = `<div class="dq-split">
         <div class="dq-form">
-          <div class="dq-slips">${slipTabs}</div>
           <div class="dq-top">
-            <p class="dq-top-lab">第 ${house ? slipOrd(slips[cur]) : 1} 張${house ? " · " + esc(houseName()) : " · 請先選社場"}</p>
-            <div class="dq-houses">${houseBtns}${house ? `<button type="button" class="ghost dq-another" data-dq-another>＋再一張</button>` : ""}</div>
-            <label class="dq-date">寄送日 <input id="dq-date" type="date" value="${esc(shipDate)}" /></label>
+            <p class="dq-top-lab">${house ? esc(houseName()) + " · 點下面的單，或新增一張" : "請先選社場"}</p>
+            <div class="dq-houses">${houseBtns}</div>
+            <div class="dq-slips">${slipTabs}${house ? `<button type="button" class="ghost dq-another" data-dq-another>＋新增</button>` : ""}${dropCurrent}</div>
+            <div class="dq-key-meta">
+              <label class="dq-date">寄送日 <input id="dq-date" type="date" value="${esc(shipDate)}" /></label>
+              <label class="dq-date">單號
+                <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(slipNo(slips[cur]))}" ${house ? "" : "disabled"} />
+              </label>
+            </div>
           </div>
           ${lineHtml}
           <button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>
@@ -2026,12 +2140,13 @@
     };
   }
   let pulling = false;
+  const droppedIds = new Set();
   function mergeRemote(sessions) {
     let changed = false;
     const root = document.getElementById("dq-root");
     const typing = document.activeElement && root && root.contains(document.activeElement);
     for (const rec of sessions) {
-      if (!rec || !rec.id) continue;
+      if (!rec || !rec.id || droppedIds.has(rec.id)) continue;
       const remote = sessionToSlip(rec);
       if (!remote.saved && !slipHasBody(remote)) continue;
       const i = slips.findIndex((s) => s.id === remote.id);
@@ -2061,6 +2176,10 @@
       .then((r) => r.json())
       .then((j) => {
         const sessions = Array.isArray(j?.sessions) ? j.sessions : [];
+        const ids = new Set(sessions.map((s) => s && s.id).filter(Boolean));
+        droppedIds.forEach((id) => {
+          if (!ids.has(id)) droppedIds.delete(id);
+        });
         if (mergeRemote(sessions)) renderDailyQty();
       })
       .catch(() => {})

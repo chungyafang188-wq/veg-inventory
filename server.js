@@ -666,6 +666,21 @@ function handleApi(req, res) {
         .then(async (raw) => {
           const body = JSON.parse(raw);
           if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("bad");
+          if (body.drop) {
+            const dropId = String(body.id || "").trim();
+            const sessions = await readDailyQtySessions();
+            const at = sessions.findIndex((s) => s && s.id === dropId);
+            if (at >= 0 && sessions[at].saved !== false) {
+              send(res, 400, '{"ok":false,"error":"saved"}', TYPES[".json"]);
+              return;
+            }
+            if (at >= 0) {
+              sessions.splice(at, 1);
+              await writeDailyQtySessions(sessions);
+            }
+            send(res, 200, '{"ok":true,"dropped":true}', TYPES[".json"]);
+            return;
+          }
           const rows = Array.isArray(body.rows)
             ? body.rows.map((r) => ({
                 dt: String(r.dt || ""),

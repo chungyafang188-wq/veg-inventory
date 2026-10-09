@@ -3493,14 +3493,16 @@ function ensureLabelSel(day, rows) {
   for (const k of [...labelSel]) if (!keys.has(k)) labelSel.delete(k);
 }
 /**
- * Artwork is landscape 寬版 70×50 (user / physical sticker look).
- * Thermal drivers usually expect portrait 50×70 feed, so print wraps each sticker in
- * .label-page and rotates -90° onto @page 50×70. On-screen preview stays 70×50 WYSIWYG.
+ * On-screen artwork stays landscape 70×50 so a line like 台中拍賣 stays one row.
+ * TSC P200 stock USER is 67.5mm × 50.4mm, driver 直向. Print scales that artwork
+ * into one page of that size. Do not rotate onto 50×70 — that spills onto the next label.
  */
-const LABEL_PRINT_W_MM = 70;
-const LABEL_PRINT_H_MM = 50;
+const LABEL_ART_W_MM = 70;
+const LABEL_ART_H_MM = 50;
+const LABEL_PRINT_W_MM = 67.5;
+const LABEL_PRINT_H_MM = 50.4;
 function labelPrintNeedsRotate() {
-  return LABEL_PRINT_W_MM > LABEL_PRINT_H_MM;
+  return false;
 }
 /**
  * Print path injects this CSS into a blank window — styles.css is NOT used for printing.
@@ -3511,11 +3513,12 @@ function labelPrintNeedsRotate() {
  *     foot/meta (太陽日／流水; container = 國別／廠商); bottom 5mm pad reserved
  */
 function labelPrintCss() {
-  const w = LABEL_PRINT_W_MM;
-  const h = LABEL_PRINT_H_MM;
+  const w = LABEL_ART_W_MM;
+  const h = LABEL_ART_H_MM;
   const rotate = labelPrintNeedsRotate();
-  const pageW = rotate ? h : w;
-  const pageH = rotate ? w : h;
+  const pageW = rotate ? h : LABEL_PRINT_W_MM;
+  const pageH = rotate ? w : LABEL_PRINT_H_MM;
+  const fit = !rotate && (pageW !== w || pageH !== h) ? pageW / w : 1;
   const pageRule = `@page { size: ${pageW}mm ${pageH}mm; margin: 0; }`;
   // Do not put transform:none on .label-sticker — rotate print needs it.
   const sharpen = `* {
@@ -3550,12 +3553,18 @@ function labelPrintCss() {
   transform: translate(0, ${w}mm) rotate(-90deg);
   transform-origin: top left;
 }`
-    : `.label-sticker {
-  ${stickerBase}
+    : `.label-page {
+  width: ${pageW}mm; height: ${pageH}mm; margin: 0; padding: 0; overflow: hidden;
+  position: relative; box-sizing: border-box;
   page-break-inside: avoid; break-inside: avoid;
   page-break-after: always; break-after: page;
 }
-.label-sticker:last-child { page-break-after: auto; break-after: auto; }`;
+.label-page:last-child { page-break-after: auto; break-after: auto; }
+.label-sticker {
+  ${stickerBase}
+  transform: scale(${fit});
+  transform-origin: top left;
+}`;
   return `${pageRule}
 html, body {
   margin: 0; padding: 0; background: #fff;
@@ -3729,9 +3738,7 @@ function labelStickerHtml(item, forPrint) {
   </article>`;
 }
 function openLabelPrint(cards) {
-  const body = labelPrintNeedsRotate()
-    ? cards.map((c) => `<div class="label-page">${c}</div>`).join("")
-    : cards.join("");
+  const body = cards.map((c) => `<div class="label-page">${c}</div>`).join("");
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" /><title>標籤貼紙</title>
 <style>${labelPrintCss()}</style></head><body>${body}</body></html>`;
   let w = null;
@@ -3861,7 +3868,7 @@ function renderLabels() {
     b.classList.toggle("on", b.dataset.labelKind === labelKind);
   });
   const hint = document.getElementById("label-kind-hint");
-  if (hint) hint.textContent = "熱感紙 70mm × 50mm（寬版）。預覽＝印出樣子。";
+  if (hint) hint.textContent = "熱感紙 67.5mm × 50.4mm（寬版，字橫向）。預覽＝印出樣子。";
   const paneText = document.getElementById("label-pane-text");
   const paneCont = document.getElementById("label-pane-container");
   const paneShip = document.getElementById("label-pane-ship");

@@ -6547,7 +6547,7 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 }
 .label-pick-body { display: grid; gap: 0.15rem; min-width: 0; }
 .label-pick-body strong { font-size: 0.98rem; }
-/* Preview mirrors print artwork (labelPrintCss): landscape 70×50 寬版, grid 1fr|auto, bottom 5mm. */
+/* Preview is the 70×50 artwork. Print scales it onto the 67.5×50.4 stock. */
 .label-sticker {
   width: 70mm;
   height: 50mm;

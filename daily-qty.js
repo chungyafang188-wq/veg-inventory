@@ -793,6 +793,90 @@
     } catch (_) {}
     persistLocal();
   }
+  let matchHouse = "";
+  let matchDay = "";
+  let matchBill = "";
+  let matchRows = [];
+  const MATCH_STORE = "dq-house-match-v1";
+  function loadMatchStore() {
+    try {
+      const j = JSON.parse(sessionStorage.getItem(MATCH_STORE) || "");
+      if (!j || typeof j !== "object") return;
+      matchHouse = j.house || "";
+      matchDay = j.day || "";
+      matchBill = j.bill || "";
+      matchRows = Array.isArray(j.rows) ? j.rows : [];
+    } catch (_) {}
+  }
+  function saveMatchStore() {
+    try {
+      sessionStorage.setItem(MATCH_STORE, JSON.stringify({
+        house: matchHouse,
+        day: matchDay,
+        bill: matchBill,
+        rows: matchRows,
+      }));
+    } catch (_) {}
+  }
+  function slipsForMatch(id, day) {
+    return slips.filter((s) => s.saved && s.house === id && s.shipDate === day);
+  }
+  function houseShipList(id, day) {
+    const prevHouse = house;
+    house = id || "";
+    const dt = billDateOf(day || "");
+    house = prevHouse;
+    const out = [];
+    for (const s of slipsForMatch(id, day)) {
+      for (const line of s.lines || []) {
+        const sku = String(line.sku || "").trim();
+        const crop = sku
+          ? [line.kind, line.crop].filter(Boolean).join(" ")
+          : cropOf(line.crop) || String(line.crop || "").trim() || "未填品項";
+        for (const slot of line.slots || []) {
+          const mk = String(slot.mk || "").trim();
+          const q = qtyOf(slot.qty);
+          if (!mk || !q) continue;
+          out.push({ dt, mk, crop, sku, qty: q });
+        }
+      }
+    }
+    return out;
+  }
+  function compareHouseDay() {
+    const prev = { house, shipDate, billText };
+    house = matchHouse;
+    shipDate = matchDay;
+    billText = matchBill;
+    let out = [];
+    try {
+      const H = agg(houseShipList(matchHouse, matchDay));
+      const P = agg(parseBill(matchBill));
+      const keys = new Set([...H.keys(), ...P.keys()]);
+      for (const k of keys) {
+        const h = H.get(k);
+        const p = P.get(k);
+        const hQty = h?.qty || 0;
+        const pQty = p?.qty || 0;
+        out.push({
+          dt: (h || p).dt,
+          mk: (h || p).mk,
+          crop: (h || p).crop,
+          sku: (h || p).sku || "",
+          h: hQty,
+          p: pQty,
+          d: pQty - hQty,
+          ok: hQty === pQty && hQty > 0,
+        });
+      }
+      out.sort((a, b) => a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
+    } finally {
+      house = prev.house;
+      shipDate = prev.shipDate;
+      billText = prev.billText;
+    }
+    return out;
+  }
   function compareSlip(slip) {
     const prev = { house, shipDate, lines, billText };
     house = slip.house || "";
@@ -1436,9 +1520,8 @@
     return true;
   }
   function stageBillText(text) {
-    const s = matchSlip();
-    if (!s) {
-      msg = "請先選定要回對的單。";
+    if (!matchHouse) {
+      msg = "請先選要回對的社場。";
       renderDailyQty();
       return;
     }
@@ -1448,23 +1531,25 @@
       renderDailyQty();
       return;
     }
-    const rows = readRowsFor(s, raw);
-    if (!stageReadRows(s, rows)) {
-      s.billText = raw;
-      s.rows = [];
-      rememberSlip(s);
+    const virtual = { house: matchHouse, shipDate: matchDay, billText: "", rows: [] };
+    const rows = readRowsFor(virtual, raw);
+    if (!stageReadRows(virtual, rows)) {
+      virtual.billText = raw;
       msg = "沒有讀出件數。請確認有日期、市場、品名、件數，文字框還可以改。";
     }
+    matchBill = virtual.billText || raw;
+    matchRows = [];
+    saveMatchStore();
     renderDailyQty();
   }
   async function ingestBillImage(file) {
     if (!file) return;
-    const slip = matchSlip();
-    if (!slip) {
-      msg = "請先選定要回對的單。";
+    if (!matchHouse) {
+      msg = "請先選要回對的社場。";
       renderDailyQty();
       return;
     }
+    const slip = { house: matchHouse, shipDate: matchDay, billText: "", rows: [] };
     ocrStatus = setBillMsg;
     setBillMsg("正在讀圖片上的品名和件數。辨識在這台電腦進行，不會把照片送出去。");
     try {
@@ -1482,10 +1567,10 @@
         const n = String(slip.billText || "").split(/\n/).length - 1;
         msg = `讀出 ${Math.max(n, 1)} 筆，但不太確定。請先改不對的件數，再按開始回對。`;
       }
+      matchBill = slip.billText || text || "";
+      matchRows = [];
+      saveMatchStore();
       if (!noted) {
-        if (text) slip.billText = text;
-        slip.rows = [];
-        rememberSlip(slip);
         msg = text ? "這張照片讀不到件數。文字框裡是讀到的原文，可以改，或改貼明細。" : PHOTO_FAIL;
       }
       renderDailyQty();
@@ -1608,10 +1693,6 @@
       if (e.target.closest("[data-dq-pane]")) {
         syncCurrent();
         pane = e.target.closest("[data-dq-pane]").dataset.dqPane || "key";
-        if (pane === "match" && !matchId) {
-          const saved = slips.find((s) => s.saved);
-          matchId = saved ? saved.id : "";
-        }
         renderDailyQty();
         return;
       }
@@ -1653,7 +1734,13 @@
       }
       if (e.target.closest("[data-dq-match]")) {
         syncCurrent();
-        matchId = e.target.closest("[data-dq-match]").dataset.dqMatch || "";
+        const picked = slips.find((x) => x.id === (e.target.closest("[data-dq-match]").dataset.dqMatch || ""));
+        if (picked) {
+          matchHouse = picked.house || matchHouse;
+          matchDay = picked.shipDate || matchDay;
+          matchRows = [];
+          saveMatchStore();
+        }
         pane = "match";
         renderDailyQty();
         return;
@@ -1730,28 +1817,36 @@
         document.getElementById("dq-bill-file")?.click();
         return;
       }
+      if (e.target.closest("[data-dq-match-house]")) {
+        matchHouse = e.target.closest("[data-dq-match-house]").dataset.dqMatchHouse || "";
+        matchRows = [];
+        saveMatchStore();
+        pane = "match";
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("#dq-run")) {
-        const s = slips.find((x) => x.id === matchId) || slips.find((x) => x.saved);
-        if (!s) {
-          msg = "還沒有已儲存的單，請先在鍵單確認儲存。";
+        matchBill = document.getElementById("dq-bill")?.value || matchBill || "";
+        const mates = slipsForMatch(matchHouse, matchDay);
+        if (!matchHouse) {
+          msg = "請先選社場。";
           renderDailyQty();
           return;
         }
-        s.billText = document.getElementById("dq-bill")?.value || s.billText || "";
-        if (!String(s.billText).trim()) {
-          msg = "請貼上拍賣回來的件數金額單。";
+        if (!mates.length) {
+          msg = "這天這個社場還沒有已送出的單。";
           renderDailyQty();
           return;
         }
-        if (!slipBits(s).total) {
-          msg = "這張單還沒有件數。";
+        if (!String(matchBill).trim()) {
+          msg = "請貼上社場送來的整份明細。";
           renderDailyQty();
           return;
         }
-        s.rows = compareSlip(s);
-        const miss = s.rows.filter((r) => !r.ok).length;
-        msg = miss ? `回對完成，有 ${miss} 筆不一致。` : "回對完成，件數一致。";
-        saveSlip(s);
+        matchRows = compareHouseDay();
+        saveMatchStore();
+        const miss = matchRows.filter((r) => !r.ok).length;
+        msg = miss ? `回對完成，有 ${miss} 筆和社場合計不一致。` : "回對完成，和社場合計一致。";
         renderDailyQty();
         return;
       }
@@ -1783,28 +1878,31 @@
         queueSlipSync(s);
         return;
       }
+      if (t.id === "dq-match-day") {
+        matchDay = t.value || localYmd();
+        matchRows = [];
+        saveMatchStore();
+        renderDailyQty();
+        return;
+      }
       if (t.id === "dq-bill") {
-        const s = pane === "match" ? slips.find((x) => x.id === matchId) : null;
-        if (s) {
-          s.billText = t.value;
+        if (pane === "match") {
+          matchBill = t.value;
+          saveMatchStore();
           if (!syncingRead) {
             const host = document.getElementById("dq-read-host");
-            if (host) host.innerHTML = readTableHtml(readRowsFor(s, t.value));
+            if (host) host.innerHTML = readTableHtml(readRowsFor({ house: matchHouse, shipDate: matchDay }, t.value));
           }
-        } else billText = t.value;
-        if (s) queueSlipSync(s);
-        else persistLocal(true);
+          return;
+        }
+        billText = t.value;
+        persistLocal(true);
         return;
       }
       if (t.id === "dq-bill-file") {
         const file = t.files && t.files[0];
         t.value = "";
         if (file) ingestBillImage(file);
-        return;
-      }
-      if (t.id === "dq-match-pick") {
-        matchId = t.value;
-        renderDailyQty();
         return;
       }
       if (t.id === "dq-note") {
@@ -1931,6 +2029,7 @@
       slips.forEach((s) => {
         if (!s.saved && slipHasBody(s)) queueSlipSync(s);
       });
+      loadMatchStore();
     }
     if (!shipDate) shipDate = localYmd();
     syncCurrent();
@@ -2036,47 +2135,64 @@
         </section>
       </div>`;
     } else if (pane === "match") {
-      const picked = savedSlips.find((s) => s.id === matchId) || savedSlips[0];
-      if (picked && picked.id !== matchId) matchId = picked.id;
-      const opts = savedSlips
-        .map((s) => `<option value="${esc(s.id)}"${s.id === matchId ? " selected" : ""}>${esc(houseLab(s.house))} ${esc(s.shipDate)}</option>`)
-        .join("");
-      const sum = picked ? slipBits(picked) : { parts: [], total: 0 };
-      const showRows = picked && picked.rows && picked.rows.length ? picked.rows : [];
-      const matchTable = showRows.length
-        ? `<div class="dq-sheet-wrap"><table class="dq-sheet">
-          <thead><tr><th>狀態</th><th>市場</th><th>品項</th><th>寄送件</th><th>帳單件</th><th>差</th></tr></thead>
-          <tbody>${showRows
+      if (!matchDay) matchDay = shipDate || localYmd();
+      if (!matchHouse) {
+        const any = savedSlips.find((s) => s.shipDate === matchDay) || savedSlips[0];
+        if (any) matchHouse = any.house || "";
+      }
+      const mates = slipsForMatch(matchHouse, matchDay);
+      const ours = agg(houseShipList(matchHouse, matchDay));
+      const ourRows = [...ours.values()].sort((a, b) => a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
+      const ourTotal = ourRows.reduce((n, r) => n + Number(r.qty || 0), 0);
+      const houseBtnsMatch = HOUSES.map((h) => {
+        const n = slipsForMatch(h.id, matchDay).length;
+        return `<button type="button" class="pick${matchHouse === h.id ? " on" : ""}" data-dq-match-house="${esc(h.id)}">${esc(h.lab)}${n ? `<em class="dq-house-n">${n}</em>` : ""}</button>`;
+      }).join("");
+      const slipNames = mates.map((s) => slipTabText(s)).join("、");
+      const pending = slips.filter((s) => !s.saved && s.house === matchHouse && s.shipDate === matchDay && slipHasBody(s));
+      const pendingNote = pending.length
+        ? `<p class="dq-match-note">還有 ${pending.length} 張還沒送出，這次回對不計入：${esc(pending.map((s) => slipTabText(s)).join("、"))}。請先到鍵單按確認儲存。</p>`
+        : "";
+      const billHint = matchHouse === "xinfeng" ? "新豐的帳單日期是寄送日隔天。" : "帳單日期跟寄送日同一天。";
+      const ourTable = ourRows.length
+        ? `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr><th>市場</th><th>品項</th><th>寄出合計</th></tr></thead><tbody>${ourRows
+            .map((r) => `<tr><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td><td class="num">${r.qty}</td></tr>`)
+            .join("")}</tbody><tfoot><tr><td colspan="2">合計</td><td class="num">${ourTotal}</td></tr></tfoot></table></div>`
+        : `<p class="dq-empty">這天這個社場還沒有已送出的單。</p>`;
+      const matchTable = matchRows.length
+        ? `<div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>狀態</th><th>市場</th><th>品項</th><th>寄出合計</th><th>社場帳單</th><th>差</th></tr></thead><tbody>${matchRows
             .map((r) => {
               const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
-              const st = r.ok ? "一致" : !r.p ? "帳單沒回來" : !r.h ? "帳單多出" : "件數不同";
-              return `<tr class="${cls}"><td>${esc(st)}</td><td>${esc(r.mk)}</td><td>${esc(r.crop)}</td>
+              const st = r.ok ? "一致" : !r.p ? "帳單沒有" : !r.h ? "帳單多出" : "件數不同";
+              return `<tr class="${cls}"><td>${esc(st)}</td><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td>
                 <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.d > 0 ? "+" : ""}${r.d}</td></tr>`;
             })
             .join("")}</tbody></table></div>`
         : "";
-      body = picked
+      body = savedSlips.length
         ? `<div class="dq-match">
-            <label class="dq-match-pick">要回對的單
-              <select id="dq-match-pick">${opts}</select>
-            </label>
-            <p class="dq-sum">${esc(houseLab(picked.house))}</p>
-            <ul class="dq-sum-list">${slipBlockHtml(sum.blocks)}</ul>
-            <label class="dq-paste">貼上明細：文字或照片都可以（日期、市場、品名、件數）
-              <textarea id="dq-bill" placeholder="直接貼文字，或在這裡貼上拍賣單照片">${esc(picked.billText || "")}</textarea>
+            <p class="dq-match-note">社場一次送來這天全部拍賣數量。這裡把這個社場、這個寄送日的每一張單加總，再跟整份明細比一次。</p>
+            <div class="dq-houses">${houseBtnsMatch}</div>
+            <label class="dq-date">寄送日 <input id="dq-match-day" type="date" value="${esc(matchDay)}" /></label>
+            <p class="dq-sum">${esc(houseLab(matchHouse) || "請選社場")} · ${mates.length} 張已送出${slipNames ? " · " + esc(slipNames) : ""}</p>
+            ${pendingNote}
+            <p class="dq-match-note">${billHint}</p>
+            ${ourTable}
+            <label class="dq-paste">貼上社場整份明細：文字或照片（日期、市場、品名、件數）
+              <textarea id="dq-bill" placeholder="貼上這個社場送來的全部數量">${esc(matchBill)}</textarea>
             </label>
             <div class="dq-tools">
               <button type="button" class="ghost" id="dq-bill-pick">選擇照片</button>
               <input id="dq-bill-file" type="file" accept="image/*" hidden />
             </div>
-            <div id="dq-read-host">${picked ? readTableHtml(readRowsFor(picked, picked.billText || "")) : ""}</div>
+            <div id="dq-read-host">${readTableHtml(readRowsFor({ house: matchHouse, shipDate: matchDay }, matchBill))}</div>
             <div class="dq-tools">
               <button type="button" class="primary" id="dq-run">開始回對</button>
             </div>
             <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
             ${matchTable}
           </div>`
-        : `<p class="dq-empty">還沒有已儲存的單可以回對。請先在鍵單確認儲存。</p><p class="dq-msg" id="dq-msg">${esc(msg)}</p>`;
+        : `<p class="dq-empty">還沒有已送出的單可以回對。請先在鍵單確認儲存。</p><p class="dq-msg" id="dq-msg">${esc(msg)}</p>`;
     } else {
       body = `<div class="dq-split">
         <div class="dq-form">

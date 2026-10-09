@@ -285,11 +285,34 @@
     title = s.title || "";
     sessionId = s.id;
   }
-  function persistLocal() {
+  const pushTimers = new Map();
+  function slipHasBody(s) {
+    if (!s) return false;
+    if (slipBits(s).total) return true;
+    if (String(s.note || "").trim() || String(s.inner || "").trim()) return true;
+    return false;
+  }
+  function queueSlipSync(slip) {
+    if (!slip || !slip.house || !slipHasBody(slip)) return;
+    const prev = pushTimers.get(slip.id);
+    if (prev) clearTimeout(prev);
+    pushTimers.set(
+      slip.id,
+      setTimeout(() => {
+        pushTimers.delete(slip.id);
+        saveSlip(slip);
+      }, 800),
+    );
+  }
+  function persistLocal(sync) {
     syncCurrent();
     try {
       sessionStorage.setItem(STORE_KEY, JSON.stringify({ slips, cur }));
     } catch (_) {}
+    if (sync && slips[cur]) {
+      slips[cur].at = Date.now();
+      queueSlipSync(slips[cur]);
+    }
   }
   function restoreLocal() {
     try {
@@ -307,6 +330,7 @@
         title: s.title || "",
         saved: !!s.saved,
         seq: s.seq || "",
+        at: Number(s.at) || 0,
       }));
       if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
       applySlip(Math.min(Number(j.cur) || 0, slips.length - 1));
@@ -655,7 +679,9 @@
       rows: s.rows || [],
       seq: slipNo(s),
       saved: !!s.saved,
+      at: Date.now(),
     };
+    s.at = payload.at;
     try {
       const r = await fetch("./api/daily-qty/history", {
         method: "POST",
@@ -1400,6 +1426,14 @@
   function bindOnce() {
     if (bound) return;
     bound = true;
+    setInterval(() => {
+      const root = document.getElementById("dq-root");
+      const page = document.getElementById("page-daily-qty");
+      if (!root) return;
+      if (page && page.hidden) return;
+      if (document.activeElement && root.contains(document.activeElement)) return;
+      pullHistory();
+    }, 12000);
     const root = document.getElementById("dq-root");
     if (!root) return;
     root.addEventListener("click", (e) => {
@@ -1600,6 +1634,7 @@
         if (ta) ta.value = s.billText;
         syncingRead = false;
         persistLocal();
+        queueSlipSync(s);
         return;
       }
       if (t.id === "dq-bill") {
@@ -1611,6 +1646,8 @@
             if (host) host.innerHTML = readTableHtml(readRowsFor(s, t.value));
           }
         } else billText = t.value;
+        if (s) queueSlipSync(s);
+        else persistLocal(true);
         return;
       }
       if (t.id === "dq-bill-file") {
@@ -1627,13 +1664,13 @@
       if (t.id === "dq-note") {
         note = t.value;
         paintSlip();
-        persistLocal();
+        persistLocal(true);
         return;
       }
       if (t.id === "dq-inner") {
         inner = t.value;
         paintSlip();
-        persistLocal();
+        persistLocal(true);
         return;
       }
       if (t.id === "dq-title") {
@@ -1643,7 +1680,7 @@
       if (t.id === "dq-date") {
         shipDate = t.value || localYmd();
         paintSlip();
-        persistLocal();
+        persistLocal(true);
         return;
       }
       const lineEl = t.closest("[data-dq-line]");
@@ -1661,7 +1698,7 @@
         if (!line.sku) line.crop = t.value.trim();
         paintFind(t);
         paintSlip();
-        persistLocal();
+        persistLocal(true);
         return;
       }
       if (t.dataset.dqF === "sub") line.sub = t.value.trim();
@@ -1678,7 +1715,7 @@
         }
       }
       paintSlip();
-      persistLocal();
+      persistLocal(true);
     }
     root.addEventListener("change", readField);
     root.addEventListener("input", readField);
@@ -1727,6 +1764,9 @@
       restoreLocal();
       const hash = (location.hash || "").replace("#", "");
       if (hash === "list" || hash === "match" || hash === "key") pane = hash;
+      slips.forEach((s) => {
+        if (!s.saved && slipHasBody(s)) queueSlipSync(s);
+      });
     }
     if (!shipDate) shipDate = localYmd();
     syncCurrent();
@@ -1907,7 +1947,6 @@
     persistLocal();
     pullHistory();
   }
-  let historyPulled = false;
   function sessionToSlip(rec) {
     return {
       id: String(rec.id),
@@ -1921,26 +1960,51 @@
       title: rec.title || "",
       seq: rec.seq || "",
       saved: rec.saved !== false,
+      at: Number(rec.at) || 0,
     };
   }
+  let pulling = false;
+  function mergeRemote(sessions) {
+    let changed = false;
+    const root = document.getElementById("dq-root");
+    const typing = document.activeElement && root && root.contains(document.activeElement);
+    for (const rec of sessions) {
+      if (!rec || !rec.id) continue;
+      const remote = sessionToSlip(rec);
+      if (!remote.saved && !slipHasBody(remote)) continue;
+      const i = slips.findIndex((s) => s.id === remote.id);
+      if (i < 0) {
+        slips.push(remote);
+        changed = true;
+        continue;
+      }
+      const local = slips[i];
+      if (typing && slips[cur] === local) continue;
+      if ((Number(rec.at) || 0) <= (Number(local.at) || 0)) continue;
+      const wasCur = slips[cur] === local;
+      slips[i] = remote;
+      if (wasCur) applySlip(i);
+      changed = true;
+    }
+    if (!slips.some((s) => !s.saved)) {
+      slips.push(freshSlip());
+      changed = true;
+    }
+    return changed;
+  }
   function pullHistory() {
-    if (historyPulled) return;
-    historyPulled = true;
+    if (pulling) return;
+    pulling = true;
     fetch("./api/daily-qty/history", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         const sessions = Array.isArray(j?.sessions) ? j.sessions : [];
-        let changed = false;
-        for (const rec of sessions) {
-          if (!rec || !rec.id || rec.saved === false) continue;
-          if (slips.some((s) => s.id === rec.id)) continue;
-          slips.push(sessionToSlip(rec));
-          changed = true;
-        }
-        if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
-        if (changed) renderDailyQty();
+        if (mergeRemote(sessions)) renderDailyQty();
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        pulling = false;
+      });
   }
 
   window.renderDailyQty = renderDailyQty;

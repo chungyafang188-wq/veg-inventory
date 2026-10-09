@@ -254,6 +254,55 @@ async function writeSyncDoc(parsed) {
   );
   return parsed;
 }
+function readDailyQtyFile() {
+  try {
+    const j = JSON.parse(fs.readFileSync(DAILY_QTY_FILE, "utf8"));
+    return Array.isArray(j?.sessions) ? j.sessions : Array.isArray(j) ? j : [];
+  } catch (_) {
+    return [];
+  }
+}
+function writeDailyQtyFile(sessions) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${DAILY_QTY_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ sessions }));
+  fs.renameSync(tmp, DAILY_QTY_FILE);
+}
+async function readDailyQtySessions() {
+  const fileSessions = readDailyQtyFile();
+  if (!(await ensurePg())) return fileSessions;
+  const pool = pgPoolGet();
+  const found = await pool.query("SELECT doc FROM app_state WHERE id = $1", ["daily-qty"]);
+  if (found.rows.length) {
+    const doc = found.rows[0].doc || {};
+    const sessions = Array.isArray(doc.sessions) ? doc.sessions : [];
+    if (!sessions.length && fileSessions.length) {
+      await writeDailyQtySessions(fileSessions);
+      return fileSessions;
+    }
+    return sessions;
+  }
+  await pool.query(
+    "INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3) ON CONFLICT (id) DO NOTHING",
+    ["daily-qty", JSON.stringify({ sessions: fileSessions }), Date.now()],
+  );
+  return fileSessions;
+}
+async function writeDailyQtySessions(sessions) {
+  const sliced = sessions.slice(0, 300);
+  try {
+    writeDailyQtyFile(sliced);
+  } catch (err) {
+    console.error(err);
+  }
+  if (!(await ensurePg())) return;
+  const pool = pgPoolGet();
+  await pool.query(
+    `INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
+    ["daily-qty", JSON.stringify({ sessions: sliced }), Date.now()],
+  );
+}
 
 function loadSyncBundle() {
   try {
@@ -603,30 +652,20 @@ function handleApi(req, res) {
     return true;
   }
   if (urlPath === "/api/daily-qty/history") {
-    const loadSessions = () => {
-      try {
-        const j = JSON.parse(fs.readFileSync(DAILY_QTY_FILE, "utf8"));
-        return Array.isArray(j?.sessions) ? j.sessions : Array.isArray(j) ? j : [];
-      } catch (_) {
-        return [];
-      }
-    };
-    const saveSessions = (sessions) => {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      const tmp = `${DAILY_QTY_FILE}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ sessions }));
-      fs.renameSync(tmp, DAILY_QTY_FILE);
-    };
     if (req.method === "GET") {
-      send(res, 200, JSON.stringify({ ok: true, sessions: loadSessions() }), TYPES[".json"]);
+      readDailyQtySessions()
+        .then((sessions) => send(res, 200, JSON.stringify({ ok: true, sessions }), TYPES[".json"]))
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, '{"ok":false,"sessions":[]}', TYPES[".json"]);
+        });
       return true;
     }
     if (req.method === "POST" || req.method === "PUT") {
       readBody(req, 5e6)
-        .then((raw) => {
+        .then(async (raw) => {
           const body = JSON.parse(raw);
           if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("bad");
-          const sessions = loadSessions();
           const rows = Array.isArray(body.rows)
             ? body.rows.map((r) => ({
                 dt: String(r.dt || ""),
@@ -670,13 +709,14 @@ function handleApi(req, res) {
           if (typeof body.billText === "string") rec.billText = body.billText.slice(0, 20000);
           if (typeof body.note === "string") rec.note = body.note.slice(0, 200);
           if (typeof body.inner === "string") rec.inner = body.inner.slice(0, 200);
+          const sessions = await readDailyQtySessions();
           const i = sessions.findIndex((s) => s && s.id === id);
           const prev = i >= 0 ? sessions[i] : null;
           const houseId = rec.house;
           const ship = rec.shipDate;
-          let seq = "";
-          if (prev && /^\d{5}$/.test(String(prev.seq || ""))) seq = String(prev.seq);
-          else {
+          const kept = prev && /^\d{5}$/.test(String(prev.seq || "")) ? String(prev.seq) : "";
+          let seq = kept;
+          if (!seq && body.saved !== false) {
             const want = String(body.seq || "").replace(/\D/g, "").slice(0, 5);
             const clash = /^\d{5}$/.test(want) && sessions.some((s) => s && s.id !== id && String(s.seq || "") === want);
             const digit = houseId === "xinfeng" ? "1" : houseId === "yongfang" ? "2" : houseId === "dazhuang" ? "3" : houseId === "erlun" ? "4" : "9";
@@ -696,11 +736,11 @@ function handleApi(req, res) {
           }
           rec.seq = seq;
           if (i >= 0) {
-            rec.at = Number(sessions[i].at) || rec.at;
+            rec.at = Number(body.at) || Date.now();
             sessions[i] = { ...sessions[i], ...rec };
           } else sessions.push(rec);
           sessions.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-          saveSessions(sessions.slice(0, 300));
+          await writeDailyQtySessions(sessions.slice(0, 300));
           send(res, 200, JSON.stringify({ ok: true, id, seq }), TYPES[".json"]);
         })
         .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));

@@ -43,6 +43,7 @@ const DATA_DIR = pickDataDir();
 const DATA_FILE = path.join(DATA_DIR, "sync.json");
 const LINE_FILE = path.join(DATA_DIR, "line-drafts.json");
 const AUCTION_PAY_FILE = path.join(DATA_DIR, "auction-pay-history.json");
+const DAILY_QTY_FILE = path.join(DATA_DIR, "daily-qty-history.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -601,6 +602,88 @@ function handleApi(req, res) {
     send(res, 405, "Method not allowed");
     return true;
   }
+  if (urlPath === "/api/daily-qty/history") {
+    const loadSessions = () => {
+      try {
+        const j = JSON.parse(fs.readFileSync(DAILY_QTY_FILE, "utf8"));
+        return Array.isArray(j?.sessions) ? j.sessions : Array.isArray(j) ? j : [];
+      } catch (_) {
+        return [];
+      }
+    };
+    const saveSessions = (sessions) => {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      const tmp = `${DAILY_QTY_FILE}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ sessions }));
+      fs.renameSync(tmp, DAILY_QTY_FILE);
+    };
+    if (req.method === "GET") {
+      send(res, 200, JSON.stringify({ ok: true, sessions: loadSessions() }), TYPES[".json"]);
+      return true;
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      readBody(req, 5e6)
+        .then((raw) => {
+          const body = JSON.parse(raw);
+          if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("bad");
+          const sessions = loadSessions();
+          const rows = Array.isArray(body.rows)
+            ? body.rows.map((r) => ({
+                dt: String(r.dt || ""),
+                mk: String(r.mk || ""),
+                crop: String(r.crop || ""),
+                sku: String(r.sku || ""),
+                h: Number(r.h) || 0,
+                p: Number(r.p) || 0,
+                d: Number(r.d) || 0,
+                ok: !!r.ok,
+              }))
+            : [];
+          const id = String(body.id || "").trim() || `dq-${Date.now()}`;
+          const lines = Array.isArray(body.lines)
+            ? body.lines.slice(0, 40).map((l) => ({
+                crop: String(l?.crop || "").slice(0, 40),
+                spec: String(l?.spec || "").slice(0, 40),
+                sku: String(l?.sku || "").slice(0, 40),
+                kind: String(l?.kind || "").slice(0, 40),
+                alias: String(l?.alias || "").slice(0, 40),
+                sub: String(l?.sub || "").slice(0, 20),
+                slots: Array.isArray(l?.slots)
+                  ? l.slots.slice(0, 12).map((s) => ({
+                      mk: String(s?.mk || "").slice(0, 12),
+                      qty: String(s?.qty ?? "").slice(0, 12),
+                    }))
+                  : [],
+              }))
+            : null;
+          const rec = {
+            id,
+            at: Number(body.at) || Date.now(),
+            title: String(body.title || "").slice(0, 80),
+            house: String(body.house || "").slice(0, 20),
+            shipDate: String(body.shipDate || "").slice(0, 12),
+            by: String(body.by || "").slice(0, 40),
+            rows,
+            saved: body.saved !== false,
+          };
+          if (lines) rec.lines = lines;
+          if (typeof body.billText === "string") rec.billText = body.billText.slice(0, 20000);
+          if (typeof body.note === "string") rec.note = body.note.slice(0, 200);
+          const i = sessions.findIndex((s) => s && s.id === id);
+          if (i >= 0) {
+            rec.at = Number(sessions[i].at) || rec.at;
+            sessions[i] = { ...sessions[i], ...rec };
+          } else sessions.push(rec);
+          sessions.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+          saveSessions(sessions.slice(0, 300));
+          send(res, 200, JSON.stringify({ ok: true, id }), TYPES[".json"]);
+        })
+        .catch(() => send(res, 400, '{"ok":false}', TYPES[".json"]));
+      return true;
+    }
+    send(res, 405, "Method not allowed");
+    return true;
+  }
   if (urlPath === "/api/racks-txns") {
     if (req.method !== "GET") {
       send(res, 405, "Method not allowed");
@@ -727,6 +810,9 @@ function handleApi(req, res) {
             send(res, 409, JSON.stringify(current), TYPES[".json"]);
             return;
           }
+          if (parsed.attendance == null && current.attendance && typeof current.attendance === "object") {
+            parsed.attendance = current.attendance;
+          }
           await writeSyncDoc(parsed);
           send(res, 200, '{"ok":true}', TYPES[".json"]);
           return;
@@ -739,6 +825,9 @@ function handleApi(req, res) {
         if (basedOn && curAt && basedOn < curAt) {
           send(res, 409, JSON.stringify(current), TYPES[".json"]);
           return;
+        }
+        if (parsed.attendance == null && current.attendance && typeof current.attendance === "object") {
+          parsed.attendance = current.attendance;
         }
         fs.mkdirSync(DATA_DIR, { recursive: true });
         const tmp = `${DATA_FILE}.tmp`;

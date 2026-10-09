@@ -2223,6 +2223,7 @@ function renderHomeHub() {
     { id: "ware", icon: "crate", title: "庫存管理", blurb: "進貨・調倉・容器", tone: "ware", show: () => can("page-ware-in") || can("page-rack") || can("page-sitework") || can("books-stock") },
     { id: "import", icon: "ship", title: "進口管理", blurb: "港口・放行・拆櫃", tone: "ware", show: () => can("page-import") || can("page-unpack") },
     { id: "finance", icon: "coin", title: "財務核帳", blurb: "現金・貨運・沖帳", tone: "acct", show: () => can("page-finance") },
+    { id: "auction", icon: "bill", title: "拍賣寄貨", blurb: "鍵單・總資料・回對", tone: "orders", show: () => can("page-orders") || can("page-help") },
     { id: "master", icon: "person", title: "基本資料", blurb: "客戶・廠商", tone: "help", show: () => can("page-master") },
     { id: "report", icon: "clip", title: "報表中心", blurb: "進銷存・統計", tone: "acct", show: () => can("page-report") || can("page-stats") },
     { id: "fields", icon: "clip", title: "田區管理", blurb: "契作・巡視・採收", tone: "ware", show: () => can("page-fields") },
@@ -2703,6 +2704,7 @@ function buildSalesBlocks() {
   if (can("page-help")) {
     financeTabs.push({ id: "help", lab: "貨運比對", hint: "帳務核對", attrs: 'data-sales-pane="help"' });
     financeTabs.push({ id: "auction-pay", lab: "拍賣帳款核對", hint: "鴻安×貨款", attrs: 'data-sales-pane="auction-pay"' });
+    financeTabs.push({ id: "daily-qty", lab: "拍賣寄貨", hint: "鍵單・回對", attrs: 'data-sales-pane="daily-qty"' });
   }
   if (can("finance-remit")) {
     financeTabs.push({ id: "ar-remit", lab: "匯款沖帳", hint: "應收×銀行", attrs: 'data-sales-pane="ar-remit"' });
@@ -2867,7 +2869,7 @@ function restoreSalesMount() {
 function salesPaneBlockId(paneId) {
   if (["form", "today", "line", "pending-books", "short", "ship", "sales-bill"].includes(paneId)) return "ship";
   if (["in", "stock", "sitework", "rack"].includes(paneId)) return "ware";
-  if (["cashday", "help", "auction-pay", "ar-remit"].includes(paneId)) return "finance";
+  if (["cashday", "help", "auction-pay", "daily-qty", "ar-remit"].includes(paneId)) return "finance";
   if (["cust", "vendor"].includes(paneId)) return "master";
   if (["ledger", "label-prints", "stats"].includes(paneId)) return "report";
   return "ship";
@@ -2920,6 +2922,8 @@ function pageElForSalesPane(paneId) {
       return document.getElementById("page-ar-remit");
     case "auction-pay":
       return document.getElementById("page-auction-pay");
+    case "daily-qty":
+      return document.getElementById("page-daily-qty");
     default:
       return null;
   }
@@ -2952,6 +2956,8 @@ function salesPaneDenied(paneId) {
     if (!can("page-master")) return "沒有基本資料權限。";
   } else if (paneId === "help" || paneId === "auction-pay") {
     if (!can("page-help")) return "沒有財務權限。";
+  } else if (paneId === "daily-qty") {
+    if (!can("page-orders") && !can("page-help")) return "沒有拍賣寄貨權限。";
   } else if (paneId === "cashday") {
     if (!can("finance-cash")) return "沒有這個權限。";
   } else if (paneId === "ar-remit") {
@@ -3054,6 +3060,8 @@ function runSalesPaneRenderers(paneId) {
       run(renderArRemit);
     } else if (vpage === "auction-pay" && typeof renderAuctionPay === "function") {
       run(renderAuctionPay);
+    } else if (vpage === "daily-qty" && typeof renderDailyQty === "function") {
+      run(renderDailyQty);
     } else if (vpage === "pending-books") {
       run(renderPendingBooks);
     } else if (vpage === "soon") {
@@ -3164,6 +3172,11 @@ function goFromHub(btn) {
     hubOpen = "";
   } else if (go === "help") {
     page = "help";
+  } else if (go === "daily-qty") {
+    if (!can("page-orders") && !can("page-help")) return setStatus("沒有拍賣寄貨權限。", true);
+    page = "daily-qty";
+    hubOpen = "";
+    hubDept = "";
   } else if (go === "labels") {
     if (!can("page-orders") && !can("page-plan") && !can("page-books")) return setStatus("沒有列印權限。", true);
     page = "labels";
@@ -4905,6 +4918,7 @@ function applyRoleUi() {
     pages.push("help");
     pages.push("auction-pay");
   }
+  if (can("page-orders") || can("page-help")) pages.push("daily-qty");
   if (can("finance-remit")) pages.push("ar-remit");
   if (!isUnpackerRole()) pages.push("soon");
   if (can("page-orders") || can("page-plan") || can("page-books")) pages.push("labels");
@@ -12390,6 +12404,11 @@ function render() {
   applyRoleUi();
   syncPhoneTabbar();
   document.body.classList.toggle("on-home", page === "home");
+  document.body.classList.toggle(
+    "dq-wide",
+    (page === "daily-qty" || (page === "home" && hubSalesPane === "daily-qty")) &&
+      document.body.classList.contains("layout-web"),
+  );
   document.body.classList.toggle("sales-workspace", page === "home" && hubDept === "sales");
   const coName = document.getElementById("co-name");
   if (coName && document.body.classList.contains("layout-phone")) {
@@ -12429,6 +12448,8 @@ function render() {
             ? "匯款沖帳"
           : page === "auction-pay"
             ? "拍賣帳款核對"
+          : page === "daily-qty"
+            ? "拍賣寄貨"
           : page === "labels"
             ? "標籤貼紙"
           : page === "label-prints"
@@ -12469,6 +12490,8 @@ function render() {
   if (pageArRemit) pageArRemit.hidden = page !== "ar-remit";
   const pageAuctionPay = document.getElementById("page-auction-pay");
   if (pageAuctionPay) pageAuctionPay.hidden = page !== "auction-pay";
+  const pageDailyQty = document.getElementById("page-daily-qty");
+  if (pageDailyQty) pageDailyQty.hidden = page !== "daily-qty" && !(page === "home" && hubSalesPane === "daily-qty");
   document.getElementById("page-orders").hidden = page !== "orders";
   document.getElementById("page-plan").hidden = page !== "plan";
   document.getElementById("page-stock").hidden = !(onBooks && booksPart === "stock");
@@ -12497,6 +12520,7 @@ function render() {
   if (page === "help") run(renderHelpFreight);
   if (page === "ar-remit" && typeof renderArRemit === "function") run(renderArRemit);
   if (page === "auction-pay" && typeof renderAuctionPay === "function") run(renderAuctionPay);
+  if (page === "daily-qty" && typeof renderDailyQty === "function") run(renderDailyQty);
   if (page === "labels") run(renderLabels);
   if (page === "label-prints") run(renderLabelPrints);
   if (page === "unpack" && typeof renderUnpackPage === "function") run(renderUnpackPage);
@@ -12776,6 +12800,16 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
       page = "home";
       hubDept = next;
       hubWorkPane = "";
+      render();
+      return;
+    }
+    if (next === "auction") {
+      if (!can("page-orders") && !can("page-help")) return setStatus("沒有拍賣寄貨權限。", true);
+      restoreSalesMount();
+      page = "daily-qty";
+      hubDept = "";
+      hubOpen = "";
+      hubSalesPane = "";
       render();
       return;
     }

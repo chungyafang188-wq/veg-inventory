@@ -7077,6 +7077,7 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-filters select { width: auto; padding: 0.35rem 0.5rem; }
 .bill-title { margin: 0.2rem 0 0.45rem; font-weight: 700; }
 .bill-head, .bill-line { display: grid; grid-template-columns: 3rem 3rem 3.4rem 3.4rem 2.8rem 2.4rem 4.6rem 3rem 3rem 3.2rem 3.2rem 2rem 5.4rem; gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
+.bill-split { grid-column: 1 / -1; display: grid; grid-template-columns: 3rem 3.4rem 3.4rem 2.4rem 2.8rem; gap: 0.28rem; align-items: center; }
 .bill-head { color: var(--muted); font-size: 0.78rem; }
 .bill-mini { display: none; }
 .bill-line label { display: grid; gap: 0.1rem; min-width: 0; }
@@ -7120,7 +7121,7 @@ body.layout-phone .bill-form { display: flex; flex-direction: column; gap: 0.6re
 body.layout-phone .bill-mini { display: block; margin-bottom: 0.12rem; font-size: 0.78rem; color: var(--muted); }
 body.layout-phone .bill-line {
   grid-template-columns: 1fr 1fr;
-  grid-template-areas: "date off" "people start" "end hours" "total rest" "price estimate" "pay amt" "note note";
+  grid-template-areas: "date off" "people start" "end hours" "split split" "total rest" "price estimate" "pay amt" "note note";
   gap: 0.45rem 0.55rem;
   margin: 0;
   padding: 0.7rem 0.75rem 0.8rem;
@@ -7141,6 +7142,7 @@ body.layout-phone .bill-line > .bill-pay { grid-area: pay; }
 body.layout-phone .bill-line > .bill-amt { grid-area: amt; align-self: end; }
 body.layout-phone .bill-line > .bill-off { grid-area: off; justify-self: end; align-self: center; }
 body.layout-phone .bill-line > .bill-note { grid-area: note; }
+body.layout-phone .bill-split { grid-area: split; grid-column: auto; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem; }
 body.layout-phone .bill-note .attend-in { max-width: none; }
 body.layout-phone .bill-line .attend-in { min-height: 2.55rem; padding: 0.45rem 0.6rem; font-size: 1.05rem; }
 body.layout-phone .bill-off { min-height: 2.4rem; padding: 0.25rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }

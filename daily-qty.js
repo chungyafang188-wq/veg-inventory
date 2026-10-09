@@ -185,9 +185,14 @@
     return blocks;
   }
   const HOUSE_NO = { xinfeng: "1", yongfang: "2", dazhuang: "3", erlun: "4" };
+  function cleanSeq(raw) {
+    const s = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+    if (!s) return "";
+    return /^[A-Z0-9]{1,12}$/.test(s) ? s : null;
+  }
   function slipNo(s) {
-    const raw = String(s?.seq || "").replace(/\D/g, "");
-    return /^\d{5}$/.test(raw) ? raw : "";
+    const cleaned = cleanSeq(s?.seq);
+    return cleaned || "";
   }
   function allocSeq(s) {
     const had = slipNo(s);
@@ -197,7 +202,9 @@
     const used = new Set();
     for (const o of slips) {
       if (o === s || o.house !== s.house || o.shipDate !== s.shipDate) continue;
-      const n = Number(String(o.seq || "").slice(-2));
+      const seq = String(o.seq || "");
+      if (!/^\d{5}$/.test(seq)) continue;
+      const n = Number(seq.slice(-2));
       if (n) used.add(n);
     }
     let n = 1;
@@ -206,7 +213,8 @@
     return s.seq;
   }
   function slipOrd(s) {
-    const n = Number(String(s?.seq || "").slice(-2));
+    const seq = String(s?.seq || "");
+    const n = /^\d{5}$/.test(seq) ? Number(seq.slice(-2)) : 0;
     if (n) return n;
     const mates = slips.filter((x) => x.house && x.house === s.house && x.shipDate === s.shipDate);
     const i = mates.indexOf(s);
@@ -409,12 +417,16 @@
     const seen = new Set();
     const body = rows
       .map((r) => {
+        let seqCell = "";
         let act = "";
-        if (withAct && !seen.has(r.id)) {
+        if (!seen.has(r.id)) {
           seen.add(r.id);
-          act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-open="${r.slipIndex}">修改</button><button type="button" class="primary" data-dq-match="${esc(r.id)}">回對</button></td>`;
+          seqCell = `<td class="num dq-seq" rowspan="${span[r.id]}"><button type="button" class="dq-seq-btn" data-dq-seq="${esc(r.id)}" title="點一下修正單號">${esc(r.seq)}</button></td>`;
+          if (withAct) {
+            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-open="${r.slipIndex}">修改</button><button type="button" class="primary" data-dq-match="${esc(r.id)}">回對</button></td>`;
+          }
         }
-        return `<tr>${showDate ? `<td>${esc(r.date)}</td>` : ""}<td class="num">${esc(r.seq)}</td><td>${esc(r.house)}</td><td>${esc(r.item)}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
+        return `<tr>${showDate ? `<td>${esc(r.date)}</td>` : ""}${seqCell}<td>${esc(r.house)}</td><td>${esc(r.item)}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
       })
       .join("");
     const total = rows.reduce((n, r) => n + Number(r.qty || 0), 0);
@@ -662,7 +674,7 @@
     out.sort((a, b) => a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
     return out;
   }
-  async function saveSlip(slip) {
+  async function saveSlip(slip, opts) {
     const s = slip || slips[cur];
     if (!s) return;
     const payload = {
@@ -678,8 +690,8 @@
       inner: s.inner || "",
       rows: s.rows || [],
       seq: slipNo(s),
+      seqSet: !!(opts && opts.seqSet),
       saved: !!s.saved,
-      at: Date.now(),
     };
     s.at = payload.at;
     try {
@@ -690,7 +702,7 @@
       });
       const j = await r.json().catch(() => ({}));
       if (j.id) s.id = j.id;
-      if (j.seq) s.seq = String(j.seq);
+      if (j && Object.prototype.hasOwnProperty.call(j, "seq")) s.seq = String(j.seq || "");
     } catch (_) {}
     persistLocal();
   }
@@ -1442,6 +1454,57 @@
         if (typeof goHome === "function") goHome();
         return;
       }
+      if (e.target.closest("[data-dq-seq]")) {
+        const btn = e.target.closest("[data-dq-seq]");
+        const id = btn.dataset.dqSeq || "";
+        const s = slips.find((x) => x.id === id);
+        const td = btn.parentElement;
+        if (!s || !td || td.querySelector(".dq-seq-edit")) return;
+        const input = document.createElement("input");
+        input.className = "dq-seq-edit";
+        input.value = slipNo(s);
+        input.maxLength = 12;
+        input.setAttribute("aria-label", "單號");
+        td.replaceChildren(input);
+        input.focus();
+        input.select();
+        let done = false;
+        const cancel = () => {
+          if (done) return;
+          done = true;
+          renderDailyQty();
+        };
+        const commit = () => {
+          if (done) return;
+          done = true;
+          const next = cleanSeq(input.value);
+          if (next == null) {
+            msg = "單號請用英數，12碼以內。";
+            renderDailyQty();
+            return;
+          }
+          if (next === slipNo(s)) {
+            renderDailyQty();
+            return;
+          }
+          s.seq = next;
+          s.at = Date.now();
+          saveSlip(s, { seqSet: true });
+          msg = next ? `單號已改成 ${next}。` : "單號已清掉。";
+          renderDailyQty();
+        };
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            commit();
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            cancel();
+          }
+        });
+        input.addEventListener("blur", () => commit());
+        return;
+      }
       if (e.target.closest("[data-dq-day]")) {
         listDay = e.target.closest("[data-dq-day]").dataset.dqDay || listDay;
         listMonth = String(listDay || "").slice(0, 7);
@@ -1843,24 +1906,23 @@
       if (!listDay) listDay = localYmd();
       if (!listMonth) listMonth = listDay.slice(0, 7);
       const all = catalogRows();
-      const dayRows = all.filter((r) => r.date === listDay);
-      const found = all.filter((r) => rowHit(r, listQ));
+      const q = String(listQ || "").trim();
+      const shown = q ? all.filter((r) => rowHit(r, q)) : all.filter((r) => r.date === listDay);
       const [, mm, dd] = listDay.split("-");
-      const dayTable = dayRows.length
-        ? gridTable(dayRows, { actions: true })
-        : `<p class="dq-empty">${Number(mm)}/${Number(dd)} 沒有拍賣資料。</p>`;
+      const title = q ? "搜尋結果" : `${Number(mm)}/${Number(dd)} 入單資料`;
+      const table = shown.length
+        ? gridTable(shown, { actions: true, showDate: true })
+        : `<p class="dq-empty">${q ? "找不到符合的單。" : `${Number(mm)}/${Number(dd)} 沒有拍賣資料。`}</p>`;
       body = `<div class="dq-board">
         ${dqCalHtml()}
         <section class="dq-block">
-          <h3>${Number(mm)}/${Number(dd)} 入單資料</h3>
-          ${dayTable}
-        </section>
-        <section class="dq-block">
-          <h3>總清單</h3>
-          <label class="dq-q">快速搜尋
-            <input id="dq-q" type="search" placeholder="單號、日期、社場、品項、市場" value="${esc(listQ)}" />
-          </label>
-          ${gridTable(found, { showDate: true })}
+          <div class="dq-list-bar">
+            <h3>${title}</h3>
+            <label class="dq-q">快速搜尋
+              <input id="dq-q" type="search" placeholder="單號、日期、社場、品項、市場" value="${esc(listQ)}" />
+            </label>
+          </div>
+          ${table}
           <p class="dq-card-msg" id="dq-list-msg"></p>
         </section>
       </div>`;

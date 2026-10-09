@@ -714,25 +714,30 @@ function handleApi(req, res) {
           const prev = i >= 0 ? sessions[i] : null;
           const houseId = rec.house;
           const ship = rec.shipDate;
-          const kept = prev && /^\d{5}$/.test(String(prev.seq || "")) ? String(prev.seq) : "";
-          let seq = kept;
-          if (!seq && body.saved !== false) {
-            const want = String(body.seq || "").replace(/\D/g, "").slice(0, 5);
-            const clash = /^\d{5}$/.test(want) && sessions.some((s) => s && s.id !== id && String(s.seq || "") === want);
+          const cleanSeq = (raw) => {
+            const s = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+            if (!s) return "";
+            return /^[A-Z0-9]{1,12}$/.test(s) ? s : "";
+          };
+          const want = cleanSeq(body.seq);
+          const prevSeq = prev ? cleanSeq(prev.seq) : "";
+          let seq = "";
+          if (body.seqSet || want) seq = want;
+          else if (prevSeq) seq = prevSeq;
+          else if (body.saved !== false) {
             const digit = houseId === "xinfeng" ? "1" : houseId === "yongfang" ? "2" : houseId === "dazhuang" ? "3" : houseId === "erlun" ? "4" : "9";
             const dd = String(ship || "").slice(-2).padStart(2, "0");
-            if (/^\d{5}$/.test(want) && !clash) seq = want;
-            else {
-              const used = new Set();
-              sessions.forEach((s) => {
-                if (!s || s.id === id || s.house !== houseId || s.shipDate !== ship) return;
-                const n = Number(String(s.seq || "").slice(-2));
-                if (n) used.add(n);
-              });
-              let n = 1;
-              while (used.has(n) && n < 99) n += 1;
-              seq = `${digit}${dd}${String(n).padStart(2, "0")}`;
-            }
+            const used = new Set();
+            sessions.forEach((s) => {
+              if (!s || s.id === id || s.house !== houseId || s.shipDate !== ship) return;
+              const prevNo = String(s.seq || "");
+              if (!/^\d{5}$/.test(prevNo)) return;
+              const n = Number(prevNo.slice(-2));
+              if (n) used.add(n);
+            });
+            let n = 1;
+            while (used.has(n) && n < 99) n += 1;
+            seq = `${digit}${dd}${String(n).padStart(2, "0")}`;
           }
           rec.seq = seq;
           if (i >= 0) {

@@ -797,6 +797,8 @@
   let matchDay = "";
   let matchBill = "";
   let matchRows = [];
+  let matchPhotoUrl = "";
+  let matchPhotoName = "";
   const MATCH_STORE = "dq-house-match-v1";
   function loadMatchStore() {
     try {
@@ -1542,16 +1544,26 @@
     saveMatchStore();
     renderDailyQty();
   }
+  function clearMatchPhoto() {
+    if (matchPhotoUrl) URL.revokeObjectURL(matchPhotoUrl);
+    matchPhotoUrl = "";
+    matchPhotoName = "";
+  }
   async function ingestBillImage(file) {
     if (!file) return;
+    clearMatchPhoto();
+    matchPhotoUrl = URL.createObjectURL(file);
+    matchPhotoName = file.name || "照片";
     if (!matchHouse) {
-      msg = "請先選要回對的社場。";
+      msg = `已選取「${matchPhotoName}」。請再選社場。`;
       renderDailyQty();
       return;
     }
+    msg = `已選取「${matchPhotoName}」，正在讀件數。`;
+    renderDailyQty();
     const slip = { house: matchHouse, shipDate: matchDay, billText: "", rows: [] };
     ocrStatus = setBillMsg;
-    setBillMsg("正在讀圖片上的品名和件數。辨識在這台電腦進行，不會把照片送出去。");
+    setBillMsg(`已選取「${matchPhotoName}」，正在讀件數。辨識在這台電腦進行，不會把照片送出去。`);
     try {
       const canvas = await prepSlipImage(file);
       const worker = await ocrWorker();
@@ -1823,6 +1835,12 @@
       }
       if (e.target.closest("#dq-bill-pick")) {
         document.getElementById("dq-bill-file")?.click();
+        return;
+      }
+      if (e.target.closest("#dq-photo-clear")) {
+        clearMatchPhoto();
+        msg = "已清除這張照片。";
+        renderDailyQty();
         return;
       }
       if (e.target.closest("[data-dq-match-house]")) {
@@ -2167,15 +2185,39 @@
             .map((r) => `<tr><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td><td class="num">${r.qty}</td></tr>`)
             .join("")}</tbody><tfoot><tr><td colspan="2">合計</td><td class="num">${ourTotal}</td></tr></tfoot></table></div>`
         : `<p class="dq-empty">這天這個社場還沒有已送出的單。</p>`;
-      const matchTable = matchRows.length
-        ? `<div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>狀態</th><th>市場</th><th>品項</th><th>寄出合計</th><th>社場帳單</th><th>差</th></tr></thead><tbody>${matchRows
+      const shownMatch = [...matchRows].sort((a, b) => Number(a.ok) - Number(b.ok) || a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
+      const sameN = matchRows.filter((r) => r.ok).length;
+      const diffN = matchRows.filter((r) => r.h && r.p && !r.ok).length;
+      const missN = matchRows.filter((r) => r.h && !r.p).length;
+      const extraN = matchRows.filter((r) => !r.h && r.p).length;
+      const matchBits = [
+        sameN ? `${sameN} 筆一樣` : "",
+        diffN ? `${diffN} 筆件數不同` : "",
+        missN ? `${missN} 筆我們有寄、帳單沒有` : "",
+        extraN ? `${extraN} 筆帳單有、我們沒寄` : "",
+      ].filter(Boolean);
+      const matchTable = shownMatch.length
+        ? `<section class="dq-match-result">
+            <h3>回對結果</h3>
+            <p class="dq-match-note">每一列是同一個市場、同一個品項。差＝社場帳單減我們寄出。正數是社場比較多，負數是社場比較少。</p>
+            <p class="dq-match-legend"><span class="ok">一樣</span><span class="bad">件數不同</span><span class="miss">有一邊沒有</span></p>
+            <p class="dq-sum">${esc(matchBits.join("，"))}</p>
+            <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>市場</th><th>品項</th><th>我們寄出</th><th>社場帳單</th><th>差</th></tr></thead><tbody>${shownMatch
             .map((r) => {
               const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
-              const st = r.ok ? "一致" : !r.p ? "帳單沒有" : !r.h ? "帳單多出" : "件數不同";
+              const st = r.ok ? "一樣" : !r.p ? "我們有、帳單沒有" : !r.h ? "帳單有、我們沒有" : "件數不同";
+              const diff = `${r.d > 0 ? "+" : ""}${r.d}`;
               return `<tr class="${cls}"><td>${esc(st)}</td><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td>
-                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.d > 0 ? "+" : ""}${r.d}</td></tr>`;
+                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${esc(diff)}</td></tr>`;
             })
-            .join("")}</tbody></table></div>`
+            .join("")}</tbody></table></div></section>`
+        : "";
+      const photoBox = matchPhotoUrl
+        ? `<div class="dq-photo-picked">
+            <b>已選取照片${matchPhotoName ? "：" + esc(matchPhotoName) : ""}</b>
+            <img src="${esc(matchPhotoUrl)}" alt="選取的拍賣明細" />
+            <button type="button" class="ghost" id="dq-photo-clear">清除這張照片</button>
+          </div>`
         : "";
       body = savedSlips.length
         ? `<div class="dq-match">
@@ -2186,6 +2228,7 @@
             ${pendingNote}
             <p class="dq-match-note">${billHint}</p>
             ${ourTable}
+            ${photoBox}
             <label class="dq-paste">貼上社場整份明細：文字或照片（日期、市場、品名、件數）
               <textarea id="dq-bill" placeholder="貼上這個社場送來的全部數量">${esc(matchBill)}</textarea>
             </label>

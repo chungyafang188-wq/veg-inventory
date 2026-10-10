@@ -203,6 +203,9 @@ function pgPoolGet() {
       ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
       max: 3,
     });
+    pgPool.on("error", (err) => {
+      console.error("pg pool idle client error", err && err.message ? err.message : err);
+    });
   }
   return pgPool;
 }

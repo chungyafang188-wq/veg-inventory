@@ -1614,10 +1614,18 @@
       const root = document.getElementById("dq-root");
       const page = document.getElementById("page-daily-qty");
       if (!root) return;
+      if (document.hidden) return;
       if (page && page.hidden) return;
       if (document.activeElement && root.contains(document.activeElement)) return;
       pullHistory();
     }, 12000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      const root = document.getElementById("dq-root");
+      const page = document.getElementById("page-daily-qty");
+      if (!root || (page && page.hidden)) return;
+      pullHistory();
+    });
     const root = document.getElementById("dq-root");
     if (!root) return;
     root.addEventListener("click", (e) => {

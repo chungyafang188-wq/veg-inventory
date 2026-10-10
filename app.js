@@ -15449,6 +15449,7 @@ document.getElementById("fix-morning").onclick = unlockAllMorning;
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   pollCloud();
+  refreshLineDrafts();
   if (ensureTodayBooks()) {
     syncAllNqQty();
     save();
@@ -15717,6 +15718,13 @@ function applyBundle(b) {
     if (typeof onImportRemoteApplied === "function") onImportRemoteApplied();
   } catch (_) {}
 }
+async function pullCloudRev() {
+  const r = await fetch(`${CLOUD_URL}?rev=1`, { cache: "no-store", headers: { Accept: "application/json" } });
+  const type = r.headers.get("content-type") || "";
+  if (!r.ok || !type.includes("json")) throw new Error("no-rev");
+  const data = await r.json();
+  return Number(data.updatedAt) || 0;
+}
 async function pullCloud() {
   const r = await fetch(CLOUD_URL, { cache: "no-store", headers: { Accept: "application/json" } });
   const type = r.headers.get("content-type") || "";
@@ -15970,13 +15978,27 @@ async function pushCloud(force, retry) {
   writeSyncAt(bundle.updatedAt);
   return true;
 }
+let healBusy = false;
 async function healCloudSync() {
   if (planShipLock) return true;
+  if (document.hidden) return true;
+  if (healBusy) return true;
+  healBusy = true;
   try {
+    let localAt = readSyncAt();
+    if (localHasData() && localAt) {
+      try {
+        const remoteAt = await pullCloudRev();
+        if (remoteAt && remoteAt === localAt) {
+          skipCloud = false;
+          return true;
+        }
+      } catch (_) {}
+    }
     const remote = await pullCloud();
     skipCloud = false;
     const remoteAt = Number(remote.updatedAt) || 0;
-    const localAt = readSyncAt();
+    localAt = readSyncAt();
     const remoteOk = bundleHasData(remote);
     const localOk = localHasData();
     if (localOk && !remoteOk) {
@@ -16056,6 +16078,8 @@ async function healCloudSync() {
     setSyncNote("同步暫時失敗，會自動再試。");
     console.error(err);
     return false;
+  } finally {
+    healBusy = false;
   }
 }
 async function reloadFromCloud() {
@@ -16116,5 +16140,11 @@ try {
 } catch (_) {}
 bootCloudSync();
 refreshLineDrafts();
-setInterval(healCloudSync, 8000);
-setInterval(refreshLineDrafts, 8000);
+setInterval(() => {
+  if (document.hidden) return;
+  healCloudSync();
+}, 8000);
+setInterval(() => {
+  if (document.hidden) return;
+  refreshLineDrafts();
+}, 8000);

@@ -232,6 +232,13 @@ function seedDocFromFile() {
   } catch (_) {}
   return { updatedAt: 0 };
 }
+async function readSyncRev() {
+  if (!(await ensurePg())) return 0;
+  const pool = pgPoolGet();
+  const found = await pool.query("SELECT updated_at FROM app_state WHERE id = $1", ["sync"]);
+  if (!found.rows.length) return 0;
+  return Number(found.rows[0].updated_at) || 0;
+}
 async function readSyncDoc() {
   if (!(await ensurePg())) return null;
   const pool = pgPoolGet();
@@ -870,6 +877,23 @@ function handleApi(req, res) {
     return true;
   }
   if (req.method === "GET") {
+    const revOnly = /(?:^|[?&])rev=1(?:&|$)/.test(req.url || "");
+    if (revOnly) {
+      const reply = (updatedAt) => send(res, 200, JSON.stringify({ updatedAt: Number(updatedAt) || 0 }), TYPES[".json"]);
+      if (pgEnabled()) {
+        readSyncRev().then(reply).catch((err) => {
+          console.error(err);
+          send(res, 500, '{"updatedAt":0}', TYPES[".json"]);
+        });
+        return true;
+      }
+      try {
+        reply(Number(JSON.parse(fs.readFileSync(DATA_FILE, "utf8")).updatedAt) || 0);
+      } catch (_) {
+        reply(0);
+      }
+      return true;
+    }
     if (pgEnabled()) {
       readSyncDoc()
         .then((doc) => send(res, 200, JSON.stringify(doc || { updatedAt: 0 }), TYPES[".json"]))

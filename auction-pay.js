@@ -544,24 +544,145 @@
     ta.remove();
     return Promise.resolve();
   }
+  let lastCopyUrl = "";
   function hideCopyOut() {
     const wrap = document.getElementById("ap-copy-wrap");
     const box = document.getElementById("ap-copy-out");
+    const img = document.getElementById("ap-copy-img");
     if (wrap) wrap.hidden = true;
     if (box) {
       box.value = "";
       box.hidden = true;
     }
+    if (img) {
+      img.hidden = true;
+      img.removeAttribute("src");
+    }
+    if (lastCopyUrl) {
+      URL.revokeObjectURL(lastCopyUrl);
+      lastCopyUrl = "";
+    }
   }
   function showCopyOut(text) {
     const wrap = document.getElementById("ap-copy-wrap");
     const box = document.getElementById("ap-copy-out");
+    const img = document.getElementById("ap-copy-img");
+    if (img) img.hidden = true;
     if (wrap) wrap.hidden = false;
     if (box) {
       box.hidden = false;
       box.value = text;
       box.focus();
       box.select();
+    }
+  }
+  function showCopyImage(blob) {
+    const wrap = document.getElementById("ap-copy-wrap");
+    const box = document.getElementById("ap-copy-out");
+    const img = document.getElementById("ap-copy-img");
+    if (box) box.hidden = true;
+    if (lastCopyUrl) URL.revokeObjectURL(lastCopyUrl);
+    lastCopyUrl = URL.createObjectURL(blob);
+    if (img) {
+      img.hidden = false;
+      img.src = lastCopyUrl;
+    }
+    if (wrap) wrap.hidden = false;
+  }
+  function drawNetTable(list, title) {
+    const headers = ["我的寄件日", "對方貨款日", "我的金額", "對方實拿", "差額", "結果", "說明"];
+    const body = list.map((r) => tableCells(r).map((c) => String(c || "")));
+    const scale = 2;
+    const padX = 16;
+    const rowH = 40;
+    const font = '16px "Microsoft JhengHei", "PingFang TC", sans-serif';
+    const fontBold = '700 16px "Microsoft JhengHei", "PingFang TC", sans-serif';
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.font = font;
+    const cols = headers.map((h, i) => {
+      let w = ctx.measureText(h).width;
+      for (const row of body) w = Math.max(w, ctx.measureText(row[i]).width);
+      return Math.ceil(w + padX * 2);
+    });
+    const tableW = cols.reduce((s, w) => s + w, 0);
+    const titleH = 34;
+    const subH = 26;
+    const headH = 40;
+    const top = 18;
+    const width = tableW + 32;
+    const height = top + titleH + subH + headH + body.length * rowH + 18;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#143528";
+    ctx.font = '700 20px "Microsoft JhengHei", "PingFang TC", sans-serif';
+    ctx.fillText(title, 16, top + 22);
+    ctx.fillStyle = "#5a6a62";
+    ctx.font = '14px "Microsoft JhengHei", "PingFang TC", sans-serif';
+    ctx.fillText("對方貨款日 = 我的寄件日 + 1 天", 16, top + titleH + 16);
+    const tableY = top + titleH + subH;
+    ctx.fillStyle = "#eef6f1";
+    ctx.fillRect(16, tableY, tableW, headH);
+    ctx.strokeStyle = "#c5d9cc";
+    ctx.strokeRect(16, tableY, tableW, headH + body.length * rowH);
+    ctx.font = fontBold;
+    ctx.fillStyle = "#143528";
+    ctx.textBaseline = "middle";
+    let x = 16;
+    headers.forEach((h, i) => {
+      ctx.fillText(h, x + padX, tableY + headH / 2);
+      x += cols[i];
+    });
+    body.forEach((row, ri) => {
+      const ry = tableY + headH + ri * rowH;
+      const bad = !!list[ri].bad;
+      ctx.fillStyle = bad ? "#fdecea" : ri % 2 ? "#f7fbf8" : "#ffffff";
+      ctx.fillRect(16.5, ry, tableW - 1, rowH);
+      ctx.strokeStyle = "#e4eee8";
+      ctx.beginPath();
+      ctx.moveTo(16, ry);
+      ctx.lineTo(16 + tableW, ry);
+      ctx.stroke();
+      ctx.font = bad ? fontBold : font;
+      ctx.fillStyle = bad ? "#7a1212" : "#1c241f";
+      let cx = 16;
+      row.forEach((cell, i) => {
+        const right = i >= 2 && i <= 4;
+        const tw = ctx.measureText(cell).width;
+        const tx = right ? cx + cols[i] - padX - tw : cx + padX;
+        ctx.fillText(cell, tx, ry + rowH / 2);
+        cx += cols[i];
+      });
+    });
+    return canvas;
+  }
+  async function copyNetImage(list, title) {
+    const canvas = drawNetTable(list, title);
+    const blobTask = new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+    try {
+      if (!navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("no image clipboard");
+      try { window.focus(); } catch (_) {}
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobTask })]);
+      const blob = await blobTask;
+      if (blob) showCopyImage(blob);
+      msg = `已複製表格圖片（${list.length} 列），可直接貼到 LINE。`;
+    } catch (_) {
+      const blob = await blobTask;
+      if (!blob) {
+        msg = "表格圖片沒有做成。";
+        hideCopyOut();
+      } else {
+        showCopyImage(blob);
+        msg = "圖片在下面。請在圖上按右鍵複製，再貼到 LINE。";
+      }
+    }
+    renderAuctionPay();
+    if (msg.includes("圖片")) {
+      const blob = await blobTask;
+      if (blob) showCopyImage(blob);
     }
   }
   async function copyTable(kind) {
@@ -574,6 +695,10 @@
       return;
     }
     const title = job === "net" ? (kind === "all" ? "拍賣貨款實拿核帳" : "拍賣貨款實拿有差") : kind === "all" ? "拍賣帳款核對" : "拍賣帳款待對方核對";
+    if (job === "net") {
+      await copyNetImage(list, title);
+      return;
+    }
     const text = `${title}\n${tableTsv(list)}`;
     try {
       await copyText(text);
@@ -957,10 +1082,10 @@
     bindOnce();
     const root = document.getElementById("ap-root");
     if (!root) return;
-    if (!root.querySelector("#ap-ui-v11")) {
+    if (!root.querySelector("#ap-ui-v12")) {
       root.innerHTML = `
       <header class="ap-head">
-        <span id="ap-ui-v11" hidden></span>
+        <span id="ap-ui-v12" hidden></span>
         <h2 id="ap-title">拍賣帳款核對</h2>
         <p id="ap-intro-qty">上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。歷史反查會把整次比對存在伺服器，各台平板登入後看到同一份。</p>
         <p id="ap-intro-net" hidden>上傳永芳銷售明細和貨款付款單。永芳金額是照貨款實拿登的。比對每天的實拿，金額對不上才標出來。</p>
@@ -1023,6 +1148,7 @@
           <button type="button" class="ghost" id="ap-copy-close">取消</button>
         </div>
         <textarea id="ap-copy-out" readonly></textarea>
+        <img id="ap-copy-img" alt="表格圖片" hidden />
       </div>
       <p class="ap-msg" id="ap-msg"></p>
       <div id="ap-body"></div>`;

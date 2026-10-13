@@ -178,6 +178,12 @@
   font-size: 0.78rem;
   line-height: 1.4;
 }
+#ap-copy-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+}
 @media print {
   .ap-files, .ap-tools, .noprint { display: none !important; }
   .ap-sheet-wrap { max-height: none; overflow: visible; border: none; }

@@ -12708,17 +12708,17 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
   }
   const attendDrop = e.target.closest("[data-attend-drop]");
   if (attendDrop && typeof attendDropCrewExtra === "function") {
-    attendDropCrewExtra(attendDrop.dataset.attendDrop || "");
+    attendDropCrewExtra(attendDrop.dataset.attendDrop || "", attendDrop.dataset.attendSlot || "2");
     return;
   }
   const billAdd = e.target.closest("[data-bill-add]");
   if (billAdd && typeof attendOpenBillExtra === "function") {
-    attendOpenBillExtra(billAdd.dataset.billDay || "");
+    attendOpenBillExtra(billAdd.dataset.billDay || "", billAdd.dataset.billCrew || "");
     return;
   }
   const billDrop = e.target.closest("[data-bill-drop]");
   if (billDrop && typeof attendDropBillExtra === "function") {
-    attendDropBillExtra(billDrop.dataset.billDay || "", billDrop.dataset.billCrew || "");
+    attendDropBillExtra(billDrop.dataset.billDay || "", billDrop.dataset.billCrew || "", billDrop.dataset.billSlot || "2");
     return;
   }
   const attendFoldBtn = e.target.closest("[data-attend-fold-btn]");
@@ -15565,7 +15565,7 @@ function attendMergeFields(kind) {
   }
   return typeof ATTEND_CREW_FIELDS !== "undefined"
     ? ATTEND_CREW_FIELDS
-    : ["plan", "people", "start", "end", "rest", "off", "showHours", "price", "pay", "note"];
+    : ["plan", "people", "start", "end", "rest", "place", "people2", "start2", "end2", "rest2", "place2", "people3", "start3", "end3", "rest3", "place3", "off", "showHours", "price", "pay", "pay2", "pay3", "note"];
 }
 function attendFieldAt(rec, field) {
   const t = rec && rec.at && Number(rec.at[field]);

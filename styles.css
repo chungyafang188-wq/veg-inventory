@@ -7052,10 +7052,12 @@ body.layout-phone .attend-crew > label:nth-child(7) { grid-area: rest; }
 body.layout-phone .attend-crew-hours { grid-area: hours; }
 body.layout-phone .attend-crew-bento { grid-area: bento; }
 body.layout-phone .attend-more { grid-area: more; }
+.attend-place { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.35rem; }
+.attend-place .attend-in { width: 6rem; }
 .attend-more { grid-column: 1 / -1; }
 .attend-extra-shift {
   display: grid;
-  grid-template-columns: 4.2rem 4rem minmax(3.4rem, 1fr) minmax(3.8rem, 1fr) auto;
+  grid-template-columns: 4.2rem 4rem 4.2rem minmax(3.4rem, 1fr) minmax(3.8rem, 1fr) auto;
   gap: 0.35rem;
   align-items: end;
   margin: 0.1rem 0 0.35rem;
@@ -7097,7 +7099,8 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-head, .bill-line { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem 3.4rem 2.2rem minmax(5.4rem, 1fr); gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
 .bill-more { grid-column: 1 / -1; }
 .bill-add, .bill-drop, .attend-add, .attend-drop { width: auto; margin: 0.05rem 0 0.15rem; padding: 0.12rem 0.55rem; }
-.bill-split { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem max-content; justify-content: start; width: max-content; max-width: 100%; gap: 0.28rem; align-items: center; margin: 0 0 0.2rem; }
+.bill-split { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem 4.2rem max-content; justify-content: start; width: max-content; max-width: 100%; gap: 0.28rem; align-items: center; margin: 0 0 0.2rem; }
+.bill-place .attend-in { width: 4.2rem; }
 .bill-extra-lab { font-size: 0.78rem; font-weight: 800; color: #1a6843; }
 .bill-head { color: var(--muted); font-size: 0.78rem; }
 .bill-mini { display: none; }

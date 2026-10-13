@@ -37,14 +37,16 @@ body.dq-wide .app { max-width: min(76rem, calc(100vw - 1.5rem)); }
   line-height: 1.55;
   color: #16241c;
 }
+.dq-slip b { font-weight: 800; }
 .dq-slip.is-empty { color: #5a6a62; font-weight: 600; }
 .dq-side .primary { width: 100%; margin-top: 0.7rem; }
-.dq-slots { display: grid; gap: 0.4rem; }
+.dq-slots { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .dq-slot {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 1.2fr) minmax(5.2rem, 0.7fr) 1.6rem auto;
-  gap: 0.35rem;
+  grid-template-columns: 5.8rem 3.3rem 1.15rem auto;
+  gap: 0.2rem;
   align-items: center;
+  width: auto;
 }
 .dq-slot select,
 .dq-slot input { min-height: 2.55rem; margin: 0; }
@@ -115,41 +117,51 @@ body.layout-web.dq-wide .app-head {
   width: auto;
   margin: 0;
 }
-.dq-mkt {
-  border: 1px solid #d5e6db;
-  background: #f7fbf8;
-  border-radius: 0.85rem;
-  padding: 0.55rem 0.55rem 0.35rem;
-  margin: 0 0 0.65rem;
+.dq-line-head {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: end;
 }
-.dq-mkt-head {
+.dq-line-head .dq-sub { margin: 0; }
+.dq-del {
+  width: auto;
+  margin: 0;
+  min-height: 2.35rem;
+  padding: 0.2rem 0.75rem;
+  justify-self: end;
+}
+.dq-line-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
   align-items: end;
-  margin: 0 0 0.45rem;
 }
-.dq-mkt-pick {
+.dq-line-meta .dq-spec { width: 8.4rem; }
+.dq-line-meta .dq-country { width: 8.6rem; }
+.dq-markets { display: grid; gap: 0.28rem; }
+.dq-markets-lab { font-size: 0.78rem; font-weight: 800; color: #1a6843; }
+.dq-line .dq-country {
   display: grid;
   gap: 0.15rem;
   font-size: 0.78rem;
   font-weight: 800;
-  color: #1a6843;
-  min-width: 7.5rem;
+  color: #1a4a78;
+  background: #f3f7ff;
+  border: 1px solid #c5d4ea;
+  border-radius: 0.55rem;
+  padding: 0.28rem 0.4rem 0.4rem;
 }
-.dq-mkt-pick select { min-height: 2.4rem; font-weight: 800; background: #fff; }
-.dq-mkt-add { width: auto; margin: 0; min-height: 2.4rem; }
-.dq-line-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.35rem; align-items: end; }
-.dq-line-meta {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 5.6rem 4.6rem minmax(5.4rem, 1fr) 3.4rem;
-  gap: 0.35rem;
-  align-items: end;
+.dq-line .dq-country select {
+  min-height: 2.35rem;
+  margin: 0;
+  width: 100%;
+  padding: 0.2rem 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #16241c;
+  background: #fff;
 }
-.dq-country, .dq-qty { display: grid; gap: 0.15rem; font-size: 0.78rem; font-weight: 800; color: #1a6843; }
-.dq-country select, .dq-qty input { min-height: 2.35rem; margin: 0; font-weight: 800; background: #fff; }
-.dq-qty input { text-align: center; }
 .dq-mk-lab { margin: 0.15rem 0 0; font-size: 0.72rem; font-weight: 700; color: #5a6a62; }
 .dq-mk.on input { border-color: #1a6843; background: #eef8f1; }
 .dq-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
@@ -306,8 +318,8 @@ body.layout-web.dq-wide .app-head {
 .dq-slip-tab { display: inline-flex; align-items: center; gap: 0.2rem; }
 .dq-tab-x, .dq-drop { width: auto; margin: 0; min-height: 2rem; padding: 0.15rem 0.55rem; color: #8a2b2b; border-color: #e4b4b4; background: #fff; }
 .dq-another { width: auto; margin: 0; }
-.dq-line-top { grid-template-columns: minmax(0, 1.2fr) auto; gap: 0.45rem; }
-.dq-line-meta { grid-template-columns: 6.2rem 4.8rem 7.2rem 3.6rem; }
+.dq-line-meta .dq-spec { width: 9rem; }
+.dq-line-meta .dq-country { width: 9rem; }
 .dq-add-line {
   width: 100%;
   margin: 0.2rem 0 0.7rem;
@@ -451,8 +463,8 @@ body.layout-web.dq-wide .app-head {
   width: 3.2rem;
 }
 .dq-spec-box em { font-style: normal; font-weight: 800; color: #1a6843; font-size: 0.85rem; white-space: nowrap; }
-.dq-slots { grid-template-columns: 1fr 1fr; gap: 0.28rem 0.45rem; }
-.dq-slot { grid-template-columns: minmax(4.2rem, 1fr) 3.1rem 1.15rem auto; gap: 0.2rem; }
+.dq-slots { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.dq-slot { grid-template-columns: 6.2rem 3.4rem 1.15rem auto; gap: 0.25rem; width: auto; }
 .dq-line .dq-slot select,
 .dq-line .dq-slot input {
   min-height: 1.85rem;

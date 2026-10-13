@@ -10,7 +10,7 @@ const ATTEND_CREWS = [
   { id: "zhen", boss: "小珍" },
 ];
 const ATTEND_FIXED_FIELDS = ["on", "start", "end", "start2", "end2", "rest", "split", "noBento"];
-const ATTEND_CREW_FIELDS = ["plan", "people", "start", "end", "rest", "people2", "start2", "end2", "rest2", "off", "showHours", "price", "pay", "note"];
+const ATTEND_CREW_FIELDS = ["plan", "people", "start", "end", "rest", "people2", "start2", "end2", "rest2", "off", "showHours", "price", "pay", "pay2", "note"];
 function attendMark(rec, field) {
   if (!rec || !field) return rec;
   if (!rec.at || typeof rec.at !== "object" || Array.isArray(rec.at)) rec.at = {};
@@ -61,6 +61,10 @@ function attendCrew(iso, crew) {
     rest2: "",
     off: false,
     showHours: false,
+    price: "",
+    pay: "",
+    pay2: "",
+    note: "",
     ...(saved && typeof saved === "object" ? saved : {}),
   };
 }
@@ -468,6 +472,7 @@ function attendDropBillExtra(iso, crewId) {
   base.start2 = "";
   base.end2 = "";
   base.rest2 = "";
+  base.pay2 = "";
   attendMark(base, "people2");
   rec.crews[crewId] = base;
   save();
@@ -599,17 +604,34 @@ function attendBillHoursText(crew) {
 }
 function attendBillEstimate(crew) {
   if (!crew || crew.off) return "";
-  const hours = attendCrewHours(crew);
-  const wage = Number(crew.price);
-  if (hours == null || String(crew.price || "").trim() === "" || !Number.isFinite(wage)) return "";
-  return String(Math.round(hours * wage));
+  const pay = attendBillPersonPay(attendCrewHours(crew), crew.price, "");
+  return pay == null ? "" : String(pay);
+}
+function attendBillPersonPay(hours, price, typed) {
+  const typedText = String(typed || "").trim();
+  if (typedText !== "") {
+    const n = Number(typedText);
+    return Number.isFinite(n) ? Math.round(n) : null;
+  }
+  const wageText = String(price || "").trim();
+  const wage = Number(wageText);
+  if (hours == null || wageText === "" || !Number.isFinite(wage)) return null;
+  return Math.round(hours * wage);
+}
+function attendBillGroupPays(crew) {
+  if (!crew || crew.off) return [];
+  const typed = [crew.pay, crew.pay2];
+  return attendCrewGroups(crew).map((g, i) => {
+    const pay = attendBillPersonPay(g.hours, crew.price, typed[i] || "");
+    const amt = g.n && pay != null ? Math.round(g.n * pay) : null;
+    return { n: g.n, hours: g.hours, start: g.start, end: g.end, pay, amt };
+  });
 }
 function attendBillAmount(crew) {
   if (!crew || crew.off) return "";
-  const pay = Number(crew.pay);
-  const n = attendCrewHeadcount(crew);
-  if (String(crew.pay || "").trim() === "" || !Number.isFinite(pay)) return "";
-  return String(Math.round(n * pay));
+  const parts = attendBillGroupPays(crew).filter((g) => g.amt != null);
+  if (!parts.length) return "";
+  return String(parts.reduce((sum, g) => sum + g.amt, 0));
 }
 function attendBillHoursNote(day) {
   if (!day || !day.showHours || day.off) return "";
@@ -728,15 +750,18 @@ function attendBillDays(bossId, ym) {
     const rest2 = crew.rest2 || "";
     const price = crew.price || "";
     const pay = crew.pay || "";
+    const pay2 = crew.pay2 || "";
     const rest = crew.rest || "";
     const off = !!crew.off;
     const showHours = !!crew.showHours;
     const n = attendCrewHeadcount({ off, people, people2 });
-    const shaped = { off, people, start, end, rest, people2, start2, end2, rest2, price, pay, showHours };
+    const shaped = { off, people, start, end, rest, people2, start2, end2, rest2, price, pay, pay2, showHours };
     const amt = attendBillAmount(shaped);
-    const touched = off || String(people).trim() || String(start).trim() || String(end).trim() || String(people2).trim() || String(start2).trim() || String(end2).trim() || String(price).trim() || String(pay).trim();
+    const touched = off || String(people).trim() || String(start).trim() || String(end).trim() || String(people2).trim() || String(start2).trim() || String(end2).trim() || String(price).trim() || String(pay).trim() || String(pay2).trim();
     const hours2 = attendShiftHours(start2, end2, rest2);
-    days.push({ iso, d, m, off, showHours, people, start, end, rest, people2, start2, end2, rest2, price, pay, note: crew.note || "", n, amt, hours: attendBillHoursText(shaped), hours2: hours2 == null ? "" : String(hours2), estimate: attendBillEstimate(shaped), touched });
+    const payHint = attendBillPersonPay(attendShiftHours(start, end, rest), price, "");
+    const pay2Hint = attendBillPersonPay(hours2, price, "");
+    days.push({ iso, d, m, off, showHours, people, start, end, rest, people2, start2, end2, rest2, price, pay, pay2, note: crew.note || "", n, amt, hours: attendBillHoursText(shaped), hours2: hours2 == null ? "" : String(hours2), estimate: attendBillEstimate(shaped), estimate2: pay2Hint == null ? "" : String(pay2Hint), payHint: payHint == null ? "" : String(payHint), touched });
   }
   return days;
 }
@@ -777,7 +802,7 @@ function attendBillForm(days, crewId, opts) {
         <span class="bill-total-hours"><span class="bill-mini">總工時</span><b data-bill-total-hours="${esc(day.iso)}">${esc(attendBillTotalText(day))}</b></span>
         <label class="bill-price"><span class="bill-mini">時薪</span><input class="attend-in" data-bill-field="price" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.price))}" inputmode="numeric"></label>
         <span class="bill-estimate"><span class="bill-mini">預計</span><b class="bill-estimate-num" data-bill-estimate="${esc(day.iso)}">${esc(day.estimate)}</b></span>
-        <label class="bill-pay"><span class="bill-mini">實發</span><input class="attend-in" data-bill-field="pay" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.pay))}" inputmode="numeric"></label>
+        <label class="bill-pay"><span class="bill-mini">實發</span><input class="attend-in" data-bill-field="pay" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.pay))}" placeholder="${esc(day.payHint || "")}" inputmode="numeric"></label>
         <span class="bill-amt" data-bill-amt="${esc(day.iso)}"><span class="bill-mini">金額</span><b class="bill-amt-num">${esc(amt)}</b></span>
         <label class="bill-off"><input type="checkbox" data-bill-off="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}"${day.off ? " checked" : ""}>休</label>
         <div class="bill-note">
@@ -795,6 +820,10 @@ function attendBillForm(days, crewId, opts) {
             <label class="bill-end"><span class="bill-mini">結束</span><input class="attend-in" data-bill-field="end2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.end2 || ""))}"></label>
             <label class="bill-rest"><span class="bill-mini">午休</span><input class="attend-in" data-bill-field="rest2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${cross2 ? esc(String(day.rest2 || "")) : ""}" placeholder="${cross2 ? "60" : "—"}" inputmode="numeric"${cross2 ? "" : " disabled"}></label>
             <span class="bill-hours"><span class="bill-mini">時數</span><b data-bill-hours2="${esc(day.iso)}">${esc(day.hours2 || "")}</b></span>
+            <span class="bill-split-gap"></span>
+            <span class="bill-split-gap"></span>
+            <span class="bill-estimate"><span class="bill-mini">預計</span><b data-bill-estimate2="${esc(day.iso)}">${esc(day.estimate2 || "")}</b></span>
+            <label class="bill-pay"><span class="bill-mini">實發</span><input class="attend-in" data-bill-field="pay2" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}" value="${esc(String(day.pay2 || ""))}" placeholder="${esc(day.estimate2 || "")}" inputmode="numeric"></label>
             <button type="button" class="ghost bill-drop" data-bill-drop="1" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}">拿掉</button>
           </div>
         </div>
@@ -1024,7 +1053,20 @@ function attendBillLiveRows(days) {
       continue;
     }
     flush();
-    rows.push({ kind: "work", iso: day.iso, label: attendBillDateLabel(day.m, day.d, day.start, day.end, day.start2, day.end2), qty: `${day.n}人`, price: day.pay, amt: day.amt, note: attendBillSlipNote(day) });
+    const parts = attendBillGroupPays(day).filter((g) => g.n > 0 && g.pay != null);
+    const samePay = parts.length > 0 && parts.every((g) => g.pay === parts[0].pay);
+    if (!parts.length || samePay) {
+      const n = parts.length ? parts.reduce((sum, g) => sum + g.n, 0) : day.n;
+      const price = parts.length ? parts[0].pay : day.pay;
+      const amt = parts.length ? n * parts[0].pay : day.amt;
+      rows.push({ kind: "work", iso: day.iso, label: attendBillDateLabel(day.m, day.d, day.start, day.end, day.start2, day.end2), qty: `${n}人`, price, amt, note: attendBillSlipNote(day) });
+    } else {
+      parts.forEach((g, i) => {
+        const hoursNote = day.showHours && g.hours != null ? `${g.n}人*${g.hours}小時` : "";
+        const note = [hoursNote, i === 0 ? String(day.note || "").trim() : ""].filter(Boolean).join(" ");
+        rows.push({ kind: "work", iso: day.iso, label: attendBillDateLabel(day.m, day.d, g.start, g.end, "", ""), qty: `${g.n}人`, price: g.pay, amt: g.amt, note });
+      });
+    }
   }
   flush();
   return rows;
@@ -1053,7 +1095,7 @@ function attendBillHtml() {
   const one = days.filter((day) => day.iso === focus);
   return `<section class="bill-page">
     <h2>工時費用單</h2>
-    <p class="attend-note">人數和時間會記到每日到班。兩個人下班不一樣，第一組打一人，下面「另一組」再打一人。跨中午可填午休分鐘，空白扣 60 分，填 0 不扣。總工時是各組人數乘上各組時數再加總。預計＝時數×時薪，是第一組一人的估計。實發自己填，改時間不會蓋掉。金額＝實發×兩組人數加總。</p>
+    <p class="attend-note">人數和時間會記到每日到班。兩個人下班不一樣，第一組打一人，下面「另一組」再打一人。跨中午可填午休分鐘，空白扣 60 分，填 0 不扣。總工時是各組人數乘上各組時數再加總。時薪兩組共用。實發沒填時，用該組時數乘時薪。兩組時數不同，一人實發就不同。有填實發就用填的，改時間不會蓋掉。金額是各組實發乘各組人數再加總。</p>
     <div class="bill-filters">
       <label>老闆 <select data-bill-boss>${bossOpts}</select></label>
       <label>月份 <select data-bill-month>${monthOpts}</select></label>
@@ -1078,7 +1120,7 @@ function attendBillEdit(iso, crewId, field, value) {
     base.showHours = !!value;
     attendMark(base, "showHours");
   }
-  if (field === "people" || field === "start" || field === "end" || field === "rest" || field === "people2" || field === "start2" || field === "end2" || field === "rest2" || field === "price" || field === "pay" || field === "note") {
+  if (field === "people" || field === "start" || field === "end" || field === "rest" || field === "people2" || field === "start2" || field === "end2" || field === "rest2" || field === "price" || field === "pay" || field === "pay2" || field === "note") {
     base[field] = value;
     attendMark(base, field);
   }
@@ -1100,6 +1142,13 @@ function attendBillEdit(iso, crewId, field, value) {
     if (totalHoursEl) totalHoursEl.textContent = attendBillTotalText({ ...base, hours: hoursText });
     const estimateEl = row.querySelector("[data-bill-estimate]");
     if (estimateEl) estimateEl.textContent = attendBillEstimate(base);
+    const estimate2 = attendBillPersonPay(hours2, base.price, "");
+    const estimate2El = row.querySelector("[data-bill-estimate2]");
+    if (estimate2El) estimate2El.textContent = estimate2 == null ? "" : String(estimate2);
+    const payIn = row.querySelector("[data-bill-field='pay']");
+    if (payIn && document.activeElement !== payIn) payIn.placeholder = attendBillEstimate(base);
+    const pay2In = row.querySelector("[data-bill-field='pay2']");
+    if (pay2In && document.activeElement !== pay2In) pay2In.placeholder = estimate2 == null ? "" : String(estimate2);
     const hoursNote = row.querySelector("[data-bill-hours-note]");
     if (hoursNote) hoursNote.textContent = attendBillHoursNote({ ...base, hours: attendBillHoursText(base) });
     const restIn = row.querySelector("[data-bill-field='rest']");
@@ -1116,7 +1165,7 @@ function attendBillEdit(iso, crewId, field, value) {
       if (!cross2) rest2In.value = "";
     }
   });
-  const touched = !!base.off || String(base.people || "").trim() || String(base.start || "").trim() || String(base.end || "").trim() || String(base.people2 || "").trim() || String(base.start2 || "").trim() || String(base.end2 || "").trim() || String(base.price || "").trim() || String(base.pay || "").trim();
+  const touched = !!base.off || String(base.people || "").trim() || String(base.start || "").trim() || String(base.end || "").trim() || String(base.people2 || "").trim() || String(base.start2 || "").trim() || String(base.end2 || "").trim() || String(base.price || "").trim() || String(base.pay || "").trim() || String(base.pay2 || "").trim();
   document.querySelectorAll(`[data-bill-pick="${CSS.escape(iso)}"]`).forEach((btn) => btn.classList.toggle("is-on", touched));
   const days = attendBillDays(crewId, String(iso).slice(0, 7));
   const total = days.reduce((sum, day) => sum + (Number(day.amt) || 0), 0);

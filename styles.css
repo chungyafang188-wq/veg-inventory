@@ -7097,7 +7097,7 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-head, .bill-line { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem 3.4rem 2.2rem minmax(5.4rem, 1fr); gap: 0.28rem; align-items: center; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
 .bill-more { grid-column: 1 / -1; }
 .bill-add, .bill-drop, .attend-add, .attend-drop { width: auto; margin: 0.05rem 0 0.15rem; padding: 0.12rem 0.55rem; }
-.bill-split { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem max-content; justify-content: start; width: max-content; max-width: 100%; gap: 0.28rem; align-items: center; margin: 0 0 0.2rem; }
+.bill-split { display: grid; grid-template-columns: 3.2rem 3rem 3.6rem 3.6rem 2.8rem 2.6rem 4.2rem 3.2rem 3.2rem 3.4rem max-content; justify-content: start; width: max-content; max-width: 100%; gap: 0.28rem; align-items: center; margin: 0 0 0.2rem; }
 .bill-extra-lab { font-size: 0.78rem; font-weight: 800; color: #1a6843; }
 .bill-head { color: var(--muted); font-size: 0.78rem; }
 .bill-mini { display: none; }
@@ -7165,6 +7165,7 @@ body.layout-phone .bill-line > .bill-off { grid-area: off; justify-self: end; al
 body.layout-phone .bill-line > .bill-note { grid-area: note; }
 body.layout-phone .bill-line > .bill-more { grid-area: split; grid-column: auto; }
 body.layout-phone .bill-split { width: 100%; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem; }
+body.layout-phone .bill-split-gap { display: none; }
 body.layout-phone .bill-extra-lab,
 body.layout-phone .bill-drop { grid-column: 1 / -1; }
 body.layout-phone .bill-note .attend-in { max-width: none; }

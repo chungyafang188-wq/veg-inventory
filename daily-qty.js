@@ -32,8 +32,9 @@
   function blankSlots(n) {
     return Array.from({ length: n }, () => ({ mk: "", qty: "" }));
   }
+  const COUNTRIES = ["中國", "紐西蘭", "越南", "韓國", "日本", "澳洲", "美國", "本產"];
   function freshLine() {
-    return { crop: "", spec: "", sku: "", sub: "", slots: blankSlots(SLOT_N) };
+    return { crop: "", spec: "", sku: "", sub: "", country: "", slots: [{ mk: "", qty: "" }] };
   }
   function freshSlip() {
     return {
@@ -46,6 +47,7 @@
       title: "",
       note: "",
       inner: "",
+      code: "",
       saved: false,
     };
   }
@@ -58,6 +60,7 @@
   let billText = "";
   let note = "";
   let inner = "";
+  let slipCode = "";
   let rows = [];
 
   function esc(s) {
@@ -121,6 +124,55 @@
     if (/洋蔥|澳洋/.test(t)) return /本產/.test(t) ? "洋蔥本產" : "洋蔥進口";
     return String(t || "").replace(/\s+/g, " ").trim();
   }
+  function lineMarket(line) {
+    return String((line && line.slots && line.slots[0] && line.slots[0].mk) || "");
+  }
+  function sharedCode(list) {
+    const subs = [...new Set((list || []).map((l) => String(l.sub || "").trim()).filter(Boolean))];
+    return subs.length === 1 ? subs[0] : "";
+  }
+  function foldLine(line) {
+    const slots = Array.isArray(line.slots) ? line.slots : [];
+    const filled = slots.filter((s) => String(s.mk || "").trim() || qtyOf(s.qty));
+    const base = filled.length ? filled : [{ mk: "", qty: "" }];
+    return base.map((slot, i) => {
+      const copy = i === 0
+        ? line
+        : {
+            crop: line.crop || "",
+            spec: line.spec || "",
+            sku: line.sku || "",
+            kind: line.kind || "",
+            alias: line.alias || "",
+            sub: line.sub || "",
+            country: line.country || "",
+          };
+      copy.country = copy.country || "";
+      copy.slots = [{ mk: String(slot.mk || ""), qty: String(slot.qty ?? "") }];
+      return copy;
+    });
+  }
+  function normalizeLines(list) {
+    const out = [];
+    for (const line of list || []) out.push(...foldLine(line));
+    return out.length ? out : [freshLine()];
+  }
+  function addLineIn(mk) {
+    const line = freshLine();
+    const key = mk || "";
+    const mates = lines.filter((l) => lineMarket(l) === key);
+    const prev = mates.length ? mates[mates.length - 1] : lines[lines.length - 1];
+    line.sub = slipCode || (prev && prev.sub) || "";
+    line.slots = [{ mk: key, qty: "" }];
+    let at = lines.length;
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      if (lineMarket(lines[i]) === key) {
+        at = i + 1;
+        break;
+      }
+    }
+    lines.splice(at, 0, line);
+  }
   function qtyOf(v) {
     const s = String(v ?? "").replace(/,/g, "").replace(/件/g, "");
     const m = s.match(/-?\d+(?:\.\d+)?/);
@@ -162,11 +214,12 @@
   function itemLabel(line) {
     const spec = specText(line);
     const sub = String(line.sub || "").trim();
+    const country = String(line.country || "").trim();
     const sku = String(line.sku || "").trim();
     const name = sku
       ? [sku, line.kind, line.crop].filter(Boolean).join(" ")
       : String(line.crop || "").trim();
-    return [name, sub, spec].filter(Boolean).join(" ") || "寄送";
+    return [name, country, sub, spec].filter(Boolean).join(" ") || "寄送";
   }
   function noticeBlocks() {
     const blocks = [];
@@ -361,6 +414,7 @@
     s.billText = billText;
     s.note = note;
     s.inner = inner;
+    s.code = slipCode;
     s.rows = rows;
     s.title = title;
     s.id = sessionId || s.id;
@@ -371,11 +425,12 @@
     const s = slips[i];
     house = s.house || "";
     shipDate = s.shipDate || localYmd();
-    lines = s.lines && s.lines.length ? s.lines : [freshLine()];
+    lines = normalizeLines(s.lines && s.lines.length ? s.lines : [freshLine()]);
     s.lines = lines;
     billText = s.billText || "";
     note = s.note || "";
     inner = s.inner || "";
+    slipCode = s.code || sharedCode(lines);
     rows = Array.isArray(s.rows) ? s.rows : [];
     title = s.title || "";
     sessionId = s.id;
@@ -417,10 +472,11 @@
         id: s.id || freshSlip().id,
         house: s.house || "",
         shipDate: s.shipDate || localYmd(),
-        lines: Array.isArray(s.lines) && s.lines.length ? s.lines : [freshLine()],
+        lines: normalizeLines(Array.isArray(s.lines) && s.lines.length ? s.lines : [freshLine()]),
         billText: s.billText || "",
         note: s.note || "",
         inner: s.inner || "",
+        code: s.code || "",
         rows: Array.isArray(s.rows) ? s.rows : [],
         title: s.title || "",
         saved: !!s.saved,
@@ -775,6 +831,7 @@
       billText: s.billText || "",
       note: s.note || "",
       inner: s.inner || "",
+      code: s.code || "",
       rows: s.rows || [],
       seq: slipNo(s),
       seqSet: !!(opts && opts.seqSet),
@@ -1793,8 +1850,18 @@
         confirmSlip();
         return;
       }
+      if (e.target.closest("[data-dq-add-in]")) {
+        addLineIn(e.target.closest("[data-dq-add-in]").dataset.dqAddIn || "");
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("#dq-add")) {
-        lines.push(freshLine());
+        if (lines.some((l) => !lineMarket(l))) {
+          msg = "先選好還沒填的市場，再加下一個。";
+          renderDailyQty();
+          return;
+        }
+        addLineIn("");
         renderDailyQty();
         return;
       }
@@ -1937,6 +2004,34 @@
         persistLocal(true);
         return;
       }
+      if (t.id === "dq-code") {
+        const prev = slipCode;
+        slipCode = t.value.trim();
+        document.querySelectorAll("#dq-root [data-dq-line]").forEach((el) => {
+          const line = lines[Number(el.dataset.dqLine)];
+          const inp = el.querySelector("[data-dq-f=sub]");
+          if (!line || !inp) return;
+          if (!line.sub || line.sub === prev) {
+            line.sub = slipCode;
+            if (document.activeElement !== inp) inp.value = slipCode;
+          }
+        });
+        paintSlip();
+        persistLocal(true);
+        return;
+      }
+      if (t.hasAttribute("data-dq-mkt")) {
+        if (e.type !== "change") return;
+        const from = t.getAttribute("data-dq-mkt") || "";
+        const to = t.value;
+        if (from === to) return;
+        lines.forEach((line) => {
+          if (!line.slots || !line.slots[0]) line.slots = [{ mk: "", qty: "" }];
+          if ((line.slots[0].mk || "") === from) line.slots[0].mk = to;
+        });
+        renderDailyQty();
+        return;
+      }
       if (t.id === "dq-inner") {
         inner = t.value;
         paintSlip();
@@ -1988,6 +2083,7 @@
         return;
       }
       if (t.dataset.dqF === "sub") line.sub = t.value.trim();
+      if (t.dataset.dqF === "country") line.country = t.value.trim();
       if (t.dataset.dqF === "spec") line.spec = String(t.value || "").replace(/公斤/g, "").trim();
       if (t.dataset.dqF === "sku") line.sku = t.value;
       const row = t.closest("[data-dq-slot]");
@@ -2065,53 +2161,74 @@
       const badge = n ? `<em class="dq-house-n">${n}</em>` : "";
       return `<button type="button" class="pick${house === h.id ? " on" : ""}" data-dq-house="${esc(h.id)}">${esc(h.lab)}${badge}</button>`;
     }).join("");
-    const lineHtml = lines
-      .map((line, i) => {
-        const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
-        const slotHtml = (line.slots || []).map((slot, si) => {
-          const opts = [`<option value="">選市場</option>`]
-            .concat(
-              MK_KEYS.map((mk) => {
-                const dis = mk !== slot.mk && used.has(mk) ? " disabled" : "";
-                const on = mk === slot.mk ? " selected" : "";
-                return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
-              }),
-            )
-            .join("");
-          const extra = (line.slots || []).length > SLOT_N
-            ? `<button type="button" class="ghost" data-dq-del-slot="${si}">刪</button>`
-            : "";
-          return `<div class="dq-slot${slot.mk && qtyOf(slot.qty) ? " is-on" : ""}" data-dq-slot="${si}">
-            <select data-dq-slot-mk>${opts}</select>
-            <input data-dq-slot-qty inputmode="numeric" placeholder="件數" value="${esc(slot.qty)}" />
-            <span class="dq-slot-unit">件</span>
-            ${extra}
-          </div>`;
-        }).join("");
-        const addSlot = (line.slots || []).length < MK_KEYS.length
-          ? `<button type="button" class="ghost dq-add-slot" data-dq-add-slot="${i}">＋加一個市場</button>`
-          : "";
+    const groups = [];
+    const groupAt = new Map();
+    lines.forEach((line, i) => {
+      const mk = lineMarket(line);
+      if (!groupAt.has(mk)) {
+        groupAt.set(mk, groups.length);
+        groups.push({ mk, rows: [] });
+      }
+      groups[groupAt.get(mk)].rows.push(i);
+    });
+    const takenMk = new Set(groups.map((g) => g.mk).filter(Boolean));
+    const lineHtml = groups.map((g) => {
+      const mkOpts = [`<option value="">選市場</option>`]
+        .concat(MK_KEYS.map((mk) => {
+          const dis = mk !== g.mk && takenMk.has(mk) ? " disabled" : "";
+          const on = mk === g.mk ? " selected" : "";
+          return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
+        }))
+        .join("");
+      const rows = g.rows.map((i) => {
+        const line = lines[i];
+        const slot = (line.slots && line.slots[0]) || { qty: "" };
+        const countryNow = String(line.country || "");
+        const countryList = countryNow && !COUNTRIES.includes(countryNow) ? COUNTRIES.concat(countryNow) : COUNTRIES;
+        const countryOpts = [`<option value="">選國家</option>`]
+          .concat(countryList.map((c) => `<option value="${esc(c)}"${c === countryNow ? " selected" : ""}>${esc(c)}</option>`))
+          .join("");
+        const shown = findLine === i
+          ? findQ
+          : line.sku
+            ? `${line.sku} ${[line.kind, line.crop].filter(Boolean).join(" ")}`
+            : line.crop || "";
         return `<div class="dq-line" data-dq-line="${i}">
           <div class="dq-line-top">
             <label class="dq-crop">品項
-              <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(findLine === i ? findQ : line.sku ? `${line.sku} ${[line.kind, line.crop].filter(Boolean).join(" ")}` : line.crop || "")}" />
+              <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(shown)}" />
             </label>
-            <label class="dq-sub">小代號
-              <input data-dq-f="sub" value="${esc(line.sub || "")}" placeholder="050" />
-            </label>
-            <label class="dq-spec">規格
-              <span class="dq-spec-box">
-                <input data-dq-f="spec" inputmode="decimal" placeholder="20" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}" />
-                <em>公斤</em>
-              </span>
-            </label>
+            <div class="dq-line-meta">
+              <label class="dq-country">國家
+                <select data-dq-f="country">${countryOpts}</select>
+              </label>
+              <label class="dq-sub">小代號
+                <input data-dq-f="sub" value="${esc(line.sub || "")}" placeholder="493" />
+              </label>
+              <label class="dq-spec">規格
+                <span class="dq-spec-box">
+                  <input data-dq-f="spec" inputmode="decimal" placeholder="6" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}" />
+                  <em>公斤</em>
+                </span>
+              </label>
+              <label class="dq-qty" data-dq-slot="0">件數
+                <input data-dq-slot-qty inputmode="numeric" placeholder="件" value="${esc(slot.qty)}" />
+              </label>
+            </div>
             <button type="button" class="ghost" data-dq-del="${i}">刪</button>
           </div>
-          <div class="dq-slots">${slotHtml}</div>
-          ${addSlot}
         </div>`;
-      })
-      .join("");
+      }).join("");
+      return `<section class="dq-mkt">
+        <div class="dq-mkt-head">
+          <label class="dq-mkt-pick">市場
+            <select data-dq-mkt="${esc(g.mk)}">${mkOpts}</select>
+          </label>
+          <button type="button" class="ghost dq-mkt-add" data-dq-add-in="${esc(g.mk)}">＋這個市場加品項</button>
+        </div>
+        ${rows}
+      </section>`;
+    }).join("");
     const rack = `<nav class="dq-rack" aria-label="拍賣寄貨三層">
       <button type="button" data-dq-pane="key"${pane === "key" ? ' class="on"' : ""}><b>1</b><span>鍵單</span></button>
       <button type="button" data-dq-pane="list"${pane === "list" ? ' class="on"' : ""}><b>2</b><span>入單總資料</span></button>
@@ -2256,10 +2373,14 @@
               <label class="dq-date">單號
                 <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(slipNo(slips[cur]))}" ${house ? "" : "disabled"} />
               </label>
+              <label class="dq-date dq-code">小代號
+                <input id="dq-code" placeholder="493，整張沿用" value="${esc(slipCode)}" />
+              </label>
             </div>
+            <p class="dq-mk-lab">同一市場的品項放在一起。小代號填上面那格，新增品項會沿用；某一項不同再改那一列。每個品項選國家，會印在出單上。</p>
           </div>
           ${lineHtml}
-          <button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>
+          <button type="button" class="dq-add-line" id="dq-add">＋加一個市場</button>
           <label class="dq-note">社場／貨運看（是否收貨）
             <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(note)}" />
           </label>
@@ -2295,10 +2416,11 @@
       id: String(rec.id),
       house: rec.house || "",
       shipDate: rec.shipDate || "",
-      lines: Array.isArray(rec.lines) && rec.lines.length ? rec.lines : [freshLine()],
+      lines: normalizeLines(Array.isArray(rec.lines) && rec.lines.length ? rec.lines : [freshLine()]),
       billText: rec.billText || "",
       note: rec.note || "",
       inner: rec.inner || "",
+      code: rec.code || "",
       rows: Array.isArray(rec.rows) ? rec.rows : [],
       title: rec.title || "",
       seq: rec.seq || "",

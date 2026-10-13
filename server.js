@@ -712,6 +712,7 @@ function handleApi(req, res) {
                 kind: String(l?.kind || "").slice(0, 40),
                 alias: String(l?.alias || "").slice(0, 40),
                 sub: String(l?.sub || "").slice(0, 20),
+                country: String(l?.country || "").slice(0, 20),
                 slots: Array.isArray(l?.slots)
                   ? l.slots.slice(0, 12).map((s) => ({
                       mk: String(s?.mk || "").slice(0, 12),
@@ -734,6 +735,7 @@ function handleApi(req, res) {
           if (typeof body.billText === "string") rec.billText = body.billText.slice(0, 20000);
           if (typeof body.note === "string") rec.note = body.note.slice(0, 200);
           if (typeof body.inner === "string") rec.inner = body.inner.slice(0, 200);
+          if (typeof body.code === "string") rec.code = body.code.slice(0, 20);
           const sessions = await readDailyQtySessions();
           const i = sessions.findIndex((s) => s && s.id === id);
           const prev = i >= 0 ? sessions[i] : null;

@@ -1,6 +1,18 @@
 .ap-root { padding-bottom: 1.5rem; }
 .ap-head h2 { margin: 0 0 0.25rem; font-size: 1.15rem; }
 .ap-head p { margin: 0 0 0.75rem; color: #5a6a62; font-size: 0.82rem; line-height: 1.45; }
+.ap-rule {
+  margin: 0 0 0.7rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #d5e4da;
+  background: #f7fbf8;
+  border-radius: 0.45rem;
+  color: #1a6843;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+.ap-sheet td.ap-explain { white-space: normal; min-width: 10rem; font-weight: 500; color: #3d4a44; }
+.ap-sheet tr.is-match td { font-weight: 500; }
 .ap-files {
   display: grid;
   gap: 0.55rem;

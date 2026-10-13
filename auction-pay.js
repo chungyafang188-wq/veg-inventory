@@ -32,6 +32,9 @@
   let msg = "";
   let pickKeys = new Set();
   let pageMode = "work";
+  let job = "qty";
+  let netRows = [];
+  let netView = "all";
   let sessionId = "";
   let hCount = 0;
   let pCount = 0;
@@ -333,6 +336,147 @@
     return out;
   }
 
+  function prevDay(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return ymd(new Date(Date.UTC(y, m - 1, d - 1)));
+  }
+  function round2(n) {
+    return Math.round(Number(n) * 100) / 100;
+  }
+  function moneyTxt(n) {
+    const x = round2(n);
+    const digits = Math.abs(x - Math.round(x)) < 0.001 ? 0 : 2;
+    return x.toLocaleString("zh-TW", { minimumFractionDigits: digits, maximumFractionDigits: 2 });
+  }
+  function gapTxt(n) {
+    const x = round2(n);
+    if (Math.abs(x) < 0.005) return "0";
+    const t = moneyTxt(Math.abs(x));
+    return x > 0 ? `+${t}` : `−${t}`;
+  }
+  function dayTxt(iso) {
+    if (!iso) return "";
+    const [, m, d] = iso.split("-").map(Number);
+    return `${m}/${d}`;
+  }
+  function parseYongfang(sheets) {
+    const out = [];
+    for (const sh of sheets || []) {
+      const data = sh.rows || [];
+      let iSpec = 4;
+      let iQty = 5;
+      let iAmt = 8;
+      for (const r of data.slice(0, 12)) {
+        const heads = (r || []).map((x) => String(x || "").replace(/\s+/g, ""));
+        const s = heads.findIndex((h) => /品名規格/.test(h));
+        if (s < 0) continue;
+        const iAmtH = heads.findIndex((h) => /稅前金額/.test(h));
+        const iQtyH = heads.findIndex((h) => /數量/.test(h) && !/金額/.test(h));
+        iSpec = s;
+        iQty = iQtyH >= 0 ? iQtyH : s + 1;
+        iAmt = iAmtH >= 0 ? iAmtH : 8;
+        break;
+      }
+      let cur = "";
+      for (const r of data) {
+        const rowText = (r || []).map((c) => String(c ?? "")).join(" ");
+        if (/單據日期/.test(rowText)) {
+          const day = parseDate(rowText);
+          if (day) cur = day;
+          continue;
+        }
+        const spec = String(cell(r, iSpec) || "");
+        if (!spec || /合計|鐵架|品名規格/.test(spec) || !cur) continue;
+        const qty = qtyOf(cell(r, iQty));
+        const amt = qtyOf(cell(r, iAmt));
+        if (!qty && !amt) continue;
+        out.push({ dt: cur, mk: marketOf(spec) || "未分", amt });
+      }
+    }
+    return out;
+  }
+  function parsePayNet(sheets) {
+    const out = [];
+    for (const sh of sheets || []) {
+      const data = sh.rows || [];
+      let header = -1;
+      for (let i = 0; i < Math.min(40, data.length); i++) {
+        const heads = (data[i] || []).map((x) => String(x || "").trim());
+        if (heads.some((h) => h.includes("日期")) && heads.some((h) => h.includes("實拿"))) {
+          header = i;
+          break;
+        }
+      }
+      if (header < 0) continue;
+      const heads = (data[header] || []).map((x) => String(x || "").trim());
+      const iDate = heads.findIndex((h) => h.includes("日期"));
+      const iMk = heads.findIndex((h) => h.includes("市場"));
+      const iName = heads.findIndex((h) => h.includes("品名"));
+      const iAmt = heads.findIndex((h) => h.includes("金額") && !h.includes("實"));
+      const iFee = heads.findIndex((h) => h.includes("手續費"));
+      const iFr = heads.findIndex((h) => h.includes("運費"));
+      const iNet = heads.findIndex((h) => h.includes("實拿"));
+      for (let i = header + 1; i < data.length; i++) {
+        const r = data[i] || [];
+        const dt = parseDate(cell(r, iDate));
+        if (!dt) continue;
+        const name = String(cell(r, iName >= 0 ? iName : 3) || "");
+        if (/合計/.test(name) || /合計/.test((r || []).join(" "))) continue;
+        const amt = iAmt >= 0 ? qtyOf(cell(r, iAmt)) : 0;
+        const fee = iFee >= 0 ? qtyOf(cell(r, iFee)) : 0;
+        const fr = iFr >= 0 ? qtyOf(cell(r, iFr)) : 0;
+        let net = iNet >= 0 ? qtyOf(cell(r, iNet)) : 0;
+        if (!net && (amt || fee || fr)) net = round2(amt - fee - fr);
+        if (!name && !net && !amt) continue;
+        out.push({ dt, mk: marketOf(cell(r, iMk)) || marketOf(name) || "未分", net });
+      }
+    }
+    return out;
+  }
+  function marketNote(ym, pm) {
+    const keys = new Set([...ym.keys(), ...pm.keys()]);
+    const bits = [];
+    for (const mk of keys) {
+      const gap = round2((pm.get(mk) || 0) - (ym.get(mk) || 0));
+      if (Math.abs(gap) < 1) continue;
+      bits.push(`${mk} ${gapTxt(gap)}`);
+    }
+    return bits.join("、");
+  }
+  function buildNetDays(yList, pList) {
+    const Y = new Map();
+    const P = new Map();
+    for (const x of yList) {
+      if (!Y.has(x.dt)) Y.set(x.dt, new Map());
+      const m = Y.get(x.dt);
+      m.set(x.mk, round2((m.get(x.mk) || 0) + x.amt));
+    }
+    for (const x of pList) {
+      if (!P.has(x.dt)) P.set(x.dt, new Map());
+      const m = P.get(x.dt);
+      m.set(x.mk, round2((m.get(x.mk) || 0) + x.net));
+    }
+    const ships = new Set(Y.keys());
+    for (const bill of P.keys()) ships.add(prevDay(bill));
+    return [...ships]
+      .sort()
+      .map((ship) => {
+        const bill = addDay(ship);
+        const ym = Y.get(ship) || new Map();
+        const pm = P.get(bill) || new Map();
+        let mine = 0;
+        let theirs = 0;
+        for (const v of ym.values()) mine += v;
+        for (const v of pm.values()) theirs += v;
+        mine = round2(mine);
+        theirs = round2(theirs);
+        const d = round2(theirs - mine);
+        const bad = Math.abs(d) >= 1;
+        return { ship, bill, mine, theirs, d, bad, note: bad ? marketNote(ym, pm) : "" };
+      })
+      .filter((r) => r.mine || r.theirs);
+  }
+
   function agg(list) {
     const m = new Map();
     for (const x of list) {
@@ -361,15 +505,25 @@
   }
 
   function visible() {
+    if (job === "net") {
+      if (netView === "bad") return netRows.filter((r) => r.bad);
+      return netRows;
+    }
     if (view === "ok") return rows.filter((r) => r.ok);
     if (view === "pending") return rows.filter((r) => !r.ok);
     return rows;
   }
 
   function tableHeaders() {
+    if (job === "net") return ["我的寄件日", "對方貨款日", "我的金額", "對方實拿", "差額", "結果", "說明"];
     return ["貨款日", "市場", "品項", "鴻安件", "貨款件", "差", "備註"];
   }
+  function netResult(r) {
+    if (!r.bad) return "相符";
+    return r.d > 0 ? "少登" : "多登";
+  }
   function tableCells(r) {
+    if (job === "net") return [dayTxt(r.ship), dayTxt(r.bill), moneyTxt(r.mine), moneyTxt(r.theirs), gapTxt(r.d), netResult(r), r.note || ""];
     return [md(r.dt), r.mk, r.crop, String(r.h), String(r.p), String(r.d), r.note || ""];
   }
   function tableTsv(list) {
@@ -411,14 +565,15 @@
     }
   }
   async function copyTable(kind) {
-    const list = kind === "all" ? rows : rows.filter((r) => !r.ok);
+    const src = job === "net" ? netRows : rows;
+    const list = kind === "all" ? src : src.filter((r) => (job === "net" ? r.bad : !r.ok));
     if (!list.length) {
-      msg = kind === "all" ? "目前沒有表格可複製。" : "沒有待核對列可複製。";
+      msg = kind === "all" ? "目前沒有表格可複製。" : job === "net" ? "沒有金額對不上的天。" : "沒有待核對列可複製。";
       hideCopyOut();
       renderAuctionPay();
       return;
     }
-    const title = kind === "all" ? "拍賣帳款核對" : "拍賣帳款待對方核對";
+    const title = job === "net" ? (kind === "all" ? "拍賣貨款實拿核帳" : "拍賣貨款實拿有差") : kind === "all" ? "拍賣帳款核對" : "拍賣帳款待對方核對";
     const text = `${title}\n${tableTsv(list)}`;
     try {
       await copyText(text);
@@ -502,6 +657,43 @@
     renderAuctionPay();
   }
 
+  async function runNetCompare() {
+    const hf = document.getElementById("ap-hongan")?.files?.[0];
+    const pf = document.getElementById("ap-pay")?.files?.[0];
+    if (!hf || !pf) {
+      msg = "請選永芳與貨款兩份檔。";
+      renderAuctionPay();
+      return;
+    }
+    msg = "正在比對實拿…";
+    renderAuctionPay();
+    try {
+      const parsed = await Promise.all([uploadParse(hf), uploadParse(pf)]);
+      const scored = parsed.map((json, i) => {
+        const sheets = sheetsOf(json);
+        const file = i === 0 ? hf : pf;
+        return { file, y: parseYongfang(sheets), p: parsePayNet(sheets), name: file.name };
+      });
+      const yPack = scored[0].y.length >= scored[1].y.length ? scored[0] : scored[1];
+      const pPack = yPack === scored[0] ? scored[1] : scored[0];
+      honganName = yPack.file.name;
+      payName = pPack.file.name;
+      netRows = buildNetDays(yPack.y, pPack.p);
+      netView = "all";
+      pageMode = "work";
+      const bad = netRows.filter((r) => r.bad);
+      const short = round2(bad.filter((r) => r.d > 0).reduce((s, r) => s + r.d, 0));
+      if (!yPack.y.length || !pPack.p.length) {
+        msg = `讀不到完整資料。${scored.map((s) => `${s.name}（永芳 ${s.y.length} 列、實拿 ${s.p.length} 列）`).join("；")}。請確認是永芳「日期別-銷售明細」和貨款「付款單」。`;
+      } else {
+        msg = `對方貨款日 = 我的寄件日 + 1 天。相符 ${netRows.length - bad.length} 天，有差 ${bad.length} 天${bad.length ? `，少登 ${moneyTxt(short)}` : ""}。`;
+      }
+    } catch (err) {
+      msg = String(err.message || err);
+    }
+    renderAuctionPay();
+  }
+
   function bindOnce() {
     if (bound) return;
     bound = true;
@@ -509,7 +701,8 @@
     if (!root) return;
     root.addEventListener("click", (e) => {
       if (e.target.closest("#ap-run")) {
-        runCompare();
+        if (job === "net") runNetCompare();
+        else runCompare();
         return;
       }
       if (e.target.closest(".ap-xls-btn")) {
@@ -521,14 +714,19 @@
             ? sess
               ? `拍賣帳款-${whenTxt(sess.at).replace(/[: ]/g, "")}`
               : "拍賣帳款-歷史反查"
-            : view === "ok"
-              ? "拍賣帳款-已確認"
-              : "拍賣帳款-待對方核對",
+            : job === "net"
+              ? netView === "bad"
+                ? "拍賣貨款實拿-有差"
+                : "拍賣貨款實拿核帳"
+              : view === "ok"
+                ? "拍賣帳款-已確認"
+                : "拍賣帳款-待對方核對",
         );
         return;
       }
       if (e.target.closest("#ap-print")) {
-        view = "pending";
+        if (job === "net") netView = "all";
+        else view = "pending";
         renderAuctionPay();
         window.print();
         return;
@@ -555,6 +753,13 @@
         saveConfirms();
         msg = `已確認 ${picked.length} 列沒問題。剩下給對方核對。`;
         saveSession();
+        renderAuctionPay();
+        return;
+      }
+      if (e.target.closest("[data-ap-job]")) {
+        job = e.target.closest("[data-ap-job]").dataset.apJob || "qty";
+        if (job === "net") pageMode = "work";
+        msg = "";
         renderAuctionPay();
         return;
       }
@@ -585,7 +790,8 @@
       }
       const f = e.target.closest("[data-ap-view]");
       if (f) {
-        view = f.dataset.apView || "pending";
+        if (job === "net") netView = f.dataset.apView || "all";
+        else view = f.dataset.apView || "pending";
         renderAuctionPay();
       }
     });
@@ -751,35 +957,41 @@
     bindOnce();
     const root = document.getElementById("ap-root");
     if (!root) return;
-    if (!root.querySelector("#ap-ui-v9")) {
+    if (!root.querySelector("#ap-ui-v11")) {
       root.innerHTML = `
       <header class="ap-head">
-        <span id="ap-ui-v9" hidden></span>
-        <h2>拍賣帳款核對</h2>
-        <p>上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。歷史反查會把整次比對存在伺服器，各台平板登入後看到同一份。</p>
+        <span id="ap-ui-v11" hidden></span>
+        <h2 id="ap-title">拍賣帳款核對</h2>
+        <p id="ap-intro-qty">上傳兩份檔比對。先勾選沒問題的列（勾了不會消失），再按「確認送出無誤」。確認後可複製剩下的待核對資料貼到 LINE 給對方。歷史反查會把整次比對存在伺服器，各台平板登入後看到同一份。</p>
+        <p id="ap-intro-net" hidden>上傳永芳銷售明細和貨款付款單。永芳金額是照貨款實拿登的。比對每天的實拿，金額對不上才標出來。</p>
       </header>
+      <nav class="ap-filters noprint" id="ap-job-nav">
+        <button type="button" class="pick" data-ap-job="qty">鴻安件數</button>
+        <button type="button" class="pick" data-ap-job="net">實拿核帳</button>
+      </nav>
+      <p id="ap-rule" class="ap-rule" hidden>對方貨款日 = 我的寄件日 + 1 天。兩邊日期不同是正常的，只標金額不同。</p>
       <nav class="ap-filters noprint" id="ap-mode-nav">
         <button type="button" class="pick" data-ap-mode="work">本次比對</button>
         <button type="button" class="pick" data-ap-mode="hist">歷史反查</button>
       </nav>
       <div id="ap-work-pane">
         <div class="ap-files">
-          <label class="ap-file">鴻安 XLS
+          <label class="ap-file"><span id="ap-file-a-lab">鴻安 XLS</span>
             <input type="file" id="ap-hongan" accept=".xls,.xlsx" />
             <span class="muted" id="ap-hongan-lab">尚未選檔</span>
           </label>
-          <label class="ap-file">貨款 XLSX
+          <label class="ap-file"><span id="ap-file-b-lab">貨款 XLSX</span>
             <input type="file" id="ap-pay" accept=".xls,.xlsx" />
             <span class="muted" id="ap-pay-lab">尚未選檔</span>
           </label>
         </div>
         <div class="ap-tools">
           <button type="button" class="primary" id="ap-run">開始比對</button>
-          <button type="button" class="ghost noprint" id="ap-ok-all">全選目前畫面</button>
+          <button type="button" class="ghost noprint ap-qty-only" id="ap-ok-all">全選目前畫面</button>
           <button type="button" class="ghost noprint ap-xls-btn">下載 Excel</button>
-          <button type="button" class="ghost noprint" id="ap-print">列印待核對</button>
+          <button type="button" class="ghost noprint" id="ap-print">列印</button>
           <button type="button" class="ghost noprint" id="ap-copy-pending">複製待對方核對</button>
-          <button type="button" class="ghost noprint" id="ap-copy-all">複製全部差異</button>
+          <button type="button" class="ghost noprint" id="ap-copy-all">複製全部</button>
         </div>
       </div>
       <div id="ap-hist-bar" class="ap-hist-bar noprint" hidden>
@@ -819,20 +1031,92 @@
     const pLab = document.getElementById("ap-pay-lab");
     if (hLab) hLab.textContent = honganName || "尚未選檔";
     if (pLab) pLab.textContent = payName || "尚未選檔";
+    const title = document.getElementById("ap-title");
+    if (title) title.textContent = job === "net" ? "拍賣貨款實拿核帳" : "拍賣帳款核對";
+    const introQty = document.getElementById("ap-intro-qty");
+    const introNet = document.getElementById("ap-intro-net");
+    if (introQty) introQty.hidden = job === "net";
+    if (introNet) introNet.hidden = job !== "net";
+    const rule = document.getElementById("ap-rule");
+    if (rule) rule.hidden = job !== "net";
+    const aName = document.getElementById("ap-file-a-lab");
+    const bName = document.getElementById("ap-file-b-lab");
+    if (aName) aName.textContent = job === "net" ? "永芳（我的寄件）" : "鴻安 XLS";
+    if (bName) bName.textContent = job === "net" ? "貨款（對方隔天）" : "貨款 XLSX";
+    const copyPending = document.getElementById("ap-copy-pending");
+    const copyAll = document.getElementById("ap-copy-all");
+    if (copyPending) copyPending.textContent = job === "net" ? "複製有差" : "複製待對方核對";
+    if (copyAll) copyAll.textContent = job === "net" ? "複製全部" : "複製全部差異";
+    root.querySelectorAll(".ap-qty-only").forEach((el) => {
+      el.hidden = job === "net";
+    });
     const workPane = document.getElementById("ap-work-pane");
     const histBar = document.getElementById("ap-hist-bar");
-    if (workPane) workPane.hidden = pageMode === "hist";
-    if (histBar) histBar.hidden = pageMode !== "hist";
+    const modeNav = document.getElementById("ap-mode-nav");
+    if (workPane) workPane.hidden = job !== "net" && pageMode === "hist";
+    if (histBar) histBar.hidden = job === "net" || pageMode !== "hist";
+    if (modeNav) modeNav.hidden = job === "net";
+    root.querySelectorAll("[data-ap-job]").forEach((b) => {
+      b.classList.toggle("on", b.dataset.apJob === job);
+    });
     root.querySelectorAll("[data-ap-mode]").forEach((b) => {
       b.classList.toggle("on", b.dataset.apMode === pageMode);
     });
-    if (pageMode === "hist") fillHistFilters();
+    if (pageMode === "hist" && job !== "net") fillHistFilters();
     const msgEl = document.getElementById("ap-msg");
     if (msgEl) msgEl.textContent = msg;
     const body = document.getElementById("ap-body");
     if (!body) return;
-    if (pageMode === "hist") {
+    if (pageMode === "hist" && job !== "net") {
       body.innerHTML = histBodyHtml();
+      return;
+    }
+    if (job === "net") {
+      const bad = netRows.filter((r) => r.bad);
+      const okN = netRows.length - bad.length;
+      const short = round2(bad.filter((r) => r.d > 0).reduce((s, r) => s + r.d, 0));
+      const vis = visible();
+      const kpi = netRows.length
+        ? `<div class="ap-kpis">
+            <div class="ap-kpi"><strong>${okN}</strong><span>金額相符（天）</span></div>
+            <div class="ap-kpi is-bad"><strong>${bad.length}</strong><span>金額有差（天）</span></div>
+            <div class="ap-kpi${short ? " is-bad" : ""}"><strong>${moneyTxt(short)}</strong><span>少登合計</span></div>
+          </div>`
+        : "";
+      const table = vis.length
+        ? `<div class="ap-sheet-wrap"><table class="ap-sheet">
+          <thead><tr>
+            <th>我的寄件日</th><th>對方貨款日</th>
+            <th>我的金額</th><th>對方實拿</th><th>差額</th><th>結果</th><th>說明</th>
+          </tr></thead>
+          <tbody>${vis
+            .map((r) => {
+              return `<tr class="${r.bad ? "is-bad" : "is-match"}">
+                <td>${esc(dayTxt(r.ship))}</td>
+                <td>${esc(dayTxt(r.bill))}</td>
+                <td class="num">${esc(moneyTxt(r.mine))}</td>
+                <td class="num">${esc(moneyTxt(r.theirs))}</td>
+                <td class="num ap-diff">${esc(gapTxt(r.d))}</td>
+                <td>${r.bad ? `<span class="ap-mark">${esc(netResult(r))}</span>` : '<span class="ap-okmark">相符</span>'}</td>
+                <td class="ap-explain">${esc(r.note || "")}</td>
+              </tr>`;
+            })
+            .join("")}</tbody></table></div>`
+        : netRows.length
+          ? `<p class="muted">這個篩選沒有列。</p>`
+          : "";
+      body.innerHTML = `
+        ${kpi}
+        ${
+          netRows.length
+            ? `<div class="ap-filters noprint">
+                <button type="button" class="pick${netView === "all" ? " on" : ""}" data-ap-view="all">全部 ${netRows.length} 天</button>
+                <button type="button" class="pick${netView === "bad" ? " on" : ""}" data-ap-view="bad">只看有差</button>
+              </div>`
+            : ""
+        }
+        ${table}
+      `;
       return;
     }
     const okN = rows.filter((r) => r.ok).length;

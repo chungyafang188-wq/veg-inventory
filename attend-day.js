@@ -940,8 +940,9 @@ function attendBillPreview(days) {
       <label>到<select data-bill-to>${opt(billTo)}</select></label>
       <button type="button" class="primary" data-bill-copy>複製圖片貼 LINE</button>
       <button type="button" class="ghost" data-bill-pdf>列印 PDF</button>
+      <button type="button" class="ghost" data-bill-xlsx>另存 Excel</button>
     </div>
-    <p class="attend-note">選好起迄日。複製的是圖片，可直接貼到 LINE。列印時選另存 PDF。</p>
+    <p class="attend-note">選好起迄日。複製的是圖片，可直接貼到 LINE。PDF 與 Excel 都會直接下載。</p>
     ${table}`;
 }
 function attendFitText(ctx, text, max) {
@@ -951,7 +952,7 @@ function attendFitText(ctx, text, max) {
   while (out && ctx.measureText(`${out}…`).width > max) out = out.slice(0, -1);
   return `${out}…`;
 }
-function attendBillPngBlob(title, rows) {
+function attendBillSheetCanvas(title, rows) {
   const head = ["日期", "數量", "單價", "金額", "備註"];
   const body = rows.map((row) => [
     row.label || "",
@@ -1012,7 +1013,63 @@ function attendBillPngBlob(title, rows) {
   body.forEach((cells, i) => paintRow(cells, titleH + rowH * (i + 1), i === body.length - 1));
   ctx.strokeStyle = "#d5ddd6";
   ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+  return canvas;
+}
+function attendBillPngBlob(title, rows) {
+  const canvas = attendBillSheetCanvas(title, rows);
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+}
+function attendPdfBytes(jpeg, pxW, pxH) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  let offset = 0;
+  const offsets = [0];
+  const add = (part) => {
+    const bytes = typeof part === "string" ? enc.encode(part) : part;
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const pageW = 595.28;
+  const margin = 28;
+  const drawW = pageW - margin * 2;
+  const drawH = drawW * (pxH / pxW);
+  const pageH = drawH + margin * 2;
+  add("%PDF-1.3\n");
+  const obj = (n, body) => {
+    offsets[n] = offset;
+    add(`${n} 0 obj\n${body}\nendobj\n`);
+  };
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW.toFixed(2)} ${pageH.toFixed(2)}] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>`);
+  const content = `q ${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${margin.toFixed(2)} ${margin.toFixed(2)} cm /Im0 Do Q\n`;
+  const contentBytes = enc.encode(content);
+  offsets[4] = offset;
+  add(`4 0 obj\n<< /Length ${contentBytes.length} >>\nstream\n`);
+  add(contentBytes);
+  add("endstream\nendobj\n");
+  offsets[5] = offset;
+  add(`5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${pxW} /Height ${pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);
+  add(jpeg);
+  add("\nendstream\nendobj\n");
+  const xref = offset;
+  let xrefBody = "xref\n0 6\n0000000000 65535 f \n";
+  for (let i = 1; i <= 5; i += 1) xrefBody += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  add(xrefBody);
+  add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(chunks, { type: "application/pdf" });
+}
+function attendBillPdfBlob(title, rows) {
+  const canvas = attendBillSheetCanvas(title, rows);
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        resolve(null);
+        return;
+      }
+      resolve(attendPdfBytes(new Uint8Array(await blob.arrayBuffer()), canvas.width, canvas.height));
+    }, "image/jpeg", 0.92);
+  });
 }
 async function attendBillCopyImage() {
   const pack = attendBillCurrentPack();
@@ -1053,42 +1110,171 @@ async function attendBillCopyImage() {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   setStatus("這台不能直接貼圖，已存成圖片檔，請傳到 LINE。");
 }
-function attendBillPrintPdf() {
+async function attendBillPrintPdf() {
   const pack = attendBillCurrentPack();
   if (!pack.rows.length) {
     setStatus("這段沒有已填的日子。", true);
     return;
   }
-  const body = pack.rows
-    .map((row) => {
-      const amt = row.amt === "" || row.amt == null ? "" : attendBillMoney(row.amt);
-      return `<tr><td>${esc(row.label)}</td><td>${esc(row.qty || "")}</td><td>${esc(String(row.price || ""))}</td><td>${esc(amt)}</td><td>${esc(row.note || "")}</td></tr>`;
-    })
-    .join("");
-  const total = pack.rows.reduce((sum, row) => sum + (Number(row.amt) || 0), 0);
-  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${esc(pack.title)}</title>
-    <style>
-      body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#163024;margin:16px;font-size:13px}
-      h1{font-size:18px;margin:0 0 10px}
-      table{border-collapse:collapse;width:100%}
-      th,td{border:1px solid #bbb;padding:6px 8px;text-align:left}
-      th{background:#f4f7f4}
-      tfoot td{font-weight:700}
-    </style></head><body>
-    <h1>${esc(pack.title)}</h1>
-    <table><thead><tr><th>日期</th><th>數量</th><th>單價</th><th>金額</th><th>備註</th></tr></thead>
-    <tbody>${body}</tbody>
-    <tfoot><tr><td colspan="3">合計</td><td>${total ? attendBillMoney(total) : ""}</td><td></td></tr></tfoot></table>
-    <script>window.onload=function(){window.print()}<\/script>
-    </body></html>`;
-  const w = window.open("", "_blank");
-  if (!w) {
-    setStatus("瀏覽器擋了新視窗。請允許彈出後再列印，列印時選「另存 PDF」。", true);
+  setStatus("正在做成 PDF…");
+  const blob = await attendBillPdfBlob(pack.title, pack.rows);
+  if (!blob) {
+    setStatus("做成 PDF 失敗。", true);
     return;
   }
-  w.document.write(html);
-  w.document.close();
-  setStatus("請在列印視窗選「另存 PDF」。");
+  const name = `${String(pack.title || "工時單").replace(/[\\/:*?"<>|\s\u3000]+/g, "_")}.pdf`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  setStatus("已下載 PDF，不會再跳出列印畫面。");
+}
+function attendXml(text) {
+  return String(text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function attendCrc32(bytes) {
+  let c = ~0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    c ^= bytes[i];
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+  }
+  return ~c >>> 0;
+}
+function attendZip(files) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = enc.encode(file.name);
+    const data = typeof file.data === "string" ? enc.encode(file.data) : file.data;
+    const crc = attendCrc32(data);
+    const local = new Uint8Array(30 + name.length);
+    const view = new DataView(local.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint16(8, 0, true);
+    view.setUint32(14, crc, true);
+    view.setUint32(18, data.length, true);
+    view.setUint32(22, data.length, true);
+    view.setUint16(26, name.length, true);
+    local.set(name, 30);
+    parts.push(local, data);
+    const cen = new Uint8Array(46 + name.length);
+    const cv = new DataView(cen.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, name.length, true);
+    cv.setUint32(42, offset, true);
+    cen.set(name, 46);
+    central.push(cen);
+    offset += local.length + data.length;
+  }
+  const cd = offset;
+  let cdSize = 0;
+  central.forEach((part) => {
+    parts.push(part);
+    cdSize += part.length;
+  });
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, cd, true);
+  parts.push(end);
+  return new Blob(parts, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function attendCell(ref, value, kind) {
+  if (kind === "n") return `<c r="${ref}"><v>${value}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"><is><t>${attendXml(value)}</t></is></c>`;
+}
+function attendBillXlsxBlob(title, rows) {
+  const head = ["日期", "數量", "單價", "金額", "備註"];
+  const lines = [[title, "", "", "", ""], head];
+  rows.forEach((row) => {
+    lines.push([
+      row.label || "",
+      row.qty || "",
+      row.price === "" || row.price == null ? "" : String(row.price),
+      row.amt === "" || row.amt == null ? "" : attendBillMoney(row.amt),
+      row.note || "",
+    ]);
+  });
+  const total = rows.reduce((sum, row) => sum + (Number(row.amt) || 0), 0);
+  lines.push(["合計", "", "", total ? attendBillMoney(total) : "", ""]);
+  const cols = "ABCDE";
+  const sheetRows = lines
+    .map((line, r) => {
+      const cells = line
+        .map((value, c) => {
+          const num = c === 2 || c === 3 ? Number(value) : NaN;
+          return attendCell(`${cols[c]}${r + 1}`, Number.isFinite(num) && value !== "" ? num : value, Number.isFinite(num) && value !== "" ? "n" : "s");
+        })
+        .join("");
+      return `<row r="${r + 1}">${cells}</row>`;
+    })
+    .join("");
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`;
+  return attendZip([
+    {
+      name: "[Content_Types].xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="工時單" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    },
+    { name: "xl/worksheets/sheet1.xml", data: sheet },
+  ]);
+}
+function attendBillSaveExcel() {
+  const pack = attendBillCurrentPack();
+  if (!pack.rows.length) {
+    setStatus("這段沒有已填的日子。", true);
+    return;
+  }
+  const blob = attendBillXlsxBlob(pack.title, pack.rows);
+  const name = `${String(pack.title || "工時單").replace(/[\\/:*?"<>|\s\u3000]+/g, "_")}.xlsx`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  setStatus("已下載 Excel。");
 }
 function attendBillRange(kind, iso) {
   if (kind === "from") billFrom = iso;

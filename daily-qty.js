@@ -55,6 +55,8 @@
   let cur = 0;
   let listDay = "";
   let listMonth = "";
+  let keyMonth = "";
+  let matchMonth = "";
   let listQ = "";
   let lines = slips[0].lines;
   let billText = "";
@@ -73,6 +75,9 @@
   function localYmd(d) {
     const x = d || new Date();
     return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  }
+  function dayLocked(day) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) && day < localYmd();
   }
   function addDay(iso, n) {
     const [y, m, d] = iso.split("-").map(Number);
@@ -308,7 +313,15 @@
       applySlip(mates[0].i);
       house = id;
       shipDate = day;
-      msg = "";
+      msg = dayLocked(day) ? "這天已過，鍵單只能看。要改請到入單總資料。" : "";
+      pane = "key";
+      renderDailyQty();
+      return;
+    }
+    if (dayLocked(day)) {
+      house = id;
+      shipDate = day;
+      msg = "這天已過，不能在鍵單補打。請到入單總資料修正。";
       pane = "key";
       renderDailyQty();
       return;
@@ -366,6 +379,11 @@
     const id = houseId || house;
     if (!id) return;
     const day = shipDate || localYmd();
+    if (dayLocked(day)) {
+      msg = "這天已過，不能在鍵單新增。請到入單總資料修正。";
+      renderDailyQty();
+      return;
+    }
     let draft = slips.findIndex((s) => !s.saved && s.house === id && s.shipDate === day && !slipBits(s).total);
     if (draft < 0) {
       const blank = freshSlip();
@@ -409,6 +427,8 @@
   function syncCurrent() {
     const s = slips[cur];
     if (!s) return;
+    if (dayLocked(s.shipDate)) return;
+    if (dayLocked(shipDate) && s.shipDate !== shipDate) return;
     s.house = house;
     s.shipDate = shipDate || localYmd();
     s.lines = lines;
@@ -442,6 +462,48 @@
     if (slipBits(s).total) return true;
     if (String(s.note || "").trim() || String(s.inner || "").trim()) return true;
     return false;
+  }
+  function showDay(day) {
+    syncCurrent();
+    const id = house;
+    if (id) {
+      const mates = slips
+        .map((s, i) => ({ s, i }))
+        .filter((x) => x.s.house === id && x.s.shipDate === day);
+      if (mates.length) {
+        applySlip(mates[0].i);
+        house = id;
+        shipDate = day;
+        msg = dayLocked(day) ? "這天已過，鍵單只能看。要改請到入單總資料。" : "";
+        pane = "key";
+        renderDailyQty();
+        return;
+      }
+    }
+    if (dayLocked(day)) {
+      if (id) house = id;
+      shipDate = day;
+      msg = "這天已過，不能在鍵單補打。請到入單總資料修正。";
+      pane = "key";
+      renderDailyQty();
+      return;
+    }
+    let draft = slips.findIndex(
+      (s) => !s.saved && !slipHasBody(s) && (s.house || "") === (id || "") && s.shipDate === day,
+    );
+    if (draft < 0) {
+      const blank = freshSlip();
+      blank.house = id || "";
+      blank.shipDate = day;
+      slips.push(blank);
+      draft = slips.length - 1;
+    }
+    applySlip(draft);
+    house = id || "";
+    shipDate = day;
+    msg = "";
+    pane = "key";
+    renderDailyQty();
   }
   function queueSlipSync(slip) {
     if (!slip || !slip.house || !slipHasBody(slip)) return;
@@ -567,7 +629,7 @@
           seen.add(r.id);
           seqCell = `<td class="num dq-seq" rowspan="${span[r.id]}"><button type="button" class="dq-seq-btn" data-dq-seq="${esc(r.id)}" title="點一下修正單號">${esc(r.seq)}</button></td>`;
           if (withAct) {
-            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-open="${r.slipIndex}">修改</button><button type="button" class="primary" data-dq-match="${esc(r.id)}">回對</button></td>`;
+            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-fix="${esc(r.id)}">修正</button><button type="button" class="primary" data-dq-match="${esc(r.id)}">回對</button></td>`;
           }
         }
         return `<tr>${showDate ? `<td>${esc(r.date)}</td>` : ""}${seqCell}<td>${esc(r.house)}</td><td>${esc(r.item).replace(/\n/g, "<br>")}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
@@ -577,15 +639,160 @@
     const lead = showDate ? 5 : 4;
     return `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td colspan="${lead}">合計</td><td class="num">${total}</td>${withAct ? "<td></td>" : ""}</tr></tfoot></table></div>`;
   }
-  function dqCalHtml() {
-    const iso = listDay || localYmd();
-    const month = listMonth || iso.slice(0, 7);
+  let listEditId = "";
+  let listEdit = null;
+  function lineItemText(line) {
+    if (line && line._itemText != null) return line._itemText;
+    if (line && line.sku) return `${line.sku} ${[line.kind, line.crop].filter(Boolean).join(" ")}`.trim();
+    return String((line && line.crop) || "");
+  }
+  function beginListEdit(id) {
+    const s = slips.find((x) => x.id === id);
+    if (!s || !s.saved) return;
+    listEditId = s.id;
+    listEdit = {
+      lines: JSON.parse(JSON.stringify(s.lines && s.lines.length ? s.lines : [freshLine()])),
+      note: s.note || "",
+      inner: s.inner || "",
+    };
+    pane = "list";
+    if (s.shipDate) {
+      listDay = s.shipDate;
+      listMonth = String(s.shipDate).slice(0, 7);
+    }
+    listQ = "";
+    msg = "";
+  }
+  function readListEditForm() {
+    const box = document.querySelector("[data-dq-fix-box]");
+    if (!box || !listEdit) return;
+    box.querySelectorAll("[data-dq-fix-line]").forEach((el) => {
+      const line = listEdit.lines[Number(el.dataset.dqFixLine)];
+      if (!line) return;
+      const sub = el.querySelector("[data-fix='sub']");
+      const item = el.querySelector("[data-fix='item']");
+      const spec = el.querySelector("[data-fix='spec']");
+      const country = el.querySelector("[data-fix='country']");
+      if (sub) line.sub = sub.value.trim();
+      if (item) line._itemText = item.value.trim();
+      if (spec) line.spec = String(spec.value || "").replace(/公斤/g, "").trim();
+      if (country) line.country = country.value.trim();
+      if (!line.slots) line.slots = [];
+      el.querySelectorAll("[data-dq-fix-slot]").forEach((slotEl) => {
+        const slot = line.slots[Number(slotEl.dataset.dqFixSlot)];
+        if (!slot) return;
+        const mk = slotEl.querySelector("[data-fix='mk']");
+        const qty = slotEl.querySelector("[data-fix='qty']");
+        if (mk) slot.mk = mk.value;
+        if (qty) slot.qty = qty.value;
+      });
+    });
+    const noteEl = box.querySelector("[data-fix='note']");
+    const innerEl = box.querySelector("[data-fix='inner']");
+    if (noteEl) listEdit.note = noteEl.value;
+    if (innerEl) listEdit.inner = innerEl.value;
+  }
+  function applyItemText(line, text) {
+    const raw = String(text || "").trim();
+    const shown = lineItemText({ ...line, _itemText: null });
+    if (!raw || raw === shown) return;
+    const code = raw.split(/\s+/)[0];
+    const item = (catalog || []).find((x) => x.code === code);
+    if (item && (raw === item.code || raw.startsWith(`${item.code} `))) {
+      line.sku = item.code;
+      line.crop = item.name;
+      line.kind = item.kind;
+      line.alias = item.alias || item.kindAlias || "";
+      return;
+    }
+    line.sku = "";
+    line.kind = "";
+    line.alias = "";
+    line.crop = raw;
+  }
+  async function saveListEdit() {
+    readListEditForm();
+    const s = slips.find((x) => x.id === listEditId);
+    if (!s || !listEdit) return;
+    listEdit.lines.forEach((line) => {
+      applyItemText(line, line._itemText);
+      delete line._itemText;
+    });
+    s.lines = normalizeLines(listEdit.lines);
+    s.note = String(listEdit.note || "");
+    s.inner = String(listEdit.inner || "");
+    s.at = Date.now();
+    await saveSlip(s);
+    listEditId = "";
+    listEdit = null;
+    msg = "已修正這張單，仍留在入單總資料。";
+    pane = "list";
+    renderDailyQty();
+  }
+  function listFixHtml(slip) {
+    if (!listEdit) return "";
+    const linesHtml = listEdit.lines.map((line, i) => {
+      const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
+      const countryNow = String(line.country || "");
+      const countryList = countryNow && !COUNTRIES.includes(countryNow) ? COUNTRIES.concat(countryNow) : COUNTRIES;
+      const countryOpts = [`<option value="">選國家</option>`]
+        .concat(countryList.map((c) => `<option value="${esc(c)}"${c === countryNow ? " selected" : ""}>${esc(c)}</option>`))
+        .join("");
+      const slots = (line.slots || [{ mk: "", qty: "" }]).map((slot, si) => {
+        const known = MK_KEYS.includes(slot.mk) || !slot.mk ? MK_KEYS : MK_KEYS.concat(slot.mk);
+        const opts = [`<option value="">選市場</option>`]
+          .concat(known.map((mk) => {
+            const off = mk !== slot.mk && used.has(mk) ? " disabled" : "";
+            return `<option value="${esc(mk)}"${mk === slot.mk ? " selected" : ""}${off}>${esc(mk)}</option>`;
+          }))
+          .join("");
+        const remove = (line.slots || []).length > 1
+          ? `<button type="button" class="ghost" data-dq-fix-del-slot data-dq-fix-del-slot-line="${i}" data-dq-fix-del-slot-i="${si}">×</button>`
+          : "";
+        return `<div class="dq-fix-slot" data-dq-fix-slot="${si}"><select data-fix="mk">${opts}</select><input data-fix="qty" inputmode="numeric" value="${esc(slot.qty)}" /><span>件</span>${remove}</div>`;
+      }).join("");
+      return `<div class="dq-fix-line" data-dq-fix-line="${i}">
+        <label>小代號 <input data-fix="sub" value="${esc(line.sub || "")}" /></label>
+        <label>品項 <input data-fix="item" value="${esc(lineItemText(line))}" /></label>
+        <label>規格 <input data-fix="spec" inputmode="decimal" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}" /> 公斤</label>
+        <label>國別 <select data-fix="country">${countryOpts}</select></label>
+        <div class="dq-fix-slots">${slots}<button type="button" class="ghost" data-dq-fix-add-slot="${i}">＋市場</button></div>
+        <button type="button" class="ghost" data-dq-fix-del-line="${i}">刪這個品項</button>
+      </div>`;
+    }).join("");
+    return `<section class="dq-fix" data-dq-fix-box>
+      <h3>修正 ${esc(slip.shipDate || "")} ${esc(houseLab(slip.house) || "")} ${esc(slipNo(slip))}</h3>
+      <p>改完按儲存，會留在入單總資料。</p>
+      ${linesHtml}
+      <button type="button" class="ghost" data-dq-fix-add-line>＋新增品項</button>
+      <label>社場／貨運看 <input data-fix="note" value="${esc(listEdit.note || "")}" /></label>
+      <label>內部出貨 <input data-fix="inner" value="${esc(listEdit.inner || "")}" /></label>
+      <div class="dq-fix-actions">
+        <button type="button" class="primary" data-dq-fix-save>儲存修正</button>
+        <button type="button" class="ghost" data-dq-fix-cancel>取消</button>
+      </div>
+    </section>`;
+  }
+  function datesWithSlips(houseId) {
+    const id = String(houseId || "");
+    return new Set(
+      slips
+        .filter((s) => s.shipDate && (s.saved || slipHasBody(s)) && (!id || s.house === id))
+        .map((s) => s.shipDate),
+    );
+  }
+  function dqCalHtml(opts) {
+    const o = opts || {};
+    const iso = o.selected || listDay || localYmd();
+    const month = o.month || listMonth || iso.slice(0, 7);
+    const dayAttr = o.dayAttr || "data-dq-day";
+    const shiftAttr = o.shiftAttr || "data-dq-shift";
     const [y, m] = month.split("-").map(Number);
     const first = new Date(y, m - 1, 1);
     const lead = (first.getDay() + 6) % 7;
     const count = new Date(y, m, 0).getDate();
     const today = localYmd();
-    const marked = new Set(slips.filter((s) => s.saved && s.shipDate).map((s) => s.shipDate));
+    const marked = datesWithSlips(o.houseId || "");
     const week = ["一", "二", "三", "四", "五", "六", "日"].map((name) => `<span>${name}</span>`).join("");
     let days = "";
     for (let i = 0; i < lead; i += 1) days += "<span></span>";
@@ -594,16 +801,16 @@
       const cls = ["dq-day", marked.has(cell) ? "is-data" : "", cell === today ? "is-today" : "", cell === iso ? "is-sel" : ""]
         .filter(Boolean)
         .join(" ");
-      days += `<button type="button" class="${cls}" data-dq-day="${cell}">${d}</button>`;
+      days += `<button type="button" class="${cls}" ${dayAttr}="${cell}">${d}</button>`;
     }
     return `<div class="dq-calbox">
       <div class="dq-cal-nav">
-        <button type="button" class="ghost" data-dq-shift="-1">上一月</button>
+        <button type="button" class="ghost" ${shiftAttr}="-1">上一月</button>
         <b>${y}年${m}月</b>
-        <button type="button" class="ghost" data-dq-shift="1">下一月</button>
+        <button type="button" class="ghost" ${shiftAttr}="1">下一月</button>
       </div>
       <div class="dq-cal">${week}${days}</div>
-      <p class="dq-cal-note">綠底是有拍賣資料。點日期看當天。</p>
+      <p class="dq-cal-note">綠框是有資料的日期。</p>
     </div>`;
   }
   function slipBlockHtml(blocks) {
@@ -869,6 +1076,9 @@
   let matchDay = "";
   let matchBill = "";
   let matchRows = [];
+  let matchCaptcha = "";
+  let matchBillDate = "";
+  let matchSource = "";
   let matchPhotoUrl = "";
   let matchPhotoName = "";
   const MATCH_STORE = "dq-house-match-v1";
@@ -880,6 +1090,8 @@
       matchDay = j.day || "";
       matchBill = j.bill || "";
       matchRows = Array.isArray(j.rows) ? j.rows : [];
+      matchSource = j.source || "";
+      matchBillDate = j.billDate || "";
     } catch (_) {}
   }
   function saveMatchStore() {
@@ -889,6 +1101,8 @@
         day: matchDay,
         bill: matchBill,
         rows: matchRows,
+        source: matchSource,
+        billDate: matchBillDate,
       }));
     } catch (_) {}
   }
@@ -951,6 +1165,157 @@
     }
     return out;
   }
+  const REGION_OF = new Map([
+    ["一市", "北部"],
+    ["二市", "北部"],
+    ["三重", "北部"],
+    ["板橋", "北部"],
+    ["桃園", "中區"],
+    ["台中", "中區"],
+    ["豐原", "中區"],
+    ["高雄", "南部"],
+    ["鳳山", "南部"],
+    ["屏東", "南部"],
+  ]);
+  const REGION_ORDER = ["北部", "中區", "南部", "其他"];
+  function regionOfMk(mk) {
+    return REGION_OF.get(String(mk || "").trim()) || "其他";
+  }
+  function marketBits(map) {
+    return Object.entries(map || {})
+      .filter(([, n]) => n)
+      .map(([mk, n]) => `${mk} ${n}`)
+      .join("、");
+  }
+  function regionAgg(list) {
+    const m = new Map();
+    for (const x of list) {
+      const region = regionOfMk(x.mk);
+      const sku = String(x.sku || x.crop || "").trim();
+      if (!sku || !x.qty) continue;
+      const k = `${region}|${sku}`;
+      const cur = m.get(k) || { region, sku, crop: x.crop || "", qty: 0, markets: {} };
+      cur.qty += Number(x.qty) || 0;
+      cur.crop = x.crop || cur.crop;
+      const mk = String(x.mk || "").trim() || region;
+      cur.markets[mk] = (cur.markets[mk] || 0) + (Number(x.qty) || 0);
+      m.set(k, cur);
+    }
+    return m;
+  }
+  function shippedLines(id, day) {
+    const out = [];
+    for (const s of slipsForMatch(id, day)) {
+      for (const line of s.lines || []) {
+        const sku = String(line.sku || "").trim();
+        const crop = sku
+          ? [line.kind, line.crop].filter(Boolean).join(" ")
+          : String(line.crop || "").trim();
+        for (const slot of line.slots || []) {
+          const mk = String(slot.mk || "").trim();
+          const q = qtyOf(slot.qty);
+          if (!mk || !q) continue;
+          out.push({ mk, sku: sku || crop, crop: crop || sku, qty: q });
+        }
+      }
+    }
+    return out;
+  }
+  function compareRegions(id, day, auctionRows) {
+    const H = regionAgg(shippedLines(id, day));
+    const P = regionAgg(
+      (auctionRows || []).map((r) => ({
+        mk: r.mk,
+        sku: r.sku,
+        crop: r.name || r.sku,
+        qty: Number(r.qty) || 0,
+      })),
+    );
+    const keys = new Set([...H.keys(), ...P.keys()]);
+    const out = [];
+    for (const k of keys) {
+      const h = H.get(k);
+      const p = P.get(k);
+      const hQty = h?.qty || 0;
+      const pQty = p?.qty || 0;
+      const side = h || p;
+      out.push({
+        region: side.region,
+        mk: side.region,
+        crop: side.crop,
+        sku: side.sku || "",
+        h: hQty,
+        p: pQty,
+        d: pQty - hQty,
+        ok: hQty === pQty && hQty > 0,
+        hMarkets: marketBits(h?.markets),
+        pMarkets: marketBits(p?.markets),
+      });
+    }
+    out.sort((a, b) => {
+      const ar = REGION_ORDER.indexOf(a.region);
+      const br = REGION_ORDER.indexOf(b.region);
+      return (ar < 0 ? 9 : ar) - (br < 0 ? 9 : br) || Number(a.ok) - Number(b.ok) || String(a.sku).localeCompare(String(b.sku));
+    });
+    return out;
+  }
+  async function runAuctionMatch(captcha) {
+    if (!matchHouse) {
+      msg = "請先選社場。";
+      renderDailyQty();
+      return;
+    }
+    if (matchHouse !== "xinfeng" && matchHouse !== "yongfang") {
+      msg = "大庄、二崙果菜還沒有拍賣帳號，先不自動回對。";
+      renderDailyQty();
+      return;
+    }
+    const mates = slipsForMatch(matchHouse, matchDay);
+    if (!mates.length) {
+      msg = "這天這個社場還沒有已送出的單。";
+      renderDailyQty();
+      return;
+    }
+    const msgEl = document.getElementById("dq-msg");
+    if (msgEl) msgEl.textContent = "正在讀隔天拍賣行情…";
+    let j = {};
+    try {
+      const r = await fetch("./api/daily-qty/auction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ house: matchHouse, shipDate: matchDay, captcha: captcha || "" }),
+      });
+      j = await r.json();
+    } catch (_) {
+      msg = "讀取拍賣行情失敗。";
+      renderDailyQty();
+      return;
+    }
+    if (j.needCaptcha) {
+      matchCaptcha = j.captcha ? `data:${j.captchaType || "image/png"};base64,${j.captcha}` : "";
+      msg = j.error || "請填驗證碼，再按開始回對。";
+      renderDailyQty();
+      return;
+    }
+    matchCaptcha = "";
+    if (!j.ok) {
+      msg = j.error || "讀取拍賣行情失敗。";
+      renderDailyQty();
+      return;
+    }
+    matchBillDate = j.billDate || "";
+    matchSource = "auction";
+    matchRows = compareRegions(matchHouse, matchDay, j.rows || []);
+    saveMatchStore();
+    const miss = matchRows.filter((r) => !r.ok).length;
+    const when = matchBillDate ? `（行情日 ${matchBillDate}）` : "";
+    msg = !j.rows?.length
+      ? `隔天行情沒有這幾組小代號的成交${when}。`
+      : miss
+        ? `回對完成${when}，有 ${miss} 區的品項件數不一致。`
+        : `回對完成${when}，北中南的品項件數一致。`;
+    renderDailyQty();
+  }
   function compareSlip(slip) {
     const prev = { house, shipDate, lines, billText };
     house = slip.house || "";
@@ -969,6 +1334,11 @@
     return out;
   }
   async function confirmSlip() {
+    if (dayLocked(shipDate) || (slips[cur] && dayLocked(slips[cur].shipDate))) {
+      msg = "這天已過，不能在鍵單儲存。請到入單總資料修正。";
+      renderDailyQty();
+      return;
+    }
     syncCurrent();
     if (!house) {
       msg = "請先選這一張的社場。";
@@ -1776,6 +2146,35 @@
         renderDailyQty();
         return;
       }
+      if (e.target.closest("[data-dq-key-day]")) {
+        const day = e.target.closest("[data-dq-key-day]").dataset.dqKeyDay || "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+        keyMonth = day.slice(0, 7);
+        showDay(day);
+        return;
+      }
+      if (e.target.closest("[data-dq-key-shift]")) {
+        const dir = Number(e.target.closest("[data-dq-key-shift]").dataset.dqKeyShift) || 0;
+        keyMonth = shiftMonth(keyMonth || (shipDate || localYmd()).slice(0, 7), dir);
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-match-cal]")) {
+        matchDay = e.target.closest("[data-dq-match-cal]").dataset.dqMatchCal || matchDay;
+        matchMonth = String(matchDay || "").slice(0, 7);
+        matchRows = [];
+        matchSource = "";
+        saveMatchStore();
+        pane = "match";
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-match-shift]")) {
+        const dir = Number(e.target.closest("[data-dq-match-shift]").dataset.dqMatchShift) || 0;
+        matchMonth = shiftMonth(matchMonth || (matchDay || localYmd()).slice(0, 7), dir);
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("[data-dq-shift]")) {
         const dir = Number(e.target.closest("[data-dq-shift]").dataset.dqShift) || 0;
         listMonth = shiftMonth(listMonth || (listDay || localYmd()).slice(0, 7), dir);
@@ -1800,7 +2199,11 @@
         syncCurrent();
         applySlip(Number(e.target.closest("[data-dq-slip]").dataset.dqSlip));
         pane = "key";
-        msg = houseName() ? `正在修改${houseName()}。改完再按確認儲存。` : "";
+        msg = dayLocked(shipDate)
+          ? "這天已過，鍵單只能看。要改請到入單總資料。"
+          : houseName()
+            ? `正在修改${houseName()}。改完再按確認儲存。`
+            : "";
         renderDailyQty();
         return;
       }
@@ -1816,11 +2219,62 @@
         copySlipImage(e.target.closest("[data-dq-copy-freight]").dataset.dqCopyFreight || "", "freight");
         return;
       }
-      if (e.target.closest("[data-dq-open]")) {
-        syncCurrent();
-        applySlip(Number(e.target.closest("[data-dq-open]").dataset.dqOpen));
-        pane = "key";
-        msg = houseName() ? `正在修改${houseName()}。改完再按確認儲存。` : "";
+      if (e.target.closest("[data-dq-fix-cancel]")) {
+        listEditId = "";
+        listEdit = null;
+        msg = "";
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix-save]")) {
+        saveListEdit();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix-add-line]")) {
+        readListEditForm();
+        if (!listEdit) return;
+        const prev = listEdit.lines[listEdit.lines.length - 1];
+        const line = freshLine();
+        line.sub = (prev && prev.sub) || "";
+        const mks = ((prev && prev.slots) || []).map((s) => s.mk).filter(Boolean);
+        line.slots = mks.length ? mks.map((mk) => ({ mk, qty: "" })) : [{ mk: "", qty: "" }];
+        listEdit.lines.push(line);
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix-del-line]")) {
+        readListEditForm();
+        if (!listEdit) return;
+        const i = Number(e.target.closest("[data-dq-fix-del-line]").dataset.dqFixDelLine);
+        if (i >= 0) listEdit.lines.splice(i, 1);
+        if (!listEdit.lines.length) listEdit.lines.push(freshLine());
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix-add-slot]")) {
+        readListEditForm();
+        if (!listEdit) return;
+        const i = Number(e.target.closest("[data-dq-fix-add-slot]").dataset.dqFixAddSlot);
+        const line = listEdit.lines[i];
+        if (line && (line.slots || []).length < MK_KEYS.length) {
+          if (!line.slots) line.slots = [];
+          line.slots.push({ mk: "", qty: "" });
+        }
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix-del-slot]")) {
+        readListEditForm();
+        if (!listEdit) return;
+        const btn = e.target.closest("[data-dq-fix-del-slot]");
+        const line = listEdit.lines[Number(btn.dataset.dqFixDelSlotLine)];
+        const si = Number(btn.dataset.dqFixDelSlotI);
+        if (line && line.slots && line.slots.length > 1 && si >= 0) line.slots.splice(si, 1);
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-fix]")) {
+        beginListEdit(e.target.closest("[data-dq-fix]").dataset.dqFix || "");
         renderDailyQty();
         return;
       }
@@ -1866,11 +2320,13 @@
         return;
       }
       if (e.target.closest("#dq-add")) {
+        if (dayLocked(shipDate)) return;
         addItem();
         renderDailyQty();
         return;
       }
       if (e.target.closest("[data-dq-add-slot]")) {
+        if (dayLocked(shipDate)) return;
         const lineEl = e.target.closest("[data-dq-line]");
         const line = lines[Number(lineEl?.dataset.dqLine)];
         if (line && line.slots.length < MK_KEYS.length) line.slots.push({ mk: "", qty: "" });
@@ -1878,6 +2334,7 @@
         return;
       }
       if (e.target.closest("[data-dq-del-slot]")) {
+        if (dayLocked(shipDate)) return;
         const lineEl = e.target.closest("[data-dq-line]");
         const row = e.target.closest("[data-dq-slot]");
         const line = lines[Number(lineEl?.dataset.dqLine)];
@@ -1887,11 +2344,20 @@
         return;
       }
       if (e.target.closest("[data-dq-del]")) {
+        if (dayLocked(shipDate)) return;
         const i = Number(e.target.closest("[data-dq-del]").dataset.dqDel);
         lines.splice(i, 1);
         if (!lines.length) lines.push(freshLine());
         renderDailyQty();
         return;
+      }
+      if (e.target.closest("#dq-copy") || e.target.closest("#dq-img-ship") || e.target.closest("#dq-img-freight")) {
+        if (!viewMatchesSlip()) {
+          msg = "這天沒有單。";
+          const msgEl = document.getElementById("dq-msg");
+          if (msgEl) msgEl.textContent = msg;
+          return;
+        }
       }
       if (e.target.closest("#dq-copy")) {
         copyNotice();
@@ -1918,12 +2384,18 @@
       if (e.target.closest("[data-dq-match-house]")) {
         matchHouse = e.target.closest("[data-dq-match-house]").dataset.dqMatchHouse || "";
         matchRows = [];
+        matchCaptcha = "";
+        matchSource = "";
         saveMatchStore();
         pane = "match";
         renderDailyQty();
         return;
       }
       if (e.target.closest("#dq-run")) {
+        runAuctionMatch(document.getElementById("dq-captcha")?.value || "");
+        return;
+      }
+      if (e.target.closest("#dq-run-paste")) {
         matchBill = document.getElementById("dq-bill")?.value || matchBill || "";
         const mates = slipsForMatch(matchHouse, matchDay);
         if (!matchHouse) {
@@ -1941,16 +2413,18 @@
           renderDailyQty();
           return;
         }
+        matchSource = "paste";
         matchRows = compareHouseDay();
         saveMatchStore();
         const miss = matchRows.filter((r) => !r.ok).length;
-        msg = miss ? `回對完成，有 ${miss} 筆和社場合計不一致。` : "回對完成，和社場合計一致。";
+        msg = miss ? `回對完成，有 ${miss} 筆和貼上的明細不一致。` : "回對完成，和貼上的明細一致。";
         renderDailyQty();
         return;
       }
     });
     function readField(e) {
       const t = e.target;
+      if (dayLocked(shipDate) && t.closest(".dq-form") && t.id !== "dq-date") return;
       if (t.id === "dq-q") {
         listQ = t.value;
         const pos = t.selectionStart;
@@ -2052,12 +2526,10 @@
         return;
       }
       if (t.id === "dq-date") {
-        shipDate = t.value || localYmd();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(shipDate)) renderDailyQty();
-        else {
-          paintSlip();
-          persistLocal(true);
-        }
+        const next = t.value || "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+        if (next === (shipDate || localYmd())) return;
+        showDay(next);
         return;
       }
       const lineEl = t.closest("[data-dq-line]");
@@ -2143,10 +2615,23 @@
     if (batch) chunks.push(esc(`批次：${batch}`));
     return chunks.join("\n\n");
   }
+  function viewMatchesSlip() {
+    const s = slips[cur];
+    if (!s) return false;
+    if (!dayLocked(shipDate)) return true;
+    if (s.shipDate !== shipDate) return false;
+    if (house && s.house && s.house !== house) return false;
+    return true;
+  }
   function paintSlip() {
     const box = document.getElementById("dq-slip");
     if (!box) return;
     syncCurrent();
+    if (!viewMatchesSlip()) {
+      box.textContent = "這天沒有單。";
+      box.classList.add("is-empty");
+      return;
+    }
     const empty = !shipList().length;
     if (empty) box.textContent = "左邊填市場件數後，這裡會顯示要貼到 LINE 的單據。";
     else box.innerHTML = slipPreviewHtml(slips[cur]);
@@ -2178,7 +2663,10 @@
       const badge = n ? `<em class="dq-house-n">${n}</em>` : "";
       return `<button type="button" class="pick${house === h.id ? " on" : ""}" data-dq-house="${esc(h.id)}">${esc(h.lab)}${badge}</button>`;
     }).join("");
-    const lineHtml = lines.map((line, i) => {
+    const keyLocked = dayLocked(shipDate);
+    const keyLive = !keyLocked || (slips[cur] && slips[cur].shipDate === shipDate && (!house || slips[cur].house === house));
+    const dis = keyLocked ? " disabled" : "";
+    const lineHtml = !keyLive ? "" : lines.map((line, i) => {
       const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
       const countryNow = String(line.country || "");
       const countryList = countryNow && !COUNTRIES.includes(countryNow) ? COUNTRIES.concat(countryNow) : COUNTRIES;
@@ -2198,38 +2686,38 @@
             return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
           }))
           .join("");
-        const extra = (line.slots || []).length > 1
+        const extra = !keyLocked && (line.slots || []).length > 1
           ? `<button type="button" class="ghost" data-dq-del-slot="${si}" aria-label="移掉這個市場">×</button>`
           : "";
         return `<div class="dq-slot${slot.mk && qtyOf(slot.qty) ? " is-on" : ""}" data-dq-slot="${si}">
-          <select data-dq-slot-mk>${opts}</select>
-          <input data-dq-slot-qty inputmode="numeric" placeholder="件數" value="${esc(slot.qty)}" />
+          <select data-dq-slot-mk${dis}>${opts}</select>
+          <input data-dq-slot-qty inputmode="numeric" placeholder="件數" value="${esc(slot.qty)}"${dis} />
           <span class="dq-slot-unit">件</span>
           ${extra}
         </div>`;
       }).join("");
-      const addSlot = (line.slots || []).length < MK_KEYS.length
+      const addSlot = !keyLocked && (line.slots || []).length < MK_KEYS.length
         ? `<button type="button" class="ghost dq-add-slot" data-dq-add-slot="${i}">＋市場</button>`
         : "";
       return `<div class="dq-line" data-dq-line="${i}">
         <div class="dq-line-head">
           <label class="dq-sub">小代號
-            <input data-dq-f="sub" value="${esc(line.sub || "")}" placeholder="493" />
+            <input data-dq-f="sub" value="${esc(line.sub || "")}" placeholder="493"${dis} />
           </label>
           <label class="dq-crop">品項
-            <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(shown)}" />
+            <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(shown)}"${dis} />
           </label>
-          <button type="button" class="ghost dq-del" data-dq-del="${i}">刪</button>
+          ${keyLocked ? "" : `<button type="button" class="ghost dq-del" data-dq-del="${i}">刪</button>`}
         </div>
         <div class="dq-line-meta">
           <label class="dq-spec">規格
             <span class="dq-spec-box">
-              <input data-dq-f="spec" inputmode="decimal" placeholder="12" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}" />
+              <input data-dq-f="spec" inputmode="decimal" placeholder="12" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}"${dis} />
               <em>公斤</em>
             </span>
           </label>
           <label class="dq-country">國別
-            <select data-dq-f="country">${countryOpts}</select>
+            <select data-dq-f="country"${dis}>${countryOpts}</select>
           </label>
         </div>
         <div class="dq-markets">
@@ -2282,8 +2770,16 @@
               <input id="dq-q" type="search" placeholder="單號、日期、社場、品項、市場" value="${esc(listQ)}" />
             </label>
           </div>
+          ${(() => {
+            const editSlip = listEditId ? slips.find((s) => s.id === listEditId) : null;
+            if (listEditId && !editSlip) {
+              listEditId = "";
+              listEdit = null;
+            }
+            return editSlip && listEdit ? listFixHtml(editSlip) : "";
+          })()}
           ${table}
-          <p class="dq-card-msg" id="dq-list-msg"></p>
+          <p class="dq-card-msg" id="dq-list-msg">${esc(msg)}</p>
         </section>
       </div>`;
     } else if (pane === "match") {
@@ -2305,13 +2801,24 @@
       const pendingNote = pending.length
         ? `<p class="dq-match-note">還有 ${pending.length} 張還沒送出，這次回對不計入：${esc(pending.map((s) => slipTabText(s)).join("、"))}。請先到鍵單按確認儲存。</p>`
         : "";
-      const billHint = matchHouse === "xinfeng" ? "新豐的帳單日期是寄送日隔天。" : "帳單日期跟寄送日同一天。";
+      const billHint = matchHouse === "xinfeng"
+        ? "新豐自動讀隔天行情，小代號 493、930、168 加在一起。"
+        : matchHouse === "yongfang"
+          ? "金芳用小代號各自登入查隔天行情，050、168 加在一起。密碼與小代號相同。"
+          : "大庄、二崙果菜還沒有拍賣帳號，先不自動回對。";
       const ourTable = ourRows.length
         ? `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr><th>市場</th><th>品項</th><th>寄出合計</th></tr></thead><tbody>${ourRows
             .map((r) => `<tr><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td><td class="num">${r.qty}</td></tr>`)
             .join("")}</tbody><tfoot><tr><td colspan="2">合計</td><td class="num">${ourTotal}</td></tr></tfoot></table></div>`
         : `<p class="dq-empty">這天這個社場還沒有已送出的單。</p>`;
-      const shownMatch = [...matchRows].sort((a, b) => Number(a.ok) - Number(b.ok) || a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
+      const shownMatch = [...matchRows].sort((a, b) => {
+        if (matchSource === "auction") {
+          const ar = REGION_ORDER.indexOf(a.region);
+          const br = REGION_ORDER.indexOf(b.region);
+          return (ar < 0 ? 9 : ar) - (br < 0 ? 9 : br) || Number(a.ok) - Number(b.ok) || String(a.sku).localeCompare(String(b.sku));
+        }
+        return Number(a.ok) - Number(b.ok) || a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop));
+      });
       const sameN = matchRows.filter((r) => r.ok).length;
       const diffN = matchRows.filter((r) => r.h && r.p && !r.ok).length;
       const missN = matchRows.filter((r) => r.h && !r.p).length;
@@ -2325,15 +2832,18 @@
       const matchTable = shownMatch.length
         ? `<section class="dq-match-result">
             <h3>回對結果</h3>
-            <p class="dq-match-note">每一列是同一個市場、同一個品項。差＝社場帳單減我們寄出。正數是社場比較多，負數是社場比較少。</p>
+            <p class="dq-match-note">${matchSource === "auction" ? "每一列是同一個區域、同一個品項。北部四個市場、中區、南部各自加總。同區換市場不算誤差。差＝拍賣場減我們寄出。" : "每一列是同一個市場、同一個品項。差＝社場帳單減我們寄出。正數是社場比較多，負數是社場比較少。"}</p>
             <p class="dq-match-legend"><span class="ok">一樣</span><span class="bad">件數不同</span><span class="miss">有一邊沒有</span></p>
             <p class="dq-sum">${esc(matchBits.join("，"))}</p>
-            <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>市場</th><th>品項</th><th>我們寄出</th><th>社場帳單</th><th>差</th></tr></thead><tbody>${shownMatch
+            <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>${matchSource === "auction" ? "區域" : "市場"}</th><th>品項</th><th>我們寄出</th><th>拍賣場</th><th>差</th></tr></thead><tbody>${shownMatch
             .map((r) => {
               const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
-              const st = r.ok ? "一樣" : !r.p ? "我們有、帳單沒有" : !r.h ? "帳單有、我們沒有" : "件數不同";
+              const st = r.ok ? "一樣" : !r.p ? "我們有、拍賣沒有" : !r.h ? "拍賣有、我們沒有" : "件數不同";
               const diff = `${r.d > 0 ? "+" : ""}${r.d}`;
-              return `<tr class="${cls}"><td>${esc(st)}</td><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td>
+              const detail = r.hMarkets || r.pMarkets
+                ? `<div class="dq-submk">我們 ${esc(r.hMarkets || "—")}／拍賣 ${esc(r.pMarkets || "—")}</div>`
+                : "";
+              return `<tr class="${cls}"><td>${esc(st)}</td><td>${esc(r.region || r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}${detail}</td>
                 <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${esc(diff)}</td></tr>`;
             })
             .join("")}</tbody></table></div></section>`
@@ -2347,9 +2857,12 @@
         : "";
       body = savedSlips.length
         ? `<div class="dq-match">
-            <p class="dq-match-note">社場一次送來這天全部拍賣數量。這裡把這個社場、這個寄送日的每一張單加總，再跟整份明細比一次。</p>
+            <p class="dq-match-note">選社場和寄送日後按開始回對。系統用這家的帳號讀隔天行情，同一區、同一品項的件數加總再比。安排 493 但以 930 成交，仍算同一家。</p>
             <div class="dq-houses">${houseBtnsMatch}</div>
-            <label class="dq-date">寄送日 <input id="dq-match-day" type="date" value="${esc(matchDay)}" /></label>
+            <div class="dq-date-pick">
+              <span class="dq-date-now">寄送日 ${esc(matchDay)}</span>
+              ${dqCalHtml({ selected: matchDay, month: matchMonth || String(matchDay || localYmd()).slice(0, 7), dayAttr: "data-dq-match-cal", shiftAttr: "data-dq-match-shift", houseId: matchHouse })}
+            </div>
             <p class="dq-sum">${esc(houseLab(matchHouse) || "請選社場")} · ${mates.length} 張已送出${slipNames ? " · " + esc(slipNames) : ""}</p>
             ${pendingNote}
             <p class="dq-match-note">${billHint}</p>
@@ -2363,44 +2876,60 @@
               <input id="dq-bill-file" type="file" accept="image/*" hidden />
             </div>
             <div id="dq-read-host">${readTableHtml(readRowsFor({ house: matchHouse, shipDate: matchDay }, matchBill))}</div>
+            ${matchCaptcha ? `<div class="dq-captcha"><img src="${esc(matchCaptcha)}" alt="驗證碼" /><input id="dq-captcha" inputmode="numeric" maxlength="6" placeholder="驗證碼" /></div>` : ""}
             <div class="dq-tools">
               <button type="button" class="primary" id="dq-run">開始回對</button>
+              <button type="button" class="ghost" id="dq-run-paste">改用貼上的明細</button>
             </div>
             <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
             ${matchTable}
           </div>`
         : `<p class="dq-empty">還沒有已送出的單可以回對。請先在鍵單確認儲存。</p><p class="dq-msg" id="dq-msg">${esc(msg)}</p>`;
     } else {
+      const keyHint = keyLocked
+        ? "這天已過，鍵單只能看出單。要改品項、件數、小代號或單號，請到入單總資料修正。"
+        : "小代號跟品項同一列。同一張單可以有兩個小代號；新增品項會沿用上一列，不同再改。新的一張單要重填。";
+      const keyEmpty = keyLive
+        ? ""
+        : `<p class="dq-empty">這天沒有可以看的單，也不能在鍵單補打。</p>`;
       body = `<div class="dq-split">
-        <div class="dq-form">
+        <div class="dq-form${keyLocked ? " is-locked" : ""}">
           <div class="dq-top">
-            <p class="dq-top-lab">${house ? esc(houseName()) + " · 點下面的單，或新增一張" : "請先選社場"}</p>
+            <p class="dq-top-lab">${house ? esc(houseName()) + (keyLocked ? " · 只能看" : " · 點下面的單，或新增一張") : "請先選社場"}</p>
             <div class="dq-houses">${houseBtns}</div>
-            <div class="dq-slips">${slipTabs}${house ? `<button type="button" class="ghost dq-another" data-dq-another>＋新的一張</button>` : ""}${dropCurrent}</div>
-            <div class="dq-key-meta">
-              <label class="dq-date">寄送日 <input id="dq-date" type="date" value="${esc(shipDate)}" /></label>
+            <div class="dq-slips">${slipTabs}${house && !keyLocked ? `<button type="button" class="ghost dq-another" data-dq-another>＋新的一張</button>` : ""}${keyLocked ? "" : dropCurrent}</div>
+          </div>
+          <div class="dq-key-meta">
+            <div class="dq-key-row">
+              <span class="dq-date-now">寄送日 ${esc(shipDate)}</span>
               <label class="dq-date">單號
-                <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(slipNo(slips[cur]))}" ${house ? "" : "disabled"} />
+                <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(keyLive ? slipNo(slips[cur]) : "")}" ${house && !keyLocked ? "" : "disabled"} />
               </label>
             </div>
-            <p class="dq-mk-lab">小代號跟品項同一列。同一張單可以有兩個小代號；新增品項會沿用上一列，不同再改。新的一張單要重填。</p>
+            ${dqCalHtml({ selected: shipDate, month: keyMonth || String(shipDate || localYmd()).slice(0, 7), dayAttr: "data-dq-key-day", shiftAttr: "data-dq-key-shift", houseId: house })}
           </div>
-          ${lineHtml}
-          <button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>
-          <label class="dq-note">社場／貨運看（是否收貨）
-            <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(note)}" />
-          </label>
-          <label class="dq-note">內部出貨（品項批次）
-            <input id="dq-inner" placeholder="例如：#UHA770 新鮮L" value="${esc(inner)}" />
-          </label>
+          <div class="dq-fields">
+            <p class="dq-mk-lab">${keyHint}</p>
+            ${keyEmpty}
+            ${lineHtml}
+            ${keyLocked || !keyLive ? "" : `<button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>`}
+            <label class="dq-note">社場／貨運看（是否收貨）
+              <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(keyLive ? note : "")}"${dis} />
+            </label>
+            <label class="dq-note">內部出貨（品項批次）
+              <input id="dq-inner" placeholder="例如：#UHA770 新鮮L" value="${esc(keyLive ? inner : "")}"${dis} />
+            </label>
+          </div>
         </div>
         <aside class="dq-side">
           <p class="dq-side-lab">出單預覽</p>
           <pre class="dq-slip" id="dq-slip"></pre>
-          <button type="button" class="primary" id="dq-img-ship">出單圖片</button>
-          <button type="button" class="primary" id="dq-img-freight">通知貨運</button>
-          <button type="button" class="ghost" id="dq-copy">複製文字</button>
-          <button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>
+          <div class="dq-side-actions">
+            <button type="button" class="primary" id="dq-img-ship">出單圖片</button>
+            <button type="button" class="primary" id="dq-img-freight">通知貨運</button>
+            <button type="button" class="ghost" id="dq-copy">複製文字</button>
+            ${keyLocked ? "" : `<button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>`}
+          </div>
           <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
         </aside>
       </div>`;
@@ -2408,9 +2937,8 @@
     root.innerHTML = `
       <header class="dq-head">
         <button type="button" class="ghost dq-home" data-dq-home>← 總覽</button>
-        <h2>拍賣寄貨</h2>
+        ${rack}
       </header>
-      ${rack}
       ${body}
     `;
     if (pane === "key") paintSlip();

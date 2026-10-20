@@ -6926,6 +6926,27 @@ body.layout-web .order-desk-cart .ticket-list--slim {
 .attend-form { grid-area: form; }
 .attend-result { grid-area: result; }
 .attend-kicker, .attend-note, .attend-mini { margin: 0; color: var(--muted); font-size: 0.78rem; }
+#attend-print-sheet { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  #attend-print-sheet, #attend-print-sheet * { visibility: visible; }
+  #attend-print-sheet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    color: #163024;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    font-size: 13px;
+  }
+  #attend-print-sheet h1 { font-size: 18px; margin: 0 0 10px; }
+  #attend-print-sheet table { border-collapse: collapse; width: 100%; }
+  #attend-print-sheet th, #attend-print-sheet td { border: 1px solid #bbb; padding: 6px 8px; text-align: left; }
+  #attend-print-sheet th { background: #f4f7f4; }
+  #attend-print-sheet tfoot td { font-weight: 700; }
+}
 .attend-date { margin: 0.1rem 0 0.35rem; font-weight: 700; }
 .attend-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; margin-bottom: 0.3rem; font-size: 0.85rem; }
 .attend-cal-nav .ghost { padding: 0.15rem 0.4rem; }

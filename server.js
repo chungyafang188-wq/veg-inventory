@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { parseLineOrderText, parseLineOrderBlocks, worthKeeping } = require("./line-parse.js");
 const freightReconcile = require("./freight-reconcile.js");
+const { auctionQuery } = require("./amis-auction.js");
 
 const { pathToFileURL } = require("url");
 
@@ -659,6 +660,28 @@ function handleApi(req, res) {
       return true;
     }
     send(res, 405, "Method not allowed");
+    return true;
+  }
+  if (urlPath === "/api/daily-qty/auction") {
+    if (req.method !== "POST") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    readBody(req, 2e5)
+      .then(async (raw) => {
+        const body = JSON.parse(raw);
+        const out = await auctionQuery({
+          house: String(body?.house || ""),
+          shipDate: String(body?.shipDate || ""),
+          captcha: String(body?.captcha || ""),
+          dataDir: DATA_DIR,
+        });
+        send(res, 200, JSON.stringify(out), TYPES[".json"]);
+      })
+      .catch((err) => {
+        console.error(err);
+        send(res, 500, JSON.stringify({ ok: false, error: "讀取拍賣行情失敗" }), TYPES[".json"]);
+      });
     return true;
   }
   if (urlPath === "/api/daily-qty/history") {

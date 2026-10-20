@@ -12736,6 +12736,11 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     attendBillPrintPdf();
     return;
   }
+  const billXlsx = e.target.closest("[data-bill-xlsx]");
+  if (billXlsx && typeof attendBillSaveExcel === "function") {
+    attendBillSaveExcel();
+    return;
+  }
   const billPick = e.target.closest("[data-bill-pick]");
   if (billPick && typeof attendBillPickDay === "function") {
     attendBillPickDay(billPick.dataset.billPick || "");

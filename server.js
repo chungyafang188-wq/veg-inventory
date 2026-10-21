@@ -680,7 +680,12 @@ function handleApi(req, res) {
       })
       .catch((err) => {
         console.error(err);
-        send(res, 500, JSON.stringify({ ok: false, error: "讀取拍賣行情失敗" }), TYPES[".json"]);
+        const code = String(err?.code || err?.cause?.code || "");
+        const offline = code === "ETIMEDOUT" || code === "ENETUNREACH" || code === "ECONNRESET" || code === "ECONNREFUSED";
+        const error = offline
+          ? "線上伺服器在國外，連不到台灣拍賣網站。請用辦公室這台電腦打開本機網址做拍賣回對。"
+          : "讀取拍賣行情失敗";
+        send(res, 200, JSON.stringify({ ok: false, error }), TYPES[".json"]);
       });
     return true;
   }

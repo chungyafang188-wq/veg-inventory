@@ -2413,6 +2413,17 @@ body.on-home .home-open .hub-mark.has-pic {
   line-height: 1.55;
   margin: 0.4rem 0 0.6rem;
 }
+.help-history { margin: 0.7rem 0 0.2rem; }
+.help-history h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.help-history-list { display: grid; gap: 0.35rem; }
+.help-history-list button {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.4;
+  background: #fff;
+}
 .help-table-wrap {
   overflow: auto;
   -webkit-overflow-scrolling: touch;

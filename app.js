@@ -836,6 +836,10 @@ let pbShowDone = false;
 let salesMount = null;
 let helpFilter = "issues";
 let helpResult = null;
+let helpHistory = [];
+let helpHistoryLoaded = false;
+let helpHistoryPulling = false;
+let helpHistoryAgain = false;
 const LABEL_RUN_KEY = "veg-label-run-v1";
 const LABEL_PRINTS_KEY = "veg-label-prints-v1";
 let labelPrintFilterKind = "all";
@@ -4562,6 +4566,79 @@ function helpResultHtml(status) {
   const ok = status === "match";
   return `<td><span class="help-result ${ok ? "ok" : "bad"}">${esc(helpStatusLabel(status))}</span></td>`;
 }
+function helpMd(iso) {
+  const m = String(iso || "").match(/^\d{4}-(\d{2})-(\d{2})$/);
+  return m ? `${Number(m[1])}/${Number(m[2])}` : "";
+}
+function helpHistoryTitle(rec) {
+  const span = rec.spanFrom && rec.spanTo
+    ? `${helpMd(rec.spanFrom)}–${helpMd(rec.spanTo)}`
+    : rec.dayFrom
+      ? `${rec.dayFrom}日–${rec.dayTo}日`
+      : "";
+  const diff = rec.issues ? `${rec.issues} 筆差異` : "件數都對得上";
+  const d = new Date(Number(rec.at) || Date.now());
+  const clock = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const who = rec.carrier || "貨運";
+  return span ? `${span}　${who}　${diff}　${clock}` : `${who}　${diff}　${clock}`;
+}
+function renderHelpHistory() {
+  const host = document.getElementById("help-freight-history");
+  if (!host) return;
+  if (!helpHistory.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = `<h3>對過的紀錄</h3><div class="help-history-list">${helpHistory
+    .map((rec) => `<button type="button" data-help-open="${esc(rec.id)}">${esc(helpHistoryTitle(rec))}</button>`)
+    .join("")}</div>`;
+}
+function pullHelpHistory(force) {
+  if (helpHistoryPulling) {
+    if (force) helpHistoryAgain = true;
+    return;
+  }
+  if (helpHistoryLoaded && !force) return;
+  helpHistoryPulling = true;
+  helpHistoryAgain = false;
+  fetch("./api/freight/history", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((j) => {
+      helpHistory = Array.isArray(j?.records) ? j.records : [];
+      helpHistoryLoaded = true;
+      helpHistoryPulling = false;
+      renderHelpHistory();
+      if (helpHistoryAgain) pullHelpHistory(true);
+      else if (!helpResult && helpHistory[0]) openHelpHistory(helpHistory[0].id, true);
+    })
+    .catch(() => {
+      helpHistoryPulling = false;
+      if (helpHistoryAgain) pullHelpHistory(true);
+    });
+}
+async function openHelpHistory(id, auto) {
+  const msg = document.getElementById("help-freight-msg");
+  try {
+    const r = await fetch(`./api/freight/history?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+    const j = await r.json();
+    if (auto && helpResult) return;
+    if (!r.ok || j.ok !== true || !Array.isArray(j.rows)) {
+      if (msg && !auto) msg.textContent = "這筆紀錄打不開。";
+      return;
+    }
+    helpResult = j;
+    const issueCount = j.rows.filter((row) => {
+      const st = j.mode === "generic" ? row.status : j.hasFixed ? row.statusFix : row.statusOrig;
+      return st && st !== "match";
+    }).length;
+    helpFilter = issueCount ? "issues" : "all";
+    if (msg) msg.textContent = `已打開 ${helpHistoryTitle(j)}`;
+    renderHelpFreight();
+    document.getElementById("help-freight-table")?.scrollIntoView({ block: "nearest" });
+  } catch (_) {
+    if (msg && !auto) msg.textContent = "這筆紀錄打不開。";
+  }
+}
 function renderHelpFreight() {
   const tools = document.getElementById("help-freight-tools");
   const stats = document.getElementById("help-freight-stats");
@@ -4639,6 +4716,7 @@ async function runHelpFreight() {
       return setStatus(err, true);
     }
     helpResult = j;
+    pullHelpHistory(true);
     const issueCount = (j.rows || []).filter((row) => {
       const st = j.mode === "generic" ? row.status : j.hasFixed ? row.statusFix : row.statusOrig;
       return st && st !== "match";
@@ -12525,7 +12603,11 @@ function render() {
   run(renderAlerts);
   run(syncLinePendingHint);
   if (page === "home") run(renderHomeHub);
-  if (page === "help") run(renderHelpFreight);
+  if (page === "help") {
+    run(renderHelpFreight);
+    run(renderHelpHistory);
+    pullHelpHistory();
+  }
   if (page === "ar-remit" && typeof renderArRemit === "function") run(renderArRemit);
   if (page === "auction-pay" && typeof renderAuctionPay === "function") run(renderAuctionPay);
   if (page === "daily-qty" && typeof renderDailyQty === "function") run(renderDailyQty);
@@ -13035,6 +13117,11 @@ document.getElementById("help-freight-file")?.addEventListener("change", (e) => 
 document.getElementById("help-freight-run")?.addEventListener("click", () => runHelpFreight());
 document.getElementById("help-freight-xls")?.addEventListener("click", () => downloadHelpXls());
 document.getElementById("help-freight-png")?.addEventListener("click", () => downloadHelpPng());
+document.getElementById("help-freight-history")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-help-open]");
+  if (!btn) return;
+  openHelpHistory(btn.dataset.helpOpen || "");
+});
 document.getElementById("help-freight-tools")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-help-filter]");
   if (!btn) return;

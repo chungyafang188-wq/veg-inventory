@@ -46,6 +46,7 @@ const LINE_FILE = path.join(DATA_DIR, "line-drafts.json");
 const AUCTION_PAY_FILE = path.join(DATA_DIR, "auction-pay-history.json");
 const DAILY_QTY_FILE = path.join(DATA_DIR, "daily-qty-history.json");
 const DAILY_QTY_MATCH_FILE = path.join(DATA_DIR, "daily-qty-match.json");
+const FREIGHT_HISTORY_FILE = path.join(DATA_DIR, "freight-compare.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -389,6 +390,181 @@ async function writeDailyQtyMatches(matches) {
      ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
     ["daily-qty-match", JSON.stringify({ matches: sliced }), Date.now()],
   );
+}
+
+function readFreightHistoryFile() {
+  try {
+    const j = JSON.parse(fs.readFileSync(FREIGHT_HISTORY_FILE, "utf8"));
+    return Array.isArray(j?.records) ? j.records : [];
+  } catch (_) {
+    return [];
+  }
+}
+function writeFreightHistoryFile(records) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${FREIGHT_HISTORY_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ records }));
+  fs.renameSync(tmp, FREIGHT_HISTORY_FILE);
+}
+function freightCarrier(name) {
+  const base = String(name || "").replace(/\.[^.]+$/, "").replace(/\s*\(\d+\)$/, "").trim();
+  if (base.includes("高鳴")) return "高鳴";
+  return base.slice(0, 24) || "貨運";
+}
+function cleanFreightRow(row, mode) {
+  if (mode === "freight") {
+    const day = Number(row?.day);
+    const crop = String(row?.crop || "").slice(0, 20);
+    if (!day || !crop) return null;
+    return {
+      day,
+      crop,
+      sales: Number(row.sales) || 0,
+      orig: Number(row.orig) || 0,
+      fixed: row.fixed == null || row.fixed === "" ? null : Number(row.fixed) || 0,
+      statusOrig: String(row.statusOrig || "").slice(0, 16),
+      statusFix: row.statusFix == null ? null : String(row.statusFix).slice(0, 16),
+    };
+  }
+  const key = String(row?.key || "").slice(0, 40);
+  if (!key) return null;
+  return {
+    key,
+    ours: Number(row.ours) || 0,
+    theirs: Number(row.theirs) || 0,
+    oursLines: Number(row.oursLines) || 0,
+    theirsLines: Number(row.theirsLines) || 0,
+    diff: Number(row.diff) || 0,
+    status: String(row.status || "").slice(0, 16),
+  };
+}
+function freightIssueCount(mode, rows, hasFixed) {
+  return rows.filter((row) => {
+    const st = mode === "generic" ? row.status : hasFixed ? row.statusFix : row.statusOrig;
+    return st && st !== "match";
+  }).length;
+}
+function cleanFreightRecord(body) {
+  const mode = body?.mode === "generic" ? "generic" : body?.mode === "freight" ? "freight" : "";
+  if (!mode || body?.ok === false) return null;
+  const rows = (Array.isArray(body.rows) ? body.rows : []).map((row) => cleanFreightRow(row, mode)).filter(Boolean).slice(0, 4000);
+  if (!rows.length) return null;
+  const salesName = String(body.salesName || "").slice(0, 80);
+  const origName = String(body.origName || "").slice(0, 120);
+  const freightFile = String(body.freightFile || origName || "").slice(0, 80);
+  const carrier = mode === "freight" ? freightCarrier(freightFile || origName) : freightCarrier(origName || freightFile);
+  const spanFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(body.spanFrom || "")) ? String(body.spanFrom) : "";
+  const spanTo = /^\d{4}-\d{2}-\d{2}$/.test(String(body.spanTo || "")) ? String(body.spanTo) : "";
+  const days = rows.map((row) => Number(row.day)).filter((n) => n > 0).sort((a, b) => a - b);
+  const dayFrom = days[0] || 0;
+  const dayTo = days[days.length - 1] || 0;
+  const hasFixed = !!body.hasFixed;
+  const id = mode === "freight"
+    ? `${carrier}|${spanFrom && spanTo ? `${spanFrom}|${spanTo}` : `d${dayFrom}-${dayTo}`}`
+    : `generic|${salesName}|${origName}`;
+  return {
+    id,
+    ok: true,
+    mode,
+    carrier,
+    salesName,
+    origName,
+    freightFile,
+    spanFrom,
+    spanTo,
+    dayFrom,
+    dayTo,
+    hasFixed,
+    fixedSheet: body.fixedSheet ? String(body.fixedSheet).slice(0, 40) : null,
+    lineCount: Number(body.lineCount) || 0,
+    skippedKg: (Array.isArray(body.skippedKg) ? body.skippedKg : []).slice(0, 80).map((row) => ({
+      day: Number(row?.day) || 0,
+      name: String(row?.name || "").slice(0, 40),
+      qty: Number(row?.qty) || 0,
+      unit: String(row?.unit || "").slice(0, 8),
+    })),
+    unmapped: (Array.isArray(body.unmapped) ? body.unmapped : []).slice(0, 80).map((row) => ({
+      day: Number(row?.day) || 0,
+      name: String(row?.name || "").slice(0, 40),
+      qty: Number(row?.qty) || 0,
+    })),
+    oursKey: String(body.oursKey || "").slice(0, 20),
+    oursQty: String(body.oursQty || "").slice(0, 20),
+    theirsKey: String(body.theirsKey || "").slice(0, 20),
+    theirsQty: String(body.theirsQty || "").slice(0, 20),
+    stats: body.stats && typeof body.stats === "object"
+      ? {
+          match: Number(body.stats.match) || 0,
+          qty: Number(body.stats.qty) || 0,
+          oursOnly: Number(body.stats.oursOnly) || 0,
+          theirsOnly: Number(body.stats.theirsOnly) || 0,
+        }
+      : null,
+    rows,
+    issues: freightIssueCount(mode, rows, hasFixed),
+    at: Date.now(),
+  };
+}
+function freightSummary(rec) {
+  return {
+    id: rec.id,
+    mode: rec.mode,
+    carrier: rec.carrier,
+    salesName: rec.salesName || "",
+    origName: rec.origName || "",
+    spanFrom: rec.spanFrom || "",
+    spanTo: rec.spanTo || "",
+    dayFrom: rec.dayFrom || 0,
+    dayTo: rec.dayTo || 0,
+    issues: Number(rec.issues) || 0,
+    at: Number(rec.at) || 0,
+  };
+}
+async function readFreightHistory() {
+  const fileRecords = readFreightHistoryFile();
+  if (!(await ensurePg())) return fileRecords;
+  const pool = pgPoolGet();
+  const found = await pool.query("SELECT doc FROM app_state WHERE id = $1", ["freight-compare"]);
+  if (found.rows.length) {
+    const doc = found.rows[0].doc || {};
+    const records = Array.isArray(doc.records) ? doc.records : [];
+    if (!records.length && fileRecords.length) {
+      await writeFreightHistory(fileRecords);
+      return fileRecords;
+    }
+    return records;
+  }
+  await pool.query(
+    "INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3) ON CONFLICT (id) DO NOTHING",
+    ["freight-compare", JSON.stringify({ records: fileRecords }), Date.now()],
+  );
+  return fileRecords;
+}
+async function writeFreightHistory(records) {
+  const sliced = records.slice(0, 60);
+  try {
+    writeFreightHistoryFile(sliced);
+  } catch (err) {
+    console.error(err);
+  }
+  if (!(await ensurePg())) return;
+  const pool = pgPoolGet();
+  await pool.query(
+    `INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
+    ["freight-compare", JSON.stringify({ records: sliced }), Date.now()],
+  );
+}
+async function saveFreightRecord(body) {
+  const rec = cleanFreightRecord(body);
+  if (!rec) return null;
+  const records = await readFreightHistory();
+  const i = records.findIndex((row) => row && row.id === rec.id);
+  if (i >= 0) records[i] = rec;
+  else records.unshift(rec);
+  records.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  await writeFreightHistory(records);
+  return rec;
 }
 
 function loadSyncBundle() {
@@ -979,13 +1155,60 @@ function handleApi(req, res) {
       });
     return true;
   }
+  if (urlPath === "/api/freight/history") {
+    const id = new URL(req.url, "http://local").searchParams.get("id") || "";
+    if (req.method === "GET") {
+      readFreightHistory()
+        .then((records) => {
+          if (id) {
+            const hit = records.find((row) => row && row.id === id);
+            if (!hit) {
+              send(res, 404, JSON.stringify({ ok: false, error: "找不到這筆紀錄" }), TYPES[".json"]);
+              return;
+            }
+            send(res, 200, JSON.stringify(hit), TYPES[".json"]);
+            return;
+          }
+          send(res, 200, JSON.stringify({ ok: true, records: records.map(freightSummary) }), TYPES[".json"]);
+        })
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, JSON.stringify({ ok: false, error: "讀取失敗" }), TYPES[".json"]);
+        });
+      return true;
+    }
+    if (req.method === "POST") {
+      readBody(req, 8e6)
+        .then(async (raw) => {
+          const saved = await saveFreightRecord(JSON.parse(raw));
+          if (!saved) throw new Error("bad");
+          send(res, 200, JSON.stringify({ ok: true, id: saved.id }), TYPES[".json"]);
+        })
+        .catch(() => send(res, 400, JSON.stringify({ ok: false, error: "存不起來" }), TYPES[".json"]));
+      return true;
+    }
+    if (req.method === "DELETE") {
+      readFreightHistory()
+        .then(async (records) => {
+          await writeFreightHistory(records.filter((row) => row && row.id !== id));
+          send(res, 200, JSON.stringify({ ok: true }), TYPES[".json"]);
+        })
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, JSON.stringify({ ok: false }), TYPES[".json"]);
+        });
+      return true;
+    }
+    send(res, 405, "Method not allowed");
+    return true;
+  }
   if (urlPath === "/api/freight/compare") {
     if (req.method !== "POST") {
       send(res, 405, "Method not allowed");
       return true;
     }
     readBody(req, 25e6)
-      .then((raw) => {
+      .then(async (raw) => {
         const body = JSON.parse(raw);
         const ours = body?.ours || body?.sales;
         const theirs = body?.theirs || body?.freight;
@@ -995,7 +1218,14 @@ function handleApi(req, res) {
           { name: String(ours.name || "進銷存.xls"), buf: Buffer.from(strip(ours.data), "base64") },
           { name: String(theirs.name || "貨運.xls"), buf: Buffer.from(strip(theirs.data), "base64") },
         );
-        send(res, 200, JSON.stringify(result), TYPES[".json"]);
+        let historyId = "";
+        try {
+          const saved = await saveFreightRecord(result);
+          historyId = saved?.id || "";
+        } catch (err) {
+          console.error(err);
+        }
+        send(res, 200, JSON.stringify({ ...result, historyId }), TYPES[".json"]);
       })
       .catch((err) => {
         const msg = String(err?.message || err);

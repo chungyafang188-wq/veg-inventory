@@ -147,6 +147,14 @@ function parseDayLabel(raw) {
   return m ? Number(m[1]) : null;
 }
 
+function rocToIso(y, m, d) {
+  const year = Number(y) < 1911 ? Number(y) + 1911 : Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 function normCrop(name) {
   return name.replace(/\s+/g, "").replace(/菜$/, "").toLowerCase();
 }
@@ -246,6 +254,7 @@ function parseSalesDetail(sheet) {
   if (nameCol < 0 || qtyCol < 0) return null;
 
   let day = null;
+  const dates = [];
   const qty = new Map();
   const skippedKg = [];
   const unmapped = [];
@@ -255,7 +264,11 @@ function parseSalesDetail(sheet) {
     const first = row[0] || "";
     if (first.startsWith("單據日期")) {
       const m = first.match(/(\d{1,3})\/(\d{1,2})\/(\d{1,2})/);
-      day = m ? Number(m[3]) : day;
+      if (m) {
+        day = Number(m[3]);
+        const iso = rocToIso(m[1], m[2], m[3]);
+        if (iso && !dates.includes(iso)) dates.push(iso);
+      }
       continue;
     }
     if (/計：|計:/.test(first) || first.startsWith("主管") || first === "H") continue;
@@ -276,7 +289,8 @@ function parseSalesDetail(sheet) {
     const key = `${day}|${group}`;
     qty.set(key, (qty.get(key) || 0) + amount);
   }
-  return { qty, skippedKg, unmapped, lineCount };
+  dates.sort();
+  return { qty, skippedKg, unmapped, lineCount, dates };
 }
 
 function statusOf(sales, freight) {
@@ -448,12 +462,15 @@ function runCompare(oursBook, theirsBook) {
   const job = pickRoles(oursBook, theirsBook);
   if (job) {
     const rows = compareSalesToFreight(job.sales, job.orig, job.fixed);
+    const dates = [...(job.sales.dates || [])].sort();
     return {
       ok: true,
       mode: "freight",
       salesName: job.salesName,
       origName: job.origName,
       freightFile: job.freightFile,
+      spanFrom: dates[0] || "",
+      spanTo: dates[dates.length - 1] || "",
       hasFixed: Boolean(job.fixed),
       fixedSheet: job.fixed?.sheetName || null,
       lineCount: job.sales.lineCount,
@@ -477,6 +494,8 @@ function runCompare(oursBook, theirsBook) {
     mode: "generic",
     salesName: oursBook.fileName,
     origName: theirsBook.fileName,
+    spanFrom: "",
+    spanTo: "",
     oursKey,
     oursQty,
     theirsKey,

@@ -10,7 +10,7 @@ const CAPTCHA_URL = "https://amis.afa.gov.tw/CreateValidationCodeImage.aspx";
 
 const HOUSES = {
   xinfeng: { mode: "supply", subs: ["493", "930", "168"], envUser: "AMIS_XINFENG_USER", envPass: "AMIS_XINFENG_PASS", loginUrl: LOGIN_URL },
-  yongfang: { mode: "sub", subs: ["050", "168"], supplyNo: "N99833", loginUrl: LOGIN2_URL },
+  yongfang: { mode: "sub", subs: ["050", "066", "168", "070"], supplyNo: "N99833", loginUrl: LOGIN2_URL },
 };
 
 const jars = new Map();
@@ -99,12 +99,13 @@ async function requestFollow(method, urlStr, jar, opts, hops = 0) {
   return res;
 }
 
-function decodeText(buf) {
-  return buf.toString("utf8");
-}
-
 function formFields(html) {
   const fields = {};
+  const read = (raw) => String(raw || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
   for (const m of html.matchAll(/<input\b([^>]*)>/gi)) {
     const tag = m[1];
     const name = (tag.match(/\bname="([^"]*)"/i) || [])[1];
@@ -113,22 +114,59 @@ function formFields(html) {
     if ((type === "checkbox" || type === "radio") && !/\bchecked\b/i.test(tag)) continue;
     if (type === "submit" || type === "button" || type === "image") continue;
     const value = (tag.match(/\bvalue="([^"]*)"/i) || [])[1] || "";
-    fields[name] = value
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">");
+    fields[name] = read(value);
+  }
+  for (const m of html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
+    const name = (m[1].match(/\bname="([^"]*)"/i) || [])[1];
+    if (!name) continue;
+    const selected = m[2].match(/<option\b[^>]*\bselected\b[^>]*value="([^"]*)"/i)
+      || m[2].match(/<option\b[^>]*value="([^"]*)"/i);
+    fields[name] = read(selected ? selected[1] : "");
   }
   return fields;
 }
 
+function pageSizeOnForm(html) {
+  const name = "ctl00$contentPlaceHolder$txtPerPageRows";
+  const block = html.match(new RegExp(`<select\\b[^>]*name="${name.replace(/\$/g, "\\$")}"[\\s\\S]*?</select>`, "i"));
+  if (block) {
+    const values = [...block[0].matchAll(/value="(\d+)"/gi)].map((m) => m[1]);
+    const selected = block[0].match(/<option\b[^>]*\bselected\b[^>]*value="(\d+)"/i);
+    if (values.includes("200")) return "200";
+    if (selected) return selected[1];
+    if (values.includes("60")) return "60";
+    return values.length ? values[values.length - 1] : "200";
+  }
+  return "200";
+}
+
+function isServerError(html) {
+  return /處理您的要求時發生錯誤|Server Error|Runtime Error/i.test(String(html || ""));
+}
+
 function encodeForm(fields) {
-  return new URLSearchParams(fields).toString();
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(fields)) {
+    const list = Array.isArray(value) ? value : [value];
+    for (const item of list) params.append(key, item == null ? "" : String(item));
+  }
+  return params.toString();
 }
 
 function alertText(html) {
-  const m = html.match(/alert\(\s*'([^']*)'/);
-  return m ? m[1] : "";
+  const m = html.match(/alert\(\s*['"]([^'"]*)['"]/);
+  if (m) return m[1];
+  return html.includes("查無") ? "查無資料" : "";
+}
+
+function decodeText(buf) {
+  const utf = buf.toString("utf8");
+  if (utf.includes("品名代號") || utf.includes("查無") || utf.includes("txtSupply")) return utf;
+  try {
+    const big = new TextDecoder("big5").decode(buf);
+    if (big.includes("品名") || big.includes("查無")) return big;
+  } catch (_) {}
+  return utf;
 }
 
 function isLoginPage(html) {
@@ -226,6 +264,7 @@ function parseAuctionRows(html) {
   const clean = html.replace(/<script[\s\S]*?<\/script>/gi, "");
   const rows = [];
   let on = false;
+  let heads = [];
   for (const m of clean.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)) {
     const cells = [...m[0].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
       c[1]
@@ -238,35 +277,49 @@ function parseAuctionRows(html) {
     );
     if (cells.some((c) => c.includes("品名代號"))) {
       on = true;
+      heads = cells;
       continue;
     }
     if (!on || cells.length < 8) continue;
-    if (!/^\d{2,3}\/\d{1,2}\/\d{1,2}$/.test(cells[0])) continue;
-    const qty = Number(String(cells[7]).replace(/,/g, "")) || 0;
+    const at = (re, fallback) => {
+      const i = heads.findIndex((h) => re.test(String(h || "").replace(/\s+/g, "")));
+      return i >= 0 ? i : fallback;
+    };
+    const dateIndex = at(/日期/, 0);
+    if (!/^\d{2,3}\/\d{1,2}\/\d{1,2}$/.test(cells[dateIndex] || "")) continue;
+    const num = (i) => (i >= 0 ? Number(String(cells[i] || "").replace(/,/g, "")) || 0 : 0);
+    const qty = num(at(/件數/, 7));
     if (!qty) continue;
+    const price = num(at(/單價/, -1));
+    const wt = num(at(/淨重|重量/, -1));
+    const amtIndex = heads.findIndex((h) => /總價|金額/.test(h) && !/手續|運費|實拿/.test(h));
+    let amt = num(amtIndex);
+    if (!amt && price && wt) amt = Math.round(price * wt * 100) / 100;
+    const nameIndex = heads.findIndex((h) => /品名/.test(h) && !/代號/.test(h));
+    const subIndex = at(/小代號/, 2);
+    const mkIndex = at(/市場/, 1);
     rows.push({
-      mk: normMarket(cells[1]),
-      sub: normSub(cells[2]),
-      sku: cells[4],
-      name: cells[5],
+      mk: normMarket(cells[mkIndex] || ""),
+      sub: normSub(cells[subIndex] || ""),
+      sku: cells[at(/品名代號/, 4)] || "",
+      name: cells[nameIndex >= 0 ? nameIndex : 5] || "",
       qty,
+      price,
+      wt,
+      amt,
     });
   }
   return rows;
 }
 
-async function queryBill(key, billDate, sub) {
-  const jar = jars.get(key);
-  if (!jar) return { auth: false };
-  const page = await requestFollow("GET", QUERY_URL, jar);
-  const html = decodeText(page.body);
-  if (isLoginPage(html)) return { auth: false };
+async function postBill(jar, html, { billDate, sub, supplyNo }) {
   const fields = formFields(html);
   const roc = rocDate(billDate);
   fields["ctl00$contentPlaceHolder$txtStartDate"] = roc;
   fields["ctl00$contentPlaceHolder$txtEndDate"] = roc;
+  if (supplyNo) fields["ctl00$contentPlaceHolder$txtSupplyNo"] = supplyNo;
   fields["ctl00$contentPlaceHolder$txtSupplySub"] = sub ? normSub(sub) : "";
-  fields["ctl00$contentPlaceHolder$txtPerPageRows"] = "200";
+  fields["ctl00$contentPlaceHolder$txtPerPageRows"] = pageSizeOnForm(html);
   fields["ctl00$contentPlaceHolder$ucCoopVegFruitMarket$radAllMarket"] = "radAllMarket";
   fields.__EVENTTARGET = "ctl00$contentPlaceHolder$btnQuery";
   fields.__EVENTARGUMENT = "";
@@ -280,11 +333,42 @@ async function queryBill(key, billDate, sub) {
     },
     body,
   });
-  const out = decodeText(res.body);
+  return { html: decodeText(res.body), pageSize: fields["ctl00$contentPlaceHolder$txtPerPageRows"] };
+}
+
+async function queryBill(key, billDate, sub, supplyNo) {
+  const jar = jars.get(key);
+  if (!jar) return { auth: false };
+  const page = await requestFollow("GET", QUERY_URL, jar);
+  const html = decodeText(page.body);
+  if (isLoginPage(html)) return { auth: false };
+  let posted = await postBill(jar, html, { billDate, sub, supplyNo });
+  if (isServerError(posted.html)) {
+    const again = await requestFollow("GET", QUERY_URL, jar);
+    const html2 = decodeText(again.body);
+    if (!isLoginPage(html2)) posted = await postBill(jar, html2, { billDate, sub, supplyNo });
+  }
+  const out = posted.html;
   if (isLoginPage(out)) return { auth: false };
+  if (isServerError(out)) return { auth: false };
   const note = alertText(out);
-  if (note && note.includes("查無")) return { auth: true, rows: [], note };
-  return { auth: true, rows: parseAuctionRows(out), note };
+  const sawTable = out.includes("品名代號");
+  const rows = note && note.includes("查無") ? [] : parseAuctionRows(out);
+  if (!rows.length && !note.includes("查無")) return { auth: false };
+  if (!rows.length) {
+    try {
+      const text = out.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 500);
+      fs.writeFileSync(path.join(__dirname, "data", "tmp-amis-last.txt"), [
+        new Date().toISOString(),
+        `sub=${sub || ""}`,
+        `page=${posted.pageSize}`,
+        `sawTable=${sawTable}`,
+        `note=${note || ""}`,
+        text,
+      ].join("\n"), "utf8");
+    } catch (_) {}
+  }
+  return { auth: true, rows, note, sawTable };
 }
 
 async function querySupply(house, account, billDate, captcha) {
@@ -297,37 +381,48 @@ async function querySupply(house, account, billDate, captcha) {
   let queried = jars.has(house) ? await queryBill(house, billDate, "") : { auth: false };
   if (!queried.auth) {
     jars.delete(house);
-    if (!captcha) return beginLogin(house, account);
-    return { ok: false, error: "登入後仍讀不到行情，請再試一次。" };
+    return beginLogin(house, account);
   }
   const allow = new Set(account.subs.map(normSub));
   const rows = queried.rows.filter((r) => allow.has(normSub(r.sub)));
-  return { ok: true, billDate, subs: account.subs, rows, note: queried.note || "" };
+  return { ok: true, billDate, subs: account.subs, rows, note: queried.note || "", sawTable: !!queried.sawTable };
 }
 
 async function querySubs(house, account, billDate, captcha) {
   const rows = [];
   const notes = [];
+  let sawTable = false;
   for (const sub of account.subs) {
     const key = `${house}:${sub}`;
     const subAccount = { ...account, sub, pass: sub };
-    let queried = jars.has(key) ? await queryBill(key, billDate, sub) : { auth: false };
+    let queried = jars.has(key) ? await queryBill(key, billDate, sub, account.user) : { auth: false };
     if (!queried.auth) {
       jars.delete(key);
       if (captcha && pending.has(key)) {
         const failed = await finishLogin(key, captcha, subAccount);
         if (failed) return failed;
-        queried = await queryBill(key, billDate, sub);
+        queried = await queryBill(key, billDate, sub, account.user);
       } else {
         return beginLogin(key, subAccount);
       }
     }
-    if (!queried.auth) return { ok: false, error: `小代號 ${sub} 登入後仍讀不到行情，請再試一次。` };
+    if (!queried.auth) {
+      jars.delete(key);
+      return beginLogin(key, subAccount);
+    }
+    if (queried.sawTable) sawTable = true;
     if (queried.note) notes.push(queried.note);
     const code = normSub(sub);
-    rows.push(...(queried.rows || []).filter((r) => normSub(r.sub) === code));
+    rows.push(
+      ...(queried.rows || [])
+        .filter((r) => {
+          const got = normSub(r.sub);
+          return !got || got === code;
+        })
+        .map((r) => ({ ...r, sub: code })),
+    );
   }
-  return { ok: true, billDate, subs: account.subs, rows, note: notes.filter(Boolean).join(" ") };
+  return { ok: true, billDate, subs: account.subs, rows, note: notes.filter(Boolean).join(" "), sawTable };
 }
 
 async function auctionQuery({ house, shipDate, captcha, dataDir }) {

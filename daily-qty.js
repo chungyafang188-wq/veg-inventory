@@ -3407,9 +3407,10 @@
       const missN = matchRows.filter((r) => r.h && !r.p).length;
       const extraN = matchRows.filter((r) => !r.h && r.p).length;
       const matchBits = [
-        sameN ? `${sameN} 筆一樣${swapOk ? `，其中 ${swapOk} 筆是代號對調` : ""}` : "",
+        swapOk ? `${swapOk} 筆代號對調，件數相同` : "",
+        sameN > swapOk ? `${sameN - swapOk} 筆一樣` : "",
         diffN ? `${diffN} 筆件數不同` : "",
-        missN ? `${missN} 筆我們有寄、帳單沒有` : "",
+        missN ? `${missN} 筆我們有、拍賣沒有` : "",
         extraN ? `${extraN} 筆帳單有、我們沒寄` : "",
       ].filter(Boolean);
       const totals = qtyTotals(matchRows);
@@ -3473,7 +3474,7 @@
       const matchTable = shownMatch.length
         ? `<section class="dq-match-result">
             <h3>件數回對 <button type="button" class="ghost dq-help" data-dq-help-open>說明</button></h3>
-            <p class="dq-sum">${esc(matchBits.join("，"))}</p>
+            <p class="dq-bits">${matchBits.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
             <p class="dq-confirmed">${esc(statusLine)}</p>
             ${actRow}
             ${gapPreview}
@@ -3547,8 +3548,7 @@
               <button type="button" class="ghost" id="dq-run-paste">改用貼上的明細</button>
             </div>
             </div>` : ""}
-            ${matchTable}
-            ${priceSummaryHtml()}
+            ${matchTable || priceSummaryHtml() ? `<div class="dq-result-grid">${matchTable}${priceSummaryHtml()}</div>` : ""}
           </div>`
         : `<p class="dq-empty">還沒有已送出的單可以回對。請先在鍵單確認儲存。</p><p class="dq-msg" id="dq-msg">${esc(msg)}</p>`;
     } else {

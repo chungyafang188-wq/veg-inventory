@@ -876,6 +876,15 @@ function handleApi(req, res) {
           if (typeof body.note === "string") rec.note = body.note.slice(0, 200);
           if (typeof body.inner === "string") rec.inner = body.inner.slice(0, 200);
           if (typeof body.code === "string") rec.code = body.code.slice(0, 20);
+          if (body.voided === true) rec.voided = true;
+          if (body.voided === false) rec.voided = false;
+          if (Array.isArray(body.log)) {
+            rec.log = body.log.slice(-20).map((e) => ({
+              at: Number(e && e.at) || Date.now(),
+              kind: String((e && e.kind) || "").slice(0, 8),
+              text: String((e && e.text) || "").slice(0, 180),
+            })).filter((e) => e.kind);
+          }
           const sessions = await readDailyQtySessions();
           const i = sessions.findIndex((s) => s && s.id === id);
           const prev = i >= 0 ? sessions[i] : null;

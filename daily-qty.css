@@ -601,6 +601,9 @@ body.layout-web.dq-wide .app-head {
 .dq-day-match { width: auto; margin: 0; min-height: 2rem; padding: 0.2rem 0.75rem; white-space: nowrap; }
 .dq-price { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid #d5e4da; }
 .dq-price h3, .dq-price h4 { margin: 0 0 0.35rem; }
+.dq-price-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0 0 0.35rem; }
+.dq-price-head h3 { margin: 0; }
+.dq-price-head button { width: auto; margin: 0; min-height: 2.2rem; padding: 0.15rem 0.75rem; background: #166534; color: #fff; border-color: #166534; }
 .dq-price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.8rem; align-items: start; }
 .dq-q { display: grid; gap: 0.25rem; margin: 0; font-weight: 700; min-width: 16rem; }
 .dq-seq { vertical-align: top; }
@@ -638,7 +641,9 @@ body.layout-web.dq-wide .app-head {
 .dq-captcha input { width: 4.6rem; min-height: 2.4rem; margin: 0; flex: 1 1 4.6rem; min-width: 3.4rem; }
 .dq-submk { color: #5a6a62; font-size: 0.82rem; font-weight: 500; }
 .dq-alt { margin-top: 0.2rem; color: #7a3412; font-size: 0.82rem; font-weight: 700; }
-.dq-grid tfoot td { font-weight: 800; background: #f4f7f5; }
+.dq-sheet tr.is-void td:not(.dq-act) { color: #9a1c1c; text-decoration: line-through; text-decoration-color: #c81e1e; text-decoration-thickness: 2px; }
+.dq-sheet tr.is-void .dq-seq-btn { color: #9a1c1c; text-decoration: line-through; text-decoration-color: #c81e1e; }
+.dq-sheet tr.dq-log td { text-decoration: none; color: #7a1212; font-weight: 800; font-size: 0.82rem; background: #fff6f6; white-space: normal; line-height: 1.45; }
 .dq-none { color: #5c6b62; }
 .dq-list { display: grid; gap: 0.6rem; }
 .dq-card {

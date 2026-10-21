@@ -545,6 +545,8 @@
         saved: !!s.saved,
         seq: s.seq || "",
         at: Number(s.at) || 0,
+        voided: !!s.voided,
+        log: Array.isArray(s.log) ? s.log : [],
       }));
       if (!slips.some((s) => !s.saved)) slips.push(freshSlip());
       applySlip(Math.min(Number(j.cur) || 0, slips.length - 1));
@@ -576,6 +578,23 @@
     const dt = new Date(y || 2026, (m || 1) - 1 + dir, 1);
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
   }
+  function logClock(at) {
+    const d = new Date(Number(at) || Date.now());
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+  function pushSlipLog(s, kind, text) {
+    if (!s) return;
+    if (!Array.isArray(s.log)) s.log = [];
+    s.log.push({ at: Date.now(), kind, text: String(text || "").slice(0, 180) });
+    if (s.log.length > 20) s.log.splice(0, s.log.length - 20);
+  }
+  function slipBrief(s) {
+    const bits = slipBits(s);
+    if (!bits.blocks.length) return "沒有件數";
+    return bits.blocks
+      .map((b) => `${String(b.label || "").replace(/\n/g, " ")} ${b.markets.map((m) => `${m.mk}${m.qty}`).join("、")}`)
+      .join("；");
+  }
   function catalogRows() {
     const rows = [];
     for (const s of slips) {
@@ -595,12 +614,24 @@
             mk: m.mk,
             qty: m.qty,
             lead: first,
+            voided: !!s.voided,
+            log: Array.isArray(s.log) ? s.log : [],
           });
           first = false;
         }
       }
     }
     return rows;
+  }
+  function orderSlipRows(rows) {
+    const map = new Map();
+    for (const r of rows) {
+      if (!map.has(r.id)) map.set(r.id, []);
+      map.get(r.id).push(r);
+    }
+    return [...map.values()]
+      .sort((a, b) => Number(!!a[0].voided) - Number(!!b[0].voided))
+      .flat();
   }
   function rowHit(r, q) {
     const words = String(q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -628,16 +659,40 @@
         if (!seen.has(r.id)) {
           seen.add(r.id);
           seqCell = `<td class="num dq-seq" rowspan="${span[r.id]}"><button type="button" class="dq-seq-btn" data-dq-seq="${esc(r.id)}" title="點一下修正單號">${esc(r.seq)}</button></td>`;
-          if (withAct) {
-            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-fix="${esc(r.id)}">修正</button></td>`;
+          if (withAct && !r.voided) {
+            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-fix="${esc(r.id)}">修正</button><button type="button" class="ghost" data-dq-void="${esc(r.id)}">刪除</button></td>`;
+          } else if (withAct) {
+            act = `<td class="dq-act" rowspan="${span[r.id]}">已刪除</td>`;
           }
         }
-        return `<tr>${showDate ? `<td>${esc(r.date)}</td>` : ""}${seqCell}<td>${esc(r.house)}</td><td>${esc(r.item).replace(/\n/g, "<br>")}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
+        return `<tr class="${r.voided ? "is-void" : ""}">${showDate ? `<td>${esc(r.date)}</td>` : ""}${seqCell}<td>${esc(r.house)}</td><td>${esc(r.item).replace(/\n/g, "<br>")}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
       })
       .join("");
-    const total = rows.reduce((n, r) => n + Number(r.qty || 0), 0);
+    const logs = [];
+    const logged = new Set();
+    rows.forEach((r) => {
+      if (logged.has(r.id) || !Array.isArray(r.log) || !r.log.length) return;
+      logged.add(r.id);
+      const text = r.log.map((e) => `${esc(e.kind)} ${esc(logClock(e.at))}${e.text ? "　" + esc(e.text) : ""}`).join("<br>");
+      logs.push({ id: r.id, html: `<tr class="dq-log"><td colspan="${cols}">${text}</td></tr>` });
+    });
+    const withLogs = [];
+    const placed = new Set();
+    const parts = body.split("</tr>");
+    rows.forEach((r, i) => {
+      withLogs.push(`${parts[i]}</tr>`);
+      const next = rows[i + 1];
+      if ((!next || next.id !== r.id) && !placed.has(r.id)) {
+        const hit = logs.find((x) => x.id === r.id);
+        if (hit) {
+          withLogs.push(hit.html);
+          placed.add(r.id);
+        }
+      }
+    });
+    const total = rows.reduce((n, r) => n + (r.voided ? 0 : Number(r.qty || 0)), 0);
     const lead = showDate ? 5 : 4;
-    return `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td colspan="${lead}">合計</td><td class="num">${total}</td>${withAct ? "<td></td>" : ""}</tr></tfoot></table></div>`;
+    return `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr>${head}</tr></thead><tbody>${withLogs.join("")}</tbody><tfoot><tr><td colspan="${lead}">合計</td><td class="num">${total}</td>${withAct ? "<td></td>" : ""}</tr></tfoot></table></div>`;
   }
   let listEditId = "";
   let listEdit = null;
@@ -648,7 +703,7 @@
   }
   function beginListEdit(id) {
     const s = slips.find((x) => x.id === id);
-    if (!s || !s.saved) return;
+    if (!s || !s.saved || s.voided) return;
     listEditId = s.id;
     listEdit = {
       lines: JSON.parse(JSON.stringify(s.lines && s.lines.length ? s.lines : [freshLine()])),
@@ -714,6 +769,9 @@
     readListEditForm();
     const s = slips.find((x) => x.id === listEditId);
     if (!s || !listEdit) return;
+    const before = slipBrief(s);
+    const beforeNote = String(s.note || "");
+    const beforeInner = String(s.inner || "");
     listEdit.lines.forEach((line) => {
       applyItemText(line, line._itemText);
       delete line._itemText;
@@ -721,6 +779,12 @@
     s.lines = normalizeLines(listEdit.lines);
     s.note = String(listEdit.note || "");
     s.inner = String(listEdit.inner || "");
+    const after = slipBrief(s);
+    const bits = [];
+    if (before !== after) bits.push(`原本 ${before}`);
+    if (beforeNote !== s.note) bits.push(`收貨 ${beforeNote || "空白"} → ${s.note || "空白"}`);
+    if (beforeInner !== s.inner) bits.push(`內部 ${beforeInner || "空白"} → ${s.inner || "空白"}`);
+    if (bits.length) pushSlipLog(s, "修正", bits.join("；"));
     s.at = Date.now();
     await saveSlip(s);
     listEditId = "";
@@ -1058,6 +1122,8 @@
       seq: slipNo(s),
       seqSet: !!(opts && opts.seqSet),
       saved: !!s.saved,
+      voided: !!s.voided,
+      log: Array.isArray(s.log) ? s.log.slice(-20) : [],
     };
     s.at = payload.at;
     try {
@@ -1095,6 +1161,8 @@
   let noticePick = new Set();
   let gapPreviewUrl = "";
   let gapNote = "";
+  let pricePreviewUrl = "";
+  let priceNote = "";
   function loadConfirms() {
     try {
       const j = JSON.parse(localStorage.getItem(CONFIRM_KEY) || "[]");
@@ -1230,7 +1298,7 @@
     } catch (_) {}
   }
   function slipsForMatch(id, day) {
-    return slips.filter((s) => s.saved && s.house === id && s.shipDate === day);
+    return slips.filter((s) => s.saved && !s.voided && s.house === id && s.shipDate === day);
   }
   function houseShipList(id, day) {
     const prevHouse = house;
@@ -1614,19 +1682,171 @@
     const byMarket = priceGroups(rows, true);
     const missing = rows.every((r) => !Number(r.amt));
     return `<section class="dq-price">
-      <h3>價格彙整</h3>
+      <div class="dq-price-head">
+        <h3>${esc(houseLab(matchHouse) || "拍賣")} 價格彙整</h3>
+        <button type="button" id="dq-price-copy">複製貼上</button>
+      </div>
       ${when ? `<p class="dq-match-note">${esc(when.replace(/。$/, ""))}</p>` : ""}
       ${missing ? `<p class="dq-match-note">這次行情沒有讀到金額，先列出件數。</p>` : ""}
       <div class="dq-price-grid">
         ${priceTable("品項", byItem, false)}
         ${priceTable("品項 × 市場", byMarket, true)}
       </div>
+      <div class="dq-gap-preview" id="dq-price-preview"${pricePreviewUrl ? "" : " hidden"}>${pricePreviewUrl ? `<img src="${esc(pricePreviewUrl)}" alt="拍賣單價圖片" /><p>${esc(priceNote)}</p>` : ""}</div>
     </section>`;
+  }
+  function pricePngBlob(byItem, byMarket) {
+    const font = '"Microsoft JhengHei","Noto Sans TC",sans-serif';
+    const width = 880;
+    const pad = 24;
+    const scale = 2;
+    const rowH = 38;
+    const house = houseLab(matchHouse) || "拍賣";
+    const cellsOf = (r, withMarket) => {
+      const avg = r.qty && r.hasAmt ? numText(r.amt / r.qty) : "";
+      const base = [r.item, numText(r.qty), r.hasAmt ? numText(r.amt) : "", avg];
+      return withMarket ? [r.item, r.mk, numText(r.qty), r.hasAmt ? numText(r.amt) : "", avg] : base;
+    };
+    const footOf = (rows, withMarket) => {
+      const qty = rows.reduce((n, r) => n + r.qty, 0);
+      const hasAmt = rows.some((r) => r.hasAmt);
+      const amt = rows.reduce((n, r) => n + (r.hasAmt ? r.amt : 0), 0);
+      const avg = qty && hasAmt ? numText(amt / qty) : "";
+      const lead = `合計 ${rows.length} 項`;
+      return withMarket ? [lead, "", numText(qty), hasAmt ? numText(amt) : "", avg] : [lead, numText(qty), hasAmt ? numText(amt) : "", avg];
+    };
+    const sections = [
+      { title: "品項", heads: ["品項", "件數", "金額", "均價"], fixed: [0, 100, 150, 120], rows: byItem.map((r) => cellsOf(r, false)), foot: footOf(byItem, false) },
+      { title: "品項 × 市場", heads: ["品項", "市場", "件數", "金額", "均價"], fixed: [0, 110, 90, 140, 110], rows: byMarket.map((r) => cellsOf(r, true)), foot: footOf(byMarket, true) },
+    ];
+    const height = pad + 86 + sections.reduce((n, sec) => n + 34 + rowH * (1 + sec.rows.length + 1) + 18, 0) + pad;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "#f4faf6";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#14633a";
+    ctx.fillRect(0, 0, width, 8);
+    ctx.textBaseline = "top";
+    ctx.font = `800 32px ${font}`;
+    ctx.fillText(`${house}　拍賣單價`, pad, pad + 8);
+    ctx.fillStyle = "#3d5348";
+    ctx.font = `600 18px ${font}`;
+    ctx.fillText(`寄送日 ${matchDay || ""}${matchBillDate ? `　行情日 ${matchBillDate}` : ""}`, pad, pad + 48);
+    const drawTable = (sec, top) => {
+      const inner = width - pad * 2;
+      const fixed = sec.fixed.reduce((n, w) => n + w, 0);
+      const cols = sec.heads.map((head, i) => ({ head, w: sec.fixed[i] || inner - fixed }));
+      ctx.fillStyle = "#14633a";
+      ctx.font = `800 20px ${font}`;
+      ctx.fillText(sec.title, pad, top);
+      let y = top + 30;
+      const paintRow = (values, kind) => {
+        ctx.fillStyle = kind === "head" ? "#e7f6ee" : kind === "foot" ? "#f4f7f5" : "#fff";
+        ctx.fillRect(pad, y, inner, rowH);
+        ctx.strokeStyle = "#d5e4da";
+        ctx.strokeRect(pad, y, inner, rowH);
+        let x = pad;
+        values.forEach((value, i) => {
+          const col = cols[i];
+          const num = i > 0 && !(sec.heads[i] === "市場");
+          ctx.fillStyle = "#1c2b24";
+          ctx.font = `${kind === "body" ? 600 : 800} 18px ${font}`;
+          const text = String(value || "");
+          const tw = ctx.measureText(text).width;
+          const tx = num ? x + col.w - 12 - tw : x + 12;
+          ctx.fillText(text, tx, y + 9);
+          x += col.w;
+        });
+        y += rowH;
+      };
+      paintRow(sec.heads, "head");
+      sec.rows.forEach((row) => paintRow(row, "body"));
+      paintRow(sec.foot, "foot");
+      return y + 18;
+    };
+    let y = pad + 86;
+    sections.forEach((sec) => {
+      y = drawTable(sec, y);
+    });
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+  }
+  function showPricePreview() {
+    const host = document.getElementById("dq-price-preview");
+    const alert = document.getElementById("dq-msg");
+    if (alert) alert.textContent = priceNote;
+    if (!host) return false;
+    host.hidden = false;
+    host.innerHTML = `<img src="${esc(pricePreviewUrl)}" alt="拍賣單價圖片" /><p>${esc(priceNote)}</p>`;
+    host.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+  async function copyPriceImage() {
+    const rows = matchPriceRows || [];
+    if (!rows.length) {
+      msg = "還沒有拍賣單價可以複製。";
+      const el = document.getElementById("dq-msg");
+      if (el) el.textContent = msg;
+      return;
+    }
+    let blob;
+    try {
+      blob = await pricePngBlob(priceGroups(rows, false), priceGroups(rows, true));
+    } catch (_) {
+      blob = null;
+    }
+    if (!blob) {
+      msg = "做成圖片失敗。";
+      const el = document.getElementById("dq-msg");
+      if (el) el.textContent = msg;
+      return;
+    }
+    const house = houseLab(matchHouse) || "拍賣";
+    const name = `${house}_${matchDay || "寄貨"}_拍賣單價.png`.replace(/[\\/:*?"<>|\s]+/g, "_");
+    let copied = false;
+    let shared = false;
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        copied = true;
+      }
+    } catch (_) {}
+    if (!copied && navigator.canShare) {
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `${house} 拍賣單價` });
+          shared = true;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+        }
+      }
+    }
+    if (!copied && !shared) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    if (pricePreviewUrl) URL.revokeObjectURL(pricePreviewUrl);
+    pricePreviewUrl = URL.createObjectURL(blob);
+    priceNote = copied
+      ? "已複製單價圖片。到 LINE 貼上。若貼不上，長按這張圖再複製。"
+      : shared
+        ? "請在分享裡選 LINE。"
+        : "已存成圖片檔。也可以長按這張圖複製，再貼到 LINE。";
+    msg = priceNote;
+    if (!showPricePreview()) renderDailyQty();
   }
   function housesOnDay(day) {
     const ids = [];
     for (const s of slips) {
-      if (!s.saved || s.shipDate !== day || !s.house) continue;
+      if (!s.saved || s.voided || s.shipDate !== day || !s.house) continue;
       if (!ids.includes(s.house)) ids.push(s.house);
     }
     return ids;
@@ -2643,6 +2863,7 @@
             renderDailyQty();
             return;
           }
+          pushSlipLog(s, "修正", `單號 ${slipNo(s) || "空白"} → ${next || "空白"}`);
           s.seq = next;
           s.at = Date.now();
           saveSlip(s, { seqSet: true });
@@ -2807,6 +3028,19 @@
         renderDailyQty();
         return;
       }
+      if (e.target.closest("[data-dq-void]")) {
+        const id = e.target.closest("[data-dq-void]").dataset.dqVoid || "";
+        const s = slips.find((x) => x.id === id && x.saved && !x.voided);
+        if (!s) return;
+        if (!window.confirm("刪除後這張單會用紅線畫掉，移到最下面，不會從資料消失。")) return;
+        s.voided = true;
+        pushSlipLog(s, "刪除", slipBrief(s));
+        s.at = Date.now();
+        saveSlip(s);
+        msg = "已刪除，紅線留在最下面。";
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("[data-dq-match]")) {
         syncCurrent();
         const picked = slips.find((x) => x.id === (e.target.closest("[data-dq-match]").dataset.dqMatch || ""));
@@ -2939,6 +3173,10 @@
       }
       if (e.target.closest("#dq-gap-img")) {
         copyGapImage();
+        return;
+      }
+      if (e.target.closest("#dq-price-copy")) {
+        copyPriceImage();
         return;
       }
       if (e.target.closest("[data-dq-qty-clear]")) {
@@ -3329,7 +3567,7 @@
       if (!listMonth) listMonth = listDay.slice(0, 7);
       const all = catalogRows();
       const q = String(listQ || "").trim();
-      const shown = q ? all.filter((r) => rowHit(r, q)) : all.filter((r) => r.date === listDay);
+      const shown = orderSlipRows(q ? all.filter((r) => rowHit(r, q)) : all.filter((r) => r.date === listDay));
       const [, mm, dd] = listDay.split("-");
       const title = q ? "搜尋結果" : `${Number(mm)}/${Number(dd)} 入單資料`;
       const dayHouses = q ? [] : housesOnDay(listDay);
@@ -3629,6 +3867,8 @@
       seq: rec.seq || "",
       saved: rec.saved !== false,
       at: Number(rec.at) || 0,
+      voided: !!rec.voided,
+      log: Array.isArray(rec.log) ? rec.log : [],
     };
   }
   let pulling = false;

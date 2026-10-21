@@ -1078,6 +1078,7 @@
   let matchRows = [];
   let matchPriceRows = [];
   let matchCaptcha = "";
+  let matchCaptchaSub = "";
   let matchBillDate = "";
   let matchSource = "";
   let matchPhotoUrl = "";
@@ -1088,6 +1089,12 @@
   let matchHelp = false;
   let matchFold = "";
   let matchConfirms = [];
+  let savedMatches = [];
+  let matchPulling = false;
+  let noticeSig = "";
+  let noticePick = new Set();
+  let gapPreviewUrl = "";
+  let gapNote = "";
   function loadConfirms() {
     try {
       const j = JSON.parse(localStorage.getItem(CONFIRM_KEY) || "[]");
@@ -1109,26 +1116,28 @@
   }
   function confirmHit(totals) {
     const hit = matchConfirms.find((c) => c.house === matchHouse && c.day === matchDay);
-    return !!(hit && hit.h === totals.h && hit.p === totals.p && totals.h > 0 && totals.h === totals.p);
+    return !!(hit && hit.h === totals.h && hit.p === totals.p && (totals.h > 0 || totals.p > 0));
   }
   function saveQtyConfirm() {
     const totals = qtyTotals(matchRows);
-    if (!(totals.h > 0 && totals.h === totals.p)) {
-      msg = "兩邊總件數還不一樣，先不要確認。";
+    if (!(totals.h > 0 || totals.p > 0)) {
+      msg = "還沒有件數可以確認。";
       renderDailyQty();
       return;
     }
     matchConfirms = matchConfirms.filter((c) => !(c.house === matchHouse && c.day === matchDay));
     matchConfirms.push({ house: matchHouse, day: matchDay, h: totals.h, p: totals.p, at: Date.now() });
     saveConfirms();
-    msg = `已確認這天總件數 ${totals.h} 相同。代號對調不再列入落差。`;
+    pushMatch();
+    msg = "";
     renderDailyQty();
   }
   function clearQtyConfirm() {
     matchConfirms = matchConfirms.filter((c) => !(c.house === matchHouse && c.day === matchDay));
     saveConfirms();
+    pushMatch();
     matchFold = matchSource ? "run" : "";
-    msg = "已取消這天的總數確認。";
+    msg = "";
     renderDailyQty();
   }
   function loadMatchStore() {
@@ -1143,7 +1152,69 @@
       matchSource = j.source || "";
       matchBillDate = j.billDate || "";
       matchFold = matchSource ? "run" : "";
+      if (matchSource === "auction" && matchPriceRows.length && matchHouse && matchDay) {
+        matchRows = compareRegions(matchHouse, matchDay, matchPriceRows);
+      }
     } catch (_) {}
+  }
+  function savedMatchFor(houseId, day) {
+    return savedMatches.find((m) => m && m.house === houseId && m.day === day && Array.isArray(m.prices) && m.prices.length);
+  }
+  function tryApplySaved() {
+    if (matchCaptcha || matchSource === "paste") return false;
+    if (matchSource === "auction" && matchPriceRows.length) return false;
+    const hit = savedMatchFor(matchHouse, matchDay);
+    if (!hit) return false;
+    matchPriceRows = hit.prices;
+    matchBillDate = hit.billDate || "";
+    matchSource = "auction";
+    matchRows = compareRegions(matchHouse, matchDay, matchPriceRows);
+    matchFold = "run";
+    const totals = qtyTotals(matchRows);
+    const confirm = hit.confirm;
+    if (confirm && Number(confirm.h) === totals.h && Number(confirm.p) === totals.p) {
+      matchConfirms = matchConfirms.filter((c) => !(c.house === matchHouse && c.day === matchDay));
+      matchConfirms.push({ house: matchHouse, day: matchDay, h: totals.h, p: totals.p, at: Number(hit.at) || Date.now() });
+      saveConfirms();
+    }
+    saveMatchStore();
+    return true;
+  }
+  function pushMatch() {
+    if (/onrender\.com$/i.test(location.hostname)) return;
+    if (matchSource !== "auction" || !matchHouse || !matchDay || !matchPriceRows.length) return;
+    const totals = qtyTotals(matchRows);
+    const confirmed = confirmHit(totals);
+    fetch("./api/daily-qty/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        house: matchHouse,
+        day: matchDay,
+        billDate: matchBillDate,
+        prices: matchPriceRows,
+        confirm: confirmed ? { h: totals.h, p: totals.p } : null,
+      }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j?.matches)) savedMatches = j.matches;
+      })
+      .catch(() => {});
+  }
+  function pullMatches() {
+    if (matchPulling) return;
+    matchPulling = true;
+    fetch("./api/daily-qty/match", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        savedMatches = Array.isArray(j?.matches) ? j.matches : [];
+        matchPulling = false;
+        if (pane === "match" && tryApplySaved()) renderDailyQty();
+      })
+      .catch(() => {
+        matchPulling = false;
+      });
   }
   function saveMatchStore() {
     try {
@@ -1318,6 +1389,58 @@
     }
     return [...seen.values()].sort((a, b) => a.sku.localeCompare(b.sku) || a.mk.localeCompare(b.mk));
   }
+  function pairCodeSwaps(rows) {
+    const byRegion = new Map();
+    rows.forEach((row, index) => {
+      const list = byRegion.get(row.region) || [];
+      list.push(index);
+      byRegion.set(row.region, list);
+    });
+    const used = new Set();
+    const swaps = [];
+    for (const indexes of byRegion.values()) {
+      const ours = indexes.filter((i) => rows[i].h > 0 && !rows[i].p);
+      const auctions = indexes.filter((i) => rows[i].p > 0 && !rows[i].h);
+      const candidates = [];
+      for (const hi of ours) {
+        for (const pi of auctions) {
+          const h = rows[hi];
+          const p = rows[pi];
+          const hSubs = h.subs || [];
+          const pSubs = p.subs || [];
+          const shareSub = hSubs.some((s) => pSubs.includes(s));
+          if (!shareSub && hSubs.length && pSubs.length) continue;
+          if (!sameGoods(h.crop, p.crop)) continue;
+          candidates.push({ hi, pi, score: Math.abs(h.h - p.p) });
+        }
+      }
+      candidates.sort((a, b) => a.score - b.score || a.hi - b.hi);
+      const usedH = new Set();
+      const usedP = new Set();
+      for (const pair of candidates) {
+        if (usedH.has(pair.hi) || usedP.has(pair.pi)) continue;
+        usedH.add(pair.hi);
+        usedP.add(pair.pi);
+        used.add(pair.hi);
+        used.add(pair.pi);
+        const h = rows[pair.hi];
+        const p = rows[pair.pi];
+        swaps.push({
+          ...h,
+          swap: true,
+          p: p.p,
+          d: p.p - h.h,
+          ok: h.h === p.p,
+          pMarkets: p.pMarkets,
+          altSku: p.sku,
+          altCrop: p.crop,
+          subs: [...new Set([...(h.subs || []), ...(p.subs || [])])],
+          alts: [],
+        });
+      }
+    }
+    return [...swaps, ...rows.filter((_, i) => !used.has(i)).map((row) => ({ ...row, alts: [] }))];
+  }
   function compareRegions(id, day, auctionRows) {
     const H = regionAgg(shippedLines(id, day));
     const P = regionAgg(
@@ -1356,12 +1479,13 @@
         alts,
       });
     }
-    out.sort((a, b) => {
+    const paired = pairCodeSwaps(out);
+    paired.sort((a, b) => {
       const ar = REGION_ORDER.indexOf(a.region);
       const br = REGION_ORDER.indexOf(b.region);
       return (ar < 0 ? 9 : ar) - (br < 0 ? 9 : br) || Number(a.ok) - Number(b.ok) || String(a.sku).localeCompare(String(b.sku));
     });
-    return out;
+    return paired;
   }
   async function runAuctionMatch(captcha) {
     if (!matchHouse) {
@@ -1377,6 +1501,13 @@
     const mates = slipsForMatch(matchHouse, matchDay);
     if (!mates.length) {
       msg = "這天這個社場還沒有已送出的單。";
+      renderDailyQty();
+      return;
+    }
+    if (/onrender\.com$/i.test(location.hostname)) {
+      msg = matchSource === "auction"
+        ? "線上顯示的是已經存好的行情。要更新請用辦公室這台電腦再回對一次。"
+        : "線上伺服器連不到台灣拍賣網站。請用辦公室這台電腦做回對，完成後這裡會看得到。";
       renderDailyQty();
       return;
     }
@@ -1397,11 +1528,14 @@
     }
     if (j.needCaptcha) {
       matchCaptcha = j.captcha ? `data:${j.captchaType || "image/png"};base64,${j.captcha}` : "";
-      msg = j.error || "看上面的數字，填在驗證碼旁邊，再按同一列的開始回對。";
+      matchCaptchaSub = j.sub || "";
+      const err = String(j.error || "");
+      msg = err && !/密碼|已登入|請填小代號/.test(err) ? err : "";
       renderDailyQty();
       return;
     }
     matchCaptcha = "";
+    matchCaptchaSub = "";
     if (!j.ok) {
       msg = j.error || "讀取拍賣行情失敗。";
       renderDailyQty();
@@ -1413,6 +1547,7 @@
     matchRows = compareRegions(matchHouse, matchDay, matchPriceRows);
     matchFold = "run";
     saveMatchStore();
+    pushMatch();
     const miss = matchRows.filter((r) => !r.ok).length;
     const when = matchBillDate ? `（行情日 ${matchBillDate}）` : "";
     msg = !j.rows?.length
@@ -1480,7 +1615,7 @@
     const missing = rows.every((r) => !Number(r.amt));
     return `<section class="dq-price">
       <h3>價格彙整</h3>
-      <p class="dq-match-note">${esc(when)}均價＝金額÷件數。左邊依品項，右邊再分市場。</p>
+      ${when ? `<p class="dq-match-note">${esc(when.replace(/。$/, ""))}</p>` : ""}
       ${missing ? `<p class="dq-match-note">這次行情沒有讀到金額，先列出件數。</p>` : ""}
       <div class="dq-price-grid">
         ${priceTable("品項", byItem, false)}
@@ -1507,6 +1642,7 @@
     matchSource = "";
     matchBillDate = "";
     matchCaptcha = "";
+    matchCaptchaSub = "";
     matchFold = "";
     saveMatchStore();
     pane = "match";
@@ -1713,6 +1849,182 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     msg = `這台不能直接貼圖，已把${lab}存成圖片檔。`;
     if (msgEl) msgEl.textContent = msg;
+  }
+  function gapKey(r) {
+    return [r.region || "", r.sku || "", r.altSku || "", r.crop || "", r.altCrop || "", r.h, r.p, r.swap ? 1 : 0].join("|");
+  }
+  function syncNoticePick(rows) {
+    const problems = (rows || []).filter((r) => !r.ok);
+    const sig = `${matchHouse}|${matchDay}|${problems.map(gapKey).join(";")}`;
+    if (sig === noticeSig) return;
+    noticeSig = sig;
+    noticePick = new Set(problems.map(gapKey));
+    if (gapPreviewUrl) URL.revokeObjectURL(gapPreviewUrl);
+    gapPreviewUrl = "";
+    gapNote = "";
+  }
+  function gapChosen() {
+    return matchRows.filter((r) => !r.ok && noticePick.has(gapKey(r)));
+  }
+  function paintGapButton() {
+    const btn = document.getElementById("dq-gap-img");
+    const n = gapChosen().length;
+    if (btn) btn.textContent = n ? `通知拍賣（${n}）` : "請先勾選有問題的";
+  }
+  function roundBox(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function gapPngBlob(rows) {
+    const font = '"Microsoft JhengHei","Noto Sans TC",sans-serif';
+    const width = 780;
+    const pad = 28;
+    const scale = 2;
+    const measure = document.createElement("canvas").getContext("2d");
+    const maxW = width - pad * 2 - 32;
+    const wrap = (text, size, weight) => {
+      measure.font = `${weight} ${size}px ${font}`;
+      const lines = [];
+      let cur = "";
+      for (const ch of [...String(text || "")]) {
+        const next = cur + ch;
+        if (measure.measureText(next).width > maxW && cur) {
+          lines.push(cur);
+          cur = ch;
+        } else cur = next;
+      }
+      if (cur) lines.push(cur);
+      return lines.length ? lines : [""];
+    };
+    const blocks = rows.map((r) => {
+      const status = r.swap
+        ? (r.ok ? "代號對調，件數相同" : "代號對調，件數不同")
+        : !r.p ? "我們有、拍賣沒有" : !r.h ? "拍賣有、我們沒有" : "件數不同";
+      const name = r.swap
+        ? `${[r.sku, r.crop].filter(Boolean).join(" ")} → ${[r.altSku, r.altCrop].filter(Boolean).join(" ")}`
+        : [r.sku, r.crop].filter(Boolean).join(" ");
+      const diff = `${r.d > 0 ? "+" : ""}${r.d}`;
+      const lines = [
+        { t: `${r.region || r.mk || ""}　${status}`, size: 22, weight: 800, color: "#7a1212" },
+        ...wrap(name, 26, 800).map((t) => ({ t, size: 26, weight: 800, color: "#1c2b24" })),
+        { t: `我們 ${r.h}　　拍賣 ${r.p}　　差 ${diff}`, size: 24, weight: 700, color: "#1c2b24" },
+      ];
+      const mk = [];
+      if (r.hMarkets) mk.push(`我們 ${r.hMarkets}`);
+      if (r.pMarkets) mk.push(`拍賣 ${r.pMarkets}`);
+      mk.forEach((t) => wrap(t, 20, 600).forEach((line) => lines.push({ t: line, size: 20, weight: 600, color: "#5c4a12" })));
+      return lines;
+    });
+    const blockH = (lines) => 18 + lines.reduce((n, ln) => n + ln.size + 10, 0) + 8;
+    const height = pad + 96 + blocks.reduce((n, lines) => n + blockH(lines) + 12, 8) + pad;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "#fff8f3";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#7a1212";
+    ctx.fillRect(0, 0, width, 8);
+    ctx.textBaseline = "top";
+    ctx.font = `800 30px ${font}`;
+    ctx.fillText(`${houseLab(matchHouse) || "拍賣"}　件數不符`, pad, pad + 10);
+    ctx.font = `600 20px ${font}`;
+    ctx.fillStyle = "#5c4a12";
+    ctx.fillText(`寄送日 ${matchDay || ""}${matchBillDate ? `　行情日 ${matchBillDate}` : ""}　請拍賣協助確認`, pad, pad + 50);
+    let y = pad + 96;
+    for (const lines of blocks) {
+      const h = blockH(lines);
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#e7b4b4";
+      ctx.lineWidth = 2;
+      roundBox(ctx, pad, y, width - pad * 2, h, 12);
+      ctx.fill();
+      ctx.stroke();
+      let ty = y + 14;
+      for (const ln of lines) {
+        ctx.fillStyle = ln.color;
+        ctx.font = `${ln.weight} ${ln.size}px ${font}`;
+        ctx.fillText(ln.t, pad + 16, ty);
+        ty += ln.size + 10;
+      }
+      y += h + 12;
+    }
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+  }
+  function showGapPreview() {
+    const host = document.getElementById("dq-gap-preview");
+    const alert = document.getElementById("dq-msg");
+    if (alert) alert.textContent = gapNote;
+    if (!host) return false;
+    host.hidden = false;
+    host.innerHTML = `<img src="${esc(gapPreviewUrl)}" alt="件數不符圖片" /><p>${esc(gapNote)}</p>`;
+    host.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+  async function copyGapImage() {
+    const rows = gapChosen();
+    if (!rows.length) {
+      msg = "請先勾選要通知拍賣的件數。";
+      const el = document.getElementById("dq-msg");
+      if (el) el.textContent = msg;
+      return;
+    }
+    let blob;
+    try {
+      blob = await gapPngBlob(rows);
+    } catch (_) {
+      blob = null;
+    }
+    if (!blob) {
+      msg = "做成圖片失敗。";
+      const el = document.getElementById("dq-msg");
+      if (el) el.textContent = msg;
+      return;
+    }
+    const name = `${houseLab(matchHouse) || "拍賣"}_${matchDay || "寄貨"}_件數不符.png`.replace(/[\\/:*?"<>|\s]+/g, "_");
+    let copied = false;
+    let shared = false;
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        copied = true;
+      }
+    } catch (_) {}
+    if (!copied && navigator.canShare) {
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `${houseLab(matchHouse) || "拍賣"} 件數不符` });
+          shared = true;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+        }
+      }
+    }
+    if (!copied && !shared) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    if (gapPreviewUrl) URL.revokeObjectURL(gapPreviewUrl);
+    gapPreviewUrl = URL.createObjectURL(blob);
+    gapNote = copied
+      ? "已複製圖片。到 LINE 貼上。若貼不上，長按這張圖再複製。"
+      : shared
+        ? "請在分享裡選 LINE。"
+        : "已存成圖片檔。也可以長按這張圖複製，再貼到 LINE。";
+    msg = gapNote;
+    if (!showGapPreview()) renderDailyQty();
   }
 
   const NAME_CATS = ["全部", "根莖", "葉菜", "花果", "菇蕈", "醃漬", "水果"];
@@ -2281,6 +2593,17 @@
     });
     const root = document.getElementById("dq-root");
     if (!root) return;
+    root.addEventListener("change", (e) => {
+      const input = e.target.closest("[data-dq-gap]");
+      if (!input) return;
+      const key = input.dataset.dqGap || "";
+      if (input.checked) noticePick.add(key);
+      else noticePick.delete(key);
+      root.querySelectorAll("[data-dq-gap]").forEach((el) => {
+        if (el !== input && el.dataset.dqGap === key) el.checked = input.checked;
+      });
+      paintGapButton();
+    });
     root.addEventListener("click", (e) => {
       if (e.target.closest("[data-dq-home]")) {
         window.scrollTo(0, 0);
@@ -2614,6 +2937,10 @@
         saveQtyConfirm();
         return;
       }
+      if (e.target.closest("#dq-gap-img")) {
+        copyGapImage();
+        return;
+      }
       if (e.target.closest("[data-dq-qty-clear]")) {
         clearQtyConfirm();
         return;
@@ -2623,6 +2950,7 @@
         matchRows = [];
         matchPriceRows = [];
         matchCaptcha = "";
+        matchCaptchaSub = "";
         matchSource = "";
         matchFold = "";
         saveMatchStore();
@@ -2899,6 +3227,7 @@
       });
       loadMatchStore();
       loadConfirms();
+      pushMatch();
     }
     if (!shipDate) shipDate = localYmd();
     syncCurrent();
@@ -3040,6 +3369,7 @@
         const any = savedSlips.find((s) => s.shipDate === matchDay) || savedSlips[0];
         if (any) matchHouse = any.house || "";
       }
+      tryApplySaved();
       const mates = slipsForMatch(matchHouse, matchDay);
       const ours = agg(houseShipList(matchHouse, matchDay));
       const ourRows = [...ours.values()].sort((a, b) => a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop)));
@@ -3056,7 +3386,7 @@
       const billHint = matchHouse === "xinfeng"
         ? "新豐自動讀隔天行情，小代號 493、930、168 加在一起。"
         : matchHouse === "yongfang"
-          ? "金芳用小代號各自登入查隔天行情，050、066、168、070 加在一起。密碼與小代號相同。"
+          ? "金芳用小代號各自登入查隔天行情，050、066、168、070 加在一起。"
           : "大庄、二崙果菜還沒有拍賣帳號，先不自動回對。";
       const ourTable = ourRows.length
         ? `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr><th>市場</th><th>品項</th><th>寄出合計</th></tr></thead><tbody>${ourRows
@@ -3071,63 +3401,92 @@
         }
         return Number(a.ok) - Number(b.ok) || a.mk.localeCompare(b.mk) || String(a.crop).localeCompare(String(b.crop));
       });
+      const swapOk = matchRows.filter((r) => r.swap && r.ok).length;
       const sameN = matchRows.filter((r) => r.ok).length;
       const diffN = matchRows.filter((r) => r.h && r.p && !r.ok).length;
       const missN = matchRows.filter((r) => r.h && !r.p).length;
       const extraN = matchRows.filter((r) => !r.h && r.p).length;
       const matchBits = [
-        sameN ? `${sameN} 筆一樣` : "",
+        sameN ? `${sameN} 筆一樣${swapOk ? `，其中 ${swapOk} 筆是代號對調` : ""}` : "",
         diffN ? `${diffN} 筆件數不同` : "",
         missN ? `${missN} 筆我們有寄、帳單沒有` : "",
         extraN ? `${extraN} 筆帳單有、我們沒寄` : "",
       ].filter(Boolean);
       const totals = qtyTotals(matchRows);
       const confirmed = matchSource === "auction" && confirmHit(totals);
-      const canConfirm = matchSource === "auction" && totals.h > 0 && totals.h === totals.p && matchRows.some((r) => !r.ok) && !confirmed;
-      const confirmBar = canConfirm
-        ? `<p class="dq-confirmed">兩邊總件數都是 ${totals.h}。代號對調可以視為同一批。<button type="button" class="primary" data-dq-qty-ok>總數確認</button></p>`
+      const canConfirm = matchSource === "auction" && (totals.h > 0 || totals.p > 0) && !confirmed;
+      const confirmText = totals.h === totals.p
+        ? `兩邊總件數都是 ${totals.h}。`
+        : `我們 ${totals.h}、拍賣 ${totals.p}，還差 ${Math.abs(totals.p - totals.h)}。`;
+      syncNoticePick(shownMatch);
+      const gapN = shownMatch.filter((r) => !r.ok && noticePick.has(gapKey(r))).length;
+      const visibleMatch = confirmed ? shownMatch.filter((r) => !r.ok) : shownMatch;
+      const tucked = shownMatch.length - visibleMatch.length;
+      const confirmBtn = confirmed
+        ? `<button type="button" class="ghost" data-dq-qty-clear>取消確認</button>`
+        : canConfirm
+          ? `<button type="button" class="primary" data-dq-qty-ok>總數確認</button>`
+          : "";
+      const gapBtn = shownMatch.some((r) => !r.ok)
+        ? `<button type="button" id="dq-gap-img">${gapN ? `通知拍賣（${gapN}）` : "請先勾選"}</button>`
         : "";
-      const visibleMatch = shownMatch;
+      const actRow = confirmBtn || gapBtn ? `<div class="dq-act-row">${confirmBtn}${gapBtn}</div>` : "";
+      const gapPreview = shownMatch.some((r) => !r.ok)
+        ? `<div class="dq-gap-preview" id="dq-gap-preview"${gapPreviewUrl ? "" : " hidden"}>${gapPreviewUrl ? `<img src="${esc(gapPreviewUrl)}" alt="件數不符圖片" /><p>${esc(gapNote)}</p>` : ""}</div>`
+        : "";
       const matchItems = visibleMatch.map((r) => {
         const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
-        const st = r.ok ? "一樣" : !r.p ? "我們有、拍賣沒有" : !r.h ? "拍賣有、我們沒有" : "件數不同";
+        const st = r.swap
+          ? (r.ok ? "代號對調，件數相同" : "代號對調，件數不同")
+          : r.ok ? "一樣" : !r.p ? "我們有、拍賣沒有" : !r.h ? "拍賣有、我們沒有" : "件數不同";
         const diff = `${r.d > 0 ? "+" : ""}${r.d}`;
         const detail = r.hMarkets || r.pMarkets
           ? `<div class="dq-submk">我們 ${esc(r.hMarkets || "—")}／拍賣 ${esc(r.pMarkets || "—")}</div>`
           : "";
-        const altText = (r.alts || [])
+        const altText = r.swap ? "" : (r.alts || [])
           .map((a) => `${a.sku} ${a.name} ${a.mk} ${a.qty}件${a.price ? `、每公斤 ${a.price}` : ""}`)
           .join("；");
         const altHtml = altText
           ? `<div class="dq-alt">同小代號${(r.subs || []).length ? " " + esc(r.subs.join("、")) : ""}，拍賣用其他品項代號：${esc(altText)}</div>`
           : "";
-        const name = esc([r.sku, r.crop].filter(Boolean).join(" "));
+        const name = r.swap
+          ? esc(`${[r.sku, r.crop].filter(Boolean).join(" ")} → ${[r.altSku, r.altCrop].filter(Boolean).join(" ")}`)
+          : esc([r.sku, r.crop].filter(Boolean).join(" "));
         const place = esc(r.region || r.mk || "");
-        return { cls, st: esc(st), diff: esc(diff), detail, altHtml, name, place, h: r.h, p: r.p };
+        const key = gapKey(r);
+        const problem = !r.ok;
+        const pick = problem
+          ? `<label class="dq-gap-pick"><input type="checkbox" data-dq-gap="${esc(key)}" ${noticePick.has(key) ? "checked" : ""} />通知</label>`
+          : "";
+        return { cls, st: esc(st), diff: esc(diff), detail, altHtml, name, place, h: r.h, p: r.p, pick };
       });
       const helpText = matchSource === "auction"
-        ? "每一列是同一個區域、同一個品項。北部四個市場、中區、南部各自加總。同區換市場不算誤差。差＝拍賣場減我們寄出。拍賣若把這個小代號改成別的品項代號，會列在沒有對到的那一列下面。"
+        ? "每一列是同一個區域。同一小代號、品名相同但代號不同，合成一列代號對調。件數相同就是同一批。北部、中區、南部各自看，不會把別區的市場寫進來。"
         : "每一列是同一個市場、同一個品項。差＝社場帳單減我們寄出。正數是社場比較多，負數是社場比較少。";
       const helpPop = matchHelp
         ? `<div class="dq-help-pop" data-dq-help-close><div class="dq-help-card"><p>${esc(helpText)}</p><button type="button" class="primary" data-dq-help-close>關閉</button></div></div>`
         : "";
-      const matchTable = confirmed
-        ? `<p class="dq-confirmed">已確認，總件數 ${totals.h} 相同。代號對調不再列入落差。<button type="button" class="ghost" data-dq-qty-clear>取消確認</button></p>`
-        : shownMatch.length
+      const confirmedLine = totals.h === totals.p
+        ? `已確認，總件數 ${totals.h} 相同。`
+        : `已確認。我們 ${totals.h}、拍賣 ${totals.p}。`;
+      const statusLine = confirmed ? confirmedLine : confirmText;
+      const matchTable = shownMatch.length
         ? `<section class="dq-match-result">
             <h3>件數回對 <button type="button" class="ghost dq-help" data-dq-help-open>說明</button></h3>
-            <p class="dq-match-legend"><span class="ok">一樣</span><span class="bad">件數不同</span><span class="miss">有一邊沒有</span></p>
             <p class="dq-sum">${esc(matchBits.join("，"))}</p>
-            ${confirmBar}
-            <div class="dq-match-cards">${matchItems.map((r) => `<article class="${r.cls}">
-              <div class="dq-card-top"><b>${r.st}</b><span>${r.place}</span></div>
+            <p class="dq-confirmed">${esc(statusLine)}</p>
+            ${actRow}
+            ${gapPreview}
+            ${tucked ? `<p class="dq-tucked">${tucked} 筆件數相同，已收合。</p>` : ""}
+            <div class="dq-match-cards">${matchItems.map((r) => `<article class="${r.cls}${r.pick ? " is-pick" : ""}">
+              <div class="dq-card-top"><b>${r.st}</b>${r.pick}<span>${r.place}</span></div>
               <div class="dq-card-name">${r.name}</div>
               <div class="dq-card-nums"><div><span>我們</span><b>${r.h}</b></div><div><span>拍賣</span><b>${r.p}</b></div><div><span>差</span><b>${r.diff}</b></div></div>
               ${r.detail}${r.altHtml}
             </article>`).join("")}</div>
-            <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>${matchSource === "auction" ? "區域" : "市場"}</th><th>品項</th><th>我們寄出</th><th>拍賣場</th><th>差</th></tr></thead><tbody>${matchItems
+            <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>${matchSource === "auction" ? "區域" : "市場"}</th><th>品項</th><th>我們寄出</th><th>拍賣場</th><th>差</th><th>通知</th></tr></thead><tbody>${matchItems
             .map((r) => `<tr class="${r.cls}"><td>${r.st}</td><td>${r.place}</td><td>${r.name}${r.detail}${r.altHtml}</td>
-                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.diff}</td></tr>`)
+                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.diff}</td><td>${r.pick}</td></tr>`)
             .join("")}</tbody></table></div>${helpPop}</section>`
         : "";
       const photoBox = matchPhotoUrl
@@ -3137,10 +3496,17 @@
             <button type="button" class="ghost" id="dq-photo-clear">清除這張照片</button>
           </div>`
         : "";
+      const captchaWho = matchCaptchaSub
+        ? `<span class="dq-captcha-who">小代號 <b>${esc(matchCaptchaSub)}</b></span>`
+        : "";
       const captchaGo = matchCaptcha
         ? `<div class="dq-go">
-            <div class="dq-captcha"><span>驗證碼</span><img src="${esc(matchCaptcha)}" alt="驗證碼" /><input id="dq-captcha" inputmode="numeric" maxlength="6" placeholder="填這裡" /></div>
-            <button type="button" class="primary" data-dq-run>開始回對</button>
+            <div class="dq-go-row">
+              ${captchaWho}
+              <div class="dq-captcha"><span>驗證碼</span><img src="${esc(matchCaptcha)}" alt="${esc(matchCaptchaSub ? `小代號 ${matchCaptchaSub} 的驗證碼` : "驗證碼")}" /><input id="dq-captcha" inputmode="numeric" maxlength="6" placeholder="填這裡" /></div>
+              <button type="button" class="primary" data-dq-run>開始回對</button>
+            </div>
+            ${msg ? `<p class="dq-msg">${esc(msg)}</p>` : ""}
           </div>`
         : "";
       body = savedSlips.length
@@ -3153,16 +3519,17 @@
                 <button type="button" class="ghost dq-cal-toggle" data-dq-cal-toggle>${matchCalOpen ? "收合月曆" : "改日期"}</button>
                 ${matchCaptcha ? "" : `<button type="button" class="primary dq-run-top" data-dq-run>開始回對</button>`}
               </div>
+              <p class="dq-msg dq-alert" id="dq-msg">${esc(matchCaptcha ? "" : msg)}</p>
               <div class="dq-cal-fold">
                 ${dqCalHtml({ selected: matchDay, month: matchMonth || String(matchDay || localYmd()).slice(0, 7), dayAttr: "data-dq-match-cal", shiftAttr: "data-dq-match-shift", houseId: matchHouse })}
               </div>
             </div>
             ${captchaGo}
             ${matchSource && matchFold !== "" ? `<button type="button" class="ghost dq-ship-toggle" data-dq-ship-toggle>${matchFold === "open" ? "收合寄出明細" : "寄出明細"}</button>` : ""}
-            ${(!matchSource || matchFold === "" || matchFold === "open" || confirmed) ? `<div class="dq-ship-block">
+            ${(!matchSource || matchFold === "" || matchFold === "open") ? `<div class="dq-ship-block">
             <p class="dq-sum">${esc(houseLab(matchHouse) || "請選社場")} · ${mates.length} 張已送出${slipNames ? " · " + esc(slipNames) : ""}</p>
             ${pendingNote}
-            <p class="dq-match-note">${billHint}</p>
+            ${matchSource ? "" : `<p class="dq-match-note">${billHint}</p>`}
             ${ourTable}
             </div>` : ""}
             ${(!matchSource || matchFold === "" || matchFold === "open") ? `<div class="dq-paste-block">
@@ -3180,7 +3547,6 @@
               <button type="button" class="ghost" id="dq-run-paste">改用貼上的明細</button>
             </div>
             </div>` : ""}
-            <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
             ${matchTable}
             ${priceSummaryHtml()}
           </div>`
@@ -3246,6 +3612,7 @@
     if (pane === "match" && cap) cap.focus();
     persistLocal();
     pullHistory();
+    pullMatches();
   }
   function sessionToSlip(rec) {
     return {

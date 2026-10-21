@@ -45,6 +45,7 @@ const DATA_FILE = path.join(DATA_DIR, "sync.json");
 const LINE_FILE = path.join(DATA_DIR, "line-drafts.json");
 const AUCTION_PAY_FILE = path.join(DATA_DIR, "auction-pay-history.json");
 const DAILY_QTY_FILE = path.join(DATA_DIR, "daily-qty-history.json");
+const DAILY_QTY_MATCH_FILE = path.join(DATA_DIR, "daily-qty-match.json");
 const SKIP = new Set([".git", "node_modules", "data"]);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -312,6 +313,81 @@ async function writeDailyQtySessions(sessions) {
     `INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3)
      ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
     ["daily-qty", JSON.stringify({ sessions: sliced }), Date.now()],
+  );
+}
+function readDailyQtyMatchFile() {
+  try {
+    const j = JSON.parse(fs.readFileSync(DAILY_QTY_MATCH_FILE, "utf8"));
+    return Array.isArray(j?.matches) ? j.matches : [];
+  } catch (_) {
+    return [];
+  }
+}
+function writeDailyQtyMatchFile(matches) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${DAILY_QTY_MATCH_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ matches }));
+  fs.renameSync(tmp, DAILY_QTY_MATCH_FILE);
+}
+function cleanMatchPrice(row) {
+  const qty = Number(row?.qty) || 0;
+  if (!qty) return null;
+  return {
+    mk: String(row.mk || "").slice(0, 20),
+    sub: String(row.sub || "").slice(0, 8),
+    sku: String(row.sku || "").slice(0, 20),
+    name: String(row.name || row.crop || "").slice(0, 40),
+    qty,
+    price: Number(row.price) || 0,
+    wt: Number(row.wt) || 0,
+    amt: Number(row.amt) || 0,
+  };
+}
+function cleanMatch(body) {
+  const house = String(body?.house || "").slice(0, 20);
+  const day = String(body?.day || "");
+  if (!house || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const prices = (Array.isArray(body?.prices) ? body.prices : []).map(cleanMatchPrice).filter(Boolean).slice(0, 2000);
+  if (!prices.length) return null;
+  const billDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.billDate || "")) ? String(body.billDate) : "";
+  const confirm = body?.confirm && typeof body.confirm === "object"
+    ? { h: Number(body.confirm.h) || 0, p: Number(body.confirm.p) || 0 }
+    : null;
+  return { house, day, billDate, prices, confirm, at: Date.now() };
+}
+async function readDailyQtyMatches() {
+  const fileMatches = readDailyQtyMatchFile();
+  if (!(await ensurePg())) return fileMatches;
+  const pool = pgPoolGet();
+  const found = await pool.query("SELECT doc FROM app_state WHERE id = $1", ["daily-qty-match"]);
+  if (found.rows.length) {
+    const doc = found.rows[0].doc || {};
+    const matches = Array.isArray(doc.matches) ? doc.matches : [];
+    if (!matches.length && fileMatches.length) {
+      await writeDailyQtyMatches(fileMatches);
+      return fileMatches;
+    }
+    return matches;
+  }
+  await pool.query(
+    "INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3) ON CONFLICT (id) DO NOTHING",
+    ["daily-qty-match", JSON.stringify({ matches: fileMatches }), Date.now()],
+  );
+  return fileMatches;
+}
+async function writeDailyQtyMatches(matches) {
+  const sliced = matches.slice(0, 120);
+  try {
+    writeDailyQtyMatchFile(sliced);
+  } catch (err) {
+    console.error(err);
+  }
+  if (!(await ensurePg())) return;
+  const pool = pgPoolGet();
+  await pool.query(
+    `INSERT INTO app_state (id, doc, updated_at) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at`,
+    ["daily-qty-match", JSON.stringify({ matches: sliced }), Date.now()],
   );
 }
 
@@ -687,6 +763,42 @@ function handleApi(req, res) {
           : "讀取拍賣行情失敗";
         send(res, 200, JSON.stringify({ ok: false, error }), TYPES[".json"]);
       });
+    return true;
+  }
+  if (urlPath === "/api/daily-qty/match") {
+    if (req.method === "GET") {
+      readDailyQtyMatches()
+        .then((matches) => send(res, 200, JSON.stringify({ ok: true, matches }), TYPES[".json"]))
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, '{"ok":false,"matches":[]}', TYPES[".json"]);
+        });
+      return true;
+    }
+    if (req.method === "POST") {
+      readBody(req, 2e6)
+        .then(async (raw) => {
+          const rec = cleanMatch(JSON.parse(raw));
+          if (!rec) {
+            send(res, 400, '{"ok":false}', TYPES[".json"]);
+            return;
+          }
+          const matches = await readDailyQtyMatches();
+          const i = matches.findIndex((m) => m && m.house === rec.house && m.day === rec.day);
+          if (i >= 0) matches[i] = rec;
+          else matches.unshift(rec);
+          matches.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+          const saved = matches.slice(0, 120);
+          await writeDailyQtyMatches(saved);
+          send(res, 200, JSON.stringify({ ok: true, matches: saved }), TYPES[".json"]);
+        })
+        .catch((err) => {
+          console.error(err);
+          send(res, 500, '{"ok":false}', TYPES[".json"]);
+        });
+      return true;
+    }
+    send(res, 405, "Method not allowed");
     return true;
   }
   if (urlPath === "/api/daily-qty/history") {

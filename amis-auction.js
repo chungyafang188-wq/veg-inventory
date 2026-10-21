@@ -135,9 +135,9 @@ function pageSizeOnForm(html) {
     if (values.includes("200")) return "200";
     if (selected) return selected[1];
     if (values.includes("60")) return "60";
-    return values.length ? values[values.length - 1] : "200";
+    return values.length ? values[values.length - 1] : "";
   }
-  return "200";
+  return "";
 }
 
 function isServerError(html) {
@@ -186,7 +186,7 @@ async function beginLogin(key, account) {
     captcha: img.body.toString("base64"),
     captchaType: img.type || "image/png",
   };
-  if (account.sub) out.error = `金芳請填小代號 ${account.sub} 的驗證碼。密碼與小代號相同。`;
+  if (account.sub) out.sub = account.sub;
   return out;
 }
 
@@ -315,12 +315,24 @@ function parseAuctionRows(html) {
 async function postBill(jar, html, { billDate, sub, supplyNo }) {
   const fields = formFields(html);
   const roc = rocDate(billDate);
-  fields["ctl00$contentPlaceHolder$txtStartDate"] = roc;
-  fields["ctl00$contentPlaceHolder$txtEndDate"] = roc;
-  if (supplyNo) fields["ctl00$contentPlaceHolder$txtSupplyNo"] = supplyNo;
-  fields["ctl00$contentPlaceHolder$txtSupplySub"] = sub ? normSub(sub) : "";
-  fields["ctl00$contentPlaceHolder$txtPerPageRows"] = pageSizeOnForm(html);
-  fields["ctl00$contentPlaceHolder$ucCoopVegFruitMarket$radAllMarket"] = "radAllMarket";
+  const setIf = (name, value) => {
+    if (Object.prototype.hasOwnProperty.call(fields, name)) fields[name] = value;
+  };
+  setIf("ctl00$contentPlaceHolder$txtStartDate", roc);
+  setIf("ctl00$contentPlaceHolder$txtEndDate", roc);
+  if (supplyNo) setIf("ctl00$contentPlaceHolder$txtSupplyNo", supplyNo);
+  const subName = "ctl00$contentPlaceHolder$txtSupplySub";
+  if (Object.prototype.hasOwnProperty.call(fields, subName)) fields[subName] = sub ? normSub(sub) : "";
+  const pageName = "ctl00$contentPlaceHolder$txtPerPageRows";
+  const pageSize = pageSizeOnForm(html);
+  if (pageSize) setIf(pageName, pageSize);
+  else if (Object.prototype.hasOwnProperty.call(fields, pageName)) fields[pageName] = "999";
+  const marketRadio = "ctl00$contentPlaceHolder$ucCoopVegFruitMarket$radAllMarket";
+  const marketHidden = "ctl00_contentPlaceHolder_ucCoopVegFruitMarket";
+  if (html.includes(`name="${marketRadio}"`)) {
+    fields[marketRadio] = "radAllMarket";
+    setIf(marketHidden, "ALL");
+  }
   fields.__EVENTTARGET = "ctl00$contentPlaceHolder$btnQuery";
   fields.__EVENTARGUMENT = "";
   fields["ctl00$contentPlaceHolder$btnQuery"] = "查詢";
@@ -350,11 +362,10 @@ async function queryBill(key, billDate, sub, supplyNo) {
   }
   const out = posted.html;
   if (isLoginPage(out)) return { auth: false };
-  if (isServerError(out)) return { auth: false };
+  if (isServerError(out)) return { auth: true, rows: [], note: "", sawTable: false };
   const note = alertText(out);
-  const sawTable = out.includes("品名代號");
+  const sawTable = out.includes("件數") && out.includes("品名代號");
   const rows = note && note.includes("查無") ? [] : parseAuctionRows(out);
-  if (!rows.length && !note.includes("查無")) return { auth: false };
   if (!rows.length) {
     try {
       const text = out.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 500);

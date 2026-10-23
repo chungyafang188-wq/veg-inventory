@@ -412,6 +412,9 @@
     const tails = [];
     if (freight) tails.push(`收貨：${freight}`);
     if (kind !== "freight" && batch) tails.push(`批次：${batch}`);
+    if (kind !== "freight") {
+      (s.log || []).filter((e) => e.kind === "移拍" && e.text).forEach((e) => tails.push(`移拍：${e.text}`));
+    }
     if (!sum.blocks.length) return [headLine, "沒有件數", ...tails].filter(Boolean).join("\n");
     const body = sum.blocks.map((b) =>
       [b.label, ...b.markets.map((m) => `${m.mk} ${m.qty}件`), `合計 ${b.sub}件`].join("\n"),
@@ -922,6 +925,13 @@
       drawn.push(null);
       tails.forEach((t) => drawn.push({ t, strong: false }));
     }
+    if (kind !== "freight") {
+      const moves = (s.log || []).filter((e) => e.kind === "移拍" && e.text);
+      if (moves.length) {
+        drawn.push(null);
+        moves.forEach((e) => drawn.push({ t: `移拍：${e.text}`, strong: true, alert: true }));
+      }
+    }
     const width = 760;
     const padX = 36;
     const padY = 28;
@@ -950,7 +960,7 @@
     let y = padY + headBlock + lineH / 2;
     drawn.forEach((line) => {
       if (line && line.t) {
-        ctx.fillStyle = "#14633a";
+        ctx.fillStyle = line.alert ? "#9a1c1c" : "#14633a";
         if (line.boldLead) {
           ctx.font = `800 ${bodySize}px ${font}`;
           ctx.fillText(line.boldLead, padX, y);
@@ -965,7 +975,7 @@
           ctx.fillText(line.t, padX, y);
         }
       }
-      y += lineH;
+        y += lineH;
     });
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
   }
@@ -1124,6 +1134,8 @@
       saved: !!s.saved,
       voided: !!s.voided,
       log: Array.isArray(s.log) ? s.log.slice(-20) : [],
+      yfId: s.yfId || "",
+      yfNo: s.yfNo || "",
     };
     s.at = payload.at;
     try {
@@ -1163,6 +1175,25 @@
   let gapNote = "";
   let pricePreviewUrl = "";
   let priceNote = "";
+  let pricePreviewSig = "";
+  let pricePreviewToken = 0;
+  let priceSub = "";
+  let priceItem = "";
+  function priceViewSig() {
+    return `${matchHouse}|${matchDay}|${priceSub}|${priceItem}|${(matchPriceRows || []).length}`;
+  }
+  function clearPricePreview() {
+    if (pricePreviewUrl) URL.revokeObjectURL(pricePreviewUrl);
+    pricePreviewUrl = "";
+    priceNote = "";
+    pricePreviewSig = "";
+    pricePreviewToken += 1;
+  }
+  function resetPriceFilter() {
+    priceSub = "";
+    priceItem = "";
+    clearPricePreview();
+  }
   function loadConfirms() {
     try {
       const j = JSON.parse(localStorage.getItem(CONFIRM_KEY) || "[]");
@@ -1185,6 +1216,363 @@
   function confirmHit(totals) {
     const hit = matchConfirms.find((c) => c.house === matchHouse && c.day === matchDay);
     return !!(hit && hit.h === totals.h && hit.p === totals.p && (totals.h > 0 || totals.p > 0));
+  }
+  const PAIR_KEY = "dq-pair-v1";
+  let pairLinks = [];
+  const pairPick = new Set();
+  function loadPairs() {
+    try {
+      const j = JSON.parse(localStorage.getItem(PAIR_KEY) || "[]");
+      pairLinks = Array.isArray(j) ? j : [];
+    } catch (_) {
+      pairLinks = [];
+    }
+  }
+  function savePairs() {
+    try {
+      localStorage.setItem(PAIR_KEY, JSON.stringify(pairLinks.slice(0, 200)));
+    } catch (_) {}
+  }
+  function pairPayload() {
+    return pairLinks
+      .filter((c) => c.house === matchHouse && c.day === matchDay)
+      .map((c) => ({ region: c.region || "", sku: c.sku || "", altSku: c.altSku || "", qty: Number(c.qty) || 0 }));
+  }
+  function bitsMap(text) {
+    const map = {};
+    String(text || "").split("、").forEach((part) => {
+      const bits = part.trim().split(/\s+/);
+      const n = Number(bits[1]);
+      if (bits[0] && n) map[bits[0]] = n;
+    });
+    return map;
+  }
+  function bitsText(map) {
+    return Object.entries(map || {}).filter(([, n]) => n > 0).map(([mk, n]) => `${mk} ${n}`).join("、");
+  }
+  function applyManualPairs(rows, id, day) {
+    const made = [];
+    for (const link of pairLinks.filter((c) => c.house === id && c.day === day && c.qty)) {
+      const a = rows.find((r) => !r.swap && r.region === link.region && r.sku === link.sku && Number(r.h) - Number(r.p) >= link.qty);
+      const b = rows.find((r) => !r.swap && r.region === link.region && r.sku === link.altSku && Number(r.p) - Number(r.h) >= link.qty);
+      if (!a || !b) continue;
+      const hMap = bitsMap(a.hMarkets);
+      const pMap = bitsMap(b.pMarkets);
+      const moved = {};
+      let left = link.qty;
+      for (const mk of Object.keys(pMap)) {
+        if (left <= 0) break;
+        const take = Math.min(left, pMap[mk]);
+        if (hMap[mk]) hMap[mk] = Math.max(0, hMap[mk] - take);
+        pMap[mk] -= take;
+        moved[mk] = take;
+        left -= take;
+      }
+      a.h -= link.qty;
+      a.d = a.p - a.h;
+      a.ok = a.h === a.p && a.h > 0;
+      a.hMarkets = bitsText(hMap);
+      b.p -= link.qty;
+      b.d = b.p - b.h;
+      b.ok = b.h === b.p && b.h > 0;
+      b.pMarkets = bitsText(pMap);
+      made.push({
+        region: link.region,
+        mk: link.region,
+        crop: a.crop,
+        sku: a.sku,
+        h: link.qty,
+        p: link.qty,
+        d: 0,
+        ok: true,
+        swap: true,
+        manual: true,
+        altSku: b.sku,
+        altCrop: b.crop,
+        hMarkets: bitsText(moved),
+        pMarkets: bitsText(moved),
+        subs: [...new Set([...(a.subs || []), ...(b.subs || [])])],
+        alts: [],
+      });
+    }
+    return [...made, ...rows.filter((r) => Number(r.h) || Number(r.p))];
+  }
+  function confirmManualPair() {
+    const rows = [...pairPick].map((key) => matchRows.find((r) => gapKey(r) === key)).filter(Boolean);
+    if (rows.length !== 2) {
+      msg = "請勾兩筆要當成同一批的。";
+      renderDailyQty();
+      return;
+    }
+    if ((rows[0].region || "") !== (rows[1].region || "")) {
+      msg = "要同一個區域才能對成同一批。";
+      renderDailyQty();
+      return;
+    }
+    const short = rows.find((r) => Number(r.h) > Number(r.p));
+    const extra = rows.find((r) => Number(r.p) > Number(r.h));
+    if (!short || !extra) {
+      msg = "要一筆我們比較多、一筆拍賣比較多。";
+      renderDailyQty();
+      return;
+    }
+    const q1 = Number(short.h) - Number(short.p);
+    const q2 = Number(extra.p) - Number(extra.h);
+    if (q1 !== q2) {
+      msg = `兩邊相差要一樣。現在是 ${q1} 件和 ${q2} 件。`;
+      renderDailyQty();
+      return;
+    }
+    pairLinks = pairLinks.filter((c) => !(c.house === matchHouse && c.day === matchDay && c.region === short.region && c.sku === short.sku && c.altSku === extra.sku));
+    pairLinks.push({ house: matchHouse, day: matchDay, region: short.region || "", sku: short.sku || "", altSku: extra.sku || "", qty: q1 });
+    savePairs();
+    pairPick.clear();
+    matchRows = compareRegions(matchHouse, matchDay, matchPriceRows);
+    saveMatchStore();
+    pushMatch();
+    msg = `已確認 ${short.sku} 和 ${extra.sku} 是同一批，這 ${q1} 件不算異常。`;
+    renderDailyQty();
+  }
+  let carries = [];
+  const carryDraft = new Map();
+  function loadCarries() {
+    try {
+      const j = JSON.parse(localStorage.getItem(CARRY_KEY) || "[]");
+      carries = Array.isArray(j) ? j : [];
+    } catch (_) {
+      carries = [];
+    }
+  }
+  function saveCarries() {
+    try {
+      localStorage.setItem(CARRY_KEY, JSON.stringify(carries.slice(0, 200)));
+    } catch (_) {}
+  }
+  function mergeCarry(list) {
+    let changed = false;
+    for (const m of list || []) {
+      if (!m || !Array.isArray(m.carry)) continue;
+      for (const c of m.carry) {
+        if (!c || !c.key || !c.kind) continue;
+        if (carries.some((x) => x.house === m.house && x.day === m.day && x.key === c.key)) continue;
+        carries.push({
+          house: m.house,
+          day: m.day,
+          key: c.key,
+          kind: c.kind,
+          qty: Number(c.qty) || 0,
+          mk: c.mk || "",
+          next: c.next || "",
+          slipId: c.slipId || "",
+        });
+        changed = true;
+      }
+    }
+    if (changed) saveCarries();
+  }
+  function carryPayload() {
+    return carries
+      .filter((c) => c.house === matchHouse && c.day === matchDay)
+      .map((c) => ({ key: c.key, kind: c.kind, qty: c.qty, mk: c.mk || "", next: c.next || "", slipId: c.slipId || "" }));
+  }
+  function unsoldOf(row) {
+    const h = Number(row && row.h) || 0;
+    const p = Number(row && row.p) || 0;
+    return h > p ? h - p : 0;
+  }
+  function ourMarkets(row) {
+    return String((row && row.hMarkets) || "")
+      .split("、")
+      .map((s) => s.trim().split(/\s+/)[0])
+      .filter((mk) => MK_KEYS.includes(mk));
+  }
+  function carryOf(key) {
+    return carries.find((c) => c.house === matchHouse && c.day === matchDay && c.key === key) || null;
+  }
+  function carryHtml(row) {
+    const n = unsoldOf(row);
+    if (!n) return "";
+    const key = gapKey(row);
+    const saved = carryOf(key);
+    if (saved) {
+      const text = saved.kind === "back"
+        ? `已退回 ${saved.qty} 件`
+        : `已轉到 ${saved.next}　${saved.kind === "move" ? "轉市" : "原市續賣"}　${saved.mk}　${saved.qty} 件`;
+      return `<div class="dq-carry is-done"><b>${esc(text)}</b></div>`;
+    }
+    const draft = carryDraft.get(key) || { kind: "", mk: "" };
+    const picks = [
+      ["back", "退回"],
+      ["stay", "原市續賣"],
+      ["move", "轉市"],
+    ].map(([kind, lab]) => `<button type="button" class="pick${draft.kind === kind ? " on" : ""}" data-dq-carry="${esc(key)}" data-dq-carry-kind="${kind}">${lab}</button>`).join("");
+    const mkPick = draft.kind === "stay" || draft.kind === "move"
+      ? `<label>市場<select data-dq-carry-mk="${esc(key)}"><option value="">選市場</option>${MK_KEYS.map((mk) => `<option value="${esc(mk)}"${draft.mk === mk ? " selected" : ""}>${esc(mk)}</option>`).join("")}</select></label>`
+      : "";
+    return `<div class="dq-carry"><p>沒賣完 ${n} 件，今天移拍</p><div class="dq-carry-picks">${picks}</div>${mkPick}<button type="button" class="primary" data-dq-carry-save="${esc(key)}">記入</button></div>`;
+  }
+  function parseCarryTag(tag) {
+    const m = String(tag || "").match(/^(\S+)\s+(\S+)\s+(\d+)件\s+(轉市|原市)\s+(\S+)$/);
+    if (!m) return null;
+    return { region: m[1], sku: m[2], qty: Number(m[3]), how: m[4], mk: m[5] };
+  }
+  function chineseName(houseId, day, sku) {
+    for (const s of slips) {
+      if (!s || s.voided || s.house !== houseId) continue;
+      if (day && s.shipDate !== day) continue;
+      for (const line of s.lines || []) {
+        if (String(line.sku || "").trim() !== sku) continue;
+        const crop = [line.kind, line.crop].filter(Boolean).join(" ").trim();
+        if (!crop || crop === sku) continue;
+        return crop.startsWith(sku) ? crop.slice(sku.length).trim() : crop;
+      }
+    }
+    return "";
+  }
+  function carryMoveText(tag, next, name) {
+    const p = parseCarryTag(tag);
+    const day = String(next || "").slice(5).replace("-", "/");
+    if (!p) return `${tag}，轉到 ${day || next}`;
+    const where = p.how === "轉市" ? `轉到 ${day} ${p.mk}` : `原市續賣 ${day} ${p.mk}`;
+    const item = name ? `${p.sku} ${name}` : p.sku;
+    return `${where}　${p.region} ${item} ${p.qty}件`;
+  }
+  function carryTagLabel(tag, name) {
+    const p = parseCarryTag(tag);
+    if (!p) return tag;
+    const item = name ? `${p.sku} ${name}` : p.sku;
+    return `${p.region} ${item} ${p.qty}件 ${p.how} ${p.mk}`;
+  }
+  function putMoveLog(slip, text, parsed) {
+    if (!slip || !text) return false;
+    if (!Array.isArray(slip.log)) slip.log = [];
+    const hit = slip.log.find((e) => e.kind === "移拍" && e.text.includes(parsed.sku) && e.text.includes(`${parsed.qty}件`) && e.text.includes(parsed.mk));
+    if (hit) {
+      if (hit.text === text) return false;
+      hit.text = text;
+      return true;
+    }
+    pushSlipLog(slip, "移拍", text);
+    return true;
+  }
+  function slipHasRegionSku(slip, region, sku) {
+    for (const line of slip.lines || []) {
+      if (String(line.sku || "").trim() !== sku) continue;
+      for (const slot of line.slots || []) {
+        if (regionOfMk(slot.mk) === region && qtyOf(slot.qty)) return true;
+      }
+    }
+    return false;
+  }
+  async function markSourceSlips(houseId, srcDay, tag, next) {
+    const parsed = parseCarryTag(tag);
+    if (!parsed) return [];
+    const name = chineseName(houseId, srcDay, parsed.sku);
+    const text = carryMoveText(tag, next, name);
+    const sources = slips.filter((s) => s.saved && !s.voided && s.house === houseId && s.shipDate === srcDay && slipHasRegionSku(s, parsed.region, parsed.sku));
+    const changed = [];
+    for (const src of sources) {
+      if (putMoveLog(src, text, parsed)) changed.push(src);
+    }
+    for (const src of changed) await saveSlip(src);
+    return changed;
+  }
+  function backfillCarryMarks() {
+    if (backfillCarryMarks.busy) return;
+    const jobs = [];
+    const touch = (slip) => {
+      if (slip && !jobs.includes(slip)) jobs.push(slip);
+    };
+    for (const slip of slips) {
+      if (!slip.saved || slip.voided) continue;
+      const from = String(slip.note || "").match(/^移拍自 (\d{4}-\d{2}-\d{2})$/);
+      if (!from) continue;
+      const bits = String(slip.inner || "").split("；").map((s) => s.trim()).filter(Boolean);
+      for (const tag of bits) {
+        const parsed = parseCarryTag(tag);
+        if (!parsed) continue;
+        const name = chineseName(slip.house, from[1], parsed.sku);
+        if (putMoveLog(slip, carryTagLabel(tag, name), parsed)) touch(slip);
+        const text = carryMoveText(tag, slip.shipDate, name);
+        slips.filter((s) => s.saved && !s.voided && s.house === slip.house && s.shipDate === from[1] && slipHasRegionSku(s, parsed.region, parsed.sku)).forEach((src) => {
+          if (putMoveLog(src, text, parsed)) touch(src);
+        });
+      }
+    }
+    if (!jobs.length) return;
+    backfillCarryMarks.busy = true;
+    (async () => {
+      for (const src of jobs) await saveSlip(src);
+      backfillCarryMarks.busy = false;
+      renderDailyQty();
+    })();
+  }
+  async function writeCarrySlip(row, qty, mk, next, kind) {
+    const tag = `${row.region || ""} ${row.sku || ""} ${qty}件 ${kind === "move" ? "轉市" : "原市"} ${mk}`;
+    const crop = String(row.crop || "").trim();
+    const name = crop && crop !== row.sku ? (crop.startsWith(row.sku) ? crop.slice(String(row.sku || "").length).trim() : crop) : "";
+    const label = carryTagLabel(tag, name);
+    let slip = slips.find((s) => s.saved && !s.voided && s.house === matchHouse && s.shipDate === next && String(s.note || "") === `移拍自 ${matchDay}`);
+    const line = {
+      crop: row.crop || "",
+      spec: "",
+      sku: row.sku || "",
+      sub: (row.subs && row.subs[0]) || "",
+      country: "",
+      slots: [{ mk, qty: String(qty) }],
+    };
+    if (!slip) {
+      slip = freshSlip();
+      slip.house = matchHouse;
+      slip.shipDate = next;
+      slip.saved = true;
+      slip.note = `移拍自 ${matchDay}`;
+      slip.inner = tag;
+      slip.lines = [line];
+      slip.title = `${houseLab(matchHouse) || "拍賣"}-移拍`;
+      pushSlipLog(slip, "移拍", label);
+      slips.push(slip);
+    } else if (!String(slip.inner || "").includes(tag)) {
+      slip.lines = (slip.lines || []).concat([line]);
+      slip.inner = [slip.inner, tag].filter(Boolean).join("；");
+      pushSlipLog(slip, "移拍", label);
+    }
+    await saveSlip(slip);
+    await markSourceSlips(matchHouse, matchDay, tag, next);
+    return slip.id;
+  }
+  async function saveCarry(key) {
+    const row = matchRows.find((r) => gapKey(r) === key);
+    const n = unsoldOf(row);
+    const draft = carryDraft.get(key) || {};
+    if (!row || !n || !draft.kind) {
+      msg = "請先選退回、原市續賣或轉市。";
+      renderDailyQty();
+      return;
+    }
+    if (draft.kind !== "back" && !draft.mk) {
+      msg = "請選續賣的市場。";
+      renderDailyQty();
+      return;
+    }
+    const next = addDay(matchDay, 1);
+    let slipId = "";
+    if (draft.kind !== "back") slipId = await writeCarrySlip(row, n, draft.mk, next, draft.kind);
+    carries = carries.filter((c) => !(c.house === matchHouse && c.day === matchDay && c.key === key));
+    carries.push({
+      house: matchHouse,
+      day: matchDay,
+      key,
+      kind: draft.kind,
+      qty: n,
+      mk: draft.kind === "back" ? "" : draft.mk,
+      next: draft.kind === "back" ? "" : next,
+      slipId,
+    });
+    saveCarries();
+    pushMatch();
+    msg = draft.kind === "back" ? `已記入退回 ${n} 件。` : `已轉到 ${next}，${draft.mk} ${n} 件。`;
+    renderDailyQty();
   }
   function saveQtyConfirm() {
     const totals = qtyTotals(matchRows);
@@ -1262,6 +1650,8 @@
         billDate: matchBillDate,
         prices: matchPriceRows,
         confirm: confirmed ? { h: totals.h, p: totals.p } : null,
+        carry: carryPayload(),
+        pairs: pairPayload(),
       }),
     })
       .then((r) => r.json())
@@ -1277,6 +1667,7 @@
       .then((r) => r.json())
       .then((j) => {
         savedMatches = Array.isArray(j?.matches) ? j.matches : [];
+        mergeCarry(savedMatches);
         matchPulling = false;
         if (pane === "match" && tryApplySaved()) renderDailyQty();
       })
@@ -1547,7 +1938,7 @@
         alts,
       });
     }
-    const paired = pairCodeSwaps(out);
+    const paired = applyManualPairs(pairCodeSwaps(out), id, day);
     paired.sort((a, b) => {
       const ar = REGION_ORDER.indexOf(a.region);
       const br = REGION_ORDER.indexOf(b.region);
@@ -1563,12 +1954,6 @@
     }
     if (matchHouse !== "xinfeng" && matchHouse !== "yongfang") {
       msg = "大庄、二崙果菜還沒有拍賣帳號，先不自動回對。";
-      renderDailyQty();
-      return;
-    }
-    const mates = slipsForMatch(matchHouse, matchDay);
-    if (!mates.length) {
-      msg = "這天這個社場還沒有已送出的單。";
       renderDailyQty();
       return;
     }
@@ -1612,19 +1997,23 @@
     matchBillDate = j.billDate || "";
     matchSource = "auction";
     matchPriceRows = Array.isArray(j.rows) ? j.rows : [];
+    resetPriceFilter();
     matchRows = compareRegions(matchHouse, matchDay, matchPriceRows);
     matchFold = "run";
     saveMatchStore();
     pushMatch();
     const miss = matchRows.filter((r) => !r.ok).length;
     const when = matchBillDate ? `（行情日 ${matchBillDate}）` : "";
+    const noSlip = !slipsForMatch(matchHouse, matchDay).length;
     msg = !j.rows?.length
       ? (j.sawTable
         ? `行情表有打開${when}，但這幾組小代號沒有列在裡面。`
         : `這次沒有讀到行情表${when}。請再按一次開始回對。`)
-      : miss
-        ? `回對完成${when}，有 ${miss} 區的品項件數不一致。`
-        : `回對完成${when}，北中南的品項件數一致。`;
+      : noSlip
+        ? `這天沒有已送出的單，已讀到拍賣行情${when}。金額在下方。`
+        : miss
+          ? `回對完成${when}，有 ${miss} 區的品項件數不一致。`
+          : `回對完成${when}，北中南的品項件數一致。`;
     renderDailyQty();
   }
   function numText(n) {
@@ -1634,6 +2023,39 @@
     const [whole, frac] = s.split(".");
     const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return frac ? `${grouped}.${frac}` : grouped;
+  }
+  function priceItemKey(row) {
+    return [row.sku, row.name || row.crop].filter(Boolean).join(" ") || "未填品項";
+  }
+  function priceSubOf(row) {
+    return normSubCode(row.sub);
+  }
+  function priceSubList() {
+    const subs = [];
+    for (const row of matchPriceRows || []) {
+      const sub = priceSubOf(row);
+      if (sub && !subs.includes(sub)) subs.push(sub);
+    }
+    return subs.sort();
+  }
+  function priceFilteredRows(sub, item) {
+    return (matchPriceRows || []).filter((row) => {
+      if (sub && priceSubOf(row) !== sub) return false;
+      if (item && priceItemKey(row) !== item) return false;
+      return true;
+    });
+  }
+  function priceItemList(sub) {
+    const items = [];
+    for (const row of priceFilteredRows(sub, "")) {
+      const item = priceItemKey(row);
+      if (item && !items.includes(item)) items.push(item);
+    }
+    return items.sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  }
+  function priceCopyTitle(sub, item) {
+    const house = houseLab(matchHouse) || "拍賣";
+    return [house, sub ? `小代號 ${sub}` : "", item || "", "拍賣單價"].filter(Boolean).join("　");
   }
   function priceGroups(rows, withMarket) {
     const map = new Map();
@@ -1678,24 +2100,37 @@
         : "開始回對並讀到行情後，這裡彙整品項和市場的件數、金額、均價。";
       return `<section class="dq-price"><h3>價格彙整</h3><p class="dq-empty">${note}</p></section>`;
     }
-    const byItem = priceGroups(rows, false);
-    const byMarket = priceGroups(rows, true);
-    const missing = rows.every((r) => !Number(r.amt));
+    const subs = priceSubList();
+    if (priceSub && !subs.includes(priceSub)) priceSub = "";
+    const items = priceItemList(priceSub);
+    if (priceItem && !items.includes(priceItem)) priceItem = "";
+    const shown = priceFilteredRows(priceSub, priceItem);
+    const byItem = priceGroups(shown, false);
+    const byMarket = priceGroups(shown, true);
+    const missing = shown.every((r) => !Number(r.amt));
+    const subPicks = [`<span class="dq-price-lab">小代號</span>`, `<button type="button" class="pick${priceSub ? "" : " on"}" data-dq-price-sub="">全部</button>`]
+      .concat(subs.map((sub) => `<button type="button" class="pick${priceSub === sub ? " on" : ""}" data-dq-price-sub="${esc(sub)}">${esc(sub)}</button>`))
+      .join("");
+    const itemPicks = [`<span class="dq-price-lab">品項</span>`, `<button type="button" class="pick${priceItem ? "" : " on"}" data-dq-price-item="">全部</button>`]
+      .concat(items.map((item) => `<button type="button" class="pick${priceItem === item ? " on" : ""}" data-dq-price-item="${esc(item)}">${esc(item)}</button>`))
+      .join("");
     return `<section class="dq-price">
-      <div class="dq-price-head">
-        <h3>${esc(houseLab(matchHouse) || "拍賣")} 價格彙整</h3>
-        <button type="button" id="dq-price-copy">複製貼上</button>
-      </div>
+      <h3>${esc(houseLab(matchHouse) || "拍賣")} 價格彙整</h3>
       ${when ? `<p class="dq-match-note">${esc(when.replace(/。$/, ""))}</p>` : ""}
       ${missing ? `<p class="dq-match-note">這次行情沒有讀到金額，先列出件數。</p>` : ""}
+      <div class="dq-price-filters">
+        <div class="dq-price-picks">${subPicks}</div>
+        <div class="dq-price-picks">${itemPicks}</div>
+      </div>
+      <div class="dq-price-copyline"><button type="button" id="dq-price-copy">複製貼上</button></div>
       <div class="dq-price-grid">
         ${priceTable("品項", byItem, false)}
         ${priceTable("品項 × 市場", byMarket, true)}
       </div>
-      <div class="dq-gap-preview" id="dq-price-preview"${pricePreviewUrl ? "" : " hidden"}>${pricePreviewUrl ? `<img src="${esc(pricePreviewUrl)}" alt="拍賣單價圖片" /><p>${esc(priceNote)}</p>` : ""}</div>
+      <div class="dq-gap-preview" id="dq-price-preview"${pricePreviewSig === priceViewSig() && pricePreviewUrl ? "" : " hidden"}>${pricePreviewSig === priceViewSig() && pricePreviewUrl ? `<img src="${esc(pricePreviewUrl)}" alt="拍賣單價圖片" /><p>${esc(priceNote)}</p>` : ""}</div>
     </section>`;
   }
-  function pricePngBlob(byItem, byMarket) {
+  function pricePngBlob(byItem, byMarket, title) {
     const font = '"Microsoft JhengHei","Noto Sans TC",sans-serif';
     const width = 880;
     const pad = 24;
@@ -1730,8 +2165,14 @@
     ctx.fillStyle = "#14633a";
     ctx.fillRect(0, 0, width, 8);
     ctx.textBaseline = "top";
-    ctx.font = `800 32px ${font}`;
-    ctx.fillText(`${house}　拍賣單價`, pad, pad + 8);
+    const houseTitle = title || `${house}　拍賣單價`;
+    let titleSize = 32;
+    ctx.font = `800 ${titleSize}px ${font}`;
+    while (titleSize > 18 && ctx.measureText(houseTitle).width > width - pad * 2) {
+      titleSize -= 2;
+      ctx.font = `800 ${titleSize}px ${font}`;
+    }
+    ctx.fillText(houseTitle, pad, pad + 8);
     ctx.fillStyle = "#3d5348";
     ctx.font = `600 18px ${font}`;
     ctx.fillText(`寄送日 ${matchDay || ""}${matchBillDate ? `　行情日 ${matchBillDate}` : ""}`, pad, pad + 48);
@@ -1773,27 +2214,52 @@
     });
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
   }
-  function showPricePreview() {
+  function showPricePreview(scroll) {
     const host = document.getElementById("dq-price-preview");
-    const alert = document.getElementById("dq-msg");
-    if (alert) alert.textContent = priceNote;
-    if (!host) return false;
+    if (!host || !pricePreviewUrl) return false;
     host.hidden = false;
     host.innerHTML = `<img src="${esc(pricePreviewUrl)}" alt="拍賣單價圖片" /><p>${esc(priceNote)}</p>`;
-    host.scrollIntoView({ block: "nearest" });
+    if (scroll) host.scrollIntoView({ block: "nearest" });
     return true;
   }
-  async function copyPriceImage() {
-    const rows = matchPriceRows || [];
+  async function syncPricePreview() {
+    const sig = priceViewSig();
+    if (!matchPriceRows.length || pane !== "match") return;
+    if (pricePreviewSig === sig && pricePreviewUrl) return;
+    const token = ++pricePreviewToken;
+    const sub = priceSub;
+    const item = priceItem;
+    const rows = priceFilteredRows(sub, item);
+    if (!rows.length) return;
+    const title = priceCopyTitle(sub, item);
+    let blob = null;
+    try {
+      blob = await pricePngBlob(priceGroups(rows, false), priceGroups(rows, true), title);
+    } catch (_) {
+      blob = null;
+    }
+    if (token !== pricePreviewToken || sig !== priceViewSig()) return;
+    if (!blob) return;
+    if (pricePreviewUrl) URL.revokeObjectURL(pricePreviewUrl);
+    pricePreviewUrl = URL.createObjectURL(blob);
+    pricePreviewSig = sig;
+    priceNote = title;
+    showPricePreview(false);
+  }
+  async function copyPriceImage(pick) {
+    const sub = pick && Object.prototype.hasOwnProperty.call(pick, "sub") ? pick.sub : priceSub;
+    const item = pick && Object.prototype.hasOwnProperty.call(pick, "item") ? pick.item : priceItem;
+    const rows = priceFilteredRows(sub, item);
     if (!rows.length) {
-      msg = "還沒有拍賣單價可以複製。";
+      msg = "這個範圍沒有拍賣單價可以複製。";
       const el = document.getElementById("dq-msg");
       if (el) el.textContent = msg;
       return;
     }
+    const title = priceCopyTitle(sub, item);
     let blob;
     try {
-      blob = await pricePngBlob(priceGroups(rows, false), priceGroups(rows, true));
+      blob = await pricePngBlob(priceGroups(rows, false), priceGroups(rows, true), title);
     } catch (_) {
       blob = null;
     }
@@ -1803,8 +2269,7 @@
       if (el) el.textContent = msg;
       return;
     }
-    const house = houseLab(matchHouse) || "拍賣";
-    const name = `${house}_${matchDay || "寄貨"}_拍賣單價.png`.replace(/[\\/:*?"<>|\s]+/g, "_");
+    const name = `${title}.png`.replace(/[\\/:*?"<>|\s]+/g, "_");
     let copied = false;
     let shared = false;
     try {
@@ -1817,7 +2282,7 @@
       const file = new File([blob], name, { type: "image/png" });
       if (navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title: `${house} 拍賣單價` });
+          await navigator.share({ files: [file], title });
           shared = true;
         } catch (err) {
           if (err && err.name === "AbortError") return;
@@ -1833,15 +2298,24 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     }
-    if (pricePreviewUrl) URL.revokeObjectURL(pricePreviewUrl);
-    pricePreviewUrl = URL.createObjectURL(blob);
     priceNote = copied
       ? "已複製單價圖片。到 LINE 貼上。若貼不上，長按這張圖再複製。"
       : shared
         ? "請在分享裡選 LINE。"
         : "已存成圖片檔。也可以長按這張圖複製，再貼到 LINE。";
     msg = priceNote;
-    if (!showPricePreview()) renderDailyQty();
+    const sameView = (sub || "") === (priceSub || "") && (item || "") === (priceItem || "");
+    if (sameView) {
+      if (pricePreviewUrl) URL.revokeObjectURL(pricePreviewUrl);
+      pricePreviewUrl = URL.createObjectURL(blob);
+      pricePreviewSig = priceViewSig();
+      const alert = document.getElementById("dq-msg");
+      if (alert) alert.textContent = priceNote;
+      if (!showPricePreview(true)) renderDailyQty();
+    } else {
+      const alert = document.getElementById("dq-msg");
+      if (alert) alert.textContent = priceNote;
+    }
   }
   function housesOnDay(day) {
     const ids = [];
@@ -1864,6 +2338,7 @@
     matchCaptcha = "";
     matchCaptchaSub = "";
     matchFold = "";
+    resetPriceFilter();
     saveMatchStore();
     pane = "match";
     msg = ids.length > 1 ? "已帶到這一天。這天有多家社場，請再點要回對的那一家。" : "";
@@ -1940,6 +2415,274 @@
     if (msgEl) msgEl.textContent = msg;
     const btn = document.getElementById("dq-copy");
     if (btn && msg.startsWith("已複製")) btn.textContent = "已複製，可貼上 LINE";
+  }
+  const YF_MARKET = {
+    一市: "一市場",
+    二市: "二市場",
+    三重: "三市場",
+    板橋: "板橋",
+    桃園: "桃園",
+    台中: "台中",
+    高雄: "高雄",
+    鳳山: "鳳山",
+    屏東: "屏東",
+  };
+  const YF_ORDER = ["一市場", "二市場", "三市場", "板橋", "桃園", "台中", "高雄", "鳳山", "屏東"];
+  const YF_SUPPLY = "N99833";
+  let yfBusy = false;
+  function paintMsg() {
+    const msgEl = document.getElementById("dq-msg");
+    if (msgEl) msgEl.textContent = msg;
+  }
+  function yfPackSpec(spec) {
+    const t = String(spec || "").trim().replace(/公斤/g, "");
+    if (!t) return "";
+    if (/^\d+\.$/.test(t)) return t;
+    const m = t.match(/^(\d+(?:\.\d+)?)(?:\s*kg)?$/i);
+    return m ? `${m[1]}kg` : t;
+  }
+  function yfPackLabel(spec) {
+    const t = yfPackSpec(spec);
+    if (!t) return "";
+    if (/(公斤|kg)$/i.test(t)) return t.replace(/kg$/i, "公斤");
+    return `${t}公斤`;
+  }
+  function yfOfficial(sku) {
+    const code = String(sku || "").trim().toUpperCase();
+    const item = (catalog || []).find((x) => String(x.code || "").toUpperCase() === code);
+    if (!item) return { code, name: "" };
+    const kind = String(item.kind || "").trim();
+    const name = String(item.name || "").trim();
+    const zh = kind && name && kind !== name ? `${kind} ${name}` : name || kind;
+    return { code, name: zh };
+  }
+  function yfSheetModel(slip) {
+    const cols = [];
+    const items = [];
+    const unmatched = [];
+    for (const line of slip?.lines || []) {
+      const qty = {};
+      for (const slot of line.slots || []) {
+        const mk = YF_MARKET[slot.mk] || "";
+        const n = Number(String(slot.qty ?? "").replace(/[^\d.]/g, ""));
+        if (!mk || !n) continue;
+        qty[mk] = (qty[mk] || 0) + n;
+        if (!cols.includes(mk)) cols.push(mk);
+      }
+      if (!Object.keys(qty).length) continue;
+      const hit = yfOfficial(line.sku);
+      if (!hit.name) {
+        unmatched.push(hit.code || "未填代號");
+        continue;
+      }
+      items.push({
+        supplyNo: YF_SUPPLY,
+        subCode: String(line.sub || "").trim(),
+        productName: hit.name,
+        sku: hit.code,
+        packSpec: yfPackSpec(line.spec),
+        qty,
+      });
+    }
+    cols.sort((a, b) => {
+      const ia = YF_ORDER.indexOf(a);
+      const ib = YF_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    return { cols, items, unmatched };
+  }
+  async function yfPrepare(slip) {
+    await ensureCatalog();
+    const model = yfSheetModel(slip);
+    if (!model.items.length && !model.unmatched.length) return { model, error: "請先填市場件數。" };
+    if (model.unmatched.length) return { model, error: `${model.unmatched.join("、")} 在北農品名表對不到中文，沒有送出。` };
+    return { model, error: "" };
+  }
+  function yfPairText(model) {
+    return model.items.map((it) => `${it.sku} ${it.productName}`).join("、");
+  }
+  function yfTableRows(model, slip) {
+    const { cols, items } = model;
+    const head = ["代號", "小代號", "品名", "規格", ...cols];
+    const blanks = (n) => Array.from({ length: n }, () => "");
+    const date = String(slip.shipDate || "").replace(/-/g, "/");
+    const rows = [["永芳", date, ...blanks(Math.max(0, head.length - 2))], head];
+    items.forEach((it, i) => {
+      rows.push([
+        it.supplyNo,
+        it.subCode,
+        it.productName,
+        yfPackLabel(it.packSpec),
+        ...cols.map((c) => (it.qty[c] ? `${it.qty[c]}件` : "")),
+      ]);
+      rows.push(["", "", it.sku, "", ...cols.map(() => "")]);
+      if (i < items.length - 1) rows.push(blanks(head.length));
+    });
+    const note = String(slip.note || "").trim();
+    if (note) rows.push(["備註", note]);
+    return rows;
+  }
+  function yfTableBlob(rows) {
+    const n = Math.max(2, ...rows.map((r) => r.length));
+    const widths = Array.from({ length: n }, (_, col) => (col === 1 ? 102 : col === 2 ? 112 : col < 4 ? 86 : 78));
+    const width = widths.reduce((sum, w) => sum + w, 0);
+    const height = 30 * rows.length;
+    const canvas = document.createElement("canvas");
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return Promise.resolve(null);
+    ctx.scale(2, 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "#cfd4d8";
+    ctx.lineWidth = 1;
+    ctx.font = '15px "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#263238";
+    ctx.beginPath();
+    let x = 0;
+    ctx.moveTo(0.5, 0);
+    ctx.lineTo(0.5, height);
+    widths.forEach((w) => {
+      x += w;
+      ctx.moveTo(x - 0.5, 0);
+      ctx.lineTo(x - 0.5, height);
+    });
+    for (let r = 0; r <= rows.length; r += 1) {
+      const y = 30 * r - 0.5 * (r !== 0);
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+    rows.forEach((row, ri) => {
+      let left = 0;
+      for (let c = 0; c < n; c += 1) {
+        ctx.fillText(row[c] || "", left + widths[c] / 2, 30 * ri + 15, widths[c] - 8);
+        left += widths[c];
+      }
+    });
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
+  }
+  async function copyYongfangNotice() {
+    syncCurrent();
+    const s = slips[cur];
+    if (!s || s.house !== "yongfang") return;
+    const ready = await yfPrepare(s);
+    if (ready.error) {
+      msg = ready.error;
+      paintMsg();
+      return;
+    }
+    const rows = yfTableRows(ready.model, s);
+    let blob = null;
+    try {
+      blob = await yfTableBlob(rows);
+    } catch (_) {
+      blob = null;
+    }
+    if (!blob) {
+      msg = "金芳通知圖沒做成。";
+      paintMsg();
+      return;
+    }
+    const text = rows.map((r) => r.join("\t")).join("\n");
+    const html = `<table style="border-collapse:collapse;background:#fff;font-family:Microsoft JhengHei,sans-serif">${rows
+      .map(
+        (r) =>
+          `<tr>${r
+            .map(
+              (cell) =>
+                `<td style="min-width:70px;border:1px solid #cfd4d8;padding:4px 8px;text-align:center">${esc(cell)}</td>`,
+            )
+            .join("")}</tr>`,
+      )
+      .join("")}</table>`;
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" }),
+            "image/png": blob,
+          }),
+        ]);
+        msg = `已複製金芳通知。品名對上 ${yfPairText(ready.model)}。`;
+        paintMsg();
+        const btn = document.getElementById("dq-yf-copy");
+        if (btn) btn.textContent = "已複製，可貼上 LINE";
+        return;
+      }
+    } catch (_) {}
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `金芳通知-${s.shipDate || localYmd()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    msg = "這台瀏覽器沒複製到剪貼簿，已存成圖片檔。";
+    paintMsg();
+  }
+  async function sendYongfang() {
+    syncCurrent();
+    const s = slips[cur];
+    if (!s || s.house !== "yongfang") return;
+    const ready = await yfPrepare(s);
+    if (ready.error) {
+      msg = ready.error;
+      paintMsg();
+      return;
+    }
+    const model = ready.model;
+    if (dayLocked(s.shipDate)) {
+      msg = "這天已過，金芳底稿鎖住了，不能再寫進去。通知圖還是可以複製。";
+      paintMsg();
+      return;
+    }
+    if (yfBusy) {
+      msg = "正在寫進金芳。";
+      paintMsg();
+      return;
+    }
+    yfBusy = true;
+    const btn = document.getElementById("dq-yf-send");
+    if (btn) btn.textContent = "寫入中…";
+    msg = "正在寫進金芳，存檔和下一張都不用等。";
+    paintMsg();
+    try {
+      const r = await fetch("./api/daily-qty/yongfang-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: s.yfId || "",
+          draftDate: s.shipDate,
+          title: slipNo(s),
+          note: s.note || "",
+          items: model.items.map((it) => ({
+            supplyNo: it.supplyNo,
+            subCode: it.subCode,
+            productName: it.productName,
+            packSpec: it.packSpec,
+            markets: model.cols.map((market) => ({ market, qty: it.qty[market] || 0 })),
+          })),
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) throw new Error(j.error || "沒寫進金芳");
+      s.yfId = j.id || s.yfId || "";
+      s.yfNo = j.sheetNo ? String(j.sheetNo) : s.yfNo || "";
+      msg = `已寫進金芳第 ${s.yfNo} 張。品名對上 ${yfPairText(model)}。`;
+      if (btn) btn.textContent = s.yfNo ? `更新金芳第${s.yfNo}張` : "送到金芳";
+      saveSlip(s);
+    } catch (err) {
+      msg = err && err.message ? err.message : "沒寫進金芳，再按一次。";
+      if (btn) btn.textContent = s.yfNo ? `更新金芳第${s.yfNo}張` : "送到金芳";
+    } finally {
+      yfBusy = false;
+      paintMsg();
+    }
   }
   async function writePlain(text) {
     if (navigator.clipboard?.writeText) {
@@ -2796,9 +3539,9 @@
     if (bound) return;
     bound = true;
     setInterval(() => {
-      const root = document.getElementById("dq-root");
+    const root = document.getElementById("dq-root");
       const page = document.getElementById("page-daily-qty");
-      if (!root) return;
+    if (!root) return;
       if (document.hidden) return;
       if (page && page.hidden) return;
       if (document.activeElement && root.contains(document.activeElement)) return;
@@ -2814,6 +3557,21 @@
     const root = document.getElementById("dq-root");
     if (!root) return;
     root.addEventListener("change", (e) => {
+      const mkSel = e.target.closest("[data-dq-carry-mk]");
+      if (mkSel) {
+        const key = mkSel.dataset.dqCarryMk || "";
+        const prev = carryDraft.get(key) || { kind: "", mk: "" };
+        carryDraft.set(key, { kind: prev.kind, mk: mkSel.value });
+        return;
+      }
+      const pairInput = e.target.closest("[data-dq-pair]");
+      if (pairInput) {
+        const key = pairInput.dataset.dqPair || "";
+        if (pairInput.checked) pairPick.add(key);
+        else pairPick.delete(key);
+        renderDailyQty();
+        return;
+      }
       const input = e.target.closest("[data-dq-gap]");
       if (!input) return;
       const key = input.dataset.dqGap || "";
@@ -2910,6 +3668,7 @@
         matchSource = "";
         matchCalOpen = false;
         matchFold = "";
+        resetPriceFilter();
         saveMatchStore();
         pane = "match";
         renderDailyQty();
@@ -3051,6 +3810,7 @@
           matchPriceRows = [];
           matchSource = "";
           matchFold = "";
+          resetPriceFilter();
           saveMatchStore();
         }
         pane = "match";
@@ -3117,7 +3877,7 @@
         renderDailyQty();
         return;
       }
-      if (e.target.closest("#dq-copy") || e.target.closest("#dq-img-ship") || e.target.closest("#dq-img-freight")) {
+      if (e.target.closest("#dq-copy") || e.target.closest("#dq-img-ship") || e.target.closest("#dq-img-freight") || e.target.closest("#dq-yf-send") || e.target.closest("#dq-yf-copy")) {
         if (!viewMatchesSlip()) {
           msg = "這天沒有單。";
           const msgEl = document.getElementById("dq-msg");
@@ -3137,6 +3897,14 @@
         copyDraftImage("freight");
         return;
       }
+      if (e.target.closest("#dq-yf-send")) {
+        sendYongfang();
+        return;
+      }
+      if (e.target.closest("#dq-yf-copy")) {
+        copyYongfangNotice();
+        return;
+      }
       if (e.target.closest("#dq-bill-pick")) {
         document.getElementById("dq-bill-file")?.click();
         return;
@@ -3144,19 +3912,19 @@
       if (e.target.closest("#dq-photo-clear")) {
         clearMatchPhoto();
         msg = "已清除這張照片。";
-        renderDailyQty();
-        return;
-      }
+          renderDailyQty();
+          return;
+        }
       if (e.target.closest("[data-dq-help-open]")) {
         matchHelp = true;
-        renderDailyQty();
-        return;
-      }
+          renderDailyQty();
+          return;
+        }
       if (e.target.matches("[data-dq-help-close]") || e.target.closest("button[data-dq-help-close]")) {
         matchHelp = false;
-        renderDailyQty();
-        return;
-      }
+          renderDailyQty();
+          return;
+        }
       if (e.target.closest("[data-dq-cal-toggle]")) {
         matchCalOpen = !matchCalOpen;
         renderDailyQty();
@@ -3179,6 +3947,38 @@
         copyPriceImage();
         return;
       }
+      const carryKind = e.target.closest("[data-dq-carry-kind]");
+      if (carryKind) {
+        const key = carryKind.dataset.dqCarry || "";
+        const kind = carryKind.dataset.dqCarryKind || "";
+        const row = matchRows.find((r) => gapKey(r) === key);
+        const mks = ourMarkets(row || {});
+        const prev = carryDraft.get(key) || { kind: "", mk: "" };
+        const mk = kind === "stay" && mks.length === 1 ? mks[0] : kind === "move" ? "" : prev.mk;
+        carryDraft.set(key, { kind, mk });
+        renderDailyQty();
+        return;
+      }
+      const carrySave = e.target.closest("[data-dq-carry-save]");
+      if (carrySave) {
+        saveCarry(carrySave.dataset.dqCarrySave || "");
+        return;
+      }
+      if (e.target.closest("[data-dq-pair-ok]")) {
+        confirmManualPair();
+        return;
+      }
+      if (e.target.closest("[data-dq-price-sub]")) {
+        priceSub = e.target.closest("[data-dq-price-sub]").dataset.dqPriceSub || "";
+        if (priceItem && !priceItemList(priceSub).includes(priceItem)) priceItem = "";
+        renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-price-item]")) {
+        priceItem = e.target.closest("[data-dq-price-item]").dataset.dqPriceItem || "";
+        renderDailyQty();
+        return;
+      }
       if (e.target.closest("[data-dq-qty-clear]")) {
         clearQtyConfirm();
         return;
@@ -3191,6 +3991,7 @@
         matchCaptchaSub = "";
         matchSource = "";
         matchFold = "";
+        resetPriceFilter();
         saveMatchStore();
         pane = "match";
         renderDailyQty();
@@ -3263,6 +4064,7 @@
         matchPriceRows = [];
         matchSource = "";
         matchFold = "";
+        resetPriceFilter();
         saveMatchStore();
         renderDailyQty();
         return;
@@ -3423,6 +4225,7 @@
     const batch = String(s.inner || "").trim();
     if (freight) chunks.push(esc(`收貨：${freight}`));
     if (batch) chunks.push(esc(`批次：${batch}`));
+    (s.log || []).filter((e) => e.kind === "移拍" && e.text).forEach((e) => chunks.push(`<b>移拍：${esc(e.text)}</b>`));
     return chunks.join("\n\n");
   }
   function viewMatchesSlip() {
@@ -3463,8 +4266,10 @@
       slips.forEach((s) => {
         if (!s.saved && slipHasBody(s)) queueSlipSync(s);
       });
+      loadPairs();
       loadMatchStore();
       loadConfirms();
+      loadCarries();
       pushMatch();
     }
     if (!shipDate) shipDate = localYmd();
@@ -3479,7 +4284,7 @@
     const keyLive = !keyLocked || (slips[cur] && slips[cur].shipDate === shipDate && (!house || slips[cur].house === house));
     const dis = keyLocked ? " disabled" : "";
     const lineHtml = !keyLive ? "" : lines.map((line, i) => {
-      const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
+        const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
       const countryNow = String(line.country || "");
       const countryList = countryNow && !COUNTRIES.includes(countryNow) ? COUNTRIES.concat(countryNow) : COUNTRIES;
       const countryOpts = [`<option value="">選國家</option>`]
@@ -3490,53 +4295,53 @@
         : line.sku
           ? `${line.sku} ${[line.kind, line.crop].filter(Boolean).join(" ")}`
           : line.crop || "";
-      const slotHtml = (line.slots || []).map((slot, si) => {
-        const opts = [`<option value="">選市場</option>`]
+        const slotHtml = (line.slots || []).map((slot, si) => {
+          const opts = [`<option value="">選市場</option>`]
           .concat(MK_KEYS.map((mk) => {
-            const dis = mk !== slot.mk && used.has(mk) ? " disabled" : "";
-            const on = mk === slot.mk ? " selected" : "";
-            return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
+                const dis = mk !== slot.mk && used.has(mk) ? " disabled" : "";
+                const on = mk === slot.mk ? " selected" : "";
+                return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
           }))
-          .join("");
+            .join("");
         const extra = !keyLocked && (line.slots || []).length > 1
           ? `<button type="button" class="ghost" data-dq-del-slot="${si}" aria-label="移掉這個市場">×</button>`
-          : "";
-        return `<div class="dq-slot${slot.mk && qtyOf(slot.qty) ? " is-on" : ""}" data-dq-slot="${si}">
+            : "";
+          return `<div class="dq-slot${slot.mk && qtyOf(slot.qty) ? " is-on" : ""}" data-dq-slot="${si}">
           <select data-dq-slot-mk${dis}>${opts}</select>
           <input data-dq-slot-qty inputmode="numeric" placeholder="件數" value="${esc(slot.qty)}"${dis} />
-          <span class="dq-slot-unit">件</span>
-          ${extra}
-        </div>`;
-      }).join("");
+            <span class="dq-slot-unit">件</span>
+            ${extra}
+          </div>`;
+        }).join("");
       const addSlot = !keyLocked && (line.slots || []).length < MK_KEYS.length
         ? `<button type="button" class="ghost dq-add-slot" data-dq-add-slot="${i}">＋市場</button>`
-        : "";
-      return `<div class="dq-line" data-dq-line="${i}">
+          : "";
+        return `<div class="dq-line" data-dq-line="${i}">
         <div class="dq-line-head">
-          <label class="dq-sub">小代號
+            <label class="dq-sub">小代號
             <input data-dq-f="sub" value="${esc(line.sub || "")}" placeholder="493"${dis} />
-          </label>
+            </label>
           <label class="dq-crop">品項
             <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(shown)}"${dis} />
           </label>
           ${keyLocked ? "" : `<button type="button" class="ghost dq-del" data-dq-del="${i}">刪</button>`}
         </div>
         <div class="dq-line-meta">
-          <label class="dq-spec">規格
-            <span class="dq-spec-box">
+            <label class="dq-spec">規格
+              <span class="dq-spec-box">
               <input data-dq-f="spec" inputmode="decimal" placeholder="12" value="${esc(String(line.spec || "").replace(/公斤/g, ""))}"${dis} />
-              <em>公斤</em>
-            </span>
-          </label>
+                <em>公斤</em>
+              </span>
+            </label>
           <label class="dq-country">國別
             <select data-dq-f="country"${dis}>${countryOpts}</select>
           </label>
-        </div>
+          </div>
         <div class="dq-markets">
           <span class="dq-markets-lab">市場</span>
           <div class="dq-slots">${slotHtml}${addSlot}</div>
         </div>
-      </div>`;
+        </div>`;
     }).join("");
     const rack = `<nav class="dq-rack" aria-label="拍賣寄貨三層">
       <button type="button" data-dq-pane="key"${pane === "key" ? ' class="on"' : ""}><b>1</b><span>鍵單</span></button>
@@ -3584,7 +4389,7 @@
             <div class="dq-list-title">
               <h3>${title}</h3>
               ${dayMatchBtn}
-            </div>
+                </div>
             <label class="dq-q">快速搜尋
               <input id="dq-q" type="search" placeholder="單號、日期、社場、品項、市場" value="${esc(listQ)}" />
             </label>
@@ -3622,7 +4427,7 @@
         ? `<p class="dq-match-note">還有 ${pending.length} 張還沒送出，這次回對不計入：${esc(pending.map((s) => slipTabText(s)).join("、"))}。請先到鍵單按確認儲存。</p>`
         : "";
       const billHint = matchHouse === "xinfeng"
-        ? "新豐自動讀隔天行情，小代號 493、930、168 加在一起。"
+        ? "新豐自動讀隔天行情，小代號 493、930、168、830 加在一起。"
         : matchHouse === "yongfang"
           ? "金芳用小代號各自登入查隔天行情，050、066、168、070 加在一起。"
           : "大庄、二崙果菜還沒有拍賣帳號，先不自動回對。";
@@ -3630,7 +4435,7 @@
         ? `<div class="dq-sheet-wrap"><table class="dq-sheet dq-grid"><thead><tr><th>市場</th><th>品項</th><th>寄出合計</th></tr></thead><tbody>${ourRows
             .map((r) => `<tr><td>${esc(r.mk)}</td><td>${esc([r.sku, r.crop].filter(Boolean).join(" "))}</td><td class="num">${r.qty}</td></tr>`)
             .join("")}</tbody><tfoot><tr><td colspan="2">合計</td><td class="num">${ourTotal}</td></tr></tfoot></table></div>`
-        : `<p class="dq-empty">這天這個社場還沒有已送出的單。</p>`;
+        : `<p class="dq-empty">這天還沒有已送出的單。仍可按開始回對，看拍賣有沒有金額。</p>`;
       const shownMatch = [...matchRows].sort((a, b) => {
         if (matchSource === "auction") {
           const ar = REGION_ORDER.indexOf(a.region);
@@ -3669,12 +4474,13 @@
       const gapBtn = shownMatch.some((r) => !r.ok)
         ? `<button type="button" id="dq-gap-img">${gapN ? `通知拍賣（${gapN}）` : "請先勾選"}</button>`
         : "";
-      const actRow = confirmBtn || gapBtn ? `<div class="dq-act-row">${confirmBtn}${gapBtn}</div>` : "";
+      const pairBtn = pairPick.size === 2 ? `<button type="button" class="dq-pair-ok" data-dq-pair-ok>確認無誤</button>` : "";
+      const actRow = confirmBtn || gapBtn || pairBtn ? `<div class="dq-act-row">${confirmBtn}${gapBtn}${pairBtn}</div>` : "";
       const gapPreview = shownMatch.some((r) => !r.ok)
         ? `<div class="dq-gap-preview" id="dq-gap-preview"${gapPreviewUrl ? "" : " hidden"}>${gapPreviewUrl ? `<img src="${esc(gapPreviewUrl)}" alt="件數不符圖片" /><p>${esc(gapNote)}</p>` : ""}</div>`
         : "";
       const matchItems = visibleMatch.map((r) => {
-        const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
+              const cls = r.ok ? "is-ok" : r.h && !r.p ? "is-miss" : "is-bad";
         const st = r.swap
           ? (r.ok ? "代號對調，件數相同" : "代號對調，件數不同")
           : r.ok ? "一樣" : !r.p ? "我們有、拍賣沒有" : !r.h ? "拍賣有、我們沒有" : "件數不同";
@@ -3697,7 +4503,11 @@
         const pick = problem
           ? `<label class="dq-gap-pick"><input type="checkbox" data-dq-gap="${esc(key)}" ${noticePick.has(key) ? "checked" : ""} />通知</label>`
           : "";
-        return { cls, st: esc(st), diff: esc(diff), detail, altHtml, name, place, h: r.h, p: r.p, pick };
+        const pairBox = problem
+          ? `<label class="dq-pair-pick"><input type="checkbox" data-dq-pair="${esc(key)}" ${pairPick.has(key) ? "checked" : ""} />同一批</label>`
+          : "";
+        const carry = carryHtml(r);
+        return { cls, st: esc(st), diff: esc(diff), detail, altHtml, name, place, h: r.h, p: r.p, pick, pairBox, carry };
       });
       const helpText = matchSource === "auction"
         ? "每一列是同一個區域。同一小代號、品名相同但代號不同，合成一列代號對調。件數相同就是同一批。北部、中區、南部各自看，不會把別區的市場寫進來。"
@@ -3714,18 +4524,19 @@
             <h3>件數回對 <button type="button" class="ghost dq-help" data-dq-help-open>說明</button></h3>
             <p class="dq-bits">${matchBits.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
             <p class="dq-confirmed">${esc(statusLine)}</p>
+            ${matchRows.some((r) => unsoldOf(r) > 0) ? `<p class="dq-match-note">沒賣完的每一列填今天移拍：退回，或隔天續賣。續賣會自動開到隔天的寄貨單。</p>` : ""}
             ${actRow}
             ${gapPreview}
             ${tucked ? `<p class="dq-tucked">${tucked} 筆件數相同，已收合。</p>` : ""}
             <div class="dq-match-cards">${matchItems.map((r) => `<article class="${r.cls}${r.pick ? " is-pick" : ""}">
-              <div class="dq-card-top"><b>${r.st}</b>${r.pick}<span>${r.place}</span></div>
+              <div class="dq-card-top"><b>${r.st}</b>${r.pick || ""}${r.pairBox || ""}<span>${r.place}</span></div>
               <div class="dq-card-name">${r.name}</div>
               <div class="dq-card-nums"><div><span>我們</span><b>${r.h}</b></div><div><span>拍賣</span><b>${r.p}</b></div><div><span>差</span><b>${r.diff}</b></div></div>
-              ${r.detail}${r.altHtml}
+              ${r.detail}${r.altHtml}${r.carry || ""}
             </article>`).join("")}</div>
             <div class="dq-sheet-wrap"><table class="dq-sheet"><thead><tr><th>結果</th><th>${matchSource === "auction" ? "區域" : "市場"}</th><th>品項</th><th>我們寄出</th><th>拍賣場</th><th>差</th><th>通知</th></tr></thead><tbody>${matchItems
-            .map((r) => `<tr class="${r.cls}"><td>${r.st}</td><td>${r.place}</td><td>${r.name}${r.detail}${r.altHtml}</td>
-                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.diff}</td><td>${r.pick}</td></tr>`)
+            .map((r) => `<tr class="${r.cls}"><td>${r.st}</td><td>${r.place}</td><td>${r.name}${r.detail}${r.altHtml}${r.carry || ""}</td>
+                <td class="num">${r.h}</td><td class="num">${r.p}</td><td class="num">${r.diff}</td><td>${r.pick || ""}${r.pairBox || ""}</td></tr>`)
             .join("")}</tbody></table></div>${helpPop}</section>`
         : "";
       const photoBox = matchPhotoUrl
@@ -3749,14 +4560,14 @@
           </div>`
         : "";
       body = savedSlips.length
-        ? `<div class="dq-match${matchCalOpen ? " is-cal-open" : ""}${matchCaptcha ? " has-captcha" : ""}">
+        ? `<div class="dq-match${matchCalOpen ? " is-cal-open" : ""}${matchCaptcha ? " has-captcha" : ""}${matchSource ? " has-result" : ""}">
             <p class="dq-match-note dq-match-lead">選社場和寄送日後按開始回對。系統用這家的帳號讀隔天行情，同一區、同一品項的件數加總再比。安排 493 但以 930 成交，仍算同一家。</p>
             <div class="dq-houses">${houseBtnsMatch}</div>
             <div class="dq-date-pick">
               <div class="dq-date-line">
                 <span class="dq-date-now">寄送日 ${esc(matchDay)}</span>
                 <button type="button" class="ghost dq-cal-toggle" data-dq-cal-toggle>${matchCalOpen ? "收合月曆" : "改日期"}</button>
-                ${matchCaptcha ? "" : `<button type="button" class="primary dq-run-top" data-dq-run>開始回對</button>`}
+                ${matchCaptcha ? "" : `<button type="button" class="primary dq-run-top" data-dq-run>${matchSource ? "重新回對" : "開始回對"}</button>`}
               </div>
               <p class="dq-msg dq-alert" id="dq-msg">${esc(matchCaptcha ? "" : msg)}</p>
               <div class="dq-cal-fold">
@@ -3815,14 +4626,14 @@
           <div class="dq-fields">
             <p class="dq-mk-lab">${keyHint}</p>
             ${keyEmpty}
-            ${lineHtml}
+          ${lineHtml}
             ${keyLocked || !keyLive ? "" : `<button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>`}
             <label class="dq-note">社場／貨運看（是否收貨）
               <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(keyLive ? note : "")}"${dis} />
             </label>
             <label class="dq-note">內部出貨（品項批次）
               <input id="dq-inner" placeholder="例如：#UHA770 新鮮L" value="${esc(keyLive ? inner : "")}"${dis} />
-            </label>
+          </label>
           </div>
         </div>
         <aside class="dq-side">
@@ -3834,6 +4645,7 @@
             <button type="button" class="ghost" id="dq-copy">複製文字</button>
             ${keyLocked ? "" : `<button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>`}
           </div>
+          ${house === "yongfang" && keyLive ? `<div class="dq-yf"><p class="dq-yf-lab">金芳草稿</p><button type="button" class="dq-yf-send" id="dq-yf-send">${slips[cur] && slips[cur].yfNo ? `更新金芳第${esc(slips[cur].yfNo)}張` : "送到金芳"}</button><button type="button" class="dq-yf-copy" id="dq-yf-copy">複製金芳通知</button></div>` : ""}
           <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
         </aside>
       </div>`;
@@ -3841,16 +4653,18 @@
     root.innerHTML = `
       <header class="dq-head">
         <button type="button" class="ghost dq-home" data-dq-home>← 總覽</button>
-        ${rack}
+      ${rack}
       </header>
       ${body}
     `;
     if (pane === "key") paintSlip();
+    if (pane === "match") syncPricePreview();
     const cap = document.getElementById("dq-captcha");
     if (pane === "match" && cap) cap.focus();
     persistLocal();
     pullHistory();
     pullMatches();
+    backfillCarryMarks();
   }
   function sessionToSlip(rec) {
     return {
@@ -3869,6 +4683,8 @@
       at: Number(rec.at) || 0,
       voided: !!rec.voided,
       log: Array.isArray(rec.log) ? rec.log : [],
+      yfId: rec.yfId || "",
+      yfNo: rec.yfNo || "",
     };
   }
   let pulling = false;

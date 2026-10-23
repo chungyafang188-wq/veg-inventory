@@ -354,7 +354,22 @@ function cleanMatch(body) {
   const confirm = body?.confirm && typeof body.confirm === "object"
     ? { h: Number(body.confirm.h) || 0, p: Number(body.confirm.p) || 0 }
     : null;
-  return { house, day, billDate, prices, confirm, at: Date.now() };
+  const carry = (Array.isArray(body?.carry) ? body.carry : []).slice(0, 40).map((c) => {
+    const kind = ["back", "stay", "move"].includes(c?.kind) ? c.kind : "";
+    const key = String(c?.key || "").slice(0, 180);
+    const qty = Number(c?.qty) || 0;
+    if (!kind || !key || !qty) return null;
+    const next = /^\d{4}-\d{2}-\d{2}$/.test(String(c?.next || "")) ? String(c.next) : "";
+    return { key, kind, qty, mk: String(c?.mk || "").slice(0, 20), next, slipId: String(c?.slipId || "").slice(0, 80) };
+  }).filter(Boolean);
+  const pairs = (Array.isArray(body?.pairs) ? body.pairs : []).slice(0, 40).map((c) => {
+    const qty = Number(c?.qty) || 0;
+    const sku = String(c?.sku || "").slice(0, 20);
+    const altSku = String(c?.altSku || "").slice(0, 20);
+    if (!qty || !sku || !altSku) return null;
+    return { region: String(c?.region || "").slice(0, 12), sku, altSku, qty };
+  }).filter(Boolean);
+  return { house, day, billDate, prices, confirm, carry, pairs, at: Date.now() };
 }
 async function readDailyQtyMatches() {
   const fileMatches = readDailyQtyMatchFile();
@@ -815,6 +830,201 @@ function handleLineDrafts(req, res) {
   return true;
 }
 
+const YONGFANG_PASS = path.join(DATA_DIR, "yongfang-share.json");
+const YONGFANG_MARKETS = ["一市場", "二市場", "三市場", "板橋", "桃園", "台中", "高雄", "鳳山", "屏東"];
+let yongfangCookie = "";
+let yongfangCookieAt = 0;
+
+function yongfangPassword() {
+  const fromEnv = String(process.env.YONGFANG_SHARE_PASSWORD || "").trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const data = JSON.parse(fs.readFileSync(YONGFANG_PASS, "utf8"));
+    return String(data.password || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function yongfangHttp(method, urlPath, { cookie, json, timeout = 70000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const body = json == null ? null : Buffer.from(JSON.stringify(json));
+    const req = https.request(
+      {
+        method,
+        hostname: "payroll-attendance.onrender.com",
+        path: urlPath,
+        headers: {
+          Accept: "application/json",
+          ...(body ? { "Content-Type": "application/json", "Content-Length": body.length } : {}),
+          ...(cookie ? { Cookie: cookie } : {}),
+        },
+        timeout,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (_) {
+            data = {};
+          }
+          const raw = res.headers["set-cookie"] || [];
+          const next = raw.map((c) => String(c).split(";")[0]).filter(Boolean).join("; ");
+          resolve({ status: res.statusCode || 0, data, cookie: next || cookie || "" });
+        });
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function yongfangSession(force) {
+  if (!force && yongfangCookie && Date.now() - yongfangCookieAt < 10 * 60 * 1000) return yongfangCookie;
+  const password = yongfangPassword();
+  if (!password) {
+    const err = new Error("這台電腦還沒設定金芳通行密碼");
+    err.public = true;
+    throw err;
+  }
+  const res = await yongfangHttp("POST", "/api/draft-share", { json: { action: "unlock", password } });
+  if (res.status >= 400 || !res.cookie) {
+    yongfangCookie = "";
+    const err = new Error("金芳通行密碼不對");
+    err.public = true;
+    throw err;
+  }
+  yongfangCookie = res.cookie;
+  yongfangCookieAt = Date.now();
+  return yongfangCookie;
+}
+
+function yongfangPack(spec) {
+  const t = String(spec || "").trim();
+  if (!t) return "";
+  if (/^\d+\.$/.test(t)) return t;
+  const m = t.match(/^(\d+(?:\.\d+)?)\s*(kg|公斤)?$/i);
+  return m ? `${m[1]}kg` : t.slice(0, 20);
+}
+
+function cleanYongfangPush(body) {
+  const draftDate = String(body?.draftDate || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draftDate)) return null;
+  const items = [];
+  for (const it of (Array.isArray(body.items) ? body.items : []).slice(0, 40)) {
+    const markets = (Array.isArray(it?.markets) ? it.markets : []).slice(0, 12).map((m) => ({
+      market: String(m?.market || "").slice(0, 12),
+      qty: Math.max(0, Math.round(Number(m?.qty) || 0)),
+    })).filter((m) => m.market);
+    const row = {
+      supplyNo: String(it?.supplyNo || "").trim().slice(0, 20).toUpperCase(),
+      subCode: String(it?.subCode || "").trim().slice(0, 20),
+      productName: String(it?.productName || "").trim().slice(0, 40).toUpperCase(),
+      packSpec: yongfangPack(it?.packSpec),
+      markets,
+    };
+    if (row.supplyNo || row.subCode || row.productName || row.markets.some((m) => m.qty)) items.push(row);
+  }
+  if (!items.length) return null;
+  const cols = [];
+  items.forEach((it) => it.markets.forEach((m) => {
+    if (m.qty && !cols.includes(m.market)) cols.push(m.market);
+  }));
+  cols.sort((a, b) => {
+    const ia = YONGFANG_MARKETS.indexOf(a);
+    const ib = YONGFANG_MARKETS.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  return {
+    draftId: String(body.draftId || "").trim().slice(0, 80),
+    draftDate,
+    title: String(body.title || "").trim().slice(0, 40),
+    note: String(body.note || "").trim().slice(0, 200),
+    items: items.map((it, i) => ({
+      id: `item-${i}-${Date.now().toString(36)}`,
+      supplyNo: it.supplyNo,
+      subCode: it.subCode,
+      productName: it.productName,
+      packSpec: it.packSpec,
+      markets: cols.map((market, k) => ({
+        id: `market-${i}-${k}`,
+        market,
+        qty: (it.markets.find((m) => m.market === market) || {}).qty || 0,
+      })),
+    })),
+  };
+}
+
+function yongfangFail(err) {
+  const msg = String(err?.message || "");
+  if (err?.public) return msg;
+  if (msg === "timeout" || /ETIMEDOUT|ENOTFOUND|ECONNRESET|ECONNREFUSED/.test(msg)) return "金芳那台還沒醒，再按一次送到金芳。";
+  if (/鎖定|隔日/.test(msg)) return "這天已過，金芳底稿鎖住了，不能再寫進去。";
+  if (msg && msg.length <= 40 && !/pass|cookie|share/i.test(msg)) return msg;
+  return "沒寫進金芳，再按一次。";
+}
+
+async function pushYongfangDraft(body) {
+  const rec = cleanYongfangPush(body);
+  if (!rec) {
+    const err = new Error("請先填市場件數");
+    err.public = true;
+    throw err;
+  }
+  const today = new Date();
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  if (rec.draftDate < ymd) {
+    const err = new Error("這天已過，金芳底稿鎖住了，不能再寫進去。");
+    err.public = true;
+    throw err;
+  }
+  let cookie = await yongfangSession(false);
+  const call = async (method, urlPath, json) => {
+    let res = await yongfangHttp(method, urlPath, { cookie, json });
+    if (res.status === 401) {
+      cookie = await yongfangSession(true);
+      res = await yongfangHttp(method, urlPath, { cookie, json });
+    }
+    return res;
+  };
+  let draft = null;
+  if (rec.draftId) {
+    const listed = await call("GET", `/api/draft-share?date=${encodeURIComponent(rec.draftDate)}`);
+    const found = ((listed.data && listed.data.drafts) || []).find((d) => d && d.id === rec.draftId);
+    if (found) draft = found;
+  }
+  if (!draft) {
+    const created = await call("POST", "/api/draft-share", {
+      action: "create",
+      draftDate: rec.draftDate,
+      items: rec.items.slice(0, 1),
+    });
+    if (created.status >= 400 || !created.data || !created.data.id) {
+      throw new Error(created.data?.error || "新增失敗");
+    }
+    draft = created.data;
+  }
+  if (draft.locked) {
+    const err = new Error("這天已過，金芳底稿鎖住了，不能再寫進去。");
+    err.public = true;
+    throw err;
+  }
+  draft.items = rec.items;
+  draft.title = rec.title;
+  draft.note = rec.note;
+  const saved = await call("POST", "/api/draft-share", { action: "save", ...draft });
+  if (saved.status >= 400 || !saved.data || !saved.data.id) {
+    throw new Error(saved.data?.error || "儲存失敗");
+  }
+  return { id: String(saved.data.id), sheetNo: saved.data.sheetNo };
+}
+
 function handleApi(req, res) {
   const urlPath = (req.url || "").split("?")[0];
   if (urlPath.startsWith("/api/") && req.method === "OPTIONS") {
@@ -1061,6 +1271,8 @@ function handleApi(req, res) {
               text: String((e && e.text) || "").slice(0, 180),
             })).filter((e) => e.kind);
           }
+          if (Object.prototype.hasOwnProperty.call(body, "yfId")) rec.yfId = String(body.yfId || "").slice(0, 80);
+          if (Object.prototype.hasOwnProperty.call(body, "yfNo")) rec.yfNo = String(body.yfNo || "").slice(0, 12);
           const sessions = await readDailyQtySessions();
           const i = sessions.findIndex((s) => s && s.id === id);
           const prev = i >= 0 ? sessions[i] : null;
@@ -1104,6 +1316,22 @@ function handleApi(req, res) {
       return true;
     }
     send(res, 405, "Method not allowed");
+    return true;
+  }
+  if (urlPath === "/api/daily-qty/yongfang-draft") {
+    if (req.method !== "POST") {
+      send(res, 405, "Method not allowed");
+      return true;
+    }
+    readBody(req, 2e5)
+      .then(async (raw) => {
+        const out = await pushYongfangDraft(JSON.parse(raw));
+        send(res, 200, JSON.stringify({ ok: true, id: out.id, sheetNo: out.sheetNo }), TYPES[".json"]);
+      })
+      .catch((err) => {
+        console.error("yongfang draft", err && err.message);
+        send(res, 200, JSON.stringify({ ok: false, error: yongfangFail(err) }), TYPES[".json"]);
+      });
     return true;
   }
   if (urlPath === "/api/racks-txns") {

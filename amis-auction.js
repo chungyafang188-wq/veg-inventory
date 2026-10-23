@@ -9,7 +9,7 @@ const QUERY_URL = "https://amis.afa.gov.tw/m_coop/CoopVegSupplierTransInfoQuery.
 const CAPTCHA_URL = "https://amis.afa.gov.tw/CreateValidationCodeImage.aspx";
 
 const HOUSES = {
-  xinfeng: { mode: "supply", subs: ["493", "930", "168"], envUser: "AMIS_XINFENG_USER", envPass: "AMIS_XINFENG_PASS", loginUrl: LOGIN_URL },
+  xinfeng: { mode: "supply", subs: ["493", "930", "168", "830"], envUser: "AMIS_XINFENG_USER", envPass: "AMIS_XINFENG_PASS", loginUrl: LOGIN_URL },
   yongfang: { mode: "sub", subs: ["050", "066", "168", "070"], supplyNo: "N99833", loginUrl: LOGIN2_URL },
 };
 

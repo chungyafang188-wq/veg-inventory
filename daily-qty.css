@@ -55,6 +55,35 @@ body.dq-wide .app { max-width: min(76rem, calc(100vw - 1.5rem)); }
 }
 .dq-side-actions button { width: 100%; margin: 0; min-height: 2.35rem; padding: 0.35rem 0.45rem; }
 .dq-side-actions .dq-confirm { grid-column: 1 / -1; }
+.dq-yf {
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.55rem 0.55rem;
+  border-radius: 0.75rem;
+  background: #f3f6fd;
+  border: 1px solid #c5d2ee;
+  display: grid;
+  gap: 0.4rem;
+}
+.dq-yf-lab {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #3a4d86;
+}
+.dq-yf button {
+  width: 100%;
+  margin: 0;
+  min-height: 2.15rem;
+  padding: 0.28rem 0.5rem;
+  background: #fff;
+  color: #2a4480;
+  border: 1.5px solid #2a4480;
+  box-shadow: none;
+}
+.dq-yf .dq-yf-send {
+  background: #2a4480;
+  color: #fff;
+}
 .dq-slots { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .dq-slot {
   display: grid;
@@ -521,6 +550,7 @@ body.layout-web.dq-wide .app-head {
 .dq-date-pick { display: grid; gap: 0.35rem; flex: 1 1 16rem; min-width: 16rem; }
 .dq-date-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .dq-cal-toggle, .dq-run-top { display: none; }
+.dq-match.has-result .dq-run-top { display: inline-flex; width: auto; margin: 0; min-height: 2.2rem; padding: 0.15rem 0.75rem; }
 .dq-go { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.15rem 0 0.7rem; padding: 0.45rem; border: 2px solid #166534; border-radius: 12px; background: #fff; }
 .dq-go-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.35rem; }
 .dq-go .dq-captcha { margin: 0; flex: 1 1 auto; min-width: 0; }
@@ -535,6 +565,9 @@ body.layout-web.dq-wide .app-head {
 .dq-tucked { margin: 0 0 0.45rem; color: #3d5348; font-weight: 700; }
 .dq-gap-pick { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0 auto; font-weight: 800; font-size: 0.88rem; white-space: nowrap; }
 .dq-gap-pick input { width: 1.2rem; height: 1.2rem; margin: 0; padding: 0; flex: 0 0 auto; accent-color: #7a1212; }
+.dq-pair-pick { display: flex; align-items: center; gap: 0.25rem; margin: 0; font-weight: 800; font-size: 0.82rem; white-space: nowrap; color: #14633a; }
+.dq-pair-pick input { width: 1.1rem; height: 1.1rem; margin: 0; padding: 0; accent-color: #166534; }
+.dq-act-row .dq-pair-ok { background: #166534; color: #fff; border-color: #166534; }
 .dq-gap-preview { margin: 0 0 0.7rem; padding: 0.55rem; border-radius: 12px; background: #fff; border: 1px solid #e7b4b4; }
 .dq-gap-preview[hidden] { display: none; }
 .dq-gap-preview img { width: 100%; border-radius: 8px; background: #fff8f3; }
@@ -585,6 +618,13 @@ body.layout-web.dq-wide .app-head {
 .dq-card-nums div { background: rgba(255,255,255,.78); border-radius: 8px; padding: 0.2rem 0.4rem; }
 .dq-card-nums span { display: block; color: #5c6b62; font-size: 0.75rem; font-weight: 700; }
 .dq-card-nums b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.dq-carry { margin-top: 0.45rem; padding-top: 0.4rem; border-top: 1px dashed #e7b4b4; }
+.dq-carry p { margin: 0 0 0.3rem; font-weight: 800; color: #7a1212; }
+.dq-carry-picks { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.dq-carry-picks .pick, .dq-carry > .primary { width: auto; margin: 0.35rem 0 0; min-height: 2rem; padding: 0.1rem 0.6rem; }
+.dq-carry label { display: grid; gap: 0.15rem; margin: 0.35rem 0 0; font-weight: 800; font-size: 0.82rem; color: #3d5348; }
+.dq-carry select { width: 100%; }
+.dq-carry.is-done b { color: #14633a; }
 @media (max-width: 40rem) {
   .dq-match-cards { display: grid; gap: 0.45rem; }
   .dq-match-result .dq-sheet-wrap { display: none; }
@@ -601,9 +641,12 @@ body.layout-web.dq-wide .app-head {
 .dq-day-match { width: auto; margin: 0; min-height: 2rem; padding: 0.2rem 0.75rem; white-space: nowrap; }
 .dq-price { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid #d5e4da; }
 .dq-price h3, .dq-price h4 { margin: 0 0 0.35rem; }
-.dq-price-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0 0 0.35rem; }
-.dq-price-head h3 { margin: 0; }
-.dq-price-head button { width: auto; margin: 0; min-height: 2.2rem; padding: 0.15rem 0.75rem; background: #166534; color: #fff; border-color: #166534; }
+.dq-price-filters { display: grid; gap: 0.4rem; margin: 0 0 0.45rem; }
+.dq-price-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.dq-price-lab { font-weight: 800; font-size: 0.82rem; color: #3d5348; }
+.dq-price-picks .pick { width: auto; margin: 0; min-height: 2rem; padding: 0.1rem 0.6rem; }
+.dq-price-copyline { display: flex; justify-content: flex-end; margin: 0 0 0.45rem; }
+.dq-price-copyline button { width: auto; margin: 0; min-height: 2.2rem; padding: 0.15rem 0.75rem; background: #166534; color: #fff; border-color: #166534; }
 .dq-price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.8rem; align-items: start; }
 .dq-q { display: grid; gap: 0.25rem; margin: 0; font-weight: 700; min-width: 16rem; }
 .dq-seq { vertical-align: top; }

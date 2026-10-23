@@ -591,6 +591,26 @@
     s.log.push({ at: Date.now(), kind, text: String(text || "").slice(0, 180) });
     if (s.log.length > 20) s.log.splice(0, s.log.length - 20);
   }
+  function slipLogHtml(s) {
+    if (!s || !Array.isArray(s.log) || !s.log.length) return "";
+    const text = s.log
+      .map((e) => `${esc(e.kind)} ${esc(logClock(e.at))}${e.text ? "　" + esc(e.text) : ""}`)
+      .join("<br>");
+    return `<p class="dq-slip-log">${text}</p>`;
+  }
+  function restoreSlip(id) {
+    const s = slips.find((x) => x.id === id && x.saved && x.voided);
+    if (!s) return;
+    s.voided = false;
+    pushSlipLog(s, "取消刪除", slipBrief(s));
+    s.at = Date.now();
+    saveSlip(s);
+    const i = slips.indexOf(s);
+    if (i >= 0) applySlip(i);
+    pane = "key";
+    msg = "已取消刪除，這張單恢復了。";
+    renderDailyQty();
+  }
   function slipBrief(s) {
     const bits = slipBits(s);
     if (!bits.blocks.length) return "沒有件數";
@@ -665,7 +685,7 @@
           if (withAct && !r.voided) {
             act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost" data-dq-copy-text="${esc(r.id)}">複製文字</button><button type="button" class="ghost" data-dq-copy-ship="${esc(r.id)}">出單</button><button type="button" class="ghost" data-dq-copy-freight="${esc(r.id)}">通知貨運</button><button type="button" class="ghost" data-dq-fix="${esc(r.id)}">修正</button><button type="button" class="ghost" data-dq-void="${esc(r.id)}">刪除</button></td>`;
           } else if (withAct) {
-            act = `<td class="dq-act" rowspan="${span[r.id]}">已刪除</td>`;
+            act = `<td class="dq-act" rowspan="${span[r.id]}"><button type="button" class="ghost dq-unvoid" data-dq-unvoid="${esc(r.id)}">取消刪除</button></td>`;
           }
         }
         return `<tr class="${r.voided ? "is-void" : ""}">${showDate ? `<td>${esc(r.date)}</td>` : ""}${seqCell}<td>${esc(r.house)}</td><td>${esc(r.item).replace(/\n/g, "<br>")}</td><td>${esc(r.mk)}</td><td class="num">${r.qty}</td>${act}</tr>`;
@@ -2362,6 +2382,11 @@
     return out;
   }
   async function confirmSlip() {
+    if (slips[cur] && slips[cur].voided) {
+      msg = "這張已刪除。要改請先按取消刪除。";
+      renderDailyQty();
+      return;
+    }
     if (dayLocked(shipDate) || (slips[cur] && dayLocked(slips[cur].shipDate))) {
       msg = "這天已過，不能在鍵單儲存。請到入單總資料修正。";
       renderDailyQty();
@@ -3791,13 +3816,19 @@
         const id = e.target.closest("[data-dq-void]").dataset.dqVoid || "";
         const s = slips.find((x) => x.id === id && x.saved && !x.voided);
         if (!s) return;
-        if (!window.confirm("刪除後這張單會用紅線畫掉，移到最下面，不會從資料消失。")) return;
+        if (!window.confirm("刪除後這張單會用紅線畫掉，移到最下面。鍵單也會標已刪除，可以再按取消刪除。")) return;
         s.voided = true;
         pushSlipLog(s, "刪除", slipBrief(s));
         s.at = Date.now();
         saveSlip(s);
-        msg = "已刪除，紅線留在最下面。";
+        msg = "已刪除。鍵單會標已刪除，要恢復按取消刪除。";
         renderDailyQty();
+        return;
+      }
+      if (e.target.closest("[data-dq-unvoid]") || e.target.closest("#dq-unvoid")) {
+        const el = e.target.closest("[data-dq-unvoid]");
+        const id = el ? el.dataset.dqUnvoid || "" : slips[cur] && slips[cur].id;
+        restoreSlip(id);
         return;
       }
       if (e.target.closest("[data-dq-match]")) {
@@ -4250,7 +4281,7 @@
     else box.innerHTML = slipPreviewHtml(slips[cur]);
     box.classList.toggle("is-empty", empty);
     const tab = document.querySelector("#dq-root .dq-tab.on");
-    if (tab && slips[cur]) tab.textContent = slipTabText(slips[cur]);
+    if (tab && slips[cur]) tab.textContent = `${slipTabText(slips[cur])}${slips[cur].voided ? " 已刪除" : ""}`;
   }
 
   let booted = false;
@@ -4276,13 +4307,14 @@
     syncCurrent();
     const houseDay = shipDate || localYmd();
     const houseBtns = HOUSES.map((h) => {
-      const n = houseSlips(h.id, houseDay).length;
+      const n = houseSlips(h.id, houseDay).filter((x) => !x.s.voided).length;
       const badge = n ? `<em class="dq-house-n">${n}</em>` : "";
       return `<button type="button" class="pick${house === h.id ? " on" : ""}" data-dq-house="${esc(h.id)}">${esc(h.lab)}${badge}</button>`;
     }).join("");
     const keyLocked = dayLocked(shipDate);
     const keyLive = !keyLocked || (slips[cur] && slips[cur].shipDate === shipDate && (!house || slips[cur].house === house));
-    const dis = keyLocked ? " disabled" : "";
+    const viewingVoid = !!(keyLive && slips[cur] && slips[cur].voided);
+    const dis = keyLocked || viewingVoid ? " disabled" : "";
     const lineHtml = !keyLive ? "" : lines.map((line, i) => {
         const used = new Set((line.slots || []).map((s) => s.mk).filter(Boolean));
       const countryNow = String(line.country || "");
@@ -4303,7 +4335,7 @@
                 return `<option value="${esc(mk)}"${on}${dis}>${esc(mk)}</option>`;
           }))
             .join("");
-        const extra = !keyLocked && (line.slots || []).length > 1
+        const extra = !keyLocked && !viewingVoid && (line.slots || []).length > 1
           ? `<button type="button" class="ghost" data-dq-del-slot="${si}" aria-label="移掉這個市場">×</button>`
             : "";
           return `<div class="dq-slot${slot.mk && qtyOf(slot.qty) ? " is-on" : ""}" data-dq-slot="${si}">
@@ -4313,7 +4345,7 @@
             ${extra}
           </div>`;
         }).join("");
-      const addSlot = !keyLocked && (line.slots || []).length < MK_KEYS.length
+      const addSlot = !keyLocked && !viewingVoid && (line.slots || []).length < MK_KEYS.length
         ? `<button type="button" class="ghost dq-add-slot" data-dq-add-slot="${i}">＋市場</button>`
           : "";
         return `<div class="dq-line" data-dq-line="${i}">
@@ -4324,7 +4356,7 @@
           <label class="dq-crop">品項
             <input class="dq-find" data-dq-find="${i}" type="search" autocomplete="off" placeholder="搜尋品名或代號" value="${esc(shown)}"${dis} />
           </label>
-          ${keyLocked ? "" : `<button type="button" class="ghost dq-del" data-dq-del="${i}">刪</button>`}
+          ${keyLocked || viewingVoid ? "" : `<button type="button" class="ghost dq-del" data-dq-del="${i}">刪</button>`}
         </div>
         <div class="dq-line-meta">
             <label class="dq-spec">規格
@@ -4357,9 +4389,9 @@
       );
     const slipTabs = slipRows
       .map(({ s, i }) => {
-        const lab = s.house ? slipTabText(s) : "未選社場";
+        const lab = `${s.house ? slipTabText(s) : "未選社場"}${s.voided ? " 已刪除" : ""}`;
         const drop = canDropSlip(s) ? `<button type="button" class="dq-tab-x" data-dq-drop="${i}">刪除</button>` : "";
-        return `<span class="dq-slip-tab"><button type="button" class="dq-tab${i === cur ? " on" : ""}" data-dq-slip="${i}">${esc(lab)}</button>${drop}</span>`;
+        return `<span class="dq-slip-tab"><button type="button" class="dq-tab${i === cur ? " on" : ""}${s.voided ? " is-void" : ""}" data-dq-slip="${i}">${esc(lab)}</button>${drop}</span>`;
       })
       .join("");
     const dropCurrent = canDropSlip(slips[cur])
@@ -4601,14 +4633,16 @@
           </div>`
         : `<p class="dq-empty">還沒有已送出的單可以回對。請先在鍵單確認儲存。</p><p class="dq-msg" id="dq-msg">${esc(msg)}</p>`;
     } else {
-      const keyHint = keyLocked
-        ? "這天已過，鍵單只能看出單。要改品項、件數、小代號或單號，請到入單總資料修正。"
-        : "小代號跟品項同一列。同一張單可以有兩個小代號；新增品項會沿用上一列，不同再改。新的一張單要重填。";
+      const keyHint = viewingVoid
+        ? "這張已刪除。單名按鍵和品項都畫了兩條紅線，內容還看得到。要恢復按取消刪除。"
+        : keyLocked
+          ? "這天已過，鍵單只能看出單。要改品項、件數、小代號或單號，請到入單總資料修正。"
+          : "小代號跟品項同一列。同一張單可以有兩個小代號；新增品項會沿用上一列，不同再改。新的一張單要重填。";
       const keyEmpty = keyLive
         ? ""
         : `<p class="dq-empty">這天沒有可以看的單，也不能在鍵單補打。</p>`;
       body = `<div class="dq-split">
-        <div class="dq-form${keyLocked ? " is-locked" : ""}">
+        <div class="dq-form${keyLocked || viewingVoid ? " is-locked" : ""}${viewingVoid ? " is-void" : ""}">
           <div class="dq-top">
             <p class="dq-top-lab">${house ? esc(houseName()) + (keyLocked ? " · 只能看" : " · 點下面的單，或新增一張") : "請先選社場"}</p>
             <div class="dq-houses">${houseBtns}</div>
@@ -4618,7 +4652,7 @@
             <div class="dq-key-row">
               <span class="dq-date-now">寄送日 ${esc(shipDate)}</span>
               <label class="dq-date">單號
-                <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(keyLive ? slipNo(slips[cur]) : "")}" ${house && !keyLocked ? "" : "disabled"} />
+                <input id="dq-seq" placeholder="沒填就自動 5 碼" value="${esc(keyLive ? slipNo(slips[cur]) : "")}" ${house && !keyLocked && !viewingVoid ? "" : "disabled"} />
               </label>
             </div>
             ${dqCalHtml({ selected: shipDate, month: keyMonth || String(shipDate || localYmd()).slice(0, 7), dayAttr: "data-dq-key-day", shiftAttr: "data-dq-key-shift", houseId: house })}
@@ -4627,7 +4661,7 @@
             <p class="dq-mk-lab">${keyHint}</p>
             ${keyEmpty}
           ${lineHtml}
-            ${keyLocked || !keyLive ? "" : `<button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>`}
+            ${keyLocked || !keyLive || viewingVoid ? "" : `<button type="button" class="dq-add-line" id="dq-add">＋新增品項</button>`}
             <label class="dq-note">社場／貨運看（是否收貨）
               <input id="dq-note" placeholder="例如：請貨運來穠全收貨" value="${esc(keyLive ? note : "")}"${dis} />
             </label>
@@ -4638,14 +4672,15 @@
         </div>
         <aside class="dq-side">
           <p class="dq-side-lab">出單預覽</p>
-          <pre class="dq-slip" id="dq-slip"></pre>
+          <pre class="dq-slip${viewingVoid ? " is-void" : ""}" id="dq-slip"></pre>
           <div class="dq-side-actions">
             <button type="button" class="primary" id="dq-img-ship">出單圖片</button>
             <button type="button" class="primary" id="dq-img-freight">通知貨運</button>
             <button type="button" class="ghost" id="dq-copy">複製文字</button>
-            ${keyLocked ? "" : `<button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>`}
+            ${viewingVoid ? `<button type="button" class="dq-unvoid" id="dq-unvoid">取消刪除</button>` : keyLocked ? "" : `<button type="button" class="primary dq-confirm" id="dq-confirm">確認儲存，下一張</button>`}
           </div>
-          ${house === "yongfang" && keyLive ? `<div class="dq-yf"><p class="dq-yf-lab">金芳草稿</p><button type="button" class="dq-yf-send" id="dq-yf-send">${slips[cur] && slips[cur].yfNo ? `更新金芳第${esc(slips[cur].yfNo)}張` : "送到金芳"}</button><button type="button" class="dq-yf-copy" id="dq-yf-copy">複製金芳通知</button></div>` : ""}
+          ${house === "yongfang" && keyLive && !viewingVoid ? `<div class="dq-yf"><p class="dq-yf-lab">金芳草稿</p><button type="button" class="dq-yf-send" id="dq-yf-send">${slips[cur] && slips[cur].yfNo ? `更新金芳第${esc(slips[cur].yfNo)}張` : "送到金芳"}</button><button type="button" class="dq-yf-copy" id="dq-yf-copy">複製金芳通知</button></div>` : ""}
+          ${keyLive ? slipLogHtml(slips[cur]) : ""}
           <p class="dq-msg" id="dq-msg">${esc(msg)}</p>
         </aside>
       </div>`;

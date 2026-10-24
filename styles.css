@@ -7160,6 +7160,7 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-head { position: sticky; top: 0; z-index: 2; background: #f4f7f4; }
 .bill-cal { display: none; }
 .bill-one { display: none; }
+.bill-phone-send { display: none; }
 .bill-cal-grid { display: grid; grid-template-columns: repeat(7, 1.85rem); gap: 0.28rem; width: max-content; }
 .bill-cal-grid span, .bill-cal-day { height: 1.85rem; display: grid; place-items: center; font-size: 0.82rem; }
 .bill-cal-day { width: auto; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--ink); }
@@ -7167,6 +7168,18 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-cal-day.is-sel { box-shadow: inset 0 0 0 2px #1d4ed8; }
 .bill-cal-day.is-on.is-sel { box-shadow: inset 0 0 0 2px #fff; }
 .bill-sample { margin-top: 0.8rem; }
+.bill-share-top {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0.15rem 0 0.55rem;
+  padding: 0.4rem 0.55rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.bill-share-top .bill-share { margin: 0; }
+#bill-preview { scroll-margin-top: 4.8rem; }
 .bill-share { display: flex; flex-wrap: wrap; align-items: end; gap: 0.45rem; margin: 0.15rem 0 0.35rem; }
 .bill-share label { display: grid; gap: 0.12rem; min-width: 5.2rem; color: var(--muted); font-size: 0.78rem; }
 .bill-share select { width: 100%; padding: 0.4rem 0.45rem; }
@@ -7176,43 +7189,99 @@ body.layout-phone .attend-crew .attend-in { min-height: 2.5rem; font-size: 1.05r
 .bill-sheet td:first-child { white-space: nowrap; }
 .bill-sheet th { background: #f4f7f4; font-weight: 700; }
 .bill-sheet tfoot td { font-weight: 700; }
-body.layout-phone .bill-cal { display: block; margin: 0.2rem 0 0.7rem; }
+body.layout-phone .bill-cal { display: block; margin: 0.1rem 0 0.45rem; }
+body.layout-phone .bill-cal-fold { background: #fff; border: 1px solid var(--line); border-radius: 0.75rem; padding: 0.05rem 0.7rem 0.15rem; }
+body.layout-phone .bill-cal-fold summary { cursor: pointer; font-weight: 800; padding: 0.45rem 0; }
+body.layout-phone .bill-cal-fold .bill-cal-grid { width: 100%; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 0 0.45rem; }
 body.layout-phone .bill-one { display: block; }
+body.layout-phone .bill-share-top { display: none; }
+body.layout-phone .bill-phone-send { display: block; margin: 0.4rem 0 0.7rem; }
+body.layout-phone .bill-phone-send button { width: 100%; margin: 0; min-height: 2.7rem; }
+body.layout-phone #bill-preview h3,
+body.layout-phone #bill-preview .bill-share { display: none; }
 body.layout-phone .bill-month { display: none; }
 body.layout-phone .bill-head { display: none; }
-body.layout-phone .bill-form { display: flex; flex-direction: column; gap: 0.6rem; }
+body.layout-phone .bill-page h2 { margin-bottom: 0.15rem; }
+body.layout-phone .bill-filters { gap: 0.55rem 0.8rem; margin: 0.25rem 0 0.35rem; }
+body.layout-phone .bill-title { margin: 0 0 0.3rem; }
+body.layout-phone .bill-form { display: flex; flex-direction: column; gap: 0.45rem; }
 body.layout-phone .bill-mini { display: block; margin-bottom: 0.12rem; font-size: 0.78rem; color: var(--muted); }
 body.layout-phone .bill-line {
   grid-template-columns: 1fr 1fr;
-  grid-template-areas: "date off" "people start" "end hours" "split split" "total rest" "price estimate" "pay amt" "note note";
-  gap: 0.45rem 0.55rem;
+  grid-template-areas: "date off" "people start" "end rest" "hours total" "price estimate" "pay amt" "note note" "split split";
+  align-items: start;
+  gap: 0.4rem 0.55rem;
   margin: 0;
-  padding: 0.7rem 0.75rem 0.8rem;
+  padding: 0.6rem 0.65rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 0.9rem;
   background: #fff;
 }
+body.layout-phone .bill-line > * { align-self: start; min-width: 0; }
 body.layout-phone .bill-line > b { grid-area: date; align-self: center; font-size: 1.05rem; }
 body.layout-phone .bill-line > .bill-people { grid-area: people; }
 body.layout-phone .bill-line > .bill-start { grid-area: start; }
 body.layout-phone .bill-line > .bill-end { grid-area: end; }
-body.layout-phone .bill-line > .bill-hours { grid-area: hours; align-self: end; }
-body.layout-phone .bill-line > .bill-total-hours { grid-area: total; align-self: end; }
+body.layout-phone .bill-line > .bill-hours { grid-area: hours; }
+body.layout-phone .bill-line > .bill-total-hours { grid-area: total; }
 body.layout-phone .bill-line > .bill-rest { grid-area: rest; }
 body.layout-phone .bill-line > .bill-price { grid-area: price; }
-body.layout-phone .bill-line > .bill-estimate { grid-area: estimate; align-self: end; }
+body.layout-phone .bill-line > .bill-estimate { grid-area: estimate; }
 body.layout-phone .bill-line > .bill-pay { grid-area: pay; }
-body.layout-phone .bill-line > .bill-amt { grid-area: amt; align-self: end; }
+body.layout-phone .bill-line > .bill-amt { grid-area: amt; }
 body.layout-phone .bill-line > .bill-off { grid-area: off; justify-self: end; align-self: center; }
 body.layout-phone .bill-line > .bill-note { grid-area: note; }
-body.layout-phone .bill-line > .bill-more { grid-area: split; grid-column: auto; }
+body.layout-phone .bill-line > .bill-more { grid-area: split; }
+body.layout-phone .bill-line > label:not(.bill-off),
+body.layout-phone .bill-hours,
+body.layout-phone .bill-total-hours,
+body.layout-phone .bill-estimate,
+body.layout-phone .bill-amt {
+  display: grid;
+  grid-template-rows: 1.05rem 2.2rem;
+  align-content: start;
+  gap: 0.12rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+body.layout-phone .bill-line .bill-mini { margin: 0; line-height: 1.05rem; }
+body.layout-phone .bill-line .attend-in,
+body.layout-phone .bill-hours > b,
+body.layout-phone .bill-total-hours > b,
+body.layout-phone .bill-estimate > b,
+body.layout-phone .bill-amt > b {
+  width: 100%;
+  height: 2.2rem;
+  min-height: 2.2rem;
+  max-height: 2.2rem;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 0 0.55rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 1rem;
+  line-height: calc(2.2rem - 2px);
+}
+body.layout-phone .bill-hours > b,
+body.layout-phone .bill-total-hours > b,
+body.layout-phone .bill-estimate > b,
+body.layout-phone .bill-amt > b { display: flex; align-items: center; background: #f4f7f4; font-weight: 800; }
+body.layout-phone .bill-rest .attend-in:disabled { background: #f4f7f4; color: #8a9690; text-align: center; }
+body.layout-phone .bill-more .bill-add { width: auto; height: auto; min-height: 2.15rem; max-height: none; margin: 0; padding: 0.2rem 0.7rem; }
+body.layout-phone .bill-note { display: grid; grid-template-columns: 1fr 1fr; gap: 0.28rem 0.45rem; align-items: start; }
+body.layout-phone .bill-note .bill-place,
+body.layout-phone .bill-note > .bill-mini,
+body.layout-phone .bill-note > .attend-in { grid-column: 1 / -1; }
+body.layout-phone .bill-note .bill-place .attend-in { width: 100%; }
 body.layout-phone .bill-split { width: 100%; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem; }
 body.layout-phone .bill-split-gap { display: none; }
 body.layout-phone .bill-extra-lab,
 body.layout-phone .bill-drop { grid-column: 1 / -1; }
 body.layout-phone .bill-note .attend-in { max-width: none; }
-body.layout-phone .bill-line .attend-in { min-height: 2.55rem; padding: 0.45rem 0.6rem; font-size: 1.05rem; }
-body.layout-phone .bill-off { min-height: 2.4rem; padding: 0.25rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }
+body.layout-phone .bill-off { min-height: 2.2rem; padding: 0.2rem 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: #f8faf8; }
 body.layout-phone .bill-off input { width: 1.15rem; height: 1.15rem; }
 
 

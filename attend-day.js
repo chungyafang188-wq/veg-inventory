@@ -832,7 +832,9 @@ function attendBillCal(days, ym, focus) {
       return `<button type="button" class="${cls}" data-bill-pick="${esc(iso)}">${date}</button>`;
     })
     .join("");
-  return `<div class="bill-cal"><div class="bill-cal-grid">${week}${buttons}</div><p class="attend-note">有填的日子反色。點一天填這一筆。</p></div>`;
+  const picked = days.find((day) => day.iso === focus);
+  const lab = picked ? `${picked.m}/${picked.d}　選日期` : "選日期";
+  return `<div class="bill-cal"><details class="bill-cal-fold"><summary>${esc(lab)}</summary><div class="bill-cal-grid">${week}${buttons}</div></details></div>`;
 }
 function attendBillSplitHtml(day, crewId, slot) {
   const suf = String(slot);
@@ -971,22 +973,25 @@ function attendBillCurrentPack() {
   const span = attendBillRangeDays(days);
   return { span, rows: attendBillLiveRows(span), title: attendBillShareTitle(span) };
 }
-function attendBillPreview(days) {
-  const span = attendBillRangeDays(days);
-  const rows = attendBillLiveRows(span);
+function attendBillShareHtml(days) {
   const opt = (selected) =>
     days.map((day) => `<option value="${esc(day.iso)}"${day.iso === selected ? " selected" : ""}>${day.m}/${day.d}</option>`).join("");
-  const table = rows.length ? attendBillTable(rows, "", false) : `<p class="attend-note">這段沒有已填的日子。</p>`;
-  return `<h3>給老闆的清單</h3>
+  return `<div class="bill-share-top">
     <div class="bill-share">
       <label>從<select data-bill-from>${opt(billFrom)}</select></label>
       <label>到<select data-bill-to>${opt(billTo)}</select></label>
       <button type="button" class="primary" data-bill-copy>複製圖片貼 LINE</button>
       <button type="button" class="ghost" data-bill-pdf>列印 PDF</button>
       <button type="button" class="ghost" data-bill-xlsx>另存 Excel</button>
+      <button type="button" class="ghost" data-bill-goto="bill-preview">看清單</button>
     </div>
-    <p class="attend-note">選好起迄日。複製的是圖片，可直接貼到 LINE。PDF 與 Excel 都會直接下載。</p>
-    ${table}`;
+  </div>`;
+}
+function attendBillPreview(days) {
+  const span = attendBillRangeDays(days);
+  const rows = attendBillLiveRows(span);
+  const table = rows.length ? attendBillTable(rows, "", false) : `<p class="attend-note">這段沒有已填的日子。</p>`;
+  return `<h3>給老闆的清單</h3>${table}`;
 }
 function attendFitText(ctx, text, max) {
   const raw = String(text || "");
@@ -1391,14 +1396,15 @@ function attendBillHtml() {
   const one = days.filter((day) => day.iso === focus);
   return `<section class="bill-page">
     <h2>工時費用單</h2>
-    <p class="attend-note">人數和時間會記到每日到班。地點填在每一組，例如田、工廠，會出現在給老闆的備註。最多三組。跨中午可填午休分鐘，空白扣 60 分，填 0 不扣。總工時是各組人數乘上各組時數再加總。時薪各組共用。實發沒填時，用該組時數乘時薪。有填實發就用填的，改時間不會蓋掉。金額是各組實發乘各組人數再加總。</p>
     <div class="bill-filters">
       <label>老闆 <select data-bill-boss>${bossOpts}</select></label>
       <label>月份 <select data-bill-month>${monthOpts}</select></label>
     </div>
     <p class="bill-title">${y - 1911}年${m}月　${esc(bossName)}</p>
+    ${attendBillShareHtml(days)}
     ${attendBillCal(days, billMonth, focus)}
     <div class="bill-one">${attendBillForm(one, boss, { foot: false })}</div>
+    <div class="bill-phone-send"><button type="button" class="primary" data-bill-copy>送出給老闆</button></div>
     <div class="bill-month">${attendBillForm(days, boss, { weeks: true })}</div>
     <div id="bill-preview">${attendBillPreview(days)}</div>
     ${sample}

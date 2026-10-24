@@ -12793,6 +12793,11 @@ document.getElementById("home-hub")?.addEventListener("click", (e) => {
     attendDropCrewExtra(attendDrop.dataset.attendDrop || "", attendDrop.dataset.attendSlot || "2");
     return;
   }
+  const billGoto = e.target.closest("[data-bill-goto]");
+  if (billGoto) {
+    document.getElementById(billGoto.dataset.billGoto || "")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   const billWeeks = e.target.closest("[data-bill-weeks]");
   if (billWeeks && typeof attendBillSetWeeks === "function") {
     attendBillSetWeeks(billWeeks.dataset.billWeeks || "one");

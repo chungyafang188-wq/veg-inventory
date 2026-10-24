@@ -855,9 +855,45 @@ function attendBillSplitHtml(day, crewId, slot) {
     <button type="button" class="ghost bill-drop" data-bill-drop="1" data-bill-slot="${slot}" data-bill-day="${esc(day.iso)}" data-bill-crew="${esc(crewId)}">拿掉</button>
   </div>`;
 }
+function attendBillWeekKey(iso) {
+  const [y, m, d] = String(iso || "").split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+function attendBillWeeks(days) {
+  const weeks = [];
+  days.forEach((day) => {
+    const key = attendBillWeekKey(day.iso);
+    const last = weeks[weeks.length - 1];
+    if (!last || last.key !== key) weeks.push({ key, days: [day] });
+    else last.days.push(day);
+  });
+  return weeks;
+}
+function attendBillOpenWeek(days) {
+  const today = attendTodayIso();
+  const hit = days.find((day) => day.iso === today) || days.find((day) => day.touched) || days[0];
+  return hit ? attendBillWeekKey(hit.iso) : "";
+}
+function attendBillWeekLabel(week) {
+  const a = week.days[0];
+  const b = week.days[week.days.length - 1];
+  const range = a.iso === b.iso ? `${a.m}/${a.d}` : `${a.m}/${a.d}–${b.m}/${b.d}`;
+  const filled = week.days.filter((day) => day.touched && !day.off).length;
+  const off = week.days.filter((day) => day.off).length;
+  const bits = [];
+  if (filled) bits.push(`已填 ${filled} 天`);
+  if (off) bits.push(`休 ${off} 天`);
+  return `${range}${bits.length ? "　" + bits.join("　") : "　還沒填"}`;
+}
+function attendBillSetWeeks(mode) {
+  document.querySelectorAll(".bill-month .bill-week").forEach((el) => {
+    el.open = mode === "all" || el.dataset.billWeek === attendBillOpenWeek(attendBillDays(billBoss, billMonth));
+  });
+}
 function attendBillForm(days, crewId, opts) {
-  const lines = days
-    .map((day) => {
+  const lineOf = (day) => {
       const amt = day.amt === "" ? "" : attendBillMoney(day.amt);
       const cross = !day.off && attendCross(day.start, day.end);
       const extraOpen = attendBillSlotOpen(day, 2) || attendBillSlotOpen(day, 3);
@@ -887,13 +923,20 @@ function attendBillForm(days, crewId, opts) {
           ${attendBillSplitHtml(day, crewId, 3)}
         </div>
       </div>`;
-    })
-    .join("");
+  };
+  const lines = days.map(lineOf).join("");
   const total = days.reduce((sum, day) => sum + (Number(day.amt) || 0), 0);
   const foot = opts && opts.foot === false ? "" : `<div class="bill-foot"><span>合計</span><b id="bill-total">${total ? attendBillMoney(total) : ""}</b></div>`;
+  const head = `<div class="bill-head"><span>日期</span><span>人數</span><span>開始</span><span>結束</span><span>午休</span><span>時數</span><span>總工時</span><span>時薪</span><span>預計</span><span>實發</span><span>金額</span><span>休</span><span>備註</span></div>`;
+  const body = opts && opts.weeks
+    ? `<div class="bill-week-tools"><button type="button" class="ghost" data-bill-weeks="one">只留這一週</button><button type="button" class="ghost" data-bill-weeks="all">展開整月</button></div>${attendBillWeeks(days).map((week) => {
+        const open = week.key === attendBillOpenWeek(days) ? " open" : "";
+        return `<details class="bill-week" data-bill-week="${esc(week.key)}"${open}><summary>${esc(attendBillWeekLabel(week))}</summary>${week.days.map(lineOf).join("")}</details>`;
+      }).join("")}`
+    : lines;
   return `<div class="bill-form">
-    <div class="bill-head"><span>日期</span><span>人數</span><span>開始</span><span>結束</span><span>午休</span><span>時數</span><span>總工時</span><span>時薪</span><span>預計</span><span>實發</span><span>金額</span><span>休</span><span>備註</span></div>
-    ${lines}
+    ${head}
+    ${body}
     ${foot}
   </div>`;
 }
@@ -1356,7 +1399,7 @@ function attendBillHtml() {
     <p class="bill-title">${y - 1911}年${m}月　${esc(bossName)}</p>
     ${attendBillCal(days, billMonth, focus)}
     <div class="bill-one">${attendBillForm(one, boss, { foot: false })}</div>
-    <div class="bill-month">${attendBillForm(days, boss)}</div>
+    <div class="bill-month">${attendBillForm(days, boss, { weeks: true })}</div>
     <div id="bill-preview">${attendBillPreview(days)}</div>
     ${sample}
   </section>`;
